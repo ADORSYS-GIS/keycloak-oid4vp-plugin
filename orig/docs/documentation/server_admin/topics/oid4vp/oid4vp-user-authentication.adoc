@@ -1,0 +1,105 @@
+[[oid4vp-authentication]]
+== Authenticate users with verifiable credentials over OpenID4VP
+
+{project_name} implements experimental support for authenticating users as they present verifiable credentials issued to them by itself.
+This is done over https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html[OpenID for Verifiable Presentation (OpenID4VP)].
+This chapter describes how to interact with this feature.
+
+[IMPORTANT]
+====
+This is an experimental feature and should not be used in production.
+Backward compatibility is not guaranteed, and future updates may introduce breaking changes.
+====
+
+=== What is covered in this chapter
+
+- Enabling user authentication over OpenID4VP
+- Initiating the flow by retrieving an authentication request
+- Polling for the status of the authentication session
+- Complete OIDC login with OpenID4VP authentication
+- Configuring the verifier policy for OpenID4VP authentication
+
+=== Enabling user authentication over OpenID4VP
+
+To enable user authentication over OpenID4VP, make sure to add the following flags to the startup command:
+
+[source,bash]
+----
+--features=oid4vc-vpauth,oid4vc-vci
+----
+
+Verify activation by checking the server logs.
+The second `oid4vc-vci` feature must equally be activated because the feature relies on {project_name} being able to link:../oid4vci/vc-issuer-configuration.adoc[issue verifiable credentials] to users itself.
+
+=== Initiating the flow by retrieving an authentication request
+
+To retrieve an authentication request, send a GET request to the `/oid4vp-auth/request` endpoint.
+The request must carry a `client_id` query parameter to indicate the client to link with the authentication session.
+
+[source,bash]
+----
+GET /realms/<realm>/oid4vp-auth/request?client_id=<client_id>
+----
+
+The endpoint returns an object containing:
+
+* an OpenID4VP authorization request link that can be used to initiate the authentication flow, either directly or by generating a QR code from it;
+* a transaction ID for inquiring the status of the thereby opened authentication session.
+
+[source,json]
+----
+{
+  "authorization_request": "openid4vp://?client_id=<client_id>&request_uri=<request_uri>",
+  "transaction_id": "<transaction_id>"
+}
+----
+
+=== Polling for the status of the authentication session
+
+Because the OpenID4VP authentication flow is implied to be pursued cross-device, the initiating client needs to asynchronously check the status of the authentication session.
+For this, send a GET request to the `/oid4vp-auth/status` endpoint, passing the transaction ID received in the previous step.
+
+[source,bash]
+----
+GET /realms/<realm>/oid4vp-auth/status/<transaction_id>
+----
+
+The response is an object containing the status of the authentication session, which can be one of the following: `pending`, `success`, or `error`.
+In case of a successful authentication, the response also contains an *authorization code* to exchange for an access token.
+In case of an error, the response contains error details.
+
+.Pending authentication
+[source,json]
+----
+{
+  "status": "pending"
+}
+----
+
+.Successful authentication
+[source,json]
+----
+{
+  "status": "success",
+  "authorization_code": "<code>"
+}
+----
+
+.Error during authentication
+[source,json]
+----
+{
+  "status": "error",
+  "error": "<error_type>",
+  "error_description": "<error_description>"
+}
+----
+
+=== Complete OIDC login with OpenID4VP authentication
+
+The integration of OpenID4VP authentication into the OIDC login flow is readily available provided you enable the `keycloak.v2+oid4vp` login theme that supports the feature.
+
+=== Configuring the verifier policy for OpenID4VP authentication
+
+Find the built-in authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
+The single SdJwt authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs, including: the accepted credential types, the maximum age of VP tokens presented, and other parameters governing the verifier policy.
