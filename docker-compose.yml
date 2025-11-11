@@ -1,0 +1,11 @@
+services:
+  keycloak-oid4vp:
+    image: quay.io/keycloak/keycloak:26.4
+    command: start-dev --features=oid4vc-vci --log-level=DEBUG
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./target/keycloak-oid4vp-plugin-1.0.0-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-oid4vp-plugin-1.0.0-SNAPSHOT.jar
