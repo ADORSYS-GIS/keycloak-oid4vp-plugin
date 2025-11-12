@@ -36,7 +36,6 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
-import org.keycloak.events.EventType;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -228,7 +227,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
      */
     public AuthorizationContext startAuthentication(String clientId) {
         logger.debug("Generating new authentication context...");
-        // event.event(EventType.OID4VP_INIT_AUTH);
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);

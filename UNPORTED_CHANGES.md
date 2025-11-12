@@ -1,11 +1,4 @@
-
-## Proper event firing
-
-```java
-    // EventType.java
-    OID4VP_INIT_AUTH(65, true),
-    OID4VP_INIT_AUTH_ERROR(0x10000 + OID4VP_INIT_AUTH.getStableIndex(), true);
-```
+# Unported changes so far
 
 ## Aud verification with pattern matching
 
