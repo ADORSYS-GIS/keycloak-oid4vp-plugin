@@ -17,6 +17,7 @@
 
 package de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.authenticator;
 
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -46,7 +47,7 @@ public class SdJwtAuthRequirements {
 
     private final SdJwtCredentialConstrainer sdJwtCredentialConstrainer;
     private final String keycloakIssuerURI;
-    private final Pattern expectedKbJwtAud;
+    private final String expectedKbJwtAud;
 
     private final List<String> expectedVcts;
     private final String expectedVctsPattern;
@@ -63,8 +64,15 @@ public class SdJwtAuthRequirements {
         // We'll need to enforce that only credentials produced by and for this audience pass through.
         // The audience is the client ID of the verifier, but some wallets prepend a scheme.
         this.keycloakIssuerURI = OID4VCIssuerWellKnownProvider.getIssuer(context);
-        String kbJwtAud = Pattern.quote(context.getUri().getBaseUri().getHost());
-        this.expectedKbJwtAud = Pattern.compile("(.*:)?%s".formatted(kbJwtAud));
+        // String kbJwtAud = Pattern.quote(context.getUri().getBaseUri().getHost());
+        // this.expectedKbJwtAud = Pattern.compile("(.*:)?%s".formatted(kbJwtAud));
+
+        // FIXME!!! This module must not know anything about OpenID4VP but because the SD-JWT API
+        //  is so far rigid for aud claim verification with pattern matching, we hardcode the client
+        //  scheme for compatibility with the Lissi wallet. Once made flexible, uncomment the logic
+        //  above.
+        String kbJwtAud = context.getClient().getClientId();
+        this.expectedKbJwtAud = String.format("%s:%s", ClientIdScheme.X509_SAN_DNS, kbJwtAud);
 
         // Reading authenticator configs
         Map<String, String> config = (authConfig != null && authConfig.getConfig() != null)
@@ -158,7 +166,7 @@ public class SdJwtAuthRequirements {
                 .withKeyBindingRequired(true)
                 .withAllowedMaxAge(kbJwtMaxAllowedAge)
                 .withNonce(nonce)
-                // .withAud(expectedKbJwtAud) // FIXME
+                .withAud(expectedKbJwtAud)
                 .withValidateNotBeforeClaim(validateNotBeforeClaim)
                 .withValidateExpirationClaim(validateExpirationClaim)
                 .build();
