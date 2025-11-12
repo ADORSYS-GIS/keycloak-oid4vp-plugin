@@ -155,20 +155,27 @@ public class SdJwtAuthRequirements {
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
+        // TODO: Update time claim options naming and config keys to denote requirement
+        //  on the presence of claims. Following a recent update to Keycloak upstream,
+        //  validation will always be performed if claims are present.
         return IssuerSignedJwtVerificationOpts.builder()
-                .withValidateNotBeforeClaim(validateNotBeforeClaim)
-                .withValidateExpirationClaim(validateExpirationClaim)
+                .withRequireIssuedAtClaim(false)
+                .withRequireNotBeforeClaim(validateNotBeforeClaim)
+                .withRequireExpirationClaim(validateExpirationClaim)
                 .build();
     }
 
     public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce) {
+        // TODO: Update time claim options naming and config keys to denote requirement
+        //  on the presence of claims. Following a recent update to Keycloak upstream,
+        //  validation will always be performed if claims are present.
         return KeyBindingJwtVerificationOpts.builder()
                 .withKeyBindingRequired(true)
                 .withAllowedMaxAge(kbJwtMaxAllowedAge)
                 .withNonce(nonce)
                 .withAud(expectedKbJwtAud)
-                .withValidateNotBeforeClaim(validateNotBeforeClaim)
-                .withValidateExpirationClaim(validateExpirationClaim)
+                .withRequireNotBeforeClaim(validateNotBeforeClaim)
+                .withRequireExpirationClaim(validateExpirationClaim)
                 .build();
     }
 
