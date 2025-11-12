@@ -1,12 +1,11 @@
-package org.keycloak.testsuite.oid4vc.issuance;
+package de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import org.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
-import org.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import org.keycloak.util.JsonSerialization;
 
 import java.util.Base64;
@@ -58,7 +57,7 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
-    public void testIETFSpecVectorSize_1Bit() throws Exception {
+    public void testIETFSpecVectorSize_1Bit() {
         // Test to understand the actual size of the IETF 1-bit test vector
         String lst = IETF_1BIT_TEST_VECTOR;
         int bits = 1;
@@ -75,7 +74,7 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
-    public void testIETFSpecVectorSize_2Bit() throws Exception {
+    public void testIETFSpecVectorSize_2Bit() {
         // Test to understand the actual size of the IETF 2-bit test vector
         String lst = IETF_2BIT_TEST_VECTOR;
         int bits = 2;
