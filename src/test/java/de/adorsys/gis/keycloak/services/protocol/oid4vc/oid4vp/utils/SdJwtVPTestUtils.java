@@ -1,40 +1,35 @@
-package org.keycloak.testsuite.oid4vc.oid4vp.utils;
+package de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.utils;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dasniko.testcontainers.keycloak.KeycloakContainer;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.common.util.Time;
-import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.AsymmetricSignatureSignerContext;
 import org.keycloak.crypto.ECDSASignatureSignerContext;
-import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
-import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureSignerContext;
 import org.keycloak.jose.jwk.JWK;
-import org.keycloak.models.RealmModel;
-import org.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import org.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.DisclosureSpec;
 import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
-import org.keycloak.services.Urls;
-import org.keycloak.testsuite.client.KeycloakTestingClient;
-import org.keycloak.testsuite.runonserver.FetchOnServer;
-import org.keycloak.urls.UrlType;
 import org.keycloak.util.JsonSerialization;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBody.CNF_CLAIM;
-import static org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBody.JWK_CLAIM;
-import static org.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
-import static org.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
-import static org.keycloak.testsuite.AbstractTestRealmKeycloakTest.TEST_REALM_NAME;
+import static de.adorsys.gis.keycloak.services.protocol.oid4vc.BaseKeycloakTest.TEST_REALM_NAME;
+import static de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
+import static de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
 
 /**
  * Test helper for crafting SD-JWT verifiable presentations.
@@ -45,12 +40,15 @@ public class SdJwtVPTestUtils {
 
     public static final int ISSUER_SIGNED_JWT_LIFESPAN_SECS = 300;
     public static final int KB_JWT_LIFESPAN_SECS = 60;
+
     public static final String EXP_CLAIM_KEY = "exp";
+    public static final String CNF_CLAIM_KEY = "cnf";
+    public static final String JWK_CLAIM_KEY = "jwk";
 
-    private final KeycloakTestingClient testingClient;
+    private final KeycloakContainer keycloak;
 
-    public SdJwtVPTestUtils(KeycloakTestingClient testingClient) {
-        this.testingClient = testingClient;
+    public SdJwtVPTestUtils(KeycloakContainer keycloak) {
+        this.keycloak = keycloak;
     }
 
     /**
@@ -70,30 +68,31 @@ public class SdJwtVPTestUtils {
      * @param setStatusClaim Specifies whether to include a status claim in the issued credential
      */
     public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
-        FetchOnServer sdJwtFetcher = (session) -> {
-            RealmModel realm = session.realms().getRealmByName(TEST_REALM_NAME);
-            KeyWrapper signingKey = session.keys().getActiveKey(realm, KeyUse.SIG, Algorithm.ES256);
 
+        SignatureSignerContext signer;
+
+        try {
+            KeyWrapper keyWrapper = RSATestUtils.getRsaKeyWrapper(getKeycloakJwk());
             if (!setKid) {
-                signingKey.setKid(null);
+                keyWrapper.setKid(null);
             }
 
-            SignatureProvider signatureProvider = session.getProvider(SignatureProvider.class, Algorithm.ES256);
-            SignatureSignerContext signer = signatureProvider.signer(signingKey);
+            signer = new AsymmetricSignatureSignerContext(keyWrapper);
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        }
 
-            String keycloakIssuerURI = Urls.realmIssuer(
-                    session.getContext().getUri(UrlType.FRONTEND).getBaseUri(),
-                    TEST_REALM_NAME
-            );
+        String serverUrl = keycloak.getAuthServerUrl();
+        String keycloakIssuerURI = KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/realms/{realm}")
+                .build(TEST_REALM_NAME)
+                .toString();
 
-            SdJwt sdJwt = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim)
-                    .withSigner(signer)
-                    .build();
+        SdJwt sdJwt = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim)
+                .withSigner(signer)
+                .build();
 
-            return sdJwt.toSdJwtString();
-        };
-
-        return testingClient.server().fetch(sdJwtFetcher, String.class);
+        return sdJwt.toSdJwtString();
     }
 
     /**
@@ -125,8 +124,8 @@ public class SdJwtVPTestUtils {
         // Bind credential to user
         JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
         ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
-        cnf.set(JWK_CLAIM, JsonSerialization.mapper.valueToTree(jwk));
-        claimSet.set(CNF_CLAIM, cnf);
+        cnf.set(JWK_CLAIM_KEY, JsonSerialization.mapper.valueToTree(jwk));
+        claimSet.set(CNF_CLAIM_KEY, cnf);
 
         if (username != null) {
             claimSet.put(OAuth2Constants.USERNAME, username);
@@ -178,12 +177,16 @@ public class SdJwtVPTestUtils {
         );
     }
 
+    public static JWK getKeycloakJwk() {
+        return testJwkResource("/keys/keycloak.json");
+    }
+
     public static JWK getUserJwk() {
-        return testJwkResource("/oid4vc/oid4vp/user-wallet-key.json");
+        return testJwkResource("/keys/user-wallet-key.json");
     }
 
     public static JWK getStrayJwk() {
-        return testJwkResource("/oid4vc/oid4vp/stray-key.json");
+        return testJwkResource("/keys/stray-key.json");
     }
 
     /**

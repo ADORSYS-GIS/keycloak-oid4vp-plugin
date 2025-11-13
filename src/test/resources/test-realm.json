@@ -1,0 +1,95 @@
+{
+  "id": "test",
+  "realm": "test",
+  "enabled": true,
+  "users": [
+    {
+      "username": "test-user@localhost",
+      "enabled": true,
+      "email": "test-user@localhost",
+      "firstName": "Tom",
+      "lastName": "Brady",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password"
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "test-app",
+      "enabled": true,
+      "redirectUris": [],
+      "secret": "password"
+    },
+    {
+      "clientId": "public-test-app",
+      "enabled": true,
+      "publicClient": true
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "id": "a971a9b9-e766-4438-b989-103991b31f44",
+      "alias": "oid4vp auth",
+      "description": "Authenticate via OpenID4VP presentations of self-issued identity credentials",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "sd-jwt-authenticator",
+          "authenticatorConfig": "sd-jwt-auth-config",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "81d62be9-cf06-4718-8837-fdfb4727b20a",
+      "alias": "sd-jwt-auth-config",
+      "config": {
+        "vct": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",
+        "enforceExpClaim": "true",
+        "enforceRevocationStatus": "true"
+      }
+    }
+  ],
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "custom-rsa",
+        "providerId": "rsa",
+        "config": {
+          "algorithm": [
+            "RS256"
+          ],
+          "privateKey": [
+            "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCDs5vCDYxAJ/2o\nskI+hd2Y8uBoBzwPHQlk/l+OG5FCxiekao5g1Se3cIvDoauOiL27oLAG8vJD11l1\nsQjScLxgMQAuFEddZojmLGqXPQsV3Z8025HhBftv4IDDBCO32ue40SFQJldDPQsB\nwFzhChFLjU839t5dH5Q70dU18B7ROiKENf5Ircu558u1mIz+U1ec4aZL+dG3zpqN\nDrVgAvwrt/m1Ov2H7EgWABsiBwVJRt8mMFJTkPgsWIJKfNc36L6P1FASqQ3H1yPE\nIN9bPB1wWCREkI4B0pxFYUdEKMIq4JuXcpY8nLhkS7zIZ//gWJR61B0kwVxrpbjf\nmB8UfBb3AgMBAAECggEAevpf2xfjepTdG4U4rkE55vQD75+xyTsH5rJQb9X2EjAO\nHE0Tnf/sEjKZj5eLJpEw+d7V/+cjqY2RD4C8CCUVAY0/6cctzF1OQAABmC98BnLn\nkufklAaN/q3YDkHzSF60ObOuM7VZjoOVn5EMKWbJN49ABbYTdUljlWgeezs4y4zy\nLpFNC2lD9kRcmGOZkF8c5NdfxCSQfwKCJF7tpoJYZpaTYusRcuDxy68X3k51pDEO\nGcxKjkhn4+Vh4yxn85dDl/KbaMGOMzPxtGhIs3CgXtUmn4MPtRAuwufHaX6SKcNL\nIfYf+ZVCPApbkPyGH9swfr3Ckh07zqHsfaYm+cQfAQKBgQC/du1wXFN0A4FhRhqT\ndPCq2oSS+KdDjTjLx7RyQ+FmZAwU1kpG0IHvKv2rxBI+C/eMyymTq/pmPKgBdyiR\nlxKWLU5hAP03e/BSOSL/FvkxJw6jcprNLlGbKd689LHB5KNc+TnIOJ223Q3xDfEJ\nWryje1BxGY+gcVNkk6IBGTZV1wKBgQCwF9xko8FFSpILNEXTtATDZjrajVFuecD1\nJQcww64QbglS0WSWzFrzNiMzSgz9x0NdWqGokqjM0aGnSulEcLLasj9OWZ6fTuve\nPe1n8J+s65NGAB6eZ9fvAYvVjc3dN5MuofcAhHN8aS+suYKyVTYiuIos/VtXbdb+\nPXWe8avj4QKBgFJVO+lzalebIknIMalzQgLWkOf6kULVObU3nXr9gbHcF+3l8G7f\nPuCwJgF1ATs5PiyHOMvNypGoR77JlOJ2ioGV3fyMxlbTrxZMh6YWJPZkC0FyCOtu\nnZ0RtjyfJMlyHmXermBRKFD4YgRksGALas8KOh9IlKCz2t6HNcUvKFRlAoGBAKqj\nhKNVeA0AVQNcdSnP8Sm0X+W3OajXfR9Q8WXUyVEMgCZr2JC0mJHD7VpfMLWfKW1G\nTQ8Ah2hq374wPlle6EI6plPzTl3L6Y7j7bFiICk94unbZdBUipAFrI6Vql7q4so2\nkxdCQnLVryguYDMVla8RqnwsSx4uxz55KgiK4emhAoGBAIx5c1FP+6+q1vJM+SgE\nOZZXUy8X78WnKEw9imM4Tkk4r6jM10PyHopuZr0+yXZ4A3Gw/bIplMVpGScqBr/I\nvk8aFXw8Fat+CWlNOs4JlyRVGlfzPQjst3KiiSBNyrOrEOf8/kDmKCuP7rvdp7pz\nuID6EdUn4in0E2RYnLVD7HcR\n-----END PRIVATE KEY-----\n"
+          ]
+        }
+      },
+      {
+        "name": "custom-ecdsa",
+        "providerId": "ecdsa-generated",
+        "config": {
+          "algorithm": [
+            "ES256"
+          ],
+          "ecdsaEllipticCurveKey": [
+            "P-256"
+          ],
+          "ecGenerateCertificate": [
+            "true"
+          ]
+        }
+      }
+    ]
+  }
+}

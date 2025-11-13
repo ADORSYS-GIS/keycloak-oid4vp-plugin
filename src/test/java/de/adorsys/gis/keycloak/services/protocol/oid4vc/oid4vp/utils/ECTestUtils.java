@@ -1,4 +1,4 @@
-package org.keycloak.testsuite.oid4vc.oid4vp.utils;
+package de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.utils;
 
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.crypto.KeyType;
