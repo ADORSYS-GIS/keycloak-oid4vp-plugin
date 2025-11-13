@@ -1,11 +1,11 @@
-package org.keycloak.testsuite.oid4vp;
+package de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.stub;
 
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
-import org.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import org.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import org.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,7 +55,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
             }
 
             String resource = path.substring(path.lastIndexOf('/') + 1);
-            return exampleStatusListJwt(String.format("/oid4vp/tokenstatus/%s.txt", resource));
+            return exampleStatusListJwt(String.format("/tokenstatus/%s.txt", resource));
         }
 
         static String exampleStatusListJwt(String filename) {

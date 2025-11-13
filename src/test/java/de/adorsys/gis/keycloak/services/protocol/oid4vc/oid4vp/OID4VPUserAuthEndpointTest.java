@@ -57,8 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
 
-    public static final String TEST_USER = "test-user@localhost";
-    public static final String TEST_CLIENT_ID = "test-app";
     public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
 
     private final SdJwtVPTestUtils sdJwtVPTestUtils = new SdJwtVPTestUtils(keycloak);

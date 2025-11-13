@@ -48,6 +48,7 @@ public abstract class BaseKeycloakTest {
             .withDefaultProviderClasses()
             .withFeaturesEnabled("oid4vc-vci")
             .withRealmImportFile("/test-realm.json")
+            .withEnv("KC_LOG_LEVEL", "INFO,de.adorsys.gis:DEBUG")
             .withLogConsumer(outputFrame -> System.out.print(outputFrame.getUtf8String()));
 
     @BeforeAll
