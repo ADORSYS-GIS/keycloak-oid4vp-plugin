@@ -54,8 +54,9 @@ public class SdJwtAuthRequirements {
         //  is so far rigid for aud claim verification with pattern matching, we hardcode the client
         //  scheme for compatibility with the Lissi wallet. Once made flexible, uncomment the logic
         //  above.
-        String kbJwtAud = context.getClient().getClientId();
-        this.expectedKbJwtAud = String.format("%s:%s", ClientIdScheme.X509_SAN_DNS, kbJwtAud);
+        String kbJwtAud = context.getUri().getBaseUri().getHost();
+        String clientIdScheme = ClientIdScheme.X509_SAN_DNS.getValue().toLowerCase();
+        this.expectedKbJwtAud = String.format("%s:%s", clientIdScheme, kbJwtAud);
 
         // Reading authenticator configs
         Map<String, String> config = (authConfig != null && authConfig.getConfig() != null)

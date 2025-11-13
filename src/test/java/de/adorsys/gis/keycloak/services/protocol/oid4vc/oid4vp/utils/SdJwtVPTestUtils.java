@@ -3,6 +3,7 @@ package de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.utils;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import de.adorsys.gis.keycloak.services.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import de.adorsys.gis.keycloak.services.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.util.KeycloakUriBuilder;
@@ -19,6 +20,7 @@ import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -161,6 +163,12 @@ public class SdJwtVPTestUtils {
         long currentTime = Time.currentTime();
         kbJwtClaims.iat(currentTime);
         kbJwtClaims.exp(currentTime + kbJwtLifespan);
+
+        // TODO: Remove the explicit scheme below when Keycloak supports aud pattern matching
+        String clientIdScheme = ClientIdScheme.X509_SAN_DNS.getValue().toLowerCase();
+        if (StringUtil.isNotBlank(aud) && !aud.startsWith(clientIdScheme + ":")) {
+            aud = String.format("%s:%s", clientIdScheme, aud);
+        }
 
         kbJwtClaims.getOtherClaims().put(IDToken.NONCE, nonce);
         kbJwtClaims.getOtherClaims().put(IDToken.AUD, aud);

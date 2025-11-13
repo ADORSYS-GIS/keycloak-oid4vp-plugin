@@ -45,7 +45,7 @@ public abstract class BaseKeycloakTest {
 
     @Container
     protected static KeycloakContainer keycloak = new KeycloakContainer("quay.io/keycloak/keycloak:nightly")
-            .withDefaultProviderClasses()
+            .withProviderClassesFrom("target/classes", "target/test-classes")
             .withFeaturesEnabled("oid4vc-vci")
             .withRealmImportFile("/test-realm.json")
             .withEnv("KC_LOG_LEVEL", "INFO,de.adorsys.gis:DEBUG")
