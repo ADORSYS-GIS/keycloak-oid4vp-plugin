@@ -11,7 +11,10 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
@@ -58,14 +61,26 @@ public abstract class BaseKeycloakTest {
 
         // Reconstruct token endpoint URL
         String serverUrl = keycloak.getAuthServerUrl();
-
         tokenEndpoint = KeycloakUriBuilder.fromUri(serverUrl)
                 .path("/realms/{realm}/protocol/openid-connect/token")
                 .build(TEST_REALM_NAME)
                 .toString();
+    }
 
-        // Charter HTTP client for testing
+    @AfterAll
+    public static void teardown() {
+        keycloak.stop();
+        keycloak.close();
+    }
+
+    @BeforeEach
+    public void before() {
         httpClient = HttpClientBuilder.create().build();
+    }
+
+    @AfterEach
+    public void after() throws IOException {
+        httpClient.close();
     }
 
     protected List<NameValuePair> getDefaultHttpParams() {
