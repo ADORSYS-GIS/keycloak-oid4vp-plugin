@@ -11,7 +11,6 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,12 +64,6 @@ public abstract class BaseKeycloakTest {
                 .path("/realms/{realm}/protocol/openid-connect/token")
                 .build(TEST_REALM_NAME)
                 .toString();
-    }
-
-    @AfterAll
-    public static void teardown() {
-        keycloak.stop();
-        keycloak.close();
     }
 
     @BeforeEach
