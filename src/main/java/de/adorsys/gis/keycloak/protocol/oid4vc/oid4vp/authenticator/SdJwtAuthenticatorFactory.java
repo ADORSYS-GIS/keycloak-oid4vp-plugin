@@ -1,14 +1,14 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import org.keycloak.provider.ProviderConfigProperty;
 
 import java.util.ArrayList;

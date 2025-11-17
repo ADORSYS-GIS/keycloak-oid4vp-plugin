@@ -1,8 +1,8 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http;
 
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import org.keycloak.broker.provider.util.SimpleHttp;
 import org.keycloak.models.KeycloakSession;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
 /**
  * Simple implementation of StatusListJwtFetcher for token status list validation.

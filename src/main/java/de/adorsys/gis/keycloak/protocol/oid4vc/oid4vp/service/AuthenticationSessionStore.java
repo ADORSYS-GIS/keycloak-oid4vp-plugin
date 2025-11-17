@@ -1,7 +1,7 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import org.jboss.logging.Logger;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import org.jboss.logging.Logger;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 

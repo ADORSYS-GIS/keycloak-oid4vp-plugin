@@ -1,14 +1,5 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import org.jboss.logging.Logger;
-import org.keycloak.common.util.CertificateUtils;
-import org.keycloak.crypto.KeyWrapper;
-import org.keycloak.crypto.SignatureProvider;
-import org.keycloak.crypto.SignatureSignerContext;
-import org.keycloak.jose.jwe.JWEUtils;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.utils.SessionExpiration;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
@@ -20,6 +11,15 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
+import org.jboss.logging.Logger;
+import org.keycloak.common.util.CertificateUtils;
+import org.keycloak.crypto.KeyWrapper;
+import org.keycloak.crypto.SignatureProvider;
+import org.keycloak.crypto.SignatureSignerContext;
+import org.keycloak.jose.jwe.JWEUtils;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.utils.SessionExpiration;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 import javax.naming.ldap.LdapName;

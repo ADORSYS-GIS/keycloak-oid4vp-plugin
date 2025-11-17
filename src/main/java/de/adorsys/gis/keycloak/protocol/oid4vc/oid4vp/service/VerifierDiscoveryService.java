@@ -1,5 +1,8 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import org.jboss.logging.Logger;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.crypto.KeyUse;
@@ -9,9 +12,6 @@ import org.keycloak.models.KeyManager;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.services.Urls;
 import org.keycloak.urls.UrlType;

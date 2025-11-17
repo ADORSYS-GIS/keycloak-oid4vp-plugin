@@ -1,11 +1,11 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import org.keycloak.util.JsonSerialization;
 
 import java.util.Base64;

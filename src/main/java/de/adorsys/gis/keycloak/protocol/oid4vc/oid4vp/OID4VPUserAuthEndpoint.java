@@ -1,6 +1,13 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -22,13 +29,6 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;

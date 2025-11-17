@@ -2,6 +2,8 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
+import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
@@ -15,8 +17,6 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
-import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;

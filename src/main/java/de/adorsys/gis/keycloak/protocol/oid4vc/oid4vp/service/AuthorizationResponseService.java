@@ -1,5 +1,11 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.Descriptor;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
@@ -10,12 +16,6 @@ import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oid4vc.model.Format;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.Descriptor;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;

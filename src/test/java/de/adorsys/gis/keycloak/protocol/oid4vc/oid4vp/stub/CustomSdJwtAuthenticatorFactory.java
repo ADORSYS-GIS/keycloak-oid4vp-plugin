@@ -1,11 +1,11 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.stub;
 
-import org.keycloak.authentication.Authenticator;
-import org.keycloak.models.KeycloakSession;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
+import org.keycloak.authentication.Authenticator;
+import org.keycloak.models.KeycloakSession;
 
 import java.io.IOException;
 import java.io.InputStream;
