@@ -30,7 +30,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Base Keycloak test class getting a realm ready for OpenID4VC scenarios.
+ * Base Keycloak test class for leveraging the TestContainers infrastructure.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
@@ -38,39 +38,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public abstract class BaseKeycloakTest {
 
     public static final String TEST_REALM_NAME = "test";
+    public static final String TEST_REALM_V2_NAME = "test-v2";
     public static final String TEST_USER = "test-user@localhost";
     public static final String TEST_CLIENT_ID = "test-app";
     public static final String TEST_CLIENT_SECRET = "password";
 
-    protected static String testRealmEndpoint;
-    protected static String tokenEndpoint;
     protected static CloseableHttpClient httpClient;
 
     @Container
     protected static KeycloakContainer keycloak = new KeycloakContainer("quay.io/keycloak/keycloak:nightly")
             .withProviderClassesFrom("target/classes", "target/test-classes")
             .withFeaturesEnabled("oid4vc-vci")
-            .withRealmImportFile("/test-realm.json")
+            .withRealmImportFile("/realms/test-realm.json")
+            .withRealmImportFile("/realms/test-realm-v2.json")
             .withEnv("KC_LOG_LEVEL", "INFO,de.adorsys.gis:DEBUG")
             .withLogConsumer(outputFrame -> System.out.print(outputFrame.getUtf8String()));
 
     @BeforeAll
     public static void setup() {
-        // Enable crypto operations
         CryptoIntegration.init(BaseKeycloakTest.class.getClassLoader());
-
-        // Reconstruct realm and token endpoints
-        String serverUrl = keycloak.getAuthServerUrl();
-
-        testRealmEndpoint = KeycloakUriBuilder.fromUri(serverUrl)
-                .path("/realms/{realm}")
-                .build(TEST_REALM_NAME)
-                .toString();
-
-        tokenEndpoint = KeycloakUriBuilder.fromUri(testRealmEndpoint)
-                .path("/protocol/openid-connect/token")
-                .build()
-                .toString();
     }
 
     @BeforeEach
@@ -81,6 +67,25 @@ public abstract class BaseKeycloakTest {
     @AfterEach
     public void after() throws IOException {
         httpClient.close();
+    }
+
+    protected String getActiveTestRealm() {
+        return TEST_REALM_NAME;
+    }
+
+    protected String getTestRealmEndpoint() {
+        String serverUrl = keycloak.getAuthServerUrl();
+        return KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/realms/{realm}")
+                .build(getActiveTestRealm())
+                .toString();
+    }
+
+    protected String getTestTokenEndpoint() {
+        return KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
+                .path("/protocol/openid-connect/token")
+                .build()
+                .toString();
     }
 
     protected List<NameValuePair> getDefaultHttpParams() {
@@ -100,7 +105,7 @@ public abstract class BaseKeycloakTest {
         params.add(new BasicNameValuePair(OAuth2Constants.CODE, code));
 
         // Prepare the request
-        HttpPost httpPost = new HttpPost(tokenEndpoint);
+        HttpPost httpPost = new HttpPost(getTestTokenEndpoint());
         httpPost.setEntity(new UrlEncodedFormEntity(params));
 
         // Execute the request and process the response

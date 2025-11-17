@@ -1,6 +1,5 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
-import de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -14,22 +13,16 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRespo
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
-import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jwk.JWK;
-import org.keycloak.jose.jws.JWSInput;
-import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
@@ -55,11 +48,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
+public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
 
-    private final SdJwtVPTestUtils sdJwtVPTestUtils = new SdJwtVPTestUtils(keycloak);
+    private final SdJwtVPTestUtils sdJwtVPTestUtils = new SdJwtVPTestUtils(keycloak, getActiveTestRealm());
 
     @Test
     public void shouldProduceAuthorizationRequests() throws Exception {
@@ -507,7 +500,7 @@ public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
         assertEquals(opts.getTestUser(), accessToken.getPreferredUsername());
 
         // Assert token issuer
-        assertEquals(testRealmEndpoint, accessToken.getIssuer());
+        assertEquals(getTestRealmEndpoint(), accessToken.getIssuer());
     }
 
     /**
@@ -629,53 +622,6 @@ public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
     }
 
     /**
-     * Request a fresh OpenID4VP authorization request from Keycloak.
-     * A request is sent to the endpoint for this purpose.
-     */
-    private AuthorizationContext requestAuthorizationRequest() throws Exception {
-        URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
-                .addParameter("client_id", TEST_CLIENT_ID)
-                .build();
-
-        HttpGet httpGet = new HttpGet(uri);
-        HttpResponse response = httpClient.execute(httpGet);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        return parseAuthorizationContext(response);
-    }
-
-    /**
-     * Resolve the request object associated with the authorization request.
-     * A request is sent to the request_uri dereferencing endpoint to retrieve the request object.     *
-     */
-    private RequestObject resolveRequestObject(String authRequest) throws IOException, JWSInputException {
-        String signedRequestJwt = resolveSignedRequestObject(authRequest);
-        JWSInput jwsInput = new JWSInput(signedRequestJwt);
-        return jwsInput.readJsonContent(RequestObject.class);
-    }
-
-    /**
-     * Resolve the request object associated with the authorization request.
-     * A request is sent to the request_uri dereferencing endpoint to retrieve the request object.     *
-     */
-    private String resolveSignedRequestObject(String authRequest) throws IOException {
-        // Extract the request_uri parameter
-        String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
-                .filter(p -> p.getName().equals("request_uri"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing query param: request_uri"));
-
-        // Send resolution request
-        HttpGet httpGet = new HttpGet(requestUri);
-        HttpResponse response = httpClient.execute(httpGet);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        // Parse and return the expected JWT response
-        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-    }
-
-    /**
      * Sends an OpenID4VP response to Keycloak, producing an SD-JWT verifiable presentation.
      */
     private HttpResponse sendAuthorizationResponse(String sdJwt, RequestObject requestObject, TestOpts opts)
@@ -760,41 +706,6 @@ public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
                         JsonSerialization.writeValueAsString(submission)),
                 new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())
         ));
-    }
-
-    /**
-     * Fetch the authentication status of an opened session by transaction ID.
-     */
-    private HttpResponse fetchAuthenticationStatus(String transactionId) throws IOException {
-        String url = getOid4vpEndpoint(String.format("/status/%s", transactionId));
-        HttpGet httpGet = new HttpGet(url);
-        return httpClient.execute(httpGet);
-    }
-
-    private static AuthorizationContext parseAuthorizationContext(HttpResponse response) throws IOException {
-        return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8),
-                AuthorizationContext.class
-        );
-    }
-
-    private static OAuth2ErrorRepresentation parseErrorResponse(HttpResponse response) throws IOException {
-        return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8),
-                OAuth2ErrorRepresentation.class
-        );
-    }
-
-    private String getOid4vpEndpoint(String route) {
-        return KeycloakUriBuilder.fromUri(testRealmEndpoint)
-                .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
-                .path(route)
-                .build(TEST_REALM_NAME)
-                .toString();
-    }
-
-    private String getVerifierClientId() {
-        return keycloak.getHost();
     }
 
 //    TODO: Test OIDC chaining

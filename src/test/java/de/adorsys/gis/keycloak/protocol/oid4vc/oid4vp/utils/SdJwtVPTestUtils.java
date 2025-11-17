@@ -29,7 +29,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Map;
 import java.util.Objects;
 
-import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_REALM_NAME;
 import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
 import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
 
@@ -48,9 +47,11 @@ public class SdJwtVPTestUtils {
     public static final String JWK_CLAIM_KEY = "jwk";
 
     private final KeycloakContainer keycloak;
+    private final String activeTestRealm;
 
-    public SdJwtVPTestUtils(KeycloakContainer keycloak) {
+    public SdJwtVPTestUtils(KeycloakContainer keycloak, String activeTestRealm) {
         this.keycloak = keycloak;
+        this.activeTestRealm = activeTestRealm;
     }
 
     /**
@@ -87,7 +88,7 @@ public class SdJwtVPTestUtils {
         String serverUrl = keycloak.getAuthServerUrl();
         String keycloakIssuerURI = KeycloakUriBuilder.fromUri(serverUrl)
                 .path("/realms/{realm}")
-                .build(TEST_REALM_NAME)
+                .build(activeTestRealm)
                 .toString();
 
         SdJwt sdJwt = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim)
