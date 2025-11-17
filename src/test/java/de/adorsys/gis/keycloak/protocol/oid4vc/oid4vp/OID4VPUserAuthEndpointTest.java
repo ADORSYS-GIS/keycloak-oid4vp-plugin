@@ -244,16 +244,6 @@ public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
 
         // Proceed to authentication
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault().setTestUser(testUser));
-
-        // TODO: Assert that "unknown-user" was imported
-//        testingClient.server(TEST_REALM_NAME).run(session -> {
-//            UserModel user = session.users().getUserByUsername(
-//                    session.getContext().getRealm(),
-//                    testUser
-//            );
-//
-//            assertNotNull("User 'unknown-user' should have been imported", user);
-//        });
     }
 
     @Test
@@ -515,6 +505,9 @@ public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
 
         // Assert authenticating user
         assertEquals(opts.getTestUser(), accessToken.getPreferredUsername());
+
+        // Assert token issuer
+        assertEquals(testRealmEndpoint, accessToken.getIssuer());
     }
 
     /**
@@ -793,8 +786,7 @@ public class OID4VPUserAuthEndpointTest extends BaseKeycloakTest {
     }
 
     private String getOid4vpEndpoint(String route) {
-        return KeycloakUriBuilder.fromUri(keycloak.getAuthServerUrl())
-                .path("/realms/{realm}")
+        return KeycloakUriBuilder.fromUri(testRealmEndpoint)
                 .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
                 .path(route)
                 .build(TEST_REALM_NAME)

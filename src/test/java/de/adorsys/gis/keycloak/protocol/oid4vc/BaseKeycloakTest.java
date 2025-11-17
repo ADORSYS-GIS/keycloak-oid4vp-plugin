@@ -42,6 +42,7 @@ public abstract class BaseKeycloakTest {
     public static final String TEST_CLIENT_ID = "test-app";
     public static final String TEST_CLIENT_SECRET = "password";
 
+    protected static String testRealmEndpoint;
     protected static String tokenEndpoint;
     protected static CloseableHttpClient httpClient;
 
@@ -58,11 +59,17 @@ public abstract class BaseKeycloakTest {
         // Enable crypto operations
         CryptoIntegration.init(BaseKeycloakTest.class.getClassLoader());
 
-        // Reconstruct token endpoint URL
+        // Reconstruct realm and token endpoints
         String serverUrl = keycloak.getAuthServerUrl();
-        tokenEndpoint = KeycloakUriBuilder.fromUri(serverUrl)
-                .path("/realms/{realm}/protocol/openid-connect/token")
+
+        testRealmEndpoint = KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/realms/{realm}")
                 .build(TEST_REALM_NAME)
+                .toString();
+
+        tokenEndpoint = KeycloakUriBuilder.fromUri(testRealmEndpoint)
+                .path("/protocol/openid-connect/token")
+                .build()
                 .toString();
     }
 

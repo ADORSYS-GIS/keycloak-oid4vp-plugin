@@ -7,11 +7,12 @@ This plugin adds OpenID4VP authentication to Keycloak
 This plugin has been tested with:
 
 | **Requirement** | **Version** |
-| --------------- | ----------- |
+|-----------------|-------------|
 | **Java**        | 17          |
-| **Keycloak**    | 26.2.4      |
+| **Keycloak**    | nightly     |
 
-While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested versions for best results.
+While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
+versions for best results.
 
 ## Build the Plugin
 

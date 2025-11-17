@@ -52,11 +52,3 @@ if (Profile.isFeatureEnabled(Feature.OID4VC_VPAUTH)) {
 ## OIDC chaining support
 
 0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and certificate generation
-
-## Miscellaneous improvements and fixes.
-
-```java
-// SdJwtCredentialBody.java
-public static final String CNF_CLAIM = "cnf";
-public static final String JWK_CLAIM = "jwk";
-```
