@@ -11,6 +11,8 @@ import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.models.utils.PostMigrationEvent;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.services.resource.RealmResourceProviderFactory;
 
@@ -38,8 +40,27 @@ public class OID4VPUserAuthEndpointFactory
         KeycloakContext context = session.getContext();
         RealmModel realm = context.getRealm();
         EventBuilder event = new EventBuilder(realm, session, context.getConnection());
-        migrateRealmIfNecessary(realm);
         return new OID4VPUserAuthEndpoint(session, event);
+    }
+
+    @Override
+    public void init(Config.Scope config) {
+    }
+
+    @Override
+    public void postInit(KeycloakSessionFactory factory) {
+        factory.register(event -> {
+            if (event instanceof PostMigrationEvent) {
+                logger.debugf("Migrating existing realms to add OpenID4VP user auth flow...");
+                KeycloakModelUtils.runJobInTransaction(factory, session ->
+                        session.realms().getRealmsStream().forEach(this::migrateRealmIfNecessary)
+                );
+            } else if (event instanceof RealmModel.RealmPostCreateEvent realmEvent) {
+                logger.debugf("Migrating newly created realm to add OpenID4VP user auth flow...");
+                RealmModel realm = realmEvent.getCreatedRealm();
+                migrateRealmIfNecessary(realm);
+            }
+        });
     }
 
     private void migrateRealmIfNecessary(RealmModel realm) {
@@ -70,14 +91,6 @@ public class OID4VPUserAuthEndpointFactory
         execution.setAuthenticatorFlow(false);
 
         realm.addAuthenticatorExecution(execution);
-    }
-
-    @Override
-    public void init(Config.Scope config) {
-    }
-
-    @Override
-    public void postInit(KeycloakSessionFactory factory) {
     }
 
     @Override

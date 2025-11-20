@@ -3,8 +3,8 @@ services:
     image: quay.io/keycloak/keycloak:nightly
     command: start-dev --features=oid4vc-vci --log-level=DEBUG
     environment:
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
     ports:
       - "8080:8080"
     volumes:
