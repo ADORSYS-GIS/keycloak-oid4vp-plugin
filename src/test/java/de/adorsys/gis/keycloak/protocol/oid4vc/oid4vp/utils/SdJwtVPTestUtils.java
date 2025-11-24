@@ -16,8 +16,8 @@ import org.keycloak.jose.jwk.JWK;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.DisclosureSpec;
+import org.keycloak.sdjwt.IssuerSignedJWT;
 import org.keycloak.sdjwt.SdJwt;
-import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
@@ -91,17 +91,17 @@ public class SdJwtVPTestUtils {
                 .build(activeTestRealm)
                 .toString();
 
-        SdJwt sdJwt = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim)
-                .withSigner(signer)
-                .build();
-
-        return sdJwt.toSdJwtString();
+        IssuerSignedJWT issuerSignedJWT = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim);
+        return SdJwt.builder()
+                .withIssuerSignedJwt(issuerSignedJWT)
+                .build(signer)
+                .toSdJwtString();
     }
 
     /**
      * Scaffold an SD-JWT identity credential that can clear authentication.
      */
-    private static SdJwt.Builder exampleSdJwtCredential(
+    private static IssuerSignedJWT exampleSdJwtCredential(
             String iss, String vct, String username, boolean setStatusClaim
     ) {
         Objects.requireNonNull(iss);
@@ -135,9 +135,9 @@ public class SdJwtVPTestUtils {
             disclosure = disclosure.withUndisclosedClaim(OAuth2Constants.USERNAME, "eI8ZWm9QnKPpNPeNenHdhQ");
         }
 
-        return SdJwt.builder()
-                .withDisclosureSpec(disclosure.build())
-                .withClaimSet(claimSet);
+        return IssuerSignedJWT.builder()
+                .withClaims(claimSet, disclosure.build())
+                .build();
     }
 
     /**
@@ -182,7 +182,7 @@ public class SdJwtVPTestUtils {
                 null,
                 JsonSerialization.mapper.valueToTree(kbJwtClaims),
                 signer,
-                KeyBindingJWT.TYP
+                OID4VCConstants.KEYBINDING_JWT_TYP
         );
     }
 

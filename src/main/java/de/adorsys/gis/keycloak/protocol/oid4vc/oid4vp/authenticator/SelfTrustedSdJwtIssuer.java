@@ -40,7 +40,7 @@ public class SelfTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
         Stream<KeyWrapper> keyStream = keyManager.getKeysStream(realm)
                 .filter(key -> KeyUse.SIG.equals(key.getUse()));
 
-        String signingKeyId = issuerSignedJWT.getHeader().getKeyId();
+        String signingKeyId = issuerSignedJWT.getJwsHeader().getKeyId();
         if (signingKeyId != null) {
             keyStream = keyStream.filter(key -> signingKeyId.equals(key.getKid()));
         }
