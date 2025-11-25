@@ -3,13 +3,17 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.keycloak.util.JsonSerialization;
 
 import java.util.Base64;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Test for ReferencedTokenValidator using the official IETF specification test vectors.
@@ -29,7 +33,7 @@ public class ReferencedTokenValidatorTest {
 
     private ReferencedTokenValidator validator;
 
-    @Before
+    @BeforeEach
     public void setUp() {
 
         // Create a mock Status List JWT fetcher
@@ -59,6 +63,7 @@ public class ReferencedTokenValidatorTest {
     @Test
     public void testIETFSpecVectorSize_1Bit() {
         // Test to understand the actual size of the IETF 1-bit test vector
+        @SuppressWarnings("RedundantLocalVariable")
         String lst = IETF_1BIT_TEST_VECTOR;
         int bits = 1;
 
@@ -66,16 +71,17 @@ public class ReferencedTokenValidatorTest {
         try {
             int maxIndex = 1048576; // Known size from IETF spec (2^20)
             ReferencedTokenValidator.readStatusValue(lst, maxIndex, bits);
-            Assert.fail("Expected test vector to fail for index " + maxIndex + " but it succeeded.");
+            fail("Expected test vector to fail for index " + maxIndex + " but it succeeded.");
         } catch (ReferencedTokenValidationException e) {
             // Assert the exact expected error message
-            Assert.assertEquals("Index 1048576 out of range (0-1048575)", e.getMessage());
+            assertEquals("Index 1048576 out of range (0-1048575)", e.getMessage());
         }
     }
 
     @Test
     public void testIETFSpecVectorSize_2Bit() {
         // Test to understand the actual size of the IETF 2-bit test vector
+        @SuppressWarnings("RedundantLocalVariable")
         String lst = IETF_2BIT_TEST_VECTOR;
         int bits = 2;
 
@@ -83,10 +89,10 @@ public class ReferencedTokenValidatorTest {
         try {
             int maxIndex = 1048576; // Known size from IETF spec (2^20)
             ReferencedTokenValidator.readStatusValue(lst, maxIndex, bits);
-            Assert.fail("Expected test vector to fail for index " + maxIndex + " but it succeeded.");
+            fail("Expected test vector to fail for index " + maxIndex + " but it succeeded.");
         } catch (ReferencedTokenValidationException e) {
             // Assert the exact expected error message
-            Assert.assertEquals("Index 1048576 out of range (0-1048575)", e.getMessage());
+            assertEquals("Index 1048576 out of range (0-1048575)", e.getMessage());
         }
     }
 
@@ -103,16 +109,19 @@ public class ReferencedTokenValidatorTest {
         // Only test indices within the valid range (0-1048575 for 2^20 entries)
         int[] indicesWithStatus1 = {0, 1993, 25460, 159495, 495669, 554353, 645645, 723232, 854545, 934534, 1000345};
         for (int idx : indicesWithStatus1) {
-            Assert.assertEquals("status[" + idx + "] should be 1", 1, ReferencedTokenValidator.readStatusValue(lst, idx, bits));
+            assertEquals(1, ReferencedTokenValidator.readStatusValue(lst, idx, bits),
+                    "status[" + idx + "] should be 1");
         }
 
         // Test some indices that should have status = 0 (VALID) - not mentioned in spec
         for (int idx : List.of(1, 100, 1000, 5000, 10000, 15000)) {
-            Assert.assertEquals("status[" + idx + "] should be 0 (not mentioned in spec)", 0, ReferencedTokenValidator.readStatusValue(lst, idx, bits));
+            assertEquals(0, ReferencedTokenValidator.readStatusValue(lst, idx, bits),
+                    "status[" + idx + "] should be 0 (not mentioned in spec)");
         }
 
         // Test boundary conditions
-        Assert.assertEquals("status[1048575] should be 0 (last valid index)", 0, ReferencedTokenValidator.readStatusValue(lst, 1048575, bits));
+        assertEquals(0, ReferencedTokenValidator.readStatusValue(lst, 1048575, bits),
+                "status[1048575] should be 0 (last valid index)");
     }
 
     @Test
@@ -131,22 +140,27 @@ public class ReferencedTokenValidatorTest {
         int[] indicesWithStatus3 = {159495, 1000345};
 
         for (int idx : indicesWithStatus1) {
-            Assert.assertEquals("status[" + idx + "] should be 1", 1, ReferencedTokenValidator.readStatusValue(lst, idx, bits));
+            assertEquals(1, ReferencedTokenValidator.readStatusValue(lst, idx, bits),
+                    "status[" + idx + "] should be 1");
         }
         for (int idx : indicesWithStatus2) {
-            Assert.assertEquals("status[" + idx + "] should be 2", 2, ReferencedTokenValidator.readStatusValue(lst, idx, bits));
+            assertEquals(2, ReferencedTokenValidator.readStatusValue(lst, idx, bits),
+                    "status[" + idx + "] should be 2");
         }
         for (int idx : indicesWithStatus3) {
-            Assert.assertEquals("status[" + idx + "] should be 3", 3, ReferencedTokenValidator.readStatusValue(lst, idx, bits));
+            assertEquals(3, ReferencedTokenValidator.readStatusValue(lst, idx, bits),
+                    "status[" + idx + "] should be 3");
         }
 
         // Test some indices that should have status = 0 (VALID) - not mentioned in spec
         for (int idx : List.of(1, 100, 1000, 5000, 10000, 12000)) {
-            Assert.assertEquals("status[" + idx + "] should be 0 (not mentioned in spec)", 0, ReferencedTokenValidator.readStatusValue(lst, idx, bits));
+            assertEquals(0, ReferencedTokenValidator.readStatusValue(lst, idx, bits),
+                    "status[" + idx + "] should be 0 (not mentioned in spec)");
         }
 
         // Test boundary conditions
-        Assert.assertEquals("status[1048575] should be 0 (last valid index)", 0, ReferencedTokenValidator.readStatusValue(lst, 1048575, bits));
+        assertEquals(0, ReferencedTokenValidator.readStatusValue(lst, 1048575, bits),
+                "status[1048575] should be 0 (last valid index)");
     }
 
     @Test
@@ -163,16 +177,17 @@ public class ReferencedTokenValidatorTest {
         // Test all 12 status values according to the IETF spec example
         int[] expectedValues = {1, 2, 0, 3, 0, 1, 0, 1, 1, 2, 3, 3};
         for (int i = 0; i < expectedValues.length; i++) {
-            Assert.assertEquals("status[" + i + "] should be " + expectedValues[i], expectedValues[i], ReferencedTokenValidator.readStatusValue(lst, i, bits));
+            assertEquals(expectedValues[i], ReferencedTokenValidator.readStatusValue(lst, i, bits),
+                    "status[" + i + "] should be " + expectedValues[i]);
         }
 
         // Test that accessing beyond the valid range throws an exception
         try {
             ReferencedTokenValidator.readStatusValue(lst, 12, bits);
-            Assert.fail("Should throw exception for index 12 (beyond valid range 0-11)");
+            fail("Should throw exception for index 12 (beyond valid range 0-11)");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention out of range",
-                    e.getMessage().contains("out of range"));
+            assertTrue(e.getMessage().contains("out of range"),
+                    "Exception should mention out of range");
         }
     }
 
@@ -190,16 +205,17 @@ public class ReferencedTokenValidatorTest {
         // Test all 16 status values
         int[] expectedValues = {1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1};
         for (int i = 0; i < expectedValues.length; i++) {
-            Assert.assertEquals("status[" + i + "] should be " + expectedValues[i], expectedValues[i], ReferencedTokenValidator.readStatusValue(lst, i, bits));
+            assertEquals(expectedValues[i], ReferencedTokenValidator.readStatusValue(lst, i, bits),
+                    "status[" + i + "] should be " + expectedValues[i]);
         }
 
         // Test that accessing beyond the valid range throws an exception
         try {
             ReferencedTokenValidator.readStatusValue(lst, 16, bits);
-            Assert.fail("Should throw exception for index 16 (beyond valid range 0-15)");
+            fail("Should throw exception for index 16 (beyond valid range 0-15)");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention out of range",
-                    e.getMessage().contains("out of range"));
+            assertTrue(e.getMessage().contains("out of range"),
+                    "Exception should mention out of range");
         }
     }
 
@@ -219,13 +235,13 @@ public class ReferencedTokenValidatorTest {
                 }
                 """);
 
-        ReferencedTokenValidationException exception = Assert.assertThrows(
-                "Should throw exception for invalid status (status[0] = 1)",
+        ReferencedTokenValidationException exception = assertThrows(
                 ReferencedTokenValidationException.class,
-                () -> validator.validate(invalidTokenPayload)
+                () -> validator.validate(invalidTokenPayload),
+                "Should throw exception for invalid status (status[0] = 1)"
         );
-        Assert.assertTrue("Exception should mention invalid status. Actual message: " + exception.getMessage(),
-                exception.getMessage().contains("Token status is not valid"));
+        assertTrue(exception.getMessage().contains("Token status is not valid"),
+                "Exception should mention invalid status. Actual message: " + exception.getMessage());
 
         // Test with status[1] = 0 (VALID) - should pass
         JsonNode validTokenPayload = JsonSerialization.mapper.readTree("""
@@ -259,13 +275,13 @@ public class ReferencedTokenValidatorTest {
                 }
                 """);
 
-        ReferencedTokenValidationException exception1 = Assert.assertThrows(
-                "Should throw exception for invalid status (status[0] = 1)",
+        ReferencedTokenValidationException exception1 = assertThrows(
                 ReferencedTokenValidationException.class,
-                () -> validator.validate(invalidTokenPayload)
+                () -> validator.validate(invalidTokenPayload),
+                "Should throw exception for invalid status (status[0] = 1)"
         );
-        Assert.assertTrue("Exception should mention invalid status",
-                exception1.getMessage().contains("Token status is not valid"));
+        assertTrue(exception1.getMessage().contains("Token status is not valid"),
+                "Exception should mention invalid status");
 
         // Test with status[1993] = 2 (SUSPENDED)
         JsonNode suspendedTokenPayload = JsonSerialization.mapper.readTree("""
@@ -279,13 +295,13 @@ public class ReferencedTokenValidatorTest {
                 }
                 """);
 
-        ReferencedTokenValidationException exception2 = Assert.assertThrows(
-                "Should throw exception for suspended status (status[1993] = 2)",
+        ReferencedTokenValidationException exception2 = assertThrows(
                 ReferencedTokenValidationException.class,
-                () -> validator.validate(suspendedTokenPayload)
+                () -> validator.validate(suspendedTokenPayload),
+                "Should throw exception for suspended status (status[1993] = 2)"
         );
-        Assert.assertTrue("Exception should mention invalid status",
-                exception2.getMessage().contains("Token status is not valid"));
+        assertTrue(exception2.getMessage().contains("Token status is not valid"),
+                "Exception should mention invalid status");
 
         // Test with a valid status (any index not mentioned in spec should be 0)
         JsonNode validTokenPayload = JsonSerialization.mapper.readTree("""
@@ -310,97 +326,97 @@ public class ReferencedTokenValidatorTest {
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for missing 'status' claim");
+            fail("Should throw exception for missing 'status' claim");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention missing status claim",
-                    e.getMessage().contains("Missing required 'status' claim"));
+            assertTrue(e.getMessage().contains("Missing required 'status' claim"),
+                    "Exception should mention missing status claim");
         }
 
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for missing 'status_list'");
+            fail("Should throw exception for missing 'status_list'");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention missing status_list",
-                    e.getMessage().contains("Missing required 'status_list'"));
+            assertTrue(e.getMessage().contains("Missing required 'status_list'"),
+                    "Exception should mention missing status_list");
         }
 
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": -1, \"uri\": \"https://example.com\"}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for negative 'idx' value");
+            fail("Should throw exception for negative 'idx' value");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention non-negative idx",
-                    e.getMessage().contains("non-negative"));
+            assertTrue(e.getMessage().contains("non-negative"),
+                    "Exception should mention non-negative idx");
         }
 
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": 999999999, \"uri\": \"https://example.com\"}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for very large 'idx' value");
+            fail("Should throw exception for very large 'idx' value");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention out of range",
-                    e.getMessage().contains("out of range"));
+            assertTrue(e.getMessage().contains("out of range"),
+                    "Exception should mention out of range");
         }
 
         // Test missing idx field
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"uri\": \"https://example.com\"}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for missing 'idx' field");
+            fail("Should throw exception for missing 'idx' field");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention missing idx field",
-                    e.getMessage().contains("Missing required 'idx' field"));
+            assertTrue(e.getMessage().contains("Missing required 'idx' field"),
+                    "Exception should mention missing idx field");
         }
 
         // Test missing uri field
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": 123}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for missing 'uri' field");
+            fail("Should throw exception for missing 'uri' field");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention missing uri field",
-                    e.getMessage().contains("Missing required 'uri' field"));
+            assertTrue(e.getMessage().contains("Missing required 'uri' field"),
+                    "Exception should mention missing uri field");
         }
 
         // Test null uri value
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": 123, \"uri\": null}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for null 'uri' value");
+            fail("Should throw exception for null 'uri' value");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention uri cannot be null",
-                    e.getMessage().contains("cannot be null"));
+            assertTrue(e.getMessage().contains("cannot be null"),
+                    "Exception should mention uri cannot be null");
         }
 
         // Test empty uri string
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": 123, \"uri\": \"\"}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for empty 'uri' value");
+            fail("Should throw exception for empty 'uri' value");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention uri cannot be empty",
-                    e.getMessage().contains("cannot be empty"));
+            assertTrue(e.getMessage().contains("cannot be empty"),
+                    "Exception should mention uri cannot be empty");
         }
 
         // Test wrong idx data type
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": \"not-a-number\", \"uri\": \"https://example.com\"}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for wrong 'idx' data type");
+            fail("Should throw exception for wrong 'idx' data type");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention idx must be a number",
-                    e.getMessage().contains("must be a number"));
+            assertTrue(e.getMessage().contains("must be a number"),
+                    "Exception should mention idx must be a number");
         }
 
         // Test wrong uri data type
         try {
             JsonNode tokenPayload = JsonSerialization.mapper.readTree("{\"status\": {\"status_list\": {\"idx\": 123, \"uri\": 456}}}");
             validator.validate(tokenPayload);
-            Assert.fail("Should throw exception for wrong 'uri' data type");
+            fail("Should throw exception for wrong 'uri' data type");
         } catch (ReferencedTokenValidationException e) {
-            Assert.assertTrue("Exception should mention uri must be a string",
-                    e.getMessage().contains("must be a string"));
+            assertTrue(e.getMessage().contains("must be a string"),
+                    "Exception should mention uri must be a string");
         }
     }
 }

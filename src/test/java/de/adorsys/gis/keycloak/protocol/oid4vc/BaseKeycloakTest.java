@@ -37,6 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Testcontainers
 public abstract class BaseKeycloakTest {
 
+    public static final String TEST_KEYCLOAK_IMAGE = String.format("quay.io/keycloak/keycloak@sha256:%s",
+            "cd512844bcd3b25c56decf8c2bf86298928fdf1e29139dd60f1ece8ebc82b370");
+
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_V2_NAME = "test-v2";
     public static final String TEST_USER = "test-user@localhost";
@@ -46,7 +49,7 @@ public abstract class BaseKeycloakTest {
     protected static CloseableHttpClient httpClient;
 
     @Container
-    protected static KeycloakContainer keycloak = new KeycloakContainer("quay.io/keycloak/keycloak:nightly")
+    protected static KeycloakContainer keycloak = new KeycloakContainer(TEST_KEYCLOAK_IMAGE)
             .withProviderClassesFrom("target/classes", "target/test-classes")
             .withFeaturesEnabled("oid4vc-vci")
             .withRealmImportFile("/realms/test-realm.json")
