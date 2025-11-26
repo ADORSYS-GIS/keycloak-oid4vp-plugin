@@ -1,0 +1,11 @@
+services:
+  keycloak-oid4vp:
+    image: quay.io/keycloak/keycloak:nightly
+    command: start-dev --features=oid4vc-vci --log-level=DEBUG
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./target/keycloak-oid4vp-plugin-1.0.0-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-oid4vp-plugin-1.0.0-SNAPSHOT.jar

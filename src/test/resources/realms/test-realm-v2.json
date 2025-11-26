@@ -1,0 +1,46 @@
+{
+  "id": "test-v2",
+  "realm": "test-v2",
+  "enabled": true,
+  "users": [
+    {
+      "username": "test-user@localhost",
+      "enabled": true,
+      "email": "test-user@localhost",
+      "firstName": "Tom",
+      "lastName": "Brady",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password"
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "test-app",
+      "enabled": true,
+      "redirectUris": [],
+      "secret": "password"
+    }
+  ],
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "custom-rsa",
+        "providerId": "rsa-generated",
+        "config": {}
+      },
+      {
+        "name": "custom-ecdsa",
+        "providerId": "ecdsa-generated",
+        "config": {
+          "ecGenerateCertificate": [
+            "false"
+          ]
+        }
+      }
+    ]
+  }
+}
