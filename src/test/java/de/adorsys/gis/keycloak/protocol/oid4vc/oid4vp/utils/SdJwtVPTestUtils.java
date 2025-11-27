@@ -181,8 +181,7 @@ public class SdJwtVPTestUtils {
         return sdJwtVP.present(
                 null,
                 JsonSerialization.mapper.valueToTree(kbJwtClaims),
-                signer,
-                OID4VCConstants.KEYBINDING_JWT_TYP
+                signer
         );
     }
 

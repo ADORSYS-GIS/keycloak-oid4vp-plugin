@@ -440,7 +440,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 null, null,  // Use expected nonce and aud
                 null, // Use expected holder key
                 -SdJwtVPTestUtils.KB_JWT_LIFESPAN_SECS, // Use a negative lifespan to expire the KB-JWT
-                "Key binding JWT: Invalid `exp` claim"
+                "Token has expired"
         );
     }
 
@@ -449,7 +449,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         testFailAuthentication_InvalidKbJwt(
                 "invalid-nonce", null,
                 null, null,
-                "Key binding JWT: Unexpected `nonce` value"
+                "claim 'nonce' does not match actual value 'invalid-nonce'"
         );
     }
 
@@ -458,7 +458,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         testFailAuthentication_InvalidKbJwt(
                 null, "invalid-aud",
                 null, null,
-                "Key binding JWT: Unexpected `aud` value"
+                "Expected audience 'x509_san_dns:localhost' not available in the token"
         );
     }
 

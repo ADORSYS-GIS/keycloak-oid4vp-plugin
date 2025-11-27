@@ -143,9 +143,9 @@ public class SdJwtAuthRequirements {
         //  on the presence of claims. Following a recent update to Keycloak upstream,
         //  validation will always be performed if claims are present.
         return IssuerSignedJwtVerificationOpts.builder()
-                .withIatCheck(false)
-                .withNbfCheck(validateNotBeforeClaim)
-                .withExpCheck(validateExpirationClaim)
+                .withIatCheck(true)
+                .withNbfCheck(!validateNotBeforeClaim)
+                .withExpCheck(!validateExpirationClaim)
                 .build();
     }
 
@@ -158,8 +158,8 @@ public class SdJwtAuthRequirements {
                 .withIatCheck(kbJwtMaxAllowedAge)
                 .withNonceCheck(nonce)
                 .withAudCheck(expectedKbJwtAud)
-                .withNbfCheck(validateNotBeforeClaim)
-                .withExpCheck(validateExpirationClaim)
+                .withNbfCheck(!validateNotBeforeClaim)
+                .withExpCheck(!validateExpirationClaim)
                 .build();
     }
 

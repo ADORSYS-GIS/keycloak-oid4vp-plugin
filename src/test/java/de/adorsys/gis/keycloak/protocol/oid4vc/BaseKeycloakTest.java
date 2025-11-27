@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public abstract class BaseKeycloakTest {
 
     public static final String TEST_KEYCLOAK_IMAGE = String.format("quay.io/keycloak/keycloak@sha256:%s",
-            "cd512844bcd3b25c56decf8c2bf86298928fdf1e29139dd60f1ece8ebc82b370");
+            "761d3ea653ae8895c6c72dd5a380ad81832f6b81ab07d7e07b0b08b25169a795");
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_V2_NAME = "test-v2";
