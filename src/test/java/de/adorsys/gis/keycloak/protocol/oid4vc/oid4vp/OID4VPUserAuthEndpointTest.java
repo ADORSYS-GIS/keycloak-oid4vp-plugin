@@ -458,7 +458,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         testFailAuthentication_InvalidKbJwt(
                 null, "invalid-aud",
                 null, null,
-                "Expected audience 'x509_san_dns:localhost' not available in the token"
+                "claim 'aud' does not match actual value"
         );
     }
 
