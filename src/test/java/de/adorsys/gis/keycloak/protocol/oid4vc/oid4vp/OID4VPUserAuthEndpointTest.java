@@ -455,11 +455,19 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     @Test
     public void shouldFailAuthentication_InvalidKbJwt_InvalidAud() throws Exception {
-        testFailAuthentication_InvalidKbJwt(
-                null, "invalid-aud",
-                null, null,
-                "claim 'aud' does not match actual value"
+        var invalidAuds = List.of(
+                "invalid-aud",
+                ":" + getVerifierClientId(), // Missing scheme
+                "double:scheme:" + getVerifierClientId()
         );
+
+        for (String invalidAud : invalidAuds) {
+            testFailAuthentication_InvalidKbJwt(
+                    null, invalidAud,
+                    null, null,
+                    "claim 'aud' does not match actual value"
+            );
+        }
     }
 
     /**
