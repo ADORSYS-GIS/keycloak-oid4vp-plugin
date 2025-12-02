@@ -3,7 +3,6 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.util.KeycloakUriBuilder;
@@ -16,11 +15,10 @@ import org.keycloak.jose.jwk.JWK;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.DisclosureSpec;
+import org.keycloak.sdjwt.IssuerSignedJWT;
 import org.keycloak.sdjwt.SdJwt;
-import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.util.JsonSerialization;
-import org.keycloak.utils.StringUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,6 +29,9 @@ import java.util.Objects;
 
 import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
 import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_CNF;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_EXP;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_JWK;
 
 /**
  * Test helper for crafting SD-JWT verifiable presentations.
@@ -41,10 +42,6 @@ public class SdJwtVPTestUtils {
 
     public static final int ISSUER_SIGNED_JWT_LIFESPAN_SECS = 300;
     public static final int KB_JWT_LIFESPAN_SECS = 60;
-
-    public static final String EXP_CLAIM_KEY = "exp";
-    public static final String CNF_CLAIM_KEY = "cnf";
-    public static final String JWK_CLAIM_KEY = "jwk";
 
     private final KeycloakContainer keycloak;
     private final String activeTestRealm;
@@ -91,17 +88,17 @@ public class SdJwtVPTestUtils {
                 .build(activeTestRealm)
                 .toString();
 
-        SdJwt sdJwt = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim)
-                .withSigner(signer)
-                .build();
-
-        return sdJwt.toSdJwtString();
+        IssuerSignedJWT issuerSignedJWT = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim);
+        return SdJwt.builder()
+                .withIssuerSignedJwt(issuerSignedJWT)
+                .build(signer)
+                .toSdJwtString();
     }
 
     /**
      * Scaffold an SD-JWT identity credential that can clear authentication.
      */
-    private static SdJwt.Builder exampleSdJwtCredential(
+    private static IssuerSignedJWT exampleSdJwtCredential(
             String iss, String vct, String username, boolean setStatusClaim
     ) {
         Objects.requireNonNull(iss);
@@ -110,7 +107,7 @@ public class SdJwtVPTestUtils {
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
         claimSet.put(OAuth2Constants.ISSUER, iss);
         claimSet.put(SdJwtAuthenticatorFactory.VCT_CONFIG, vct);
-        claimSet.put(EXP_CLAIM_KEY, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
+        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
 
         // Add status list claim (Token Status List)
         if (setStatusClaim) {
@@ -127,17 +124,17 @@ public class SdJwtVPTestUtils {
         // Bind credential to user
         JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
         ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
-        cnf.set(JWK_CLAIM_KEY, JsonSerialization.mapper.valueToTree(jwk));
-        claimSet.set(CNF_CLAIM_KEY, cnf);
+        cnf.set(CLAIM_NAME_JWK, JsonSerialization.mapper.valueToTree(jwk));
+        claimSet.set(CLAIM_NAME_CNF, cnf);
 
         if (username != null) {
             claimSet.put(OAuth2Constants.USERNAME, username);
             disclosure = disclosure.withUndisclosedClaim(OAuth2Constants.USERNAME, "eI8ZWm9QnKPpNPeNenHdhQ");
         }
 
-        return SdJwt.builder()
-                .withDisclosureSpec(disclosure.build())
-                .withClaimSet(claimSet);
+        return IssuerSignedJWT.builder()
+                .withClaims(claimSet, disclosure.build())
+                .build();
     }
 
     /**
@@ -165,12 +162,6 @@ public class SdJwtVPTestUtils {
         kbJwtClaims.iat(currentTime);
         kbJwtClaims.exp(currentTime + kbJwtLifespan);
 
-        // TODO: Remove the explicit scheme below when Keycloak supports aud pattern matching
-        String clientIdScheme = ClientIdScheme.X509_SAN_DNS.getValue().toLowerCase();
-        if (StringUtil.isNotBlank(aud) && !aud.startsWith(clientIdScheme + ":")) {
-            aud = String.format("%s:%s", clientIdScheme, aud);
-        }
-
         kbJwtClaims.getOtherClaims().put(IDToken.NONCE, nonce);
         kbJwtClaims.getOtherClaims().put(IDToken.AUD, aud);
 
@@ -181,8 +172,7 @@ public class SdJwtVPTestUtils {
         return sdJwtVP.present(
                 null,
                 JsonSerialization.mapper.valueToTree(kbJwtClaims),
-                signer,
-                KeyBindingJWT.TYP
+                signer
         );
     }
 

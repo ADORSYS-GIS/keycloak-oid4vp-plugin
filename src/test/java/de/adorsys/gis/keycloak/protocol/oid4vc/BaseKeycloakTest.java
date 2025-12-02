@@ -18,6 +18,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.util.JsonSerialization;
+import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -37,8 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Testcontainers
 public abstract class BaseKeycloakTest {
 
-    public static final String TEST_KEYCLOAK_IMAGE = String.format("quay.io/keycloak/keycloak@sha256:%s",
-            "cd512844bcd3b25c56decf8c2bf86298928fdf1e29139dd60f1ece8ebc82b370");
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:nightly";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_V2_NAME = "test-v2";
@@ -50,12 +50,12 @@ public abstract class BaseKeycloakTest {
 
     @Container
     protected static KeycloakContainer keycloak = new KeycloakContainer(TEST_KEYCLOAK_IMAGE)
+            .withImagePullPolicy(PullPolicy.alwaysPull())
             .withProviderClassesFrom("target/classes", "target/test-classes")
             .withFeaturesEnabled("oid4vc-vci")
             .withRealmImportFile("/realms/test-realm.json")
             .withRealmImportFile("/realms/test-realm-v2.json")
-            .withEnv("KC_LOG_LEVEL", "INFO,de.adorsys.gis:DEBUG")
-            .withLogConsumer(outputFrame -> System.out.print(outputFrame.getUtf8String()));
+            .withEnv("KC_LOG_LEVEL", "INFO,de.adorsys.gis:DEBUG");
 
     @BeforeAll
     public static void setup() {

@@ -440,7 +440,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 null, null,  // Use expected nonce and aud
                 null, // Use expected holder key
                 -SdJwtVPTestUtils.KB_JWT_LIFESPAN_SECS, // Use a negative lifespan to expire the KB-JWT
-                "Key binding JWT: Invalid `exp` claim"
+                "Token has expired"
         );
     }
 
@@ -449,17 +449,25 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         testFailAuthentication_InvalidKbJwt(
                 "invalid-nonce", null,
                 null, null,
-                "Key binding JWT: Unexpected `nonce` value"
+                "claim 'nonce' does not match actual value 'invalid-nonce'"
         );
     }
 
     @Test
     public void shouldFailAuthentication_InvalidKbJwt_InvalidAud() throws Exception {
-        testFailAuthentication_InvalidKbJwt(
-                null, "invalid-aud",
-                null, null,
-                "Key binding JWT: Unexpected `aud` value"
+        var invalidAuds = List.of(
+                "invalid-aud",
+                ":" + getVerifierClientId(), // Missing scheme
+                "double:scheme:" + getVerifierClientId()
         );
+
+        for (String invalidAud : invalidAuds) {
+            testFailAuthentication_InvalidKbJwt(
+                    null, invalidAud,
+                    null, null,
+                    "claim 'aud' does not match actual value"
+            );
+        }
     }
 
     /**
