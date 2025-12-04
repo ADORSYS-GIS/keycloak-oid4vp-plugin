@@ -1,5 +1,6 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import de.adorsys.gis.keycloak.protocol.oid4vc.crypto.certificate.ExtendedCertificateUtils;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
@@ -12,7 +13,6 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationCon
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
 import org.jboss.logging.Logger;
-import org.keycloak.common.util.CertificateUtils;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureSignerContext;
@@ -210,12 +210,12 @@ public class AuthorizationRequestService {
 
         // Generate a new self-signed certificate with SAN matching client ID
         try {
-            return CertificateUtils.generateV3Certificate(
+            return ExtendedCertificateUtils.generateV3Certificate(
                     keyPair,
                     keyPair.getPrivate(),
                     cert,
-                    getIssuerCN(cert)
-                    // List.of(clientId) // FIXME
+                    getIssuerCN(cert),
+                    List.of(clientId)
             );
         } catch (Exception e) {
             throw new RuntimeException("Failed to regenerate certificate with SAN", e);
