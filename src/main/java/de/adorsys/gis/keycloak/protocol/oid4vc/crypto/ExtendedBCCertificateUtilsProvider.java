@@ -1,4 +1,4 @@
-package de.adorsys.gis.keycloak.protocol.oid4vc.crypto.certificate;
+package de.adorsys.gis.keycloak.protocol.oid4vc.crypto;
 
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
@@ -29,6 +29,12 @@ import java.util.Optional;
 
 public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvider
         implements ExtendedCertificateUtilsProvider {
+
+    private static final ExtendedBCCertificateUtilsProvider INSTANCE = new ExtendedBCCertificateUtilsProvider();
+
+    public static ExtendedBCCertificateUtilsProvider getInstance() {
+        return INSTANCE;
+    }
 
     @Override
     public X509Certificate generateV3Certificate(

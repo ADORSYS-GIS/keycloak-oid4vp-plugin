@@ -26,9 +26,8 @@ import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpo
 public class OID4VPUserAuthEndpointFactory
         implements RealmResourceProviderFactory, OID4VPEnvironmentProviderFactory {
 
-    private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpointFactory.class);
-
     public static final String PROVIDER_ID = "oid4vp-auth";
+    private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpointFactory.class);
 
     @Override
     public String getId() {

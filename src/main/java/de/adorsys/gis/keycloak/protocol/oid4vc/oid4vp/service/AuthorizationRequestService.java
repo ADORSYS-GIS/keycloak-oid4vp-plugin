@@ -1,6 +1,6 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import de.adorsys.gis.keycloak.protocol.oid4vc.crypto.certificate.ExtendedCertificateUtils;
+import de.adorsys.gis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;

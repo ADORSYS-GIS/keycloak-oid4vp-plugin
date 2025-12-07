@@ -108,8 +108,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     @Test
     public void shouldAttachX5CwithClientIdAsSAN() throws Exception {
-
-
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
         String authRequest = authContext.getAuthorizationRequest();

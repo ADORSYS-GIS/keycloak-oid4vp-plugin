@@ -55,14 +55,11 @@ public abstract class BaseKeycloakTest {
             .withFeaturesEnabled("oid4vc-vci")
             .withRealmImportFile("/realms/test-realm.json")
             .withRealmImportFile("/realms/test-realm-v2.json")
-            .withEnv("KC_LOG_LEVEL", "INFO,org.keycloak.common.crypto:DEBUG,de.adorsys.gis:DEBUG");
+            .withEnv("KC_LOG_LEVEL", "INFO,de.adorsys.gis:DEBUG");
 
     @BeforeAll
     public static void setup() {
         CryptoIntegration.init(BaseKeycloakTest.class.getClassLoader());
-        // TODO: Remove this
-        var provider = CryptoIntegration.getProvider();
-        System.out.printf("\n\n\nUsing the crypto provider: %s\n\n\n\n", provider != null ? provider.getClass().getName() : "null");
     }
 
     @BeforeEach
