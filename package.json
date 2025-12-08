@@ -1,0 +1,14 @@
+{
+  "name": "keycloak-oid4vp-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Keycloak OpenID4VP plugin documentation tooling",
+  "scripts": {
+    "docs:build": "antora --stacktrace antora-playbook.yml",
+    "docs:serve": "npm run docs:build && npx http-server build/site -p 8080"
+  },
+  "devDependencies": {
+    "antora": "^3.1.7",
+    "http-server": "^14.1.1"
+  }
+}

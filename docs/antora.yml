@@ -1,0 +1,6 @@
+name: keycloak-oid4vp-plugin
+title: Keycloak OID4VP Plugin
+version: main
+nav:
+  - modules/ROOT/nav.adoc
+

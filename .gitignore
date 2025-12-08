@@ -1,6 +1,9 @@
 # Maven target directory
 /target/
 
+# Node workspace
+/node_modules/
+
 # IDE specific files
 .idea/
 
@@ -9,3 +12,6 @@
 
 # Custom docker-compose files
 docker-compose.*.yml
+
+# Antora build output
+/build/

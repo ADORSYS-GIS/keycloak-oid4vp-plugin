@@ -1,0 +1,26 @@
+= Keycloak OID4VP Plugin Documentation
+
+Welcome to the documentation hub for the Keycloak OpenID4VP plugin. Use this page to navigate to feature guides and how-tos.
+
+== What you’ll find here
+
+* OpenID4VP user authentication: how to enable the feature, initiate the flow, poll for status, and finish login.
+
+== Quick links
+
+* xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials]
+
+== Contributing docs
+
+Add new topics under `docs/modules/ROOT/pages/` and register them in `docs/modules/ROOT/nav.adoc`. The site builds with:
+
+```
+npm run docs:build
+```
+
+Preview locally:
+
+```
+npm run docs:serve
+```
+

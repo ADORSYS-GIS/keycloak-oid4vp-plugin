@@ -47,3 +47,19 @@ This will mount the plugin JAR into the Keycloak container as configured in the 
 
 If you need to make specific changes (e.g., environment variables, ports, or database settings),
 you are encouraged to create a `docker-compose.override.yml` based on the provided `docker-compose.yml`.
+
+## Documentation site (Antora)
+
+The AsciiDoc content in `docs/` is published with [Antora](https://antora.org/).
+
+Build the static site:
+```sh
+npm run docs:build
+```
+
+Preview locally after building (serves on port 8080):
+```sh
+npm run docs:serve
+```
+
+The generated site is written to `build/site/` and ignored by git.

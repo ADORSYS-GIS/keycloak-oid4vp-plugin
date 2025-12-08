@@ -1,0 +1,22 @@
+site:
+  title: Keycloak OID4VP Plugin Docs
+  start_page: keycloak-oid4vp-plugin::index.adoc
+
+content:
+  sources:
+    - url: .
+      branches: HEAD
+      start_path: docs
+
+ui:
+  bundle:
+    url: ./docs/ui/ui-bundle.zip
+    snapshot: false
+
+output:
+  dir: build/site
+
+asciidoc:
+  attributes:
+    page-pagination: ''
+
