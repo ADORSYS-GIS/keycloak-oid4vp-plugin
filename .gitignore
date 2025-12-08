@@ -3,6 +3,7 @@
 
 # Node workspace
 /node_modules/
+/docs/node_modules/
 
 # IDE specific files
 .idea/
@@ -15,3 +16,4 @@ docker-compose.*.yml
 
 # Antora build output
 /build/
+/docs/build/

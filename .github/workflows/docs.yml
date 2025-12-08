@@ -1,19 +1,9 @@
 name: Docs CI
 
 on:
-  push:
-    paths:
-      - 'docs/**'
-      - 'antora-playbook.yml'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/docs.yml'
   pull_request:
     paths:
       - 'docs/**'
-      - 'antora-playbook.yml'
-      - 'package.json'
-      - 'package-lock.json'
       - '.github/workflows/docs.yml'
 
 jobs:
@@ -28,10 +18,13 @@ jobs:
         with:
           node-version: 18
           cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
 
       - name: Install dependencies
+        working-directory: docs
         run: npm ci --ignore-scripts
 
       - name: Build docs
+        working-directory: docs
         run: npm run docs:build
 

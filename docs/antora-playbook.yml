@@ -4,13 +4,13 @@ site:
 
 content:
   sources:
-    - url: .
+    - url: ..
       branches: HEAD
       start_path: docs
 
 ui:
   bundle:
-    url: ./docs/ui/ui-bundle.zip
+    url: ./ui/ui-bundle.zip
     snapshot: false
 
 output:
