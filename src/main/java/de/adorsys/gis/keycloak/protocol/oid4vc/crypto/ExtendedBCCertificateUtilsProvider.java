@@ -15,13 +15,17 @@ import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.keycloak.common.util.BouncyIntegration;
+import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
 import java.math.BigInteger;
-import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPublicKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -38,29 +42,29 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
 
     @Override
     public X509Certificate generateV3Certificate(
-            KeyPair keyPair, PrivateKey caPrivateKey, X509Certificate caCert,
+            PrivateKey caPrivateKey, X509Certificate caCert,
             String subject, List<String> subjectAltNames
     ) {
         try {
+            PublicKey caPublicKey = caCert.getPublicKey();
             X500Name subjectDN = new X500Name("CN=" + subject);
 
-            // Serial Number
-            SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-            BigInteger serialNumber = BigInteger.valueOf(Math.abs(random.nextInt()));
-
             // Validity
-            Date notBefore = new Date(System.currentTimeMillis());
-            Date notAfter = new Date(System.currentTimeMillis() + (((1000L * 60 * 60 * 24 * 30)) * 12) * 3);
+            Date notBefore = caCert.getNotBefore();
+            Date notAfter = caCert.getNotAfter();
 
             // SubjectPublicKeyInfo
-            SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+            SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(caPublicKey.getEncoded());
 
-            X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(new X500Name(caCert.getSubjectDN().getName()),
-                    serialNumber, notBefore, notAfter, subjectDN, subjPubKeyInfo);
-
-            JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
+            // Certificate Builder
+            BigInteger serialNumber = generateSerialNumber();
+            X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(
+                    new X500Name(caCert.getSubjectX500Principal().getName()),
+                    serialNumber, notBefore, notAfter, subjectDN, subjPubKeyInfo
+            );
 
             // Subject Key Identifier
+            JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
             certGen.addExtension(Extension.subjectKeyIdentifier, false,
                     x509ExtensionUtils.createSubjectKeyIdentifier(subjPubKeyInfo));
 
@@ -69,14 +73,13 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
                     x509ExtensionUtils.createAuthorityKeyIdentifier(caCert));
 
             // Key Usage
-            certGen.addExtension(Extension.keyUsage, false, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign
-                    | KeyUsage.cRLSign));
+            int keyUsageBits = KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.cRLSign;
+            certGen.addExtension(Extension.keyUsage, false, new KeyUsage(keyUsageBits));
 
             // Extended Key Usage
             KeyPurposeId[] EKU = new KeyPurposeId[2];
             EKU[0] = KeyPurposeId.id_kp_emailProtection;
             EKU[1] = KeyPurposeId.id_kp_serverAuth;
-
             certGen.addExtension(Extension.extendedKeyUsage, false, new ExtendedKeyUsage(EKU));
 
             // Basic Constraints
@@ -91,19 +94,59 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
             certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
 
             // Content Signer
-            ContentSigner sigGen;
-            if (caCert.getPublicKey().getAlgorithm().equals("EC")) {
-                sigGen = new JcaContentSignerBuilder("SHA256WithECDSA").setProvider(BouncyIntegration.PROVIDER)
-                        .build(caPrivateKey);
-            } else {
-                sigGen = new JcaContentSignerBuilder("SHA256WithRSAEncryption").setProvider(BouncyIntegration.PROVIDER)
-                        .build(caPrivateKey);
-            }
+            String jcaContentSignerAlg = getJcaContentSignerAlg(caCert.getPublicKey());
+            ContentSigner sigGen = new JcaContentSignerBuilder(jcaContentSignerAlg)
+                    .setProvider(BouncyIntegration.PROVIDER)
+                    .build(caPrivateKey);
 
             // Certificate
-            return new JcaX509CertificateConverter().setProvider(BouncyIntegration.PROVIDER).getCertificate(certGen.build(sigGen));
+            return new JcaX509CertificateConverter()
+                    .setProvider(BouncyIntegration.PROVIDER)
+                    .getCertificate(certGen.build(sigGen));
         } catch (Exception e) {
             throw new RuntimeException("Error creating X509v3Certificate.", e);
+        }
+    }
+
+    public static String getJcaContentSignerAlg(PublicKey publicKey) {
+        switch (publicKey) {
+            // Handle EC keys - select algorithm based on curve size
+            case ECPublicKey ecKey -> {
+                int curveSize = ecKey.getParams().getCurve().getField().getFieldSize();
+
+                return switch (curveSize) {
+                    case 256 -> JavaAlgorithm.ES256;  // P-256 / secp256r1
+                    case 384 -> JavaAlgorithm.ES384;  // P-384 / secp384r1
+                    case 521 -> JavaAlgorithm.ES512;  // P-521 / secp521r1
+                    default -> throw new IllegalArgumentException("Unsupported EC curve size: " + curveSize + " bits");
+                };
+            }
+
+            // Handle RSA keys - select algorithm based on key size
+            case RSAPublicKey rsaKey -> {
+                int keySize = rsaKey.getModulus().bitLength();
+
+                if (keySize < 2048) {
+                    throw new IllegalArgumentException("RSA key size too small: " + keySize + " bits (minimum 2048)");
+                }
+
+                if (keySize >= 4096) return JavaAlgorithm.RS512;  // SHA-512
+                if (keySize >= 3072) return JavaAlgorithm.RS384;  // SHA-384
+                return JavaAlgorithm.RS256;  // SHA-256  // SHA-384
+            }
+            default -> {
+            }
+        }
+
+        throw new IllegalArgumentException("Unsupported key type: " + publicKey.getClass().getSimpleName());
+    }
+
+    private BigInteger generateSerialNumber() {
+        try {
+            SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
+            return BigInteger.valueOf(Math.abs(random.nextInt()));
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
         }
     }
 }
