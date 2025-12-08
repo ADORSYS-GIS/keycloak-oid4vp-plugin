@@ -25,6 +25,8 @@ public class ExtendedCertificateUtils extends CertificateUtils {
                 .map(Object::getClass)
                 .orElseThrow(() -> new IllegalStateException("CryptoProvider is not initialized properly"));
 
+        // TODO: Add support for other CryptoProviders (Elytron / FIPS)
+
         if (certUtilsProviderClass == BCCertificateUtilsProvider.class) {
             return ExtendedBCCertificateUtilsProvider.getInstance();
         } else {

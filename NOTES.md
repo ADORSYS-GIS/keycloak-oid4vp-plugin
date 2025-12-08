@@ -47,11 +47,6 @@ if (Profile.isFeatureEnabled(Feature.OID4VC_VPAUTH)) {
 }
 ```
 
-## Certificate generation with SAN for Lissi wallet
-
-0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
-certificate generation
-
 ## OIDC chaining support
 
 0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
