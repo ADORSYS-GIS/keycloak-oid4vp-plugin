@@ -19,7 +19,6 @@ import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
 import java.math.BigInteger;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -35,6 +34,7 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
         implements ExtendedCertificateUtilsProvider {
 
     private static final ExtendedBCCertificateUtilsProvider INSTANCE = new ExtendedBCCertificateUtilsProvider();
+    public static final int SECURE_RANDOM_ENTROPY = 20;
 
     public static ExtendedBCCertificateUtilsProvider getInstance() {
         return INSTANCE;
@@ -43,10 +43,9 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
     @Override
     public X509Certificate generateV3Certificate(
             PrivateKey caPrivateKey, X509Certificate caCert,
-            String subject, List<String> subjectAltNames
+            PublicKey subPublicKey, String subject, List<String> subjectAltNames
     ) {
         try {
-            PublicKey caPublicKey = caCert.getPublicKey();
             X500Name subjectDN = new X500Name("CN=" + subject);
 
             // Validity
@@ -54,7 +53,7 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
             Date notAfter = caCert.getNotAfter();
 
             // SubjectPublicKeyInfo
-            SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(caPublicKey.getEncoded());
+            SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(subPublicKey.getEncoded());
 
             // Certificate Builder
             BigInteger serialNumber = generateSerialNumber();
@@ -91,7 +90,9 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
                     .filter(s -> s != null && !s.isBlank())
                     .map(san -> new GeneralName(GeneralName.dNSName, san))
                     .toArray(GeneralName[]::new);
-            certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
+            if (names.length > 0) {
+                certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
+            }
 
             // Content Signer
             String jcaContentSignerAlg = getJcaContentSignerAlg(caCert.getPublicKey());
@@ -134,19 +135,17 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
                 if (keySize >= 3072) return JavaAlgorithm.RS384;  // SHA-384
                 return JavaAlgorithm.RS256;  // SHA-256  // SHA-384
             }
-            default -> {
-            }
-        }
 
-        throw new IllegalArgumentException("Unsupported key type: " + publicKey.getClass().getSimpleName());
+            // Other key types are not supported
+            default -> throw new IllegalArgumentException(
+                    "Unsupported key type: " + publicKey.getClass().getSimpleName()
+            );
+        }
     }
 
     private BigInteger generateSerialNumber() {
-        try {
-            SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-            return BigInteger.valueOf(Math.abs(random.nextInt()));
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
+        byte[] buf = new byte[SECURE_RANDOM_ENTROPY];
+        new SecureRandom().nextBytes(buf);
+        return new BigInteger(1, buf);
     }
 }

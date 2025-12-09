@@ -27,6 +27,7 @@ import javax.naming.ldap.Rdn;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
@@ -201,6 +202,7 @@ public class AuthorizationRequestService {
         }
 
         String clientId = clientMetadata.getClientId();
+        PublicKey publicKey = (PublicKey) signingKey.getPublicKey();
         PrivateKey privateKey = (PrivateKey) signingKey.getPrivateKey();
 
         // Generate a new self-signed certificate with SAN matching client ID
@@ -208,6 +210,7 @@ public class AuthorizationRequestService {
             return ExtendedCertificateUtils.generateV3Certificate(
                     privateKey,
                     cert,
+                    publicKey,
                     getIssuerCN(cert),
                     List.of(clientId)
             );

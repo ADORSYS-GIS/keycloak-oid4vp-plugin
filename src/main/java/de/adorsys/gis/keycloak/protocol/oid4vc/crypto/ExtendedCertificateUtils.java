@@ -6,6 +6,7 @@ import org.keycloak.common.util.CertificateUtils;
 import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Optional;
@@ -37,12 +38,12 @@ public class ExtendedCertificateUtils extends CertificateUtils {
 
     public static X509Certificate generateV3Certificate(
             PrivateKey caPrivateKey, X509Certificate caCert,
-            String subject, List<String> subjectAltNames
+            PublicKey subPublicKey, String subject, List<String> subjectAltNames
     ) {
         return getExtendedCertificateUtilsProvider()
                 .generateV3Certificate(
                         caPrivateKey, caCert,
-                        subject, subjectAltNames
+                        subPublicKey, subject, subjectAltNames
                 );
     }
 }

@@ -17,6 +17,8 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.BouncyIntegration;
 import org.keycloak.crypto.JavaAlgorithm;
@@ -27,19 +29,23 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static de.adorsys.gis.keycloak.protocol.oid4vc.crypto.ExtendedBCCertificateUtilsProvider.getJcaContentSignerAlg;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExtendedBCCertificateUtilsProviderTest {
 
     private static ExtendedBCCertificateUtilsProvider provider;
+    private static KeyPair subKeyPair;
     private static KeyPair caKeyPair;
     private static X509Certificate caCert;
 
@@ -49,6 +55,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         provider = ExtendedBCCertificateUtilsProvider.getInstance();
 
         // --- Generate CA keypair and minimal certificate ---
+        subKeyPair = generateRSAKeyPair(2048);
         caKeyPair = generateRSAKeyPair(2048);
         caCert = createSelfSignedCaCert(caKeyPair);
     }
@@ -58,6 +65,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(),
                 caCert,
+                subKeyPair.getPublic(),
                 "my-subject",
                 List.of("example.com", "www.example.com")
         );
@@ -75,6 +83,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         X509Certificate cert = provider.generateV3Certificate(
                 ecCaKeyPair.getPrivate(),
                 ecCaCert,
+                subKeyPair.getPublic(),
                 "my-subject-ec",
                 List.of("example.com", "www.example.com")
         );
@@ -89,6 +98,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(),
                 caCert,
+                subKeyPair.getPublic(),
                 "test",
                 List.of("a.com", "b.com")
         );
@@ -108,11 +118,36 @@ class ExtendedBCCertificateUtilsProviderTest {
         assertEquals("b.com", names[1].getName().toString());
     }
 
+    private static Stream<List<String>> noSanInputProvider() {
+        return Stream.of(
+                null,
+                List.of(),
+                List.of(""),
+                Collections.singletonList(null)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("noSanInputProvider")
+    void testGenerateV3Certificate_NoSanExtension(List<String> subAltNames) {
+        X509Certificate cert = provider.generateV3Certificate(
+                caKeyPair.getPrivate(),
+                caCert,
+                subKeyPair.getPublic(),
+                "test",
+                subAltNames
+        );
+
+        byte[] sanBytes = cert.getExtensionValue(Extension.subjectAlternativeName.getId());
+        assertNull(sanBytes);
+    }
+
     @Test
     void testGenerateV3Certificate_keyUsage() {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(),
                 caCert,
+                subKeyPair.getPublic(),
                 "ku",
                 List.of()
         );
@@ -146,6 +181,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(),
                 caCert,
+                subKeyPair.getPublic(),
                 "eku",
                 List.of()
         );
@@ -168,6 +204,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(),
                 caCert,
+                subKeyPair.getPublic(),
                 "bc",
                 List.of()
         );
@@ -185,6 +222,7 @@ class ExtendedBCCertificateUtilsProviderTest {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(),
                 caCert,
+                subKeyPair.getPublic(),
                 "sig-check",
                 List.of()
         );

@@ -8,7 +8,7 @@ This plugin has been tested with:
 
 | **Requirement** | **Version** |
 |-----------------|-------------|
-| **Java**        | 17          |
+| **Java**        | 21          |
 | **Keycloak**    | nightly     |
 
 While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
