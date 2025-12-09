@@ -23,15 +23,21 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
 import org.keycloak.jose.jwk.JWK;
+import org.keycloak.jose.jws.JWSHeader;
+import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -100,36 +106,35 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         assertFalse(payloadJson.matches(".*\\s.*"), "No space allowed");
     }
 
-//    TODO: Check SAN attachment to X5C
-//    @Test
-//    public void shouldAttachX5CwithClientIdAsSAN() throws Exception {
-//        // Retrieve an authorization request
-//        AuthorizationContext authContext = requestAuthorizationRequest();
-//        String authRequest = authContext.getAuthorizationRequest();
-//
-//        // Resolve the request_uri parameter from the authorization request
-//        String signedReqJwt = resolveSignedRequestObject(authRequest);
-//        JWSInput jwsInput = new JWSInput(signedReqJwt);
-//
-//        // Extract X5C leaf certificate from JWT header
-//        JWSHeader header = jwsInput.getHeader();
-//        String certStr = header.getX5c().get(0);
-//        byte[] certBytes = Base64.getDecoder().decode(certStr);
-//        CertificateFactory cf = CertificateFactory.getInstance("X.509");
-//        X509Certificate cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes));
-//
-//        // Assert SAN was attached to X5C
-//        Collection<?> sans = cert.getSubjectAlternativeNames();
-//        assertNotNull("Certificate should contain SAN extension", sans);
-//        assertEquals("Certificate should have one SAN entry", 1, sans.size());
-//
-//        // Assert SAN in X5C if of type DNS (2)
-//        List<?> sanEntry = (List<?>) sans.stream().toList().get(0);
-//        assertEquals("Must be of SAN type DNS", 2, sanEntry.get(0));
-//
-//        // Assert SAN in X5C matches client ID
-//        assertEquals("DNS SAN must match client ID", getVerifierClientId(), sanEntry.get(1));
-//    }
+    @Test
+    public void shouldAttachX5CwithClientIdAsSAN() throws Exception {
+        // Retrieve an authorization request
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+
+        // Resolve the request_uri parameter from the authorization request
+        String signedReqJwt = resolveSignedRequestObject(authRequest);
+        JWSInput jwsInput = new JWSInput(signedReqJwt);
+
+        // Extract X5C leaf certificate from JWT header
+        JWSHeader header = jwsInput.getHeader();
+        String certStr = header.getX5c().getFirst();
+        byte[] certBytes = Base64.getDecoder().decode(certStr);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        X509Certificate cert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes));
+
+        // Assert SAN was attached to X5C
+        Collection<?> sans = cert.getSubjectAlternativeNames();
+        assertNotNull(sans, "Certificate should contain SAN extension");
+        assertEquals(1, sans.size(), "Certificate should have one SAN entry");
+
+        // Assert SAN in X5C if of type DNS (2)
+        List<?> sanEntry = (List<?>) sans.stream().toList().getFirst();
+        assertEquals(2, sanEntry.get(0), "Must be of SAN type DNS");
+
+        // Assert SAN in X5C matches client ID
+        assertEquals(getVerifierClientId(), sanEntry.get(1), "DNS SAN must match client ID");
+    }
 
     @Test
     public void shouldNotResolveUnknownRequestURIs() throws Exception {
@@ -690,7 +695,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         // Build presentation submission
 
         PresentationDefinition definition = requestObject.getPresentationDefinition();
-        InputDescriptor inputDescriptor = definition.getInputDescriptors().get(0);
+        InputDescriptor inputDescriptor = definition.getInputDescriptors().getFirst();
 
         PresentationSubmission submission = new PresentationSubmission();
         submission.setId(UUID.randomUUID().toString());

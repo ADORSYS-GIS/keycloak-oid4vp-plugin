@@ -91,7 +91,8 @@ public class SdJwtVPTestUtils {
         IssuerSignedJWT issuerSignedJWT = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim);
         return SdJwt.builder()
                 .withIssuerSignedJwt(issuerSignedJWT)
-                .build(signer)
+                .withIssuerSigningContext(signer)
+                .build()
                 .toSdJwtString();
     }
 
