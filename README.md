@@ -7,7 +7,7 @@ This plugin adds OpenID4VP authentication to Keycloak
 This plugin has been tested with:
 
 | **Requirement** | **Version** |
-|-----------------|-------------|
+| --------------- | ----------- |
 | **Java**        | 17          |
 | **Keycloak**    | nightly     |
 
@@ -51,17 +51,4 @@ you are encouraged to create a `docker-compose.override.yml` based on the provid
 ## Documentation site (Antora)
 
 The AsciiDoc content in `docs/` is published with [Antora](https://antora.org/).
-
-Build the static site (run from `docs/`):
-```sh
-cd docs
-npm run docs:build
-```
-
-Preview locally after building (serves on port 8080):
-```sh
-cd docs
-npm run docs:serve
-```
-
-The generated site is written to `docs/build/site/` and ignored by git.
+See `docs/README.md` for build and preview instructions.

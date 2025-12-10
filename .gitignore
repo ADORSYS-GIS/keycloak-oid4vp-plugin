@@ -13,7 +13,3 @@
 
 # Custom docker-compose files
 docker-compose.*.yml
-
-# Antora build output
-/build/
-/docs/build/
