@@ -1,5 +1,6 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import de.adorsys.gis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
@@ -12,7 +13,6 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationCon
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
 import org.jboss.logging.Logger;
-import org.keycloak.common.util.CertificateUtils;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureSignerContext;
@@ -26,7 +26,6 @@ import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
@@ -203,19 +202,17 @@ public class AuthorizationRequestService {
         }
 
         String clientId = clientMetadata.getClientId();
-        KeyPair keyPair = new KeyPair(
-                (PublicKey) signingKey.getPublicKey(),
-                (PrivateKey) signingKey.getPrivateKey()
-        );
+        PublicKey publicKey = (PublicKey) signingKey.getPublicKey();
+        PrivateKey privateKey = (PrivateKey) signingKey.getPrivateKey();
 
         // Generate a new self-signed certificate with SAN matching client ID
         try {
-            return CertificateUtils.generateV3Certificate(
-                    keyPair,
-                    keyPair.getPrivate(),
+            return ExtendedCertificateUtils.generateV3Certificate(
+                    privateKey,
                     cert,
-                    getIssuerCN(cert)
-                    // List.of(clientId) // FIXME
+                    publicKey,
+                    getIssuerCN(cert),
+                    List.of(clientId)
             );
         } catch (Exception e) {
             throw new RuntimeException("Failed to regenerate certificate with SAN", e);

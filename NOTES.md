@@ -25,9 +25,11 @@ credentialSupported.getCredentialMetadata().getDisplay(),
 
 ## Adjustments in IssuerEndpoint
 
-- Relax CORS policy (Pending PR)
-- Update code leading to DPoP proof reuse (PR in preparation)
-- Backward compatibility with Lissi wallet (In preparation)
+_This needs to be confirmed functional before the section is removed_
+
+- Relax CORS policy (Merged: https://github.com/keycloak/keycloak/issues/43183)
+- Update code leading to DPoP proof reuse (Merged: https://github.com/keycloak/keycloak/pull/44439)
+- Backward compatibility with Lissi wallet (Merged: https://github.com/keycloak/keycloak/pull/43951)
 
 ## Custom Keycloak theme
 
@@ -45,11 +47,6 @@ if (Profile.isFeatureEnabled(Feature.OID4VC_VPAUTH)) {
 }
 ```
 
-## Certificate generation with SAN for Lissi wallet
-
-0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
-certificate generation
-
 ## OIDC chaining support
 
 0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
@@ -58,5 +55,3 @@ certificate generation
 # Consequential changes as we ported code to this plugin version
 
 - The realm migration logic was moved to `OID4VPUserAuthEndpointFactory`.
-- Client scheme was hardcoded for compatibility with the Lissi wallet, because aud claim pattern matching is not yet
-  available in base Keycloak.
