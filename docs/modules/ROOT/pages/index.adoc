@@ -19,9 +19,8 @@ npm install --ignore-scripts
 npm run docs:build
 ```
 
-Preview locally (serves on a free port shown in the console):
+Preview locally:
 
 ```
 npm run docs:serve
 ```
-

@@ -18,5 +18,4 @@ output:
 
 asciidoc:
   attributes:
-    page-pagination: ''
-
+    page-pagination: ""

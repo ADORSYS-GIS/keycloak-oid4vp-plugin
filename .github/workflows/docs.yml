@@ -3,8 +3,8 @@ name: Docs CI
 on:
   pull_request:
     paths:
-      - 'docs/**'
-      - '.github/workflows/docs.yml'
+      - "docs/**"
+      - ".github/workflows/docs.yml"
 
 jobs:
   build-docs:
@@ -16,8 +16,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: 18.x
+          cache: "npm"
           cache-dependency-path: docs/package-lock.json
 
       - name: Install dependencies
@@ -27,4 +27,3 @@ jobs:
       - name: Build docs
         working-directory: docs
         run: npm run docs:build
-

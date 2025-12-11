@@ -5,7 +5,7 @@
   "description": "Keycloak OpenID4VP plugin documentation tooling",
   "scripts": {
     "docs:build": "antora --stacktrace antora-playbook.yml",
-    "docs:serve": "npm run docs:build && npx http-server build/site -p 0"
+    "docs:serve": "npm run docs:build && npx http-server build/site"
   },
   "devDependencies": {
     "antora": "^3.1.7",
