@@ -1,6 +1,6 @@
 # Documentation (Antora)
 
-This directory contains the Antora-based documentation site for the Keycloak OID4VP plugin. The documentation is written in AsciiDoc and generated into a static HTML site.
+This directory contains the [Antora-based documentation](https://docs.antora.org/antora/latest/) site for the Keycloak OID4VP plugin. The documentation is written in AsciiDoc and generated into a static HTML site.
 
 Run everything from this `docs/` directory.
 

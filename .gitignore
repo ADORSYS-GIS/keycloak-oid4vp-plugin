@@ -1,9 +1,6 @@
 # Maven target directory
 /target/
 
-# Node workspace
-/docs/node_modules/
-
 # IDE specific files
 .idea/
 
