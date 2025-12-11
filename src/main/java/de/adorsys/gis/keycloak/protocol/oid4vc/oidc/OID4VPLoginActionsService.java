@@ -33,9 +33,9 @@ import org.keycloak.sessions.CommonClientSessionModel.Action;
 /**
  * Adds form action endpoint for completing OpenID4VP authentication after QR code scanning.
  */
-public class ExtendedLoginActionsService extends LoginActionsService implements RealmResourceProvider {
+public class OID4VPLoginActionsService extends LoginActionsService implements RealmResourceProvider {
 
-    private static final Logger logger = Logger.getLogger(ExtendedLoginActionsService.class);
+    private static final Logger logger = Logger.getLogger(OID4VPLoginActionsService.class);
 
     public static final String LOGIN_METHOD_PARAM = "login_method";
     public static final String OID4VP_AUTH_LOGIN_PATH = "oid4vp-auth-login";
@@ -45,7 +45,7 @@ public class ExtendedLoginActionsService extends LoginActionsService implements 
     private final HttpRequest request;
     private final ClientConnection clientConnection;
 
-    public ExtendedLoginActionsService(KeycloakSession session, EventBuilder event) {
+    public OID4VPLoginActionsService(KeycloakSession session, EventBuilder event) {
         super(session, event);
         this.event = event;
         this.realm = session.getContext().getRealm();

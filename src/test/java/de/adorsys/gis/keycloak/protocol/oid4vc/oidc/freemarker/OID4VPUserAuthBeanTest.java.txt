@@ -1,12 +1,11 @@
-package org.keycloak.testsuite.oid4vc.oid4vp;
+package de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker;
 
 import jakarta.ws.rs.core.UriBuilder;
 import org.jboss.resteasy.mock.MockHttpRequest;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.Profile;
-import org.keycloak.forms.login.freemarker.model.OID4VPUserAuthBean;
 import org.keycloak.http.HttpRequest;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -29,7 +28,6 @@ import static org.keycloak.testsuite.oid4vc.oid4vp.OID4VPUserAuthEndpointTest.TE
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-@EnableFeature(value = Profile.Feature.OID4VC_VPAUTH, skipRestart = true)
 public class OID4VPUserAuthBeanTest extends OID4VCIssuerEndpointTest {
 
     @Test

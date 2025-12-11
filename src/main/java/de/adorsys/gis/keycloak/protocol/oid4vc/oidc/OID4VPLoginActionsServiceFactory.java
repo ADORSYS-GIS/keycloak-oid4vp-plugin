@@ -9,7 +9,7 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.services.resource.RealmResourceProviderFactory;
 
-public class ExtendedLoginActionsServiceFactory
+public class OID4VPLoginActionsServiceFactory
         implements RealmResourceProviderFactory, OID4VPEnvironmentProviderFactory {
 
     public static final String PROVIDER_ID = "oid4vp-login-actions";
@@ -23,7 +23,7 @@ public class ExtendedLoginActionsServiceFactory
     public RealmResourceProvider create(KeycloakSession session) {
         KeycloakContext context = session.getContext();
         EventBuilder event = new EventBuilder(context.getRealm(), session, context.getConnection());
-        return new ExtendedLoginActionsService(session, event);
+        return new OID4VPLoginActionsService(session, event);
     }
 
     @Override

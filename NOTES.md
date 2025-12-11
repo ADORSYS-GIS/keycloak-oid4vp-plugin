@@ -40,13 +40,6 @@ _This needs to be confirmed functional before the section is removed_
 }]
 ```
 
-```java
-// FreeMarkerLoginFormsProvider.java
-if (Profile.isFeatureEnabled(Feature.OID4VC_VPAUTH)) {
-    attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, baseUri));
-}
-```
-
 ## OIDC chaining support
 
 0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
