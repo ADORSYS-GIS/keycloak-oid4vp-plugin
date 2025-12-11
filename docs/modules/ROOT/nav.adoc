@@ -1,0 +1,2 @@
+* xref:index.adoc[Home]
+* xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials]

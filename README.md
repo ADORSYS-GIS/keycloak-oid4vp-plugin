@@ -7,7 +7,7 @@ This plugin adds OpenID4VP authentication to Keycloak
 This plugin has been tested with:
 
 | **Requirement** | **Version** |
-|-----------------|-------------|
+| --------------- | ----------- |
 | **Java**        | 21          |
 | **Keycloak**    | nightly     |
 
@@ -47,3 +47,8 @@ This will mount the plugin JAR into the Keycloak container as configured in the 
 
 If you need to make specific changes (e.g., environment variables, ports, or database settings),
 you are encouraged to create a `docker-compose.override.yml` based on the provided `docker-compose.yml`.
+
+## Documentation site (Antora)
+
+The AsciiDoc content in `docs/` is published with [Antora](https://docs.antora.org/antora/latest/).
+See `docs/README.md` for build and preview instructions.
