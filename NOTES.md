@@ -52,6 +52,14 @@ if (Profile.isFeatureEnabled(Feature.OID4VC_VPAUTH)) {
 0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
 certificate generation
 
+```java
+// Custom query parameter indicating the login method (NOT CRITICAL)
+String kcLoginMethod = userSession.getNote(OIDCLoginProtocol.LOGIN_METHOD_PARAM);
+if (kcLoginMethod != null) {
+    redirectUri.addParam(OIDCLoginProtocol.LOGIN_METHOD_PARAM, kcLoginMethod);
+}
+```
+
 # Consequential changes as we ported code to this plugin version
 
 - The realm migration logic was moved to `OID4VPUserAuthEndpointFactory`.

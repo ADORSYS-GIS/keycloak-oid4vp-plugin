@@ -1,1 +1,2 @@
 de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory
+de.adorsys.gis.keycloak.protocol.oid4vc.oidc.ExtendedLoginActionsServiceFactory
