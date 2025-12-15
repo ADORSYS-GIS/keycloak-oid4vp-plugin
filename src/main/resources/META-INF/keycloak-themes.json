@@ -1,0 +1,6 @@
+{
+    "themes": [{
+        "name" : "keycloak.v2+oid4vp",
+        "types": [ "login" ]
+    }]
+}

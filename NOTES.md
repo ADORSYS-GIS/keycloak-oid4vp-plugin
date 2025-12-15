@@ -31,15 +31,6 @@ _This needs to be confirmed functional before the section is removed_
 - Update code leading to DPoP proof reuse (Merged: https://github.com/keycloak/keycloak/pull/44439)
 - Backward compatibility with Lissi wallet (Merged: https://github.com/keycloak/keycloak/pull/43951)
 
-## Custom Keycloak theme
-
-```json
-}, {
-    "name" : "keycloak.v2+oid4vp",
-    "types": [ "login" ]
-}]
-```
-
 ## OIDC chaining support
 
 0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
