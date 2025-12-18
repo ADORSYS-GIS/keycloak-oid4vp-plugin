@@ -14,8 +14,6 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFac
 import jakarta.ws.rs.core.UriBuilder;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.common.ClientConnection;
-import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 
@@ -43,17 +41,18 @@ public class OID4VPUserAuthBean {
     private final RealmModel realm;
     private final URI baseUri;
 
-    private final OID4VPUserAuthEndpoint oid4VPUserAuthEndpoint;
+    private final OID4VPUserAuthEndpoint oid4vp;
     private AuthContextBean authContextBean;
 
-    public OID4VPUserAuthBean(KeycloakSession session, RealmModel realm, URI baseUri) {
+    public OID4VPUserAuthBean(
+            KeycloakSession session, RealmModel realm,
+            URI baseUri,
+            OID4VPUserAuthEndpoint oid4vp
+    ) {
         this.session = session;
         this.realm = realm;
         this.baseUri = baseUri;
-
-        ClientConnection connection = session.getContext().getConnection();
-        EventBuilder event = new EventBuilder(realm, session, connection);
-        this.oid4VPUserAuthEndpoint = new OID4VPUserAuthEndpoint(session, event);
+        this.oid4vp = oid4vp;
     }
 
     /**
@@ -68,7 +67,7 @@ public class OID4VPUserAuthBean {
 
         // Validate client ID for OpenID4VP login
         try {
-            oid4VPUserAuthEndpoint.checkClient(clientId);
+            oid4vp.checkClient(clientId);
         } catch (IllegalArgumentException e) {
             logger.debugf("Invalid client ID '%s' in OIDC URL. Not offering option for OpenID4VP login", clientId);
             return null;
@@ -113,7 +112,7 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        AuthorizationContext authContext = oid4VPUserAuthEndpoint.startAuthentication(clientId);
+        AuthorizationContext authContext = oid4vp.startAuthentication(clientId);
 
         // Convert authorization request to QR code
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
