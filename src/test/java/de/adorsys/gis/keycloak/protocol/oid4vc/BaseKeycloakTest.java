@@ -45,6 +45,7 @@ public abstract class BaseKeycloakTest {
     public static final String TEST_USER = "test-user@localhost";
     public static final String TEST_CLIENT_ID = "test-app";
     public static final String TEST_CLIENT_SECRET = "password";
+    public static final String TEST_CLIENT_REDIRECT_URI = "http://localhost:4200/callback";
 
     protected static CloseableHttpClient httpClient;
 
@@ -101,11 +102,14 @@ public abstract class BaseKeycloakTest {
     /**
      * Exchange an authorization code for an access token at the token endpoint.
      */
-    protected String requestAccessToken(String code) throws IOException {
+    protected String requestAccessToken(String code, boolean enforceRedirectUri) throws IOException {
         // Prepare form parameters for the token request
         var params = getDefaultHttpParams();
         params.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, OAuth2Constants.AUTHORIZATION_CODE));
         params.add(new BasicNameValuePair(OAuth2Constants.CODE, code));
+        if (enforceRedirectUri) {
+            params.add(new BasicNameValuePair(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI));
+        }
 
         // Prepare the request
         HttpPost httpPost = new HttpPost(getTestTokenEndpoint());

@@ -21,12 +21,12 @@ import java.util.UUID;
 
 import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_CLIENT_ID;
 import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_REALM_NAME;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.keycloak.forms.login.freemarker.model.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
-import static org.keycloak.forms.login.freemarker.model.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 import static org.mockito.ArgumentMatchers.anyString;
 
 /**

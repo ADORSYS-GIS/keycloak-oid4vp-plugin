@@ -21,8 +21,13 @@
     {
       "clientId": "test-app",
       "enabled": true,
-      "redirectUris": [],
-      "secret": "password"
+      "secret": "password",
+      "redirectUris": [
+        "http://localhost:4200/*"
+      ],
+      "attributes": {
+        "login_theme": "keycloak.v2+oid4vp"
+      }
     },
     {
       "clientId": "public-test-app",
