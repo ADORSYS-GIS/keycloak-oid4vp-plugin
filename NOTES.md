@@ -33,9 +33,6 @@ _This needs to be confirmed functional before the section is removed_
 
 ## OIDC chaining support
 
-0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
-certificate generation
-
 ```java
 // Custom query parameter indicating the login method (NOT CRITICAL)
 String kcLoginMethod = userSession.getNote(OIDCLoginProtocol.LOGIN_METHOD_PARAM);
