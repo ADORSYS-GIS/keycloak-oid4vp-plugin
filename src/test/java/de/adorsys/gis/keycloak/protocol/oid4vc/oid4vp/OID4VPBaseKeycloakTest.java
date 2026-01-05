@@ -172,6 +172,10 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         );
     }
 
+    /**
+     * Converts a map of cookie name-value pairs into a BasicCookieStore.
+     * Useful for bridging cookie management between Jsoup and Apache HttpClient.
+     */
     protected static BasicCookieStore convertCookiesMapToStore(Map<String, String> cookiesMap) {
         BasicCookieStore cookieStore = new BasicCookieStore();
 

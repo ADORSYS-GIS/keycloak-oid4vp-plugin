@@ -14,6 +14,7 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFac
 import jakarta.ws.rs.core.UriBuilder;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 
@@ -85,7 +86,7 @@ public class OID4VPUserAuthBean {
      */
     public String getLoginActionUrl() {
         return UriBuilder.fromUri(baseUri)
-                .path("/realms/{realm}")
+                .path(ServiceUrlConstants.REALM_INFO_PATH)
                 .path(OID4VPLoginActionsServiceFactory.PROVIDER_ID)
                 .path(OID4VPLoginActionsService.OID4VP_AUTH_LOGIN_PATH)
                 .build(realm.getName())

@@ -30,6 +30,8 @@ import org.keycloak.services.resources.SessionCodeChecks;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.CommonClientSessionModel.Action;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
+
 /**
  * Adds form action endpoint for completing OpenID4VP authentication after QR code scanning.
  */
@@ -37,7 +39,6 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
 
     private static final Logger logger = Logger.getLogger(OID4VPLoginActionsService.class);
 
-    public static final String LOGIN_METHOD_PARAM = "login_method";
     public static final String OID4VP_AUTH_LOGIN_PATH = "oid4vp-auth-login";
 
     private final EventBuilder event;
@@ -53,6 +54,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         this.clientConnection = session.getContext().getConnection();
     }
 
+    // Mirrors LoginActionsService#checksForCode
     // Duplicated because private in superclass
     @SuppressWarnings("SameParameterValue")
     private SessionCodeChecks checksForCode(
@@ -108,7 +110,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
 
         // Append note conveying this login method
-        freshUserSession.setNote(LOGIN_METHOD_PARAM, OID4VP_AUTH_LOGIN_PATH);
+        freshUserSession.setNote(PARAM_LOGIN_METHOD, OID4VP_AUTH_LOGIN_PATH);
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(

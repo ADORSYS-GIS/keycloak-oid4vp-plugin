@@ -112,32 +112,6 @@
                     <argLine>-XX:+EnableDynamicAgentLoading</argLine>
                 </configuration>
             </plugin>
-            <!-- TODO: Clean this up once builds stabilized
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>3.1.4</version>
-                <executions>
-                    <execution>
-                        <id>install-external</id>
-                        <phase>clean</phase>
-                        <configuration>
-                            <file>
-                                ${project.basedir}/libs/org.keycloak.keycloak-core-999.0.0-SNAPSHOT-74033d3108.jar
-                            </file>
-                            <groupId>org.keycloak</groupId>
-                            <artifactId>keycloak-core</artifactId>
-                            <version>${keycloak.version}</version>
-                            <packaging>jar</packaging>
-                            <generatePom>true</generatePom>
-                        </configuration>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            -->
         </plugins>
     </build>
 

@@ -2,6 +2,7 @@
   "id": "test",
   "realm": "test",
   "enabled": true,
+  "sslRequired": "none",
   "users": [
     {
       "username": "test-user@localhost",

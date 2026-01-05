@@ -764,7 +764,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
             assertNotEquals("New code must be issued", authCode, freshAuthCode);
 
             // TODO: A login method param must be appended to the redirect URI
-            // String loginMethod = uriInfo.getQueryParameters().getFirst(OIDCLoginProtocol.LOGIN_METHOD_PARAM);
+            // String loginMethod = uriInfo.getQueryParameters().getFirst(PARAM_LOGIN_METHOD);
             // assertEquals(OID4VP_AUTH_LOGIN_PATH, loginMethod);
         }
     }
