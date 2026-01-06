@@ -27,9 +27,9 @@ credentialSupported.getCredentialMetadata().getDisplay(),
 
 ```java
 // Custom query parameter indicating the login method (NOT CRITICAL)
-String kcLoginMethod = userSession.getNote(OIDCLoginProtocol.LOGIN_METHOD_PARAM);
+String kcLoginMethod = userSession.getNote(OID4VPUserAuthBean.PARAM_LOGIN_METHOD);
 if (kcLoginMethod != null) {
-    redirectUri.addParam(OIDCLoginProtocol.LOGIN_METHOD_PARAM, kcLoginMethod);
+    redirectUri.addParam(OID4VPUserAuthBean.PARAM_LOGIN_METHOD, kcLoginMethod);
 }
 ```
 
