@@ -137,7 +137,7 @@ public class SdJwtAuthRequirements {
         //  on the presence of claims. Following a recent update to Keycloak upstream,
         //  validation will always be performed if claims are present.
         return IssuerSignedJwtVerificationOpts.builder()
-                .withIatCheck(true)
+                .withIatCheck(Integer.MAX_VALUE, true)
                 .withNbfCheck(!validateNotBeforeClaim)
                 .withExpCheck(!validateExpirationClaim)
                 .build();

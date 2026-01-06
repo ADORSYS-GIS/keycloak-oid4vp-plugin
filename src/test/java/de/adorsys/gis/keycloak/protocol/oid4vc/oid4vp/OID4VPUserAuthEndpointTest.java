@@ -11,14 +11,20 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDef
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
+import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
@@ -46,6 +52,7 @@ import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpo
 import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -504,7 +511,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     private void assertAuthenticatingUser(TestOpts opts, String authCode) throws VerificationException, IOException {
-        String accessTokenStr = requestAccessToken(authCode);
+        String accessTokenStr = requestAccessToken(authCode, opts.shouldEnforceRedirectUri());
         AccessToken accessToken = TokenVerifier
                 .create(accessTokenStr, AccessToken.class)
                 .getToken();
@@ -721,61 +728,46 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         ));
     }
 
-//    TODO: Test OIDC chaining
-//    @Test
-//    public void shouldAuthenticateSuccessfully_InOIDCFlow() throws Exception {
-//        // Request a valid SD-JWT credential from Keycloak to use for authentication
-//        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-//
-//        // Proceed to authentication
-//        TestOpts opts = TestOpts.getDefault().setShouldRetrieveAccessToken(false);
-//        String authCode = testSuccessfulAuthentication(sdJwt, opts);
-//        BasicNameValuePair codeParam = new BasicNameValuePair(OAuth2Constants.CODE, authCode);
-//
-//        // Collect OIDC session data
-//        oauth.openLoginForm();
-//        String actionURI = Objects
-//                .requireNonNull(ActionURIUtils.getActionURIFromPageSource(driver.getPageSource()))
-//                .replace(AUTHENTICATE_PATH, OID4VP_AUTH_LOGIN_PATH);
-//
-//        // Continue OIDC flow with auth code
-//        try (CloseableHttpClient httpClient = HttpClientBuilder.create()
-//                .setDefaultCookieStore(getCookieStore())
-//                .build()) {
-//            HttpPost httpPost = new HttpPost(actionURI);
-//            httpPost.setEntity(new UrlEncodedFormEntity(List.of(codeParam)));
-//            HttpResponse httpResponse = httpClient.execute(httpPost);
-//            assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, httpResponse.getStatusLine().getStatusCode());
-//
-//            String redirectUri = httpResponse.getFirstHeader(HttpHeaders.LOCATION).getValue();
-//            assertTrue(redirectUri.startsWith(oauth.getRedirectUri()));
-//
-//            // Extract the authorization code from the redirect URI
-//            ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(redirectUri));
-//            String freshAuthCode = uriInfo.getQueryParameters().getFirst(OAuth2Constants.CODE);
-//            assertAuthenticatingUser(opts, freshAuthCode);
-//            assertNotEquals("New code must be issued", authCode, freshAuthCode);
-//
-//            // A login method param must be appended to the redirect URI
-//            String loginMethod = uriInfo.getQueryParameters().getFirst(OIDCLoginProtocol.LOGIN_METHOD_PARAM);
-//            assertEquals(OID4VP_AUTH_LOGIN_PATH, loginMethod);
-//        }
-//    }
-//
-//    private BasicCookieStore getCookieStore() {
-//        BasicCookieStore cookieStore = new BasicCookieStore();
-//
-//        for (Cookie seleniumCookie : driver.manage().getCookies()) {
-//            BasicClientCookie clientCookie = new BasicClientCookie(seleniumCookie.getName(), seleniumCookie.getValue());
-//            clientCookie.setDomain(seleniumCookie.getDomain());
-//            clientCookie.setPath(seleniumCookie.getPath());
-//            clientCookie.setSecure(seleniumCookie.isSecure());
-//            clientCookie.setExpiryDate(seleniumCookie.getExpiry());
-//            cookieStore.addCookie(clientCookie);
-//        }
-//
-//        return cookieStore;
-//    }
+    @Test
+    public void shouldAuthenticateSuccessfully_InOIDCFlow() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Collect OIDC session data
+        FormData formData = getFreshOid4vpFormActionUrl();
+        String actionURI = formData.actionUrl();
+        BasicCookieStore cookieStore = formData.cookieStore();
+
+        // Proceed to authentication
+        TestOpts opts = TestOpts.getDefault().setShouldRetrieveAccessToken(false);
+        String authCode = testSuccessfulAuthentication(sdJwt, opts);
+        BasicNameValuePair codeParam = new BasicNameValuePair(OAuth2Constants.CODE, authCode);
+
+        // Continue OIDC flow with auth code
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+                .setDefaultCookieStore(cookieStore)
+                .build()) {
+            HttpPost httpPost = new HttpPost(actionURI);
+            httpPost.setEntity(new UrlEncodedFormEntity(List.of(codeParam)));
+            HttpResponse httpResponse = httpClient.execute(httpPost);
+            assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, httpResponse.getStatusLine().getStatusCode());
+
+            String redirectUri = httpResponse.getFirstHeader(HttpHeaders.LOCATION).getValue();
+            assertTrue(redirectUri.startsWith(TEST_CLIENT_REDIRECT_URI));
+
+            // Extract the authorization code from the redirect URI
+            ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(redirectUri));
+            String freshAuthCode = uriInfo.getQueryParameters().getFirst(OAuth2Constants.CODE);
+
+            // Assert the validity of the fresh auth code
+            assertAuthenticatingUser(opts.setShouldEnforceRedirectUri(true), freshAuthCode);
+            assertNotEquals("New code must be issued", authCode, freshAuthCode);
+
+            // TODO: A login method param must be appended to the redirect URI
+            // String loginMethod = uriInfo.getQueryParameters().getFirst(PARAM_LOGIN_METHOD);
+            // assertEquals(OID4VP_AUTH_LOGIN_PATH, loginMethod);
+        }
+    }
 
     /**
      * POJO for test options.
@@ -785,6 +777,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         private String testUser = TEST_USER;
         private boolean shouldBase64EncodeVpToken;
         private boolean shouldRetrieveAccessToken = true;
+        private boolean shouldEnforceRedirectUri = false;
         private String overridePresentationDefinitionId;
         private String overridePresentationAud;
         private Descriptor.Format overrideDescriptorFormat;
@@ -818,6 +811,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         public TestOpts setShouldRetrieveAccessToken(boolean retrieveAccessToken) {
             this.shouldRetrieveAccessToken = retrieveAccessToken;
+            return this;
+        }
+
+        public boolean shouldEnforceRedirectUri() {
+            return shouldEnforceRedirectUri;
+        }
+
+        public TestOpts setShouldEnforceRedirectUri(boolean shouldEnforceRedirectUri) {
+            this.shouldEnforceRedirectUri = shouldEnforceRedirectUri;
             return this;
         }
 

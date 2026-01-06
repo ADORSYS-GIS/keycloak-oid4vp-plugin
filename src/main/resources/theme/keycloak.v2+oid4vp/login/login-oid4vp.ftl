@@ -1,6 +1,6 @@
 <#import "template.ftl" as layout>
 <@layout.registrationLayout displayMessage=false displayInfo=false; section>
-<!-- template: login-oid4vp-wallet.ftl -->
+<!-- template: login-oid4vp.ftl -->
 
     <#if section = "header">
         ${msg('oid4vpScanPageTitle')}

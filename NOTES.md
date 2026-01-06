@@ -23,34 +23,15 @@ credentialSupported.getCredentialMetadata().getDisplay(),
         ));
 ```
 
-## Adjustments in IssuerEndpoint
-
-_This needs to be confirmed functional before the section is removed_
-
-- Relax CORS policy (Merged: https://github.com/keycloak/keycloak/issues/43183)
-- Update code leading to DPoP proof reuse (Merged: https://github.com/keycloak/keycloak/pull/44439)
-- Backward compatibility with Lissi wallet (Merged: https://github.com/keycloak/keycloak/pull/43951)
-
-## Custom Keycloak theme
-
-```json
-}, {
-    "name" : "keycloak.v2+oid4vp",
-    "types": [ "login" ]
-}]
-```
-
-```java
-// FreeMarkerLoginFormsProvider.java
-if (Profile.isFeatureEnabled(Feature.OID4VC_VPAUTH)) {
-    attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, baseUri));
-}
-```
-
 ## OIDC chaining support
 
-0c211765d0 (HEAD -> datev-develop-decoy-v2, origin/datev-develop-decoy-v2) Final file updates - oidc chaining and
-certificate generation
+```java
+// Custom query parameter indicating the login method (NOT CRITICAL)
+String kcLoginMethod = userSession.getNote(OID4VPUserAuthBean.PARAM_LOGIN_METHOD);
+if (kcLoginMethod != null) {
+    redirectUri.addParam(OID4VPUserAuthBean.PARAM_LOGIN_METHOD, kcLoginMethod);
+}
+```
 
 # Consequential changes as we ported code to this plugin version
 

@@ -1,4 +1,4 @@
-package org.keycloak.forms.login.freemarker.model;
+package de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
@@ -6,18 +6,17 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
+import de.adorsys.gis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
 import jakarta.ws.rs.core.UriBuilder;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.common.ClientConnection;
-import org.keycloak.events.EventBuilder;
+import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
-import org.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
-import org.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
-import org.keycloak.services.Urls;
-import org.keycloak.services.resources.LoginActionsService;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -43,17 +42,18 @@ public class OID4VPUserAuthBean {
     private final RealmModel realm;
     private final URI baseUri;
 
-    private final OID4VPUserAuthEndpoint oid4VPUserAuthEndpoint;
+    private final OID4VPUserAuthEndpoint oid4vp;
     private AuthContextBean authContextBean;
 
-    public OID4VPUserAuthBean(KeycloakSession session, RealmModel realm, URI baseUri) {
+    public OID4VPUserAuthBean(
+            KeycloakSession session, RealmModel realm,
+            URI baseUri,
+            OID4VPUserAuthEndpoint oid4vp
+    ) {
         this.session = session;
         this.realm = realm;
         this.baseUri = baseUri;
-
-        ClientConnection connection = session.getContext().getConnection();
-        EventBuilder event = new EventBuilder(realm, session, connection);
-        this.oid4VPUserAuthEndpoint = new OID4VPUserAuthEndpoint(session, event);
+        this.oid4vp = oid4vp;
     }
 
     /**
@@ -68,7 +68,7 @@ public class OID4VPUserAuthBean {
 
         // Validate client ID for OpenID4VP login
         try {
-            oid4VPUserAuthEndpoint.checkClient(clientId);
+            oid4vp.checkClient(clientId);
         } catch (IllegalArgumentException e) {
             logger.debugf("Invalid client ID '%s' in OIDC URL. Not offering option for OpenID4VP login", clientId);
             return null;
@@ -85,8 +85,10 @@ public class OID4VPUserAuthBean {
      * URL to continue OIDC flow upon successful OID4VP authentication
      */
     public String getLoginActionUrl() {
-        return Urls.loginActionsBase(baseUri)
-                .path(LoginActionsService.class, "oid4vpAuthLogin")
+        return UriBuilder.fromUri(baseUri)
+                .path(ServiceUrlConstants.REALM_INFO_PATH)
+                .path(OID4VPLoginActionsServiceFactory.PROVIDER_ID)
+                .path(OID4VPLoginActionsService.OID4VP_AUTH_LOGIN_PATH)
                 .build(realm.getName())
                 .toString();
     }
@@ -111,7 +113,7 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        AuthorizationContext authContext = oid4VPUserAuthEndpoint.startAuthentication(clientId);
+        AuthorizationContext authContext = oid4vp.startAuthentication(clientId);
 
         // Convert authorization request to QR code
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());

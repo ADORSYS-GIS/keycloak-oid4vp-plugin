@@ -172,6 +172,7 @@ public class SdJwtVPTestUtils {
         SdJwtVP sdJwtVP = SdJwtVP.of(sdjwt);
         return sdJwtVP.present(
                 null,
+                true,
                 JsonSerialization.mapper.valueToTree(kbJwtClaims),
                 signer
         );
