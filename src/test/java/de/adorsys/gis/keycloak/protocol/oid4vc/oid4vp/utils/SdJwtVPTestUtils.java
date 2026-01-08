@@ -62,10 +62,13 @@ public class SdJwtVPTestUtils {
      * Requests that Keycloak issue an SD-JWT credential.
      *
      * @param vct            The verifiable credential type
-     * @param username       The username of the user whom the credential is issued for
-     * @param setKid         Specifies if the ID of the key used by Keycloak for issuing the credential
+     * @param username       The username of the user whom the credential is issued
+     *                       for
+     * @param setKid         Specifies if the ID of the key used by Keycloak for
+     *                       issuing the credential
      *                       should be set to the `kid` header of the SD-JWT
-     * @param setStatusClaim Specifies whether to include a status claim in the issued credential
+     * @param setStatusClaim Specifies whether to include a status claim in the
+     *                       issued credential
      */
     public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
 
@@ -100,8 +103,7 @@ public class SdJwtVPTestUtils {
      * Scaffold an SD-JWT identity credential that can clear authentication.
      */
     private static IssuerSignedJWT exampleSdJwtCredential(
-            String iss, String vct, String username, boolean setStatusClaim
-    ) {
+            String iss, String vct, String username, boolean setStatusClaim) {
         Objects.requireNonNull(iss);
         Objects.requireNonNull(vct);
 
@@ -114,9 +116,7 @@ public class SdJwtVPTestUtils {
         if (setStatusClaim) {
             claimSet.set(STATUS_FIELD, JsonSerialization.mapper.valueToTree(
                     Map.of(STATUS_LIST_FIELD, new ReferencedTokenValidator.StatusInfo(
-                            0, "https://example.com/status-list-jwt"
-                    ))
-            ));
+                            0, "https://example.com/status-list-jwt"))));
         }
 
         DisclosureSpec.Builder disclosure = DisclosureSpec.builder()
@@ -174,8 +174,7 @@ public class SdJwtVPTestUtils {
                 null,
                 true,
                 JsonSerialization.mapper.valueToTree(kbJwtClaims),
-                signer
-        );
+                signer);
     }
 
     public static JWK getKeycloakJwk() {
