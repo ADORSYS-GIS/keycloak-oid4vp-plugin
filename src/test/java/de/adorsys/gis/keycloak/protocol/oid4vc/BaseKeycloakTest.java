@@ -37,7 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public abstract class BaseKeycloakTest {
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:nightly";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.5.0";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_V2_NAME = "test-v2";
