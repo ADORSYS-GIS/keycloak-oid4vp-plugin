@@ -3,26 +3,18 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({
-        "id",
-        "optional",
-        "path",
-        "purpose",
-        "name",
-        "intent_to_retain",
-        "filter"
-})
+@JsonPropertyOrder({"id", "optional", "path", "purpose", "name", "intent_to_retain", "filter"})
 @Generated("jsonschema2pojo")
 public class Field {
 
     @JsonProperty("id")
     private String id;
+
     @JsonProperty("optional")
     private Boolean optional;
     /**
@@ -30,10 +22,13 @@ public class Field {
      */
     @JsonProperty("path")
     private List<String> path = new ArrayList<String>();
+
     @JsonProperty("purpose")
     private String purpose;
+
     @JsonProperty("name")
     private String name;
+
     @JsonProperty("intent_to_retain")
     private Boolean intentToRetain;
     /**
@@ -130,7 +125,10 @@ public class Field {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(Field.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(Field.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("id");
         sb.append('=');
         sb.append(((this.id == null) ? "<null>" : this.id));
@@ -189,7 +187,17 @@ public class Field {
             return false;
         }
         Field rhs = ((Field) other);
-        return ((((((((this.filter == rhs.filter) || ((this.filter != null) && this.filter.equals(rhs.filter))) && ((this.path == rhs.path) || ((this.path != null) && this.path.equals(rhs.path)))) && ((this.intentToRetain == rhs.intentToRetain) || ((this.intentToRetain != null) && this.intentToRetain.equals(rhs.intentToRetain)))) && ((this.purpose == rhs.purpose) || ((this.purpose != null) && this.purpose.equals(rhs.purpose)))) && ((this.name == rhs.name) || ((this.name != null) && this.name.equals(rhs.name)))) && ((this.optional == rhs.optional) || ((this.optional != null) && this.optional.equals(rhs.optional)))) && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id))));
+        return ((((((((this.filter == rhs.filter) || ((this.filter != null) && this.filter.equals(rhs.filter)))
+                                                        && ((this.path == rhs.path)
+                                                                || ((this.path != null) && this.path.equals(rhs.path))))
+                                                && ((this.intentToRetain == rhs.intentToRetain)
+                                                        || ((this.intentToRetain != null)
+                                                                && this.intentToRetain.equals(rhs.intentToRetain))))
+                                        && ((this.purpose == rhs.purpose)
+                                                || ((this.purpose != null) && this.purpose.equals(rhs.purpose))))
+                                && ((this.name == rhs.name) || ((this.name != null) && this.name.equals(rhs.name))))
+                        && ((this.optional == rhs.optional)
+                                || ((this.optional != null) && this.optional.equals(rhs.optional))))
+                && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id))));
     }
-
 }

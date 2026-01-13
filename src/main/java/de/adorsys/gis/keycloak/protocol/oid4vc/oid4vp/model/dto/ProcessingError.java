@@ -8,7 +8,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public enum ProcessingError {
-
     AUTH_CONTEXT_CLOSED("auth_context_closed"),
     INVALID_PRESENTATION_SUBMISSION("invalid_presentation_submission"),
     INVALID_VP_TOKEN("invalid_vp_token"),

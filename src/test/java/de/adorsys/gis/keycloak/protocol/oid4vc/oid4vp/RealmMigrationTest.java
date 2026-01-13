@@ -1,9 +1,9 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
  * Testing realm migration for adding OpenID4VP user auth flow.

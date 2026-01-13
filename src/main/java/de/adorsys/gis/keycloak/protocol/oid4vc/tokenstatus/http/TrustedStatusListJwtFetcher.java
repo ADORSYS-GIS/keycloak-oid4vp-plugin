@@ -1,5 +1,13 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.List;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.crypto.KeyType;
@@ -10,15 +18,6 @@ import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.models.KeycloakSession;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
-import java.util.Base64;
-import java.util.List;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
 /**
  * Status list JWT data fetcher with trust enforcement.
@@ -61,8 +60,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
             return new JWSInput(statusListJwt);
         } catch (JWSInputException e) {
             throw new ReferencedTokenValidationException(
-                    String.format("Retrieved status list is not a valid JWT: %s", statusListJwt), e
-            );
+                    String.format("Retrieved status list is not a valid JWT: %s", statusListJwt), e);
         }
     }
 
@@ -104,8 +102,12 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
     protected String algorithmToKeyType(String alg) throws ReferencedTokenValidationException {
         return switch (alg) {
-            case Algorithm.RS256, Algorithm.RS384, Algorithm.RS512,
-                 Algorithm.PS256, Algorithm.PS384, Algorithm.PS512 -> KeyType.RSA;
+            case Algorithm.RS256,
+                    Algorithm.RS384,
+                    Algorithm.RS512,
+                    Algorithm.PS256,
+                    Algorithm.PS384,
+                    Algorithm.PS512 -> KeyType.RSA;
             case Algorithm.ES256, Algorithm.ES384, Algorithm.ES512 -> KeyType.EC;
             default -> throw new ReferencedTokenValidationException("Unsupported signature algorithm");
         };

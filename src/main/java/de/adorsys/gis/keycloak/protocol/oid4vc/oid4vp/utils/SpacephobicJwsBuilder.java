@@ -1,11 +1,10 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import java.nio.charset.StandardCharsets;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jws.JWSBuilder;
 import org.keycloak.util.JsonSerialization;
-
-import java.nio.charset.StandardCharsets;
 
 /**
  * A JWS builder that avoids adding spaces in the pre-encoded JSON.
@@ -18,8 +17,11 @@ public class SpacephobicJwsBuilder extends JWSBuilder {
     protected String encodeHeader(String sigAlgName) {
         StringBuilder builder = new StringBuilder("{");
 
-        if (org.keycloak.crypto.Algorithm.Ed25519.equals(sigAlgName) || org.keycloak.crypto.Algorithm.Ed448.equals(sigAlgName)) {
-            builder.append("\"alg\":\"").append(org.keycloak.crypto.Algorithm.EdDSA).append("\"");
+        if (org.keycloak.crypto.Algorithm.Ed25519.equals(sigAlgName)
+                || org.keycloak.crypto.Algorithm.Ed448.equals(sigAlgName)) {
+            builder.append("\"alg\":\"")
+                    .append(org.keycloak.crypto.Algorithm.EdDSA)
+                    .append("\"");
             builder.append(",\"crv\":\"").append(sigAlgName).append("\"");
         } else {
             builder.append("\"alg\":\"").append(sigAlgName).append("\"");
@@ -46,7 +48,8 @@ public class SpacephobicJwsBuilder extends JWSBuilder {
                 throw new RuntimeException(e);
             }
         }
-        if (contentType != null) builder.append(",\"cty\":\"").append(contentType).append("\"");
+        if (contentType != null)
+            builder.append(",\"cty\":\"").append(contentType).append("\"");
         builder.append("}");
         return Base64Url.encode(builder.toString().getBytes(StandardCharsets.UTF_8));
     }

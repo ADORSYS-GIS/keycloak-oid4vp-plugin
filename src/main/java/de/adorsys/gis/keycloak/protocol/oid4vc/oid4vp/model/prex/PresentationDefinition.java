@@ -3,26 +3,16 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.List;
-
+import javax.annotation.processing.Generated;
 
 /**
  * Presentation Definition
  * <p>
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({
-        "id",
-        "name",
-        "purpose",
-        "format",
-        "frame",
-        "submission_requirements",
-        "input_descriptors"
-})
+@JsonPropertyOrder({"id", "name", "purpose", "format", "frame", "submission_requirements", "input_descriptors"})
 @Generated("jsonschema2pojo")
 public class PresentationDefinition {
 
@@ -31,8 +21,10 @@ public class PresentationDefinition {
      */
     @JsonProperty("id")
     private String id;
+
     @JsonProperty("name")
     private String name;
+
     @JsonProperty("purpose")
     private String purpose;
     /**
@@ -41,8 +33,10 @@ public class PresentationDefinition {
      */
     @JsonProperty("format")
     private ClaimFormat format;
+
     @JsonProperty("frame")
     private Frame frame;
+
     @JsonProperty("submission_requirements")
     private List<SubmissionRequirement> submissionRequirements = new ArrayList<SubmissionRequirement>();
     /**
@@ -144,7 +138,10 @@ public class PresentationDefinition {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(PresentationDefinition.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(PresentationDefinition.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("id");
         sb.append('=');
         sb.append(((this.id == null) ? "<null>" : this.id));
@@ -203,7 +200,19 @@ public class PresentationDefinition {
             return false;
         }
         PresentationDefinition rhs = ((PresentationDefinition) other);
-        return ((((((((this.purpose == rhs.purpose) || ((this.purpose != null) && this.purpose.equals(rhs.purpose))) && ((this.submissionRequirements == rhs.submissionRequirements) || ((this.submissionRequirements != null) && this.submissionRequirements.equals(rhs.submissionRequirements)))) && ((this.name == rhs.name) || ((this.name != null) && this.name.equals(rhs.name)))) && ((this.format == rhs.format) || ((this.format != null) && this.format.equals(rhs.format)))) && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id)))) && ((this.inputDescriptors == rhs.inputDescriptors) || ((this.inputDescriptors != null) && this.inputDescriptors.equals(rhs.inputDescriptors)))) && ((this.frame == rhs.frame) || ((this.frame != null) && this.frame.equals(rhs.frame))));
+        return ((((((((this.purpose == rhs.purpose) || ((this.purpose != null) && this.purpose.equals(rhs.purpose)))
+                                                        && ((this.submissionRequirements == rhs.submissionRequirements)
+                                                                || ((this.submissionRequirements != null)
+                                                                        && this.submissionRequirements.equals(
+                                                                                rhs.submissionRequirements))))
+                                                && ((this.name == rhs.name)
+                                                        || ((this.name != null) && this.name.equals(rhs.name))))
+                                        && ((this.format == rhs.format)
+                                                || ((this.format != null) && this.format.equals(rhs.format))))
+                                && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id))))
+                        && ((this.inputDescriptors == rhs.inputDescriptors)
+                                || ((this.inputDescriptors != null)
+                                        && this.inputDescriptors.equals(rhs.inputDescriptors))))
+                && ((this.frame == rhs.frame) || ((this.frame != null) && this.frame.equals(rhs.frame))));
     }
-
 }

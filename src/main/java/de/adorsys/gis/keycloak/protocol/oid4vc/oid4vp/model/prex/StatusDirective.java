@@ -5,23 +5,20 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonValue;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({
-        "directive",
-        "type"
-})
+@JsonPropertyOrder({"directive", "type"})
 @Generated("jsonschema2pojo")
 public class StatusDirective {
 
     @JsonProperty("directive")
     private Directive directive;
+
     @JsonProperty("type")
     private List<String> type = new ArrayList<String>();
 
@@ -48,7 +45,10 @@ public class StatusDirective {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(StatusDirective.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(StatusDirective.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("directive");
         sb.append('=');
         sb.append(((this.directive == null) ? "<null>" : this.directive));
@@ -82,16 +82,17 @@ public class StatusDirective {
             return false;
         }
         StatusDirective rhs = ((StatusDirective) other);
-        return (((this.type == rhs.type) || ((this.type != null) && this.type.equals(rhs.type))) && ((this.directive == rhs.directive) || ((this.directive != null) && this.directive.equals(rhs.directive))));
+        return (((this.type == rhs.type) || ((this.type != null) && this.type.equals(rhs.type)))
+                && ((this.directive == rhs.directive)
+                        || ((this.directive != null) && this.directive.equals(rhs.directive))));
     }
 
     @Generated("jsonschema2pojo")
     public enum Directive {
-
         REQUIRED("required"),
         ALLOWED("allowed"),
         DISALLOWED("disallowed");
-        private final static Map<String, Directive> CONSTANTS = new HashMap<String, Directive>();
+        private static final Map<String, Directive> CONSTANTS = new HashMap<String, Directive>();
 
         static {
             for (Directive c : values()) {
@@ -124,7 +125,5 @@ public class StatusDirective {
         public String value() {
             return this.value;
         }
-
     }
-
 }

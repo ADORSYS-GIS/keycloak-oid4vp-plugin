@@ -3,15 +3,14 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import jakarta.ws.rs.core.UriBuilder;
+import java.net.URI;
+import java.util.Locale;
+import java.util.Properties;
 import org.jboss.logging.Logger;
 import org.keycloak.forms.login.LoginFormsPages;
 import org.keycloak.forms.login.freemarker.FreeMarkerLoginFormsProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.theme.Theme;
-
-import java.net.URI;
-import java.util.Locale;
-import java.util.Properties;
 
 public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
 
@@ -27,9 +26,7 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
 
     @Override
     protected void createCommonAttributes(
-            Theme theme, Locale locale, Properties messagesBundle,
-            UriBuilder baseUriBuilder, LoginFormsPages page
-    ) {
+            Theme theme, Locale locale, Properties messagesBundle, UriBuilder baseUriBuilder, LoginFormsPages page) {
         super.createCommonAttributes(theme, locale, messagesBundle, baseUriBuilder, page);
         URI baseUri = baseUriBuilder.build();
 

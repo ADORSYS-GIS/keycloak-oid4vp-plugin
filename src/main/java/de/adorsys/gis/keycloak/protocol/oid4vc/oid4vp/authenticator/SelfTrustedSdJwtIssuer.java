@@ -1,5 +1,7 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import java.util.List;
+import java.util.stream.Stream;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
@@ -12,9 +14,6 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.sdjwt.IssuerSignedJWT;
 import org.keycloak.sdjwt.consumer.TrustedSdJwtIssuer;
-
-import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * Trust anchor enforcing Keycloak only trusts SD-JWTs that it issued can verify itself.
@@ -37,8 +36,7 @@ public class SelfTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
 
         RealmModel realm = session.getContext().getRealm();
         KeyManager keyManager = session.keys();
-        Stream<KeyWrapper> keyStream = keyManager.getKeysStream(realm)
-                .filter(key -> KeyUse.SIG.equals(key.getUse()));
+        Stream<KeyWrapper> keyStream = keyManager.getKeysStream(realm).filter(key -> KeyUse.SIG.equals(key.getUse()));
 
         String signingKeyId = issuerSignedJWT.getJwsHeader().getKeyId();
         if (signingKeyId != null) {
@@ -47,8 +45,8 @@ public class SelfTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
 
         return keyStream
                 .map(key -> {
-                    SignatureProvider signatureProvider = session
-                            .getProvider(SignatureProvider.class, key.getAlgorithmOrDefault());
+                    SignatureProvider signatureProvider =
+                            session.getProvider(SignatureProvider.class, key.getAlgorithmOrDefault());
                     try {
                         return signatureProvider.verifier(key);
                     } catch (VerificationException e) {

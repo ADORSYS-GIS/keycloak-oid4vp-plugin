@@ -1,7 +1,14 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -21,14 +28,6 @@ import org.keycloak.util.JsonSerialization;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Base Keycloak test class for leveraging the TestContainers infrastructure.
@@ -95,8 +94,7 @@ public abstract class BaseKeycloakTest {
     protected List<NameValuePair> getDefaultHttpParams() {
         return new ArrayList<>(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.CLIENT_SECRET, TEST_CLIENT_SECRET)
-        ));
+                new BasicNameValuePair(OAuth2Constants.CLIENT_SECRET, TEST_CLIENT_SECRET)));
     }
 
     /**
@@ -119,8 +117,7 @@ public abstract class BaseKeycloakTest {
         try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
             assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
             String json = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-            Map<String, String> payload = JsonSerialization.readValue(json, new TypeReference<>() {
-            });
+            Map<String, String> payload = JsonSerialization.readValue(json, new TypeReference<>() {});
             return payload.get(OAuth2Constants.ACCESS_TOKEN);
         }
     }

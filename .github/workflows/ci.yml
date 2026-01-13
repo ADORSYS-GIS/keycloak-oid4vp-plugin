@@ -26,6 +26,9 @@ jobs:
       - name: Make Maven Wrapper executable
         run: chmod +x mvnw
 
+      - name: Check code formatting
+        run: ./mvnw spotless:check --batch-mode
+
       - name: Build only (skip tests)
         run: ./mvnw clean package -DskipTests --batch-mode
 

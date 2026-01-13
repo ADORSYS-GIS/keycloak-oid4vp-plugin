@@ -10,7 +10,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * Authorization Response</a>
  */
 public enum ResponseType {
-
     CODE("code"),
     VP_TOKEN("vp_token"),
     ID_TOKEN("id_token"),

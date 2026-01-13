@@ -10,7 +10,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * Authorization Request</a>
  */
 public enum ClientIdScheme {
-
     PRE_REGISTERED("pre-registered"),
     REDIRECT_URI("redirect_uri"),
     ENTITY_ID("entity_id"),

@@ -1,9 +1,21 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_CNF;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_EXP;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_JWK;
+
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.util.Map;
+import java.util.Objects;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.common.util.Time;
@@ -19,19 +31,6 @@ import org.keycloak.sdjwt.IssuerSignedJWT;
 import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.util.JsonSerialization;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
-import java.util.Map;
-import java.util.Objects;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
-import static org.keycloak.OID4VCConstants.CLAIM_NAME_CNF;
-import static org.keycloak.OID4VCConstants.CLAIM_NAME_EXP;
-import static org.keycloak.OID4VCConstants.CLAIM_NAME_JWK;
 
 /**
  * Test helper for crafting SD-JWT verifiable presentations.
@@ -100,8 +99,7 @@ public class SdJwtVPTestUtils {
      * Scaffold an SD-JWT identity credential that can clear authentication.
      */
     private static IssuerSignedJWT exampleSdJwtCredential(
-            String iss, String vct, String username, boolean setStatusClaim
-    ) {
+            String iss, String vct, String username, boolean setStatusClaim) {
         Objects.requireNonNull(iss);
         Objects.requireNonNull(vct);
 
@@ -112,15 +110,14 @@ public class SdJwtVPTestUtils {
 
         // Add status list claim (Token Status List)
         if (setStatusClaim) {
-            claimSet.set(STATUS_FIELD, JsonSerialization.mapper.valueToTree(
-                    Map.of(STATUS_LIST_FIELD, new ReferencedTokenValidator.StatusInfo(
-                            0, "https://example.com/status-list-jwt"
-                    ))
-            ));
+            claimSet.set(
+                    STATUS_FIELD,
+                    JsonSerialization.mapper.valueToTree(Map.of(
+                            STATUS_LIST_FIELD,
+                            new ReferencedTokenValidator.StatusInfo(0, "https://example.com/status-list-jwt"))));
         }
 
-        DisclosureSpec.Builder disclosure = DisclosureSpec.builder()
-                .withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
+        DisclosureSpec.Builder disclosure = DisclosureSpec.builder().withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
 
         // Bind credential to user
         JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
@@ -141,8 +138,7 @@ public class SdJwtVPTestUtils {
     /**
      * Creates an SD-JWT verifiable presentation of an SD-JWT credential.
      */
-    public String presentSdJwt(String sdjwt, String nonce, String aud, JWK holderKey)
-            throws Exception {
+    public String presentSdJwt(String sdjwt, String nonce, String aud, JWK holderKey) throws Exception {
         return presentSdJwt(sdjwt, nonce, aud, holderKey, KB_JWT_LIFESPAN_SECS);
     }
 
@@ -170,12 +166,7 @@ public class SdJwtVPTestUtils {
         SignatureSignerContext signer = new ECDSASignatureSignerContext(keyWrapper);
 
         SdJwtVP sdJwtVP = SdJwtVP.of(sdjwt);
-        return sdJwtVP.present(
-                null,
-                true,
-                JsonSerialization.mapper.valueToTree(kbJwtClaims),
-                signer
-        );
+        return sdJwtVP.present(null, true, JsonSerialization.mapper.valueToTree(kbJwtClaims), signer);
     }
 
     public static JWK getKeycloakJwk() {

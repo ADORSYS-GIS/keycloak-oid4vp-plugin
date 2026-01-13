@@ -3,6 +3,8 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
+import java.util.ArrayList;
+import java.util.List;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -10,9 +12,6 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -47,7 +46,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Credential types allowed");
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setDefaultValue(VCT_CONFIG_DEFAULT);
-        property.setHelpText("Only SD-JWTs of this comma-separated list of types (vct) will be accepted by the authenticator.");
+        property.setHelpText(
+                "Only SD-JWTs of this comma-separated list of types (vct) will be accepted by the authenticator.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -55,7 +55,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Enforce Not Before claim");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(ENFORCE_NBF_CLAIM_CONFIG_DEFAULT);
-        property.setHelpText("Verification policy whether or not to honor the nbf time claim of presented credentials.");
+        property.setHelpText(
+                "Verification policy whether or not to honor the nbf time claim of presented credentials.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -63,7 +64,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Reject expired credentials");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(ENFORCE_EXP_CLAIM_CONFIG_DEFAULT);
-        property.setHelpText("Verification policy whether or not to honor the exp time claim of presented credentials.");
+        property.setHelpText(
+                "Verification policy whether or not to honor the exp time claim of presented credentials.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -71,7 +73,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Maximum age (in seconds) of presented key-binding JWT");
         property.setType(ProviderConfigProperty.INTEGER_TYPE);
         property.setDefaultValue(KBJWT_MAX_AGE_CONFIG_DEFAULT);
-        property.setHelpText("Define a maximum age of accepted key-binding JWTs as part of measures to protect against replay.");
+        property.setHelpText(
+                "Define a maximum age of accepted key-binding JWTs as part of measures to protect against replay.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -79,7 +82,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Reject revoked credentials (Token Status List)");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT);
-        property.setHelpText("Reject credentials whose status indicates they are no longer valid as per the Token Status List mechanism.");
+        property.setHelpText(
+                "Reject credentials whose status indicates they are no longer valid as per the Token Status List mechanism.");
         configProperties.add(property);
     }
 
@@ -130,14 +134,11 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     }
 
     @Override
-    public void init(Config.Scope config) {
-    }
+    public void init(Config.Scope config) {}
 
     @Override
-    public void postInit(KeycloakSessionFactory factory) {
-    }
+    public void postInit(KeycloakSessionFactory factory) {}
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }

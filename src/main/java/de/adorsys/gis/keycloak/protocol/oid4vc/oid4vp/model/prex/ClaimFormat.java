@@ -3,9 +3,7 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import javax.annotation.processing.Generated;
-
 
 /**
  * Presentation Definition Claim Format Designations
@@ -18,16 +16,22 @@ public class ClaimFormat {
 
     @JsonProperty("jwt")
     private GenericFormat jwt;
+
     @JsonProperty("jwt_vc")
     private GenericFormat jwtVc;
+
     @JsonProperty("jwt_vp")
     private GenericFormat jwtVp;
+
     @JsonProperty("ldp")
     private GenericFormat ldp;
+
     @JsonProperty("ldp_vc")
     private GenericFormat ldpVc;
+
     @JsonProperty("ldp_vp")
     private GenericFormat ldpVp;
+
     @JsonProperty("vc+sd-jwt")
     private SdGenericFormat vcSdJwt;
 
@@ -104,7 +108,10 @@ public class ClaimFormat {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(ClaimFormat.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(ClaimFormat.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("jwt");
         sb.append('=');
         sb.append(((this.jwt == null) ? "<null>" : this.jwt));
@@ -163,7 +170,17 @@ public class ClaimFormat {
             return false;
         }
         ClaimFormat rhs = ((ClaimFormat) other);
-        return ((((((((this.ldpVp == rhs.ldpVp) || ((this.ldpVp != null) && this.ldpVp.equals(rhs.ldpVp))) && ((this.ldpVc == rhs.ldpVc) || ((this.ldpVc != null) && this.ldpVc.equals(rhs.ldpVc)))) && ((this.jwt == rhs.jwt) || ((this.jwt != null) && this.jwt.equals(rhs.jwt)))) && ((this.vcSdJwt == rhs.vcSdJwt) || ((this.vcSdJwt != null) && this.vcSdJwt.equals(rhs.vcSdJwt)))) && ((this.jwtVc == rhs.jwtVc) || ((this.jwtVc != null) && this.jwtVc.equals(rhs.jwtVc)))) && ((this.ldp == rhs.ldp) || ((this.ldp != null) && this.ldp.equals(rhs.ldp)))) && ((this.jwtVp == rhs.jwtVp) || ((this.jwtVp != null) && this.jwtVp.equals(rhs.jwtVp))));
+        return ((((((((this.ldpVp == rhs.ldpVp) || ((this.ldpVp != null) && this.ldpVp.equals(rhs.ldpVp)))
+                                                        && ((this.ldpVc == rhs.ldpVc)
+                                                                || ((this.ldpVc != null)
+                                                                        && this.ldpVc.equals(rhs.ldpVc))))
+                                                && ((this.jwt == rhs.jwt)
+                                                        || ((this.jwt != null) && this.jwt.equals(rhs.jwt))))
+                                        && ((this.vcSdJwt == rhs.vcSdJwt)
+                                                || ((this.vcSdJwt != null) && this.vcSdJwt.equals(rhs.vcSdJwt))))
+                                && ((this.jwtVc == rhs.jwtVc)
+                                        || ((this.jwtVc != null) && this.jwtVc.equals(rhs.jwtVc))))
+                        && ((this.ldp == rhs.ldp) || ((this.ldp != null) && this.ldp.equals(rhs.ldp))))
+                && ((this.jwtVp == rhs.jwtVp) || ((this.jwtVp != null) && this.jwtVp.equals(rhs.jwtVp))));
     }
-
 }

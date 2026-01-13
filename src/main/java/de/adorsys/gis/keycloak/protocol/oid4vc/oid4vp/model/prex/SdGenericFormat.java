@@ -3,21 +3,18 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({
-        "sd-jwt_alg_values",
-        "kb-jwt_alg_values"
-})
+@JsonPropertyOrder({"sd-jwt_alg_values", "kb-jwt_alg_values"})
 @Generated("jsonschema2pojo")
 public class SdGenericFormat {
 
     @JsonProperty("sd-jwt_alg_values")
     private List<String> sdJwtAlgValues = new ArrayList<String>();
+
     @JsonProperty("kb-jwt_alg_values")
     private List<String> kbJwtAlgValues = new ArrayList<String>();
 
@@ -44,7 +41,10 @@ public class SdGenericFormat {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(SdGenericFormat.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(SdGenericFormat.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("sdJwtAlgValues");
         sb.append('=');
         sb.append(((this.sdJwtAlgValues == null) ? "<null>" : this.sdJwtAlgValues));
@@ -78,7 +78,9 @@ public class SdGenericFormat {
             return false;
         }
         SdGenericFormat rhs = ((SdGenericFormat) other);
-        return (((this.kbJwtAlgValues == rhs.kbJwtAlgValues) || ((this.kbJwtAlgValues != null) && this.kbJwtAlgValues.equals(rhs.kbJwtAlgValues))) && ((this.sdJwtAlgValues == rhs.sdJwtAlgValues) || ((this.sdJwtAlgValues != null) && this.sdJwtAlgValues.equals(rhs.sdJwtAlgValues))));
+        return (((this.kbJwtAlgValues == rhs.kbJwtAlgValues)
+                        || ((this.kbJwtAlgValues != null) && this.kbJwtAlgValues.equals(rhs.kbJwtAlgValues)))
+                && ((this.sdJwtAlgValues == rhs.sdJwtAlgValues)
+                        || ((this.sdJwtAlgValues != null) && this.sdJwtAlgValues.equals(rhs.sdJwtAlgValues))));
     }
-
 }

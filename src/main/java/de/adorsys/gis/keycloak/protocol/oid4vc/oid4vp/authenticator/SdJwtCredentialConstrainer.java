@@ -6,7 +6,6 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.Field;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.Filter;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.InputDescriptor;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,17 +23,15 @@ public class SdJwtCredentialConstrainer {
     /**
      * Constructs a presentation definition requiring the disclosure of some claims.
      */
-    public PresentationDefinition generatePresentationDefinition(
-            List<String> issuerVcts,
-            List<String> requiredClaims
-    ) {
+    public PresentationDefinition generatePresentationDefinition(List<String> issuerVcts, List<String> requiredClaims) {
         PresentationDefinition def = this.prebuildPresentationDefinition(issuerVcts);
 
         // Set a unique identifier
         def.setId(UUID.randomUUID().toString());
 
         // Update field list with required claims
-        List<Field> fieldList = def.getInputDescriptors().get(0).getConstraints().getFields();
+        List<Field> fieldList =
+                def.getInputDescriptors().get(0).getConstraints().getFields();
         requiredClaims.forEach(claim -> {
             String path = String.format(CLAIM_PATH_TEMPLATE, claim);
 
@@ -66,12 +63,14 @@ public class SdJwtCredentialConstrainer {
         field.setPath(List.of(VCT_PATH));
         constraints.setFields(new ArrayList<>(List.of(field)));
 
-        List<Filter> anyOfFilters = issuerVcts.stream().map(vct -> {
-            Filter filter = new Filter();
-            filter.setType(Filter.SimpleTypes.STRING);
-            filter.setConst(vct);
-            return filter;
-        }).toList();
+        List<Filter> anyOfFilters = issuerVcts.stream()
+                .map(vct -> {
+                    Filter filter = new Filter();
+                    filter.setType(Filter.SimpleTypes.STRING);
+                    filter.setConst(vct);
+                    return filter;
+                })
+                .toList();
 
         Filter filter = new Filter();
         filter.setType(Filter.SimpleTypes.STRING);

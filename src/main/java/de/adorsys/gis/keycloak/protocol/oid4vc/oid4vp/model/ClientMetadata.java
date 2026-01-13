@@ -38,6 +38,5 @@ public class ClientMetadata {
         return this;
     }
 
-    public static class VpFormat extends ClaimFormat {
-    }
+    public static class VpFormat extends ClaimFormat {}
 }
