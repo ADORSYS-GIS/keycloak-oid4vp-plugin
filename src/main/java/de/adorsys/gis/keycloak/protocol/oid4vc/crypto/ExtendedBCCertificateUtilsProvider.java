@@ -116,7 +116,7 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
 
     public static String getJcaContentSignerAlg(PublicKey publicKey) {
         switch (publicKey) {
-                // Handle EC keys - select algorithm based on curve size
+            // Handle EC keys - select algorithm based on curve size
             case ECPublicKey ecKey -> {
                 int curveSize = ecKey.getParams().getCurve().getField().getFieldSize();
 
@@ -128,7 +128,7 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
                 };
             }
 
-                // Handle RSA keys - select algorithm based on key size
+            // Handle RSA keys - select algorithm based on key size
             case RSAPublicKey rsaKey -> {
                 int keySize = rsaKey.getModulus().bitLength();
 
@@ -141,9 +141,10 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
                 return JavaAlgorithm.RS256; // SHA-256  // SHA-384
             }
 
-                // Other key types are not supported
-            default -> throw new IllegalArgumentException(
-                    "Unsupported key type: " + publicKey.getClass().getSimpleName());
+            // Other key types are not supported
+            default ->
+                throw new IllegalArgumentException(
+                        "Unsupported key type: " + publicKey.getClass().getSimpleName());
         }
     }
 

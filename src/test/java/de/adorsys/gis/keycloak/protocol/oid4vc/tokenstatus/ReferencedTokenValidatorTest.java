@@ -41,16 +41,14 @@ public class ReferencedTokenValidatorTest {
         StatusListJwtFetcher mockStatusListJwtFetcher = uri -> {
             // Return a mock JWT token that contains the status list data
             // In a real scenario, this would be a signed JWT with the status_list claim
-            String mockJwtPayload =
-                    """
+            String mockJwtPayload = """
                     {
                         "status_list": {
                             "bits": 1,
                             "lst": "%s"
                         }
                     }
-                    """
-                            .formatted(IETF_1BIT_TEST_VECTOR);
+                    """.formatted(IETF_1BIT_TEST_VECTOR);
 
             // Create a simple JWT structure (header.payload.signature)
             String header = "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCJ9"; // {"typ":"statuslist+jwt"}
@@ -237,8 +235,7 @@ public class ReferencedTokenValidatorTest {
         // Test the official IETF 1-bit test vector using the mock HTTP fetcher
 
         // Test with status[0] = 1 (INVALID) - should throw exception
-        JsonNode invalidTokenPayload = JsonSerialization.mapper.readTree(
-                """
+        JsonNode invalidTokenPayload = JsonSerialization.mapper.readTree("""
                 {
                     "status": {
                         "status_list": {
@@ -258,8 +255,7 @@ public class ReferencedTokenValidatorTest {
                 "Exception should mention invalid status. Actual message: " + exception.getMessage());
 
         // Test with status[1] = 0 (VALID) - should pass
-        JsonNode validTokenPayload = JsonSerialization.mapper.readTree(
-                """
+        JsonNode validTokenPayload = JsonSerialization.mapper.readTree("""
                 {
                     "status": {
                         "status_list": {
@@ -279,8 +275,7 @@ public class ReferencedTokenValidatorTest {
         // Test the official IETF 2-bit test vector using the mock HTTP fetcher
 
         // Test with status[0] = 1 (INVALID)
-        JsonNode invalidTokenPayload = JsonSerialization.mapper.readTree(
-                """
+        JsonNode invalidTokenPayload = JsonSerialization.mapper.readTree("""
                 {
                     "status": {
                         "status_list": {
@@ -300,8 +295,7 @@ public class ReferencedTokenValidatorTest {
                 "Exception should mention invalid status");
 
         // Test with status[1993] = 2 (SUSPENDED)
-        JsonNode suspendedTokenPayload = JsonSerialization.mapper.readTree(
-                """
+        JsonNode suspendedTokenPayload = JsonSerialization.mapper.readTree("""
                 {
                     "status": {
                         "status_list": {
@@ -321,8 +315,7 @@ public class ReferencedTokenValidatorTest {
                 "Exception should mention invalid status");
 
         // Test with a valid status (any index not mentioned in spec should be 0)
-        JsonNode validTokenPayload = JsonSerialization.mapper.readTree(
-                """
+        JsonNode validTokenPayload = JsonSerialization.mapper.readTree("""
                 {
                     "status": {
                         "status_list": {

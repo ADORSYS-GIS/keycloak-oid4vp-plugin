@@ -385,7 +385,9 @@ public class ReferencedTokenValidator {
      * @param idx The token index in the status list (must be non-negative)
      * @param uri The URI of the status list token (must not be null or empty)
      */
-    public static record StatusInfo(@JsonProperty(IDX_FIELD) int idx, @JsonProperty(URI_FIELD) String uri) {
+    public static record StatusInfo(
+            @JsonProperty(IDX_FIELD) int idx,
+            @JsonProperty(URI_FIELD) String uri) {
         @JsonCreator
         public StatusInfo {
             // Validation handled in extractStatusInfo method
@@ -398,7 +400,9 @@ public class ReferencedTokenValidator {
      * @param bits The number of bits per status value (must be 1, 2, 4, or 8)
      * @param lst  The base64url-encoded, DEFLATE-compressed status list (must not be null or empty)
      */
-    public static record StatusList(@JsonProperty(BITS_FIELD) int bits, @JsonProperty(LST_FIELD) String lst) {
+    public static record StatusList(
+            @JsonProperty(BITS_FIELD) int bits,
+            @JsonProperty(LST_FIELD) String lst) {
         @JsonCreator
         public StatusList {
             // Validation handled in extractStatusList method

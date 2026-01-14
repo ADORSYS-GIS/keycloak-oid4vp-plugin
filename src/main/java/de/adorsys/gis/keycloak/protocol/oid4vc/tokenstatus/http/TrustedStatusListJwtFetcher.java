@@ -102,12 +102,8 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
     protected String algorithmToKeyType(String alg) throws ReferencedTokenValidationException {
         return switch (alg) {
-            case Algorithm.RS256,
-                    Algorithm.RS384,
-                    Algorithm.RS512,
-                    Algorithm.PS256,
-                    Algorithm.PS384,
-                    Algorithm.PS512 -> KeyType.RSA;
+            case Algorithm.RS256, Algorithm.RS384, Algorithm.RS512, Algorithm.PS256, Algorithm.PS384, Algorithm.PS512 ->
+                KeyType.RSA;
             case Algorithm.ES256, Algorithm.ES384, Algorithm.ES512 -> KeyType.EC;
             default -> throw new ReferencedTokenValidationException("Unsupported signature algorithm");
         };
