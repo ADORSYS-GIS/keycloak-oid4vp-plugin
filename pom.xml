@@ -119,7 +119,12 @@
                 <configuration>
                     <java>
                         <palantirJavaFormat/>
-                        <removeUnusedImports />
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                        <forbidWildcardImports/>
+                        <forbidModuleImports/>
+                        <formatAnnotations/>
                     </java>
                 </configuration>
             </plugin>

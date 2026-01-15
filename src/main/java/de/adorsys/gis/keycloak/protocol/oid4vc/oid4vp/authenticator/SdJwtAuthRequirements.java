@@ -46,8 +46,10 @@ public class SdJwtAuthRequirements {
         logger.debugf("Collecting authentication requirements");
         this.sdJwtCredentialConstrainer = new SdJwtCredentialConstrainer();
 
-        // We'll need to enforce that only credentials produced by and for this audience pass through.
-        // The audience is the client ID of the verifier, but some wallets prepend a scheme.
+        // We'll need to enforce that only credentials produced by and for this audience
+        // pass through.
+        // The audience is the client ID of the verifier, but some wallets prepend a
+        // scheme.
         this.keycloakIssuerURI = OID4VCIssuerWellKnownProvider.getIssuer(context);
         String kbJwtAud = context.getUri().getBaseUri().getHost();
         this.kbJwtAudCheck = buildAudClaimCheck(kbJwtAud);
@@ -63,13 +65,13 @@ public class SdJwtAuthRequirements {
                 SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG_DEFAULT)));
 
-        this.validateNotBeforeClaim = Boolean.parseBoolean(config.getOrDefault(
-                SdJwtAuthenticatorFactory.ENFORCE_NBF_CLAIM_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_NBF_CLAIM_CONFIG_DEFAULT)));
+        this.requireNotBeforeClaim = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG_DEFAULT)));
 
-        this.validateExpirationClaim = Boolean.parseBoolean(config.getOrDefault(
-                SdJwtAuthenticatorFactory.ENFORCE_EXP_CLAIM_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_EXP_CLAIM_CONFIG_DEFAULT)));
+        this.requireExpirationClaim = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG_DEFAULT)));
 
         this.enforceRevocationStatus = Boolean.parseBoolean(config.getOrDefault(
                 SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
@@ -135,7 +137,8 @@ public class SdJwtAuthRequirements {
     }
 
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
-        // Some wallets prepend a scheme to the expected audience. We accept any such scheme.
+        // Some wallets prepend a scheme to the expected audience. We accept any such
+        // scheme.
         String regex = String.format("([^:]+:)?%s", Pattern.quote(expectedKbJwtAud));
         Pattern expectedPattern = Pattern.compile(regex);
         return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, (expectedAud, aud) -> expectedPattern
