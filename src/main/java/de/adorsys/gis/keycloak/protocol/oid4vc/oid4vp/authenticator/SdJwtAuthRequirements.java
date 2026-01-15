@@ -22,7 +22,8 @@ import java.util.stream.Collectors;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
 /**
- * Predefined presentation requirements on the SD-JWT VP token for authentication.
+ * Predefined presentation requirements on the SD-JWT VP token for
+ * authentication.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
@@ -38,8 +39,8 @@ public class SdJwtAuthRequirements {
     private final String expectedVctsPattern;
 
     private final int kbJwtMaxAllowedAge;
-    private final boolean validateNotBeforeClaim;
-    private final boolean validateExpirationClaim;
+    private final boolean requireNotBeforeClaim;
+    private final boolean requireExpirationClaim;
     private final boolean enforceRevocationStatus;
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
@@ -67,14 +68,14 @@ public class SdJwtAuthRequirements {
                 String.valueOf(SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG_DEFAULT)
         ));
 
-        this.validateNotBeforeClaim = Boolean.parseBoolean(config.getOrDefault(
-                SdJwtAuthenticatorFactory.ENFORCE_NBF_CLAIM_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_NBF_CLAIM_CONFIG_DEFAULT)
+        this.requireNotBeforeClaim = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG_DEFAULT)
         ));
 
-        this.validateExpirationClaim = Boolean.parseBoolean(config.getOrDefault(
-                SdJwtAuthenticatorFactory.ENFORCE_EXP_CLAIM_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_EXP_CLAIM_CONFIG_DEFAULT)
+        this.requireExpirationClaim = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG_DEFAULT)
         ));
 
         this.enforceRevocationStatus = Boolean.parseBoolean(config.getOrDefault(
@@ -106,8 +107,7 @@ public class SdJwtAuthRequirements {
      */
     public PresentationRequirements getPresentationDefinition() {
         var definition = SimplePresentationDefinition.builder();
-        getRequiredClaims().forEach(claim ->
-                definition.addClaimRequirement(claim, ".*")
+        getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*")
         );
 
         return definition
@@ -133,26 +133,20 @@ public class SdJwtAuthRequirements {
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
-        // TODO: Update time claim options naming and config keys to denote requirement
-        //  on the presence of claims. Following a recent update to Keycloak upstream,
-        //  validation will always be performed if claims are present.
         return IssuerSignedJwtVerificationOpts.builder()
                 .withIatCheck(Integer.MAX_VALUE, true)
-                .withNbfCheck(!validateNotBeforeClaim)
-                .withExpCheck(!validateExpirationClaim)
+                .withNbfCheck(!requireNotBeforeClaim)
+                .withExpCheck(!requireExpirationClaim)
                 .build();
     }
 
     public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce) {
-        // TODO: Update time claim options naming and config keys to denote requirement
-        //  on the presence of claims. Following a recent update to Keycloak upstream,
-        //  validation will always be performed if claims are present.
         return KeyBindingJwtVerificationOpts.builder()
                 .withKeyBindingRequired(true)
                 .withIatCheck(kbJwtMaxAllowedAge)
                 .withNonceCheck(nonce)
-                .withNbfCheck(!validateNotBeforeClaim)
-                .withExpCheck(!validateExpirationClaim)
+                .withNbfCheck(!requireNotBeforeClaim)
+                .withExpCheck(!requireExpirationClaim)
                 .addContentVerifiers(List.of(kbJwtAudCheck))
                 .build();
     }
