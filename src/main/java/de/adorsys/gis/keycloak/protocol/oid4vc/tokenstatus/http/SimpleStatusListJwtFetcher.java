@@ -31,8 +31,7 @@ public class SimpleStatusListJwtFetcher implements StatusListJwtFetcher {
                     .asString();
         } catch (Exception e) {
             throw new ReferencedTokenValidationException(
-                    String.format("Error retrieving or parsing Status List JWT from URI: %s", uri), e
-            );
+                    String.format("Error retrieving or parsing Status List JWT from URI: %s", uri), e);
         }
     }
 }

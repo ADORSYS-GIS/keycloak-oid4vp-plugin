@@ -3,22 +3,16 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.List;
-
+import javax.annotation.processing.Generated;
 
 /**
  * Presentation Submission
  * <p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({
-        "id",
-        "definition_id",
-        "descriptor_map"
-})
+@JsonPropertyOrder({"id", "definition_id", "descriptor_map"})
 @Generated("jsonschema2pojo")
 public class PresentationSubmission {
 
@@ -89,7 +83,10 @@ public class PresentationSubmission {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(PresentationSubmission.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(PresentationSubmission.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("id");
         sb.append('=');
         sb.append(((this.id == null) ? "<null>" : this.id));
@@ -128,7 +125,10 @@ public class PresentationSubmission {
             return false;
         }
         PresentationSubmission rhs = ((PresentationSubmission) other);
-        return ((((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id))) && ((this.descriptorMap == rhs.descriptorMap) || ((this.descriptorMap != null) && this.descriptorMap.equals(rhs.descriptorMap)))) && ((this.definitionId == rhs.definitionId) || ((this.definitionId != null) && this.definitionId.equals(rhs.definitionId))));
+        return ((((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id)))
+                        && ((this.descriptorMap == rhs.descriptorMap)
+                                || ((this.descriptorMap != null) && this.descriptorMap.equals(rhs.descriptorMap))))
+                && ((this.definitionId == rhs.definitionId)
+                        || ((this.definitionId != null) && this.definitionId.equals(rhs.definitionId))));
     }
-
 }

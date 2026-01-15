@@ -3,10 +3,9 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({"alg"})
@@ -29,7 +28,10 @@ public class GenericFormat {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(GenericFormat.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(GenericFormat.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("alg");
         sb.append('=');
         sb.append(((this.alg == null) ? "<null>" : this.alg));
@@ -60,5 +62,4 @@ public class GenericFormat {
         GenericFormat rhs = ((GenericFormat) other);
         return ((this.alg == rhs.alg) || ((this.alg != null) && this.alg.equals(rhs.alg)));
     }
-
 }

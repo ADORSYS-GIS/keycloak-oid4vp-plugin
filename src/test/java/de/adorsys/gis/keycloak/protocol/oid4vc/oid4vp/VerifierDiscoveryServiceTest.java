@@ -1,13 +1,13 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>

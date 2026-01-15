@@ -1,12 +1,5 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils;
 
-import org.keycloak.common.util.Base64Url;
-import org.keycloak.crypto.KeyType;
-import org.keycloak.crypto.KeyWrapper;
-import org.keycloak.jose.jwk.ECPublicJWK;
-import org.keycloak.jose.jwk.JWK;
-import org.keycloak.util.JWKSUtils;
-
 import java.math.BigInteger;
 import java.security.AlgorithmParameters;
 import java.security.KeyFactory;
@@ -17,6 +10,12 @@ import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPrivateKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Objects;
+import org.keycloak.common.util.Base64Url;
+import org.keycloak.crypto.KeyType;
+import org.keycloak.crypto.KeyWrapper;
+import org.keycloak.jose.jwk.ECPublicJWK;
+import org.keycloak.jose.jwk.JWK;
+import org.keycloak.util.JWKSUtils;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -57,12 +56,13 @@ public class ECTestUtils {
     }
 
     private static ECParameterSpec getECParameterSpec(String jwkCrv) {
-        String crvStdName = switch (jwkCrv) {
-            case "P-256" -> "secp256r1";
-            case "P-384" -> "secp384r1";
-            case "P-521" -> "secp521r1";
-            default -> throw new IllegalArgumentException("Unsupported curve: " + jwkCrv);
-        };
+        String crvStdName =
+                switch (jwkCrv) {
+                    case "P-256" -> "secp256r1";
+                    case "P-384" -> "secp384r1";
+                    case "P-521" -> "secp521r1";
+                    default -> throw new IllegalArgumentException("Unsupported curve: " + jwkCrv);
+                };
 
         try {
             AlgorithmParameters params = AlgorithmParameters.getInstance(KeyType.EC);

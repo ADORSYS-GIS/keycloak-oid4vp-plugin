@@ -1,5 +1,7 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
@@ -16,15 +18,12 @@ import org.keycloak.models.utils.PostMigrationEvent;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.services.resource.RealmResourceProviderFactory;
 
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW;
-
 /**
  * Factory for user authentication over OpenID4VP.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-public class OID4VPUserAuthEndpointFactory
-        implements RealmResourceProviderFactory, OID4VPEnvironmentProviderFactory {
+public class OID4VPUserAuthEndpointFactory implements RealmResourceProviderFactory, OID4VPEnvironmentProviderFactory {
 
     private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpointFactory.class);
 
@@ -44,17 +43,15 @@ public class OID4VPUserAuthEndpointFactory
     }
 
     @Override
-    public void init(Config.Scope config) {
-    }
+    public void init(Config.Scope config) {}
 
     @Override
     public void postInit(KeycloakSessionFactory factory) {
         factory.register(event -> {
             if (event instanceof PostMigrationEvent) {
                 logger.debugf("Migrating existing realms to add OpenID4VP user auth flow...");
-                KeycloakModelUtils.runJobInTransaction(factory, session ->
-                        session.realms().getRealmsStream().forEach(this::migrateRealmIfNecessary)
-                );
+                KeycloakModelUtils.runJobInTransaction(
+                        factory, session -> session.realms().getRealmsStream().forEach(this::migrateRealmIfNecessary));
             } else if (event instanceof RealmModel.RealmPostCreateEvent realmEvent) {
                 logger.debugf("Migrating newly created realm to add OpenID4VP user auth flow...");
                 RealmModel realm = realmEvent.getCreatedRealm();
@@ -94,6 +91,5 @@ public class OID4VPUserAuthEndpointFactory
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }

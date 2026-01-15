@@ -9,8 +9,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-
-import javax.annotation.processing.Generated;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,51 +18,109 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-
+import javax.annotation.processing.Generated;
 
 /**
  * Core schema meta-schema
  * <p>
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({"$id", "$schema", "$ref", "$comment", "title", "description", "default", "readOnly", "writeOnly", "examples", "multipleOf", "maximum", "exclusiveMaximum", "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern", "additionalItems", "items", "maxItems", "minItems", "uniqueItems", "contains", "maxProperties", "minProperties", "required", "const", "enum", "type", "format", "contentMediaType", "contentEncoding", "if", "then", "else", "allOf", "anyOf", "oneOf", "not"})
+@JsonPropertyOrder({
+    "$id",
+    "$schema",
+    "$ref",
+    "$comment",
+    "title",
+    "description",
+    "default",
+    "readOnly",
+    "writeOnly",
+    "examples",
+    "multipleOf",
+    "maximum",
+    "exclusiveMaximum",
+    "minimum",
+    "exclusiveMinimum",
+    "maxLength",
+    "minLength",
+    "pattern",
+    "additionalItems",
+    "items",
+    "maxItems",
+    "minItems",
+    "uniqueItems",
+    "contains",
+    "maxProperties",
+    "minProperties",
+    "required",
+    "const",
+    "enum",
+    "type",
+    "format",
+    "contentMediaType",
+    "contentEncoding",
+    "if",
+    "then",
+    "else",
+    "allOf",
+    "anyOf",
+    "oneOf",
+    "not"
+})
 @Generated("jsonschema2pojo")
 public class Filter {
 
     @JsonProperty("$id")
     private String $id;
+
     @JsonProperty("$schema")
     private URI $schema;
+
     @JsonProperty("$ref")
     private String $ref;
+
     @JsonProperty("$comment")
     private String $comment;
+
     @JsonProperty("title")
     private String title;
+
     @JsonProperty("description")
     private String description;
+
     @JsonProperty("default")
     private Object _default;
+
     @JsonProperty("readOnly")
     private Boolean readOnly;
+
     @JsonProperty("writeOnly")
     private Boolean writeOnly;
+
     @JsonProperty("examples")
     private List<Object> examples = new ArrayList<Object>();
+
     @JsonProperty("multipleOf")
     private Double multipleOf;
+
     @JsonProperty("maximum")
     private Double maximum;
+
     @JsonProperty("exclusiveMaximum")
     private Double exclusiveMaximum;
+
     @JsonProperty("minimum")
     private Double minimum;
+
     @JsonProperty("exclusiveMinimum")
     private Double exclusiveMinimum;
+
     @JsonProperty("maxLength")
     private Integer maxLength;
+
     @JsonProperty("minLength")
     private Object minLength;
+
     @JsonProperty("pattern")
     private Pattern pattern;
     /**
@@ -73,12 +129,16 @@ public class Filter {
      */
     @JsonProperty("additionalItems")
     private Filter additionalItems = null;
+
     @JsonProperty("items")
     private Object items = null;
+
     @JsonProperty("maxItems")
     private Integer maxItems;
+
     @JsonProperty("minItems")
     private Object minItems;
+
     @JsonProperty("uniqueItems")
     private Boolean uniqueItems;
     /**
@@ -87,24 +147,33 @@ public class Filter {
      */
     @JsonProperty("contains")
     private Filter contains = null;
+
     @JsonProperty("maxProperties")
     private Integer maxProperties;
+
     @JsonProperty("minProperties")
     private Object minProperties;
+
     @JsonProperty("required")
     @JsonDeserialize(as = LinkedHashSet.class)
     private Set<String> required = new LinkedHashSet<String>();
+
     @JsonProperty("const")
     private Object _const;
+
     @JsonProperty("enum")
     @JsonDeserialize(as = LinkedHashSet.class)
     private Set<Object> _enum = new LinkedHashSet<Object>();
+
     @JsonProperty("type")
     private SimpleTypes type;
+
     @JsonProperty("format")
     private String format;
+
     @JsonProperty("contentMediaType")
     private String contentMediaType;
+
     @JsonProperty("contentEncoding")
     private String contentEncoding;
     /**
@@ -125,10 +194,13 @@ public class Filter {
      */
     @JsonProperty("else")
     private Filter _else = null;
+
     @JsonProperty("allOf")
     private List<Filter> allOf = new ArrayList<Filter>();
+
     @JsonProperty("anyOf")
     private List<Filter> anyOf = new ArrayList<Filter>();
+
     @JsonProperty("oneOf")
     private List<Filter> oneOf = new ArrayList<Filter>();
     /**
@@ -137,6 +209,7 @@ public class Filter {
      */
     @JsonProperty("not")
     private Filter not = null;
+
     @JsonIgnore
     private Map<String, Object> additionalProperties = new LinkedHashMap<String, Object>();
 
@@ -601,7 +674,10 @@ public class Filter {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(Filter.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(Filter.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("$id");
         sb.append('=');
         sb.append(((this.$id == null) ? "<null>" : this.$id));
@@ -830,14 +906,357 @@ public class Filter {
             return false;
         }
         Filter rhs = ((Filter) other);
-        return ((((((((((((((((((((((((((((((((((((((((((this.writeOnly == rhs.writeOnly) || ((this.writeOnly != null) && this.writeOnly.equals(rhs.writeOnly))) && ((this.$schema == rhs.$schema) || ((this.$schema != null) && this.$schema.equals(rhs.$schema)))) && ((this.minLength == rhs.minLength) || ((this.minLength != null) && this.minLength.equals(rhs.minLength)))) && ((this.pattern == rhs.pattern) || ((this.pattern != null) && this.pattern.equals(rhs.pattern)))) && ((this.description == rhs.description) || ((this.description != null) && this.description.equals(rhs.description)))) && ((this._enum == rhs._enum) || ((this._enum != null) && this._enum.equals(rhs._enum)))) && ((this.title == rhs.title) || ((this.title != null) && this.title.equals(rhs.title)))) && ((this.type == rhs.type) || ((this.type != null) && this.type.equals(rhs.type)))) && ((this.required == rhs.required) || ((this.required != null) && this.required.equals(rhs.required)))) && ((this.exclusiveMaximum == rhs.exclusiveMaximum) || ((this.exclusiveMaximum != null) && this.exclusiveMaximum.equals(rhs.exclusiveMaximum)))) && ((this.allOf == rhs.allOf) || ((this.allOf != null) && this.allOf.equals(rhs.allOf)))) && ((this.oneOf == rhs.oneOf) || ((this.oneOf != null) && this.oneOf.equals(rhs.oneOf)))) && ((this.not == rhs.not) || ((this.not != null) && this.not.equals(rhs.not)))) && ((this.additionalItems == rhs.additionalItems) || ((this.additionalItems != null) && this.additionalItems.equals(rhs.additionalItems)))) && ((this.contentEncoding == rhs.contentEncoding) || ((this.contentEncoding != null) && this.contentEncoding.equals(rhs.contentEncoding)))) && ((this.maxProperties == rhs.maxProperties) || ((this.maxProperties != null) && this.maxProperties.equals(rhs.maxProperties)))) && ((this.exclusiveMinimum == rhs.exclusiveMinimum) || ((this.exclusiveMinimum != null) && this.exclusiveMinimum.equals(rhs.exclusiveMinimum)))) && ((this.multipleOf == rhs.multipleOf) || ((this.multipleOf != null) && this.multipleOf.equals(rhs.multipleOf)))) && ((this._default == rhs._default) || ((this._default != null) && this._default.equals(rhs._default)))) && ((this.maxItems == rhs.maxItems) || ((this.maxItems != null) && this.maxItems.equals(rhs.maxItems)))) && ((this.contentMediaType == rhs.contentMediaType) || ((this.contentMediaType != null) && this.contentMediaType.equals(rhs.contentMediaType)))) && ((this._const == rhs._const) || ((this._const != null) && this._const.equals(rhs._const)))) && ((this.format == rhs.format) || ((this.format != null) && this.format.equals(rhs.format)))) && ((this.anyOf == rhs.anyOf) || ((this.anyOf != null) && this.anyOf.equals(rhs.anyOf)))) && ((this.readOnly == rhs.readOnly) || ((this.readOnly != null) && this.readOnly.equals(rhs.readOnly)))) && ((this.$comment == rhs.$comment) || ((this.$comment != null) && this.$comment.equals(rhs.$comment)))) && ((this.then == rhs.then) || ((this.then != null) && this.then.equals(rhs.then)))) && ((this.minProperties == rhs.minProperties) || ((this.minProperties != null) && this.minProperties.equals(rhs.minProperties)))) && ((this.minItems == rhs.minItems) || ((this.minItems != null) && this.minItems.equals(rhs.minItems)))) && ((this.contains == rhs.contains) || ((this.contains != null) && this.contains.equals(rhs.contains)))) && ((this._else == rhs._else) || ((this._else != null) && this._else.equals(rhs._else)))) && ((this.examples == rhs.examples) || ((this.examples != null) && this.examples.equals(rhs.examples)))) && ((this.uniqueItems == rhs.uniqueItems) || ((this.uniqueItems != null) && this.uniqueItems.equals(rhs.uniqueItems)))) && ((this.maximum == rhs.maximum) || ((this.maximum != null) && this.maximum.equals(rhs.maximum)))) && ((this.additionalProperties == rhs.additionalProperties) || ((this.additionalProperties != null) && this.additionalProperties.equals(rhs.additionalProperties)))) && ((this.$ref == rhs.$ref) || ((this.$ref != null) && this.$ref.equals(rhs.$ref)))) && ((this.minimum == rhs.minimum) || ((this.minimum != null) && this.minimum.equals(rhs.minimum)))) && ((this.items == rhs.items) || ((this.items != null) && this.items.equals(rhs.items)))) && ((this._if == rhs._if) || ((this._if != null) && this._if.equals(rhs._if)))) && ((this.maxLength == rhs.maxLength) || ((this.maxLength != null) && this.maxLength.equals(rhs.maxLength)))) && ((this.$id == rhs.$id) || ((this.$id != null) && this.$id.equals(rhs.$id))));
+        return ((((((((((((((((((((((((((((((((((((((((((this.writeOnly == rhs.writeOnly)
+                                                                                                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                                                                                                        .writeOnly
+                                                                                                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                                                                                                .writeOnly
+                                                                                                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                                                                                                        rhs.writeOnly)))
+                                                                                                                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                                                                                                                .$schema
+                                                                                                                                                                                                                                                                                                                                                        == rhs.$schema)
+                                                                                                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                                                                                                        .$schema
+                                                                                                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                                                                                                .$schema
+                                                                                                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                                                                                                        rhs.$schema))))
+                                                                                                                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                                                                                                                        .minLength
+                                                                                                                                                                                                                                                                                                                                                == rhs.minLength)
+                                                                                                                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                                                                                                                .minLength
+                                                                                                                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                                                                                                                        .minLength
+                                                                                                                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                                                                                                                rhs.minLength))))
+                                                                                                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                                                                                                .pattern
+                                                                                                                                                                                                                                                                                                                                        == rhs.pattern)
+                                                                                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                                                                                        .pattern
+                                                                                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                                                                                .pattern
+                                                                                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                                                                                        rhs.pattern))))
+                                                                                                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                                                                                                        .description
+                                                                                                                                                                                                                                                                                                                                == rhs.description)
+                                                                                                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                                                                                                .description
+                                                                                                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                                                                                                        .description
+                                                                                                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                                                                                                rhs.description))))
+                                                                                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                                                                                ._enum
+                                                                                                                                                                                                                                                                                                                        == rhs._enum)
+                                                                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                                                                        ._enum
+                                                                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                                                                ._enum
+                                                                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                                                                        rhs._enum))))
+                                                                                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                                                                                        .title
+                                                                                                                                                                                                                                                                                                                == rhs.title)
+                                                                                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                                                                                .title
+                                                                                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                                                                                        .title
+                                                                                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                                                                                rhs.title))))
+                                                                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                                                                .type
+                                                                                                                                                                                                                                                                                                        == rhs.type)
+                                                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                                                        .type
+                                                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                                                .type
+                                                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                                                        rhs.type))))
+                                                                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                                                                        .required
+                                                                                                                                                                                                                                                                                                == rhs.required)
+                                                                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                                                                .required
+                                                                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                                                                        .required
+                                                                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                                                                rhs.required))))
+                                                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                                                .exclusiveMaximum
+                                                                                                                                                                                                                                                                                        == rhs.exclusiveMaximum)
+                                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                                        .exclusiveMaximum
+                                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                                .exclusiveMaximum
+                                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                                        rhs.exclusiveMaximum))))
+                                                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                                                        .allOf
+                                                                                                                                                                                                                                                                                == rhs.allOf)
+                                                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                                                .allOf
+                                                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                                                        .allOf
+                                                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                                                rhs.allOf))))
+                                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                                .oneOf
+                                                                                                                                                                                                                                                                        == rhs.oneOf)
+                                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                                        .oneOf
+                                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                                .oneOf
+                                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                                        rhs.oneOf))))
+                                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                                        .not
+                                                                                                                                                                                                                                                                == rhs.not)
+                                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                                .not
+                                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                                        .not
+                                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                                rhs.not))))
+                                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                                .additionalItems
+                                                                                                                                                                                                                                                        == rhs.additionalItems)
+                                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                                        .additionalItems
+                                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                                .additionalItems
+                                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                                        rhs.additionalItems))))
+                                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                                        .contentEncoding
+                                                                                                                                                                                                                                                == rhs.contentEncoding)
+                                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                                .contentEncoding
+                                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                                        .contentEncoding
+                                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                                rhs.contentEncoding))))
+                                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                                .maxProperties
+                                                                                                                                                                                                                                        == rhs.maxProperties)
+                                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                                        .maxProperties
+                                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                                .maxProperties
+                                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                                        rhs.maxProperties))))
+                                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                                        .exclusiveMinimum
+                                                                                                                                                                                                                                == rhs.exclusiveMinimum)
+                                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                                .exclusiveMinimum
+                                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                                        .exclusiveMinimum
+                                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                                rhs.exclusiveMinimum))))
+                                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                                .multipleOf
+                                                                                                                                                                                                                        == rhs.multipleOf)
+                                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                                        .multipleOf
+                                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                                .multipleOf
+                                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                                        rhs.multipleOf))))
+                                                                                                                                                                                                && ((this
+                                                                                                                                                                                                                        ._default
+                                                                                                                                                                                                                == rhs._default)
+                                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                                ._default
+                                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                                && this
+                                                                                                                                                                                                                        ._default
+                                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                                rhs._default))))
+                                                                                                                                                                                        && ((this
+                                                                                                                                                                                                                .maxItems
+                                                                                                                                                                                                        == rhs.maxItems)
+                                                                                                                                                                                                || ((this
+                                                                                                                                                                                                                        .maxItems
+                                                                                                                                                                                                                != null)
+                                                                                                                                                                                                        && this
+                                                                                                                                                                                                                .maxItems
+                                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                                        rhs.maxItems))))
+                                                                                                                                                                                && ((this
+                                                                                                                                                                                                        .contentMediaType
+                                                                                                                                                                                                == rhs.contentMediaType)
+                                                                                                                                                                                        || ((this
+                                                                                                                                                                                                                .contentMediaType
+                                                                                                                                                                                                        != null)
+                                                                                                                                                                                                && this
+                                                                                                                                                                                                        .contentMediaType
+                                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                                rhs.contentMediaType))))
+                                                                                                                                                                        && ((this
+                                                                                                                                                                                                ._const
+                                                                                                                                                                                        == rhs._const)
+                                                                                                                                                                                || ((this
+                                                                                                                                                                                                        ._const
+                                                                                                                                                                                                != null)
+                                                                                                                                                                                        && this
+                                                                                                                                                                                                ._const
+                                                                                                                                                                                                .equals(
+                                                                                                                                                                                                        rhs._const))))
+                                                                                                                                                                && ((this
+                                                                                                                                                                                        .format
+                                                                                                                                                                                == rhs.format)
+                                                                                                                                                                        || ((this
+                                                                                                                                                                                                .format
+                                                                                                                                                                                        != null)
+                                                                                                                                                                                && this
+                                                                                                                                                                                        .format
+                                                                                                                                                                                        .equals(
+                                                                                                                                                                                                rhs.format))))
+                                                                                                                                                        && ((this
+                                                                                                                                                                                .anyOf
+                                                                                                                                                                        == rhs.anyOf)
+                                                                                                                                                                || ((this
+                                                                                                                                                                                        .anyOf
+                                                                                                                                                                                != null)
+                                                                                                                                                                        && this
+                                                                                                                                                                                .anyOf
+                                                                                                                                                                                .equals(
+                                                                                                                                                                                        rhs.anyOf))))
+                                                                                                                                                && ((this
+                                                                                                                                                                        .readOnly
+                                                                                                                                                                == rhs.readOnly)
+                                                                                                                                                        || ((this
+                                                                                                                                                                                .readOnly
+                                                                                                                                                                        != null)
+                                                                                                                                                                && this
+                                                                                                                                                                        .readOnly
+                                                                                                                                                                        .equals(
+                                                                                                                                                                                rhs.readOnly))))
+                                                                                                                                        && ((this
+                                                                                                                                                                .$comment
+                                                                                                                                                        == rhs.$comment)
+                                                                                                                                                || ((this
+                                                                                                                                                                        .$comment
+                                                                                                                                                                != null)
+                                                                                                                                                        && this
+                                                                                                                                                                .$comment
+                                                                                                                                                                .equals(
+                                                                                                                                                                        rhs.$comment))))
+                                                                                                                                && ((this
+                                                                                                                                                        .then
+                                                                                                                                                == rhs.then)
+                                                                                                                                        || ((this
+                                                                                                                                                                .then
+                                                                                                                                                        != null)
+                                                                                                                                                && this
+                                                                                                                                                        .then
+                                                                                                                                                        .equals(
+                                                                                                                                                                rhs.then))))
+                                                                                                                        && ((this
+                                                                                                                                                .minProperties
+                                                                                                                                        == rhs.minProperties)
+                                                                                                                                || ((this
+                                                                                                                                                        .minProperties
+                                                                                                                                                != null)
+                                                                                                                                        && this
+                                                                                                                                                .minProperties
+                                                                                                                                                .equals(
+                                                                                                                                                        rhs.minProperties))))
+                                                                                                                && ((this
+                                                                                                                                        .minItems
+                                                                                                                                == rhs.minItems)
+                                                                                                                        || ((this
+                                                                                                                                                .minItems
+                                                                                                                                        != null)
+                                                                                                                                && this
+                                                                                                                                        .minItems
+                                                                                                                                        .equals(
+                                                                                                                                                rhs.minItems))))
+                                                                                                        && ((this
+                                                                                                                                .contains
+                                                                                                                        == rhs.contains)
+                                                                                                                || ((this
+                                                                                                                                        .contains
+                                                                                                                                != null)
+                                                                                                                        && this
+                                                                                                                                .contains
+                                                                                                                                .equals(
+                                                                                                                                        rhs.contains))))
+                                                                                                && ((this._else
+                                                                                                                == rhs._else)
+                                                                                                        || ((this._else
+                                                                                                                        != null)
+                                                                                                                && this
+                                                                                                                        ._else
+                                                                                                                        .equals(
+                                                                                                                                rhs._else))))
+                                                                                        && ((this.examples
+                                                                                                        == rhs.examples)
+                                                                                                || ((this.examples
+                                                                                                                != null)
+                                                                                                        && this.examples
+                                                                                                                .equals(
+                                                                                                                        rhs.examples))))
+                                                                                && ((this.uniqueItems
+                                                                                                == rhs.uniqueItems)
+                                                                                        || ((this.uniqueItems != null)
+                                                                                                && this.uniqueItems
+                                                                                                        .equals(
+                                                                                                                rhs.uniqueItems))))
+                                                                        && ((this.maximum == rhs.maximum)
+                                                                                || ((this.maximum != null)
+                                                                                        && this.maximum.equals(
+                                                                                                rhs.maximum))))
+                                                                && ((this.additionalProperties
+                                                                                == rhs.additionalProperties)
+                                                                        || ((this.additionalProperties != null)
+                                                                                && this.additionalProperties.equals(
+                                                                                        rhs.additionalProperties))))
+                                                        && ((this.$ref == rhs.$ref)
+                                                                || ((this.$ref != null) && this.$ref.equals(rhs.$ref))))
+                                                && ((this.minimum == rhs.minimum)
+                                                        || ((this.minimum != null)
+                                                                && this.minimum.equals(rhs.minimum))))
+                                        && ((this.items == rhs.items)
+                                                || ((this.items != null) && this.items.equals(rhs.items))))
+                                && ((this._if == rhs._if) || ((this._if != null) && this._if.equals(rhs._if))))
+                        && ((this.maxLength == rhs.maxLength)
+                                || ((this.maxLength != null) && this.maxLength.equals(rhs.maxLength))))
+                && ((this.$id == rhs.$id) || ((this.$id != null) && this.$id.equals(rhs.$id))));
     }
 
     @Generated("jsonschema2pojo")
     public enum SimpleTypes {
-
-        ARRAY("array"), BOOLEAN("boolean"), INTEGER("integer"), NULL("null"), NUMBER("number"), OBJECT("object"), STRING("string");
-        private final static Map<String, SimpleTypes> CONSTANTS = new HashMap<String, SimpleTypes>();
+        ARRAY("array"),
+        BOOLEAN("boolean"),
+        INTEGER("integer"),
+        NULL("null"),
+        NUMBER("number"),
+        OBJECT("object"),
+        STRING("string");
+        private static final Map<String, SimpleTypes> CONSTANTS = new HashMap<String, SimpleTypes>();
 
         static {
             for (SimpleTypes c : values()) {
@@ -870,7 +1289,5 @@ public class Filter {
         public String value() {
             return this.value;
         }
-
     }
-
 }

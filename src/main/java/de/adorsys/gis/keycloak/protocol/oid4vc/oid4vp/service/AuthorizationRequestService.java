@@ -12,18 +12,6 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
-import org.jboss.logging.Logger;
-import org.keycloak.crypto.KeyWrapper;
-import org.keycloak.crypto.SignatureProvider;
-import org.keycloak.crypto.SignatureSignerContext;
-import org.keycloak.jose.jwe.JWEUtils;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.utils.SessionExpiration;
-import org.keycloak.sessions.AuthenticationSessionModel;
-
-import javax.naming.ldap.LdapName;
-import javax.naming.ldap.Rdn;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -35,6 +23,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.naming.ldap.LdapName;
+import javax.naming.ldap.Rdn;
+import org.jboss.logging.Logger;
+import org.keycloak.crypto.KeyWrapper;
+import org.keycloak.crypto.SignatureProvider;
+import org.keycloak.crypto.SignatureSignerContext;
+import org.keycloak.jose.jwe.JWEUtils;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.utils.SessionExpiration;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
  * Dedicated service for creating OpenID4VP authorization requests for user authentication.
@@ -45,8 +44,8 @@ public class AuthorizationRequestService {
 
     private static final Logger logger = Logger.getLogger(AuthorizationRequestService.class);
 
-    public final static String AUTH_REQ_JWT = "oauth-authz-req+jwt";
-    public final static String X509_ATTR_CN = "CN";
+    public static final String AUTH_REQ_JWT = "oauth-authz-req+jwt";
+    public static final String X509_ATTR_CN = "CN";
 
     // The number of bytes to generate for secure random strings,
     // including request IDs, transaction IDs, and nonces (doubled).
@@ -85,9 +84,7 @@ public class AuthorizationRequestService {
      * Creates a fresh authorization request for user authentication.
      */
     public AuthorizationContext createAuthorizationRequest(
-            AuthenticationSessionModel authSession,
-            SdJwtAuthRequirements authReqs
-    ) {
+            AuthenticationSessionModel authSession, SdJwtAuthRequirements authReqs) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
         // Generate random request and transaction IDs.
@@ -99,9 +96,8 @@ public class AuthorizationRequestService {
         var presentationDefinition = authReqs.getDIFPresentationDefinition();
 
         // Build request object
-        RequestObject requestObject = bootstrapRequestObject()
-                .setState(requestId)
-                .setPresentationDefinition(presentationDefinition);
+        RequestObject requestObject =
+                bootstrapRequestObject().setState(requestId).setPresentationDefinition(presentationDefinition);
 
         // Sign request object
         String requestObjectJwt = signRequestObject(requestObject);
@@ -171,21 +167,17 @@ public class AuthorizationRequestService {
 
     private String buildAuthorizationRequestLink(String requestId) {
         var clientId = clientMetadata.getClientId();
-        var requestUri = openID4VPRootUrl + "%s/%s".formatted(
-                OID4VPUserAuthEndpoint.REQUEST_JWT_PATH,
-                requestId
-        );
+        var requestUri = openID4VPRootUrl + "%s/%s".formatted(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH, requestId);
 
-        return String.format("openid4vp://authorize?client_id=%s&request_uri=%s",
+        return String.format(
+                "openid4vp://authorize?client_id=%s&request_uri=%s",
                 URLEncoder.encode(clientId, StandardCharsets.UTF_8),
                 URLEncoder.encode(requestUri, StandardCharsets.UTF_8));
     }
 
     private String signRequestObject(RequestObject requestObject) {
         logger.debugf("Signing request object (%s)", requestObject.getState());
-        Long expiration = Instant.now()
-                .plusSeconds(authSessionLifespanSecs)
-                .getEpochSecond();
+        Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
         requestObject.issuedNow().exp(expiration);
 
         return new SpacephobicJwsBuilder()
@@ -208,12 +200,7 @@ public class AuthorizationRequestService {
         // Generate a new self-signed certificate with SAN matching client ID
         try {
             return ExtendedCertificateUtils.generateV3Certificate(
-                    privateKey,
-                    cert,
-                    publicKey,
-                    getIssuerCN(cert),
-                    List.of(clientId)
-            );
+                    privateKey, cert, publicKey, getIssuerCN(cert), List.of(clientId));
         } catch (Exception e) {
             throw new RuntimeException("Failed to regenerate certificate with SAN", e);
         }

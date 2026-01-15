@@ -1,5 +1,12 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.stub.CustomSdJwtAuthenticatorFactory.MockTrustedStatusListJwtFetcher;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,13 +21,6 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.stub.CustomSdJwtAuthenticatorFactory.MockTrustedStatusListJwtFetcher;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /**
  * Test trust enforcement of retrieved status list JWTs.
  *
@@ -31,6 +31,7 @@ public class TrustedStatusListJwtFetcherTest {
 
     @Mock
     KeycloakSession session;
+
     TrustedStatusListJwtFetcher fetcher;
 
     @BeforeAll
@@ -55,8 +56,7 @@ public class TrustedStatusListJwtFetcherTest {
     @Test
     public void shouldRejectNonHttpsURIs() {
         String uri = "http://example.com/status-list-jwt";
-        var e = assertThrows(ReferencedTokenValidationException.class,
-                () -> fetcher.fetchStatusListJwt(uri));
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
         assertTrue(e.getMessage().startsWith("Status list JWT URI must use HTTPS:"));
     }
 
@@ -65,8 +65,7 @@ public class TrustedStatusListJwtFetcherTest {
         shouldRejectInvalidStatusListJwt(
                 "status-list-jwt+invalid-signature",
                 "Error during JWS signature verification",
-                "Invalid JWS signature"
-        );
+                "Invalid JWS signature");
     }
 
     @Test
@@ -74,18 +73,13 @@ public class TrustedStatusListJwtFetcherTest {
         shouldRejectInvalidStatusListJwt(
                 "status-list-jwt+no-x5c",
                 "Could not extract verifier from X5C certificate chain",
-                "Missing or empty x5c header in JWS"
-        );
+                "Missing or empty x5c header in JWS");
     }
 
     private void shouldRejectInvalidStatusListJwt(
-            String testVector,
-            String expectedErrorMessage,
-            String expectedCauseMessage
-    ) {
+            String testVector, String expectedErrorMessage, String expectedCauseMessage) {
         String uri = "https://example.com/" + testVector;
-        var e = assertThrows(ReferencedTokenValidationException.class,
-                () -> fetcher.fetchStatusListJwt(uri));
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
         assertEquals(expectedErrorMessage, e.getMessage());
         assertEquals(expectedCauseMessage, e.getCause().getMessage());
     }

@@ -21,6 +21,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
@@ -33,8 +34,6 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
-import java.util.Map;
-
 /**
  * Endpoint class for user authentication over
  * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html">
@@ -43,8 +42,7 @@ import java.util.Map;
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
-        implements RealmResourceProvider {
+public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implements RealmResourceProvider {
 
     private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpoint.class);
 
@@ -79,20 +77,18 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
         try {
             checkClient(clientId);
         } catch (IllegalArgumentException e) {
-            throw new BadRequestException(errorResponse(
-                    Response.Status.BAD_REQUEST,
-                    OAuthErrorException.INVALID_CLIENT,
-                    "Cannot proceed with provided client ID"
-            ), e);
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_CLIENT,
+                            "Cannot proceed with provided client ID"),
+                    e);
         }
 
         AuthorizationContext authContext = startAuthentication(clientId);
-        AuthenticationSessionModel authSession = recoverAuthenticationSession(
-                authContext.getTransactionId()
-        );
+        AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
 
-        return CorsService.forWebOrigins(authSession)
-                .add(Response.ok(authContext));
+        return CorsService.forWebOrigins(authSession).add(Response.ok(authContext));
     }
 
     /**
@@ -107,14 +103,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
 
         try {
             var authSession = this.recoverAuthenticationSession(requestId);
-            authorizationContext = new AuthenticationSessionStore(authSession)
-                    .getAuthorizationContextByRequestId(requestId);
+            authorizationContext =
+                    new AuthenticationSessionStore(authSession).getAuthorizationContextByRequestId(requestId);
         } catch (IllegalArgumentException e) {
-            throw new NotFoundException(errorResponse(
-                    Response.Status.NOT_FOUND,
-                    OAuthErrorException.INVALID_REQUEST,
-                    "Authorization context not found for request ID: " + requestId
-            ), e);
+            throw new NotFoundException(
+                    errorResponse(
+                            Response.Status.NOT_FOUND,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization context not found for request ID: " + requestId),
+                    e);
         }
 
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
@@ -131,8 +128,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
     public Response processAuthorizationResponse(
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
             @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
-            @FormParam(ResponseObject.STATE_KEY) String state
-    ) {
+            @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
 
         // Parse a response object from the request parameters
@@ -140,11 +136,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
         try {
             responseObject = new ResponseObject(vpToken, presentationSubmission, state);
         } catch (IllegalArgumentException | JsonProcessingException e) {
-            throw new BadRequestException(errorResponse(
-                    Response.Status.BAD_REQUEST,
-                    OAuthErrorException.INVALID_REQUEST,
-                    String.format("Unparseable response params (%s)", e.getMessage())
-            ), e);
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            String.format("Unparseable response params (%s)", e.getMessage())),
+                    e);
         }
 
         // Recover the auth session and context given the state field
@@ -152,14 +149,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
         AuthorizationContext authorizationContext;
         try {
             authSession = this.recoverAuthenticationSession(state);
-            authorizationContext = new AuthenticationSessionStore(authSession)
-                    .getAuthorizationContextByRequestId(state);
+            authorizationContext =
+                    new AuthenticationSessionStore(authSession).getAuthorizationContextByRequestId(state);
         } catch (IllegalArgumentException e) {
-            throw new BadRequestException(errorResponse(
-                    Response.Status.BAD_REQUEST,
-                    OAuthErrorException.INVALID_REQUEST,
-                    "Authorization context not found for state (request ID): " + state
-            ), e);
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization context not found for state (request ID): " + state),
+                    e);
         }
 
         // Call delegate service to process the authorization response
@@ -185,14 +183,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
 
         try {
             authSession = this.recoverAuthenticationSession(transactionId);
-            authorizationContext = new AuthenticationSessionStore(authSession)
-                    .getAuthorizationContextByTransactionId(transactionId);
+            authorizationContext =
+                    new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
         } catch (IllegalArgumentException e) {
-            throw new NotFoundException(errorResponse(
-                    Response.Status.NOT_FOUND,
-                    OAuthErrorException.INVALID_REQUEST,
-                    "Authorization context not found for transaction ID: " + transactionId
-            ), e);
+            throw new NotFoundException(
+                    errorResponse(
+                            Response.Status.NOT_FOUND,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization context not found for transaction ID: " + transactionId),
+                    e);
         }
 
         AuthorizationContext reducedContext = new AuthorizationContext()
@@ -201,8 +200,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
                 .setError(authorizationContext.getError())
                 .setErrorDescription(authorizationContext.getErrorDescription());
 
-        return CorsService.forWebOrigins(authSession)
-                .add(Response.ok(reducedContext));
+        return CorsService.forWebOrigins(authSession).add(Response.ok(reducedContext));
     }
 
     /**
@@ -217,8 +215,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
         SdJwtAuthRequirements authReqs = new SdJwtAuthRequirements(session.getContext(), authConfig);
 
         // Call delegate service to create an authorization request
-        AuthorizationContext authorizationContext = authorizationRequestService
-                .createAuthorizationRequest(authSession, authReqs);
+        AuthorizationContext authorizationContext =
+                authorizationRequestService.createAuthorizationRequest(authSession, authReqs);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -249,8 +247,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
         String authSessionId = pruneAuthSessionId(extAuthSessionId);
         AuthenticationSessionModel authSession = getAuthSession(authSessionId)
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "No authentication session attached to session ID: " + extAuthSessionId
-                ));
+                        "No authentication session attached to session ID: " + extAuthSessionId));
 
         session.getContext().setAuthenticationSession(authSession);
         return authSession;
@@ -261,11 +258,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
      */
     private Response errorResponse(Response.Status status, String error, String errorDescription) {
         var errorResponse = new OAuth2ErrorRepresentation(error, errorDescription);
-        return CorsService.open().add(Response
-                .status(status)
-                .entity(errorResponse)
-                .type(MediaType.APPLICATION_JSON)
-        );
+        return CorsService.open()
+                .add(Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON));
     }
 
     @Override
@@ -274,6 +268,5 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }

@@ -5,18 +5,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonValue;
-
-import javax.annotation.processing.Generated;
 import java.util.HashMap;
 import java.util.Map;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({
-        "id",
-        "path",
-        "path_nested",
-        "format"
-})
+@JsonPropertyOrder({"id", "path", "path_nested", "format"})
 @Generated("jsonschema2pojo")
 public class Descriptor {
 
@@ -30,6 +24,7 @@ public class Descriptor {
      */
     @JsonProperty("path")
     private String path;
+
     @JsonProperty("path_nested")
     private Descriptor pathNested;
     /**
@@ -99,7 +94,10 @@ public class Descriptor {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(Descriptor.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(Descriptor.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("id");
         sb.append('=');
         sb.append(((this.id == null) ? "<null>" : this.id));
@@ -143,12 +141,15 @@ public class Descriptor {
             return false;
         }
         Descriptor rhs = ((Descriptor) other);
-        return (((((this.format == rhs.format) || ((this.format != null) && this.format.equals(rhs.format))) && ((this.path == rhs.path) || ((this.path != null) && this.path.equals(rhs.path)))) && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id)))) && ((this.pathNested == rhs.pathNested) || ((this.pathNested != null) && this.pathNested.equals(rhs.pathNested))));
+        return (((((this.format == rhs.format) || ((this.format != null) && this.format.equals(rhs.format)))
+                                && ((this.path == rhs.path) || ((this.path != null) && this.path.equals(rhs.path))))
+                        && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id))))
+                && ((this.pathNested == rhs.pathNested)
+                        || ((this.pathNested != null) && this.pathNested.equals(rhs.pathNested))));
     }
 
     @Generated("jsonschema2pojo")
     public enum Format {
-
         JWT("jwt"),
         JWT_VC("jwt_vc"),
         JWT_VP("jwt_vp"),
@@ -157,7 +158,7 @@ public class Descriptor {
         LDP_VP("ldp_vp"),
         VC_SD_JWT("vc+sd-jwt"),
         DC_SD_JWT("dc+sd-jwt");
-        private final static Map<String, Format> CONSTANTS = new HashMap<String, Format>();
+        private static final Map<String, Format> CONSTANTS = new HashMap<String, Format>();
 
         static {
             for (Format c : values()) {
@@ -190,7 +191,5 @@ public class Descriptor {
         public String value() {
             return this.value;
         }
-
     }
-
 }

@@ -1,10 +1,9 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import java.util.Optional;
 import org.keycloak.models.ClientModel;
 import org.keycloak.services.cors.Cors;
 import org.keycloak.sessions.AuthenticationSessionModel;
-
-import java.util.Optional;
 
 /**
  * Service class for handling CORS (Cross-Origin Resource Sharing) policies.
@@ -33,7 +32,8 @@ public class CorsService {
      * @return CORS builder configured for preflight requests
      */
     public static Cors openPreflight() {
-        return Cors.builder().preflight()
+        return Cors.builder()
+                .preflight()
                 .allowedMethods(HTTP_METHOD_OPTIONS, HTTP_METHOD_POST)
                 .auth();
     }
@@ -52,8 +52,6 @@ public class CorsService {
                 .map(s -> s.toArray(String[]::new))
                 .orElseGet(() -> new String[0]);
 
-        return Cors.builder()
-                .allowedOrigins(clientWebOrigins)
-                .auth();
+        return Cors.builder().allowedOrigins(clientWebOrigins).auth();
     }
 }

@@ -5,12 +5,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonValue;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonPropertyOrder({"limit_disclosure", "statuses", "fields", "subject_is_issuer", "is_holder", "same_subject"})
@@ -19,14 +18,19 @@ public class Constraints {
 
     @JsonProperty("limit_disclosure")
     private LimitDisclosure limitDisclosure;
+
     @JsonProperty("statuses")
     private Statuses statuses;
+
     @JsonProperty("fields")
     private List<Field> fields = new ArrayList<Field>();
+
     @JsonProperty("subject_is_issuer")
     private SubjectIsIssuer subjectIsIssuer;
+
     @JsonProperty("is_holder")
     private List<IsHolder> isHolder = new ArrayList<IsHolder>();
+
     @JsonProperty("same_subject")
     private List<SameSubject> sameSubject = new ArrayList<SameSubject>();
 
@@ -93,7 +97,10 @@ public class Constraints {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(Constraints.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(Constraints.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("limitDisclosure");
         sb.append('=');
         sb.append(((this.limitDisclosure == null) ? "<null>" : this.limitDisclosure));
@@ -147,14 +154,25 @@ public class Constraints {
             return false;
         }
         Constraints rhs = ((Constraints) other);
-        return (((((((this.isHolder == rhs.isHolder) || ((this.isHolder != null) && this.isHolder.equals(rhs.isHolder))) && ((this.subjectIsIssuer == rhs.subjectIsIssuer) || ((this.subjectIsIssuer != null) && this.subjectIsIssuer.equals(rhs.subjectIsIssuer)))) && ((this.limitDisclosure == rhs.limitDisclosure) || ((this.limitDisclosure != null) && this.limitDisclosure.equals(rhs.limitDisclosure)))) && ((this.statuses == rhs.statuses) || ((this.statuses != null) && this.statuses.equals(rhs.statuses)))) && ((this.sameSubject == rhs.sameSubject) || ((this.sameSubject != null) && this.sameSubject.equals(rhs.sameSubject)))) && ((this.fields == rhs.fields) || ((this.fields != null) && this.fields.equals(rhs.fields))));
+        return (((((((this.isHolder == rhs.isHolder) || ((this.isHolder != null) && this.isHolder.equals(rhs.isHolder)))
+                                                && ((this.subjectIsIssuer == rhs.subjectIsIssuer)
+                                                        || ((this.subjectIsIssuer != null)
+                                                                && this.subjectIsIssuer.equals(rhs.subjectIsIssuer))))
+                                        && ((this.limitDisclosure == rhs.limitDisclosure)
+                                                || ((this.limitDisclosure != null)
+                                                        && this.limitDisclosure.equals(rhs.limitDisclosure))))
+                                && ((this.statuses == rhs.statuses)
+                                        || ((this.statuses != null) && this.statuses.equals(rhs.statuses))))
+                        && ((this.sameSubject == rhs.sameSubject)
+                                || ((this.sameSubject != null) && this.sameSubject.equals(rhs.sameSubject))))
+                && ((this.fields == rhs.fields) || ((this.fields != null) && this.fields.equals(rhs.fields))));
     }
 
     @Generated("jsonschema2pojo")
     public enum LimitDisclosure {
-
-        REQUIRED("required"), PREFERRED("preferred");
-        private final static Map<String, LimitDisclosure> CONSTANTS = new HashMap<String, LimitDisclosure>();
+        REQUIRED("required"),
+        PREFERRED("preferred");
+        private static final Map<String, LimitDisclosure> CONSTANTS = new HashMap<String, LimitDisclosure>();
 
         static {
             for (LimitDisclosure c : values()) {
@@ -187,14 +205,13 @@ public class Constraints {
         public String value() {
             return this.value;
         }
-
     }
 
     @Generated("jsonschema2pojo")
     public enum SubjectIsIssuer {
-
-        REQUIRED("required"), PREFERRED("preferred");
-        private final static Map<String, SubjectIsIssuer> CONSTANTS = new HashMap<String, SubjectIsIssuer>();
+        REQUIRED("required"),
+        PREFERRED("preferred");
+        private static final Map<String, SubjectIsIssuer> CONSTANTS = new HashMap<String, SubjectIsIssuer>();
 
         static {
             for (SubjectIsIssuer c : values()) {
@@ -227,7 +244,5 @@ public class Constraints {
         public String value() {
             return this.value;
         }
-
     }
-
 }

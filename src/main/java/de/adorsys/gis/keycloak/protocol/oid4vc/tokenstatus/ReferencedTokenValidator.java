@@ -5,18 +5,17 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import org.keycloak.jose.JOSE;
-import org.keycloak.jose.JOSEParser;
-import org.keycloak.jose.jws.JWSInput;
-import org.keycloak.jose.jws.JWSInputException;
-import org.keycloak.util.JsonSerialization;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
+import org.keycloak.jose.JOSE;
+import org.keycloak.jose.JOSEParser;
+import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.jose.jws.JWSInputException;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * Validator for Referenced Token payloads
@@ -190,7 +189,8 @@ public class ReferencedTokenValidator {
             JOSE joseToken = JOSEParser.parse(jwtToken);
 
             if (!(joseToken instanceof JWSInput)) {
-                throw new ReferencedTokenValidationException("Status List Token must be a signed JWS (JWT), got: " + joseToken.getClass().getSimpleName());
+                throw new ReferencedTokenValidationException("Status List Token must be a signed JWS (JWT), got: "
+                        + joseToken.getClass().getSimpleName());
             }
 
             JWSInput jws = (JWSInput) joseToken;
@@ -198,7 +198,8 @@ public class ReferencedTokenValidator {
             // Validate the JWT header type
             String typ = jws.getHeader().getType();
             if (typ == null || !typ.equals(JWT_TYPE_STATUS_LIST)) {
-                throw new ReferencedTokenValidationException("Status List Token must have type 'statuslist+jwt', got: " + typ);
+                throw new ReferencedTokenValidationException(
+                        "Status List Token must have type 'statuslist+jwt', got: " + typ);
             }
 
             // Extract the payload and parse as JSON
@@ -219,7 +220,8 @@ public class ReferencedTokenValidator {
     private StatusList extractStatusList(JsonNode statusListToken) throws ReferencedTokenValidationException {
         JsonNode statusList = statusListToken.get(STATUS_LIST_FIELD);
         if (statusList == null) {
-            throw new ReferencedTokenValidationException("Missing '" + STATUS_LIST_FIELD + "' claim in status list token");
+            throw new ReferencedTokenValidationException(
+                    "Missing '" + STATUS_LIST_FIELD + "' claim in status list token");
         }
 
         // Check for missing required fields before Jackson deserialization
@@ -261,7 +263,8 @@ public class ReferencedTokenValidator {
             StatusList statusListObj = JsonSerialization.mapper.treeToValue(statusList, StatusList.class);
             return statusListObj;
         } catch (JsonProcessingException e) {
-            throw new ReferencedTokenValidationException("Failed to parse status list information: " + e.getMessage(), e);
+            throw new ReferencedTokenValidationException(
+                    "Failed to parse status list information: " + e.getMessage(), e);
         }
     }
 
@@ -328,7 +331,8 @@ public class ReferencedTokenValidator {
      * @return The status value at the given index
      * @throws ReferencedTokenValidationException if the operation fails
      */
-    public static int readStatusValueFromBytes(byte[] bytes, int idx, int bits) throws ReferencedTokenValidationException {
+    public static int readStatusValueFromBytes(byte[] bytes, int idx, int bits)
+            throws ReferencedTokenValidationException {
         if (!List.of(1, 2, 4, 8).contains(bits)) {
             throw new ReferencedTokenValidationException("Unsupported bits value: " + bits);
         }
@@ -383,8 +387,7 @@ public class ReferencedTokenValidator {
      */
     public static record StatusInfo(
             @JsonProperty(IDX_FIELD) int idx,
-            @JsonProperty(URI_FIELD) String uri
-    ) {
+            @JsonProperty(URI_FIELD) String uri) {
         @JsonCreator
         public StatusInfo {
             // Validation handled in extractStatusInfo method
@@ -399,8 +402,7 @@ public class ReferencedTokenValidator {
      */
     public static record StatusList(
             @JsonProperty(BITS_FIELD) int bits,
-            @JsonProperty(LST_FIELD) String lst
-    ) {
+            @JsonProperty(LST_FIELD) String lst) {
         @JsonCreator
         public StatusList {
             // Validation handled in extractStatusList method

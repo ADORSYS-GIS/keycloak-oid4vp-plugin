@@ -1,12 +1,11 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import java.io.IOException;
+import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
-
-import java.io.IOException;
-import java.util.Objects;
 
 /**
  * Dedicated service for persisting authorization contexts to authentication sessions.
@@ -32,7 +31,8 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
         }
 
         authenticationSession.setAuthNote(AUTH_CONTEXT_SESSION_KEY, authContextJson);
-        logger.debugf("Stored authorization context in authentication session: requestId=%s",
+        logger.debugf(
+                "Stored authorization context in authentication session: requestId=%s",
                 authorizationContext.getRequestId());
     }
 
@@ -42,10 +42,11 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
     public AuthorizationContext getAuthorizationContextByRequestId(String requestId) {
         AuthorizationContext authContext = getAuthorizationContext();
         if (!Objects.equals(authContext.getRequestId(), requestId)) {
-            logger.warnf("Authorization context does not match the provided request ID: "
-                    + "Expected=%s, Actual=%s", authContext.getRequestId(), requestId);
-            throw new IllegalArgumentException("Authorization context does not match the provided request ID: "
-                    + requestId);
+            logger.warnf(
+                    "Authorization context does not match the provided request ID: " + "Expected=%s, Actual=%s",
+                    authContext.getRequestId(), requestId);
+            throw new IllegalArgumentException(
+                    "Authorization context does not match the provided request ID: " + requestId);
         }
 
         return authContext;
@@ -57,10 +58,11 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
     public AuthorizationContext getAuthorizationContextByTransactionId(String transactionId) {
         AuthorizationContext authContext = getAuthorizationContext();
         if (!Objects.equals(authContext.getTransactionId(), transactionId)) {
-            logger.warnf("Authorization context does not match the provided transaction ID: "
-                    + "Expected=%s, Actual=%s", authContext.getTransactionId(), transactionId);
-            throw new IllegalArgumentException("Authorization context does not match the provided transaction ID: "
-                    + transactionId);
+            logger.warnf(
+                    "Authorization context does not match the provided transaction ID: " + "Expected=%s, Actual=%s",
+                    authContext.getTransactionId(), transactionId);
+            throw new IllegalArgumentException(
+                    "Authorization context does not match the provided transaction ID: " + transactionId);
         }
 
         return authContext;

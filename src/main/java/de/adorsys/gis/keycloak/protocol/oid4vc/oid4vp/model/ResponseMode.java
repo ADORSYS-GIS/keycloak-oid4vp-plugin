@@ -10,7 +10,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * Authorization Request</a>
  */
 public enum ResponseMode {
-
     FRAGMENT("fragment"),
     FORM_POST("form_post"),
     DIRECT_POST("direct_post"),

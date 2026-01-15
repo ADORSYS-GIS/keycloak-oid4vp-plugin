@@ -4,14 +4,13 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthent
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
-import org.keycloak.authentication.Authenticator;
-import org.keycloak.models.KeycloakSession;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import org.keycloak.authentication.Authenticator;
+import org.keycloak.models.KeycloakSession;
 
 /**
  * This class overrides the default behavior of the {@link SdJwtAuthenticatorFactory} to use a mock
@@ -64,8 +63,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
                     throw new IllegalArgumentException("Resource not found: " + filename);
                 }
 
-                return new String(stream.readAllBytes(), StandardCharsets.UTF_8)
-                        .replaceAll("\\R", "");
+                return new String(stream.readAllBytes(), StandardCharsets.UTF_8).replaceAll("\\R", "");
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

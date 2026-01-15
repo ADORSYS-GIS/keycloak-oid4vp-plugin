@@ -30,15 +30,12 @@ public class ResponseObject {
     @JsonProperty(STATE_KEY)
     private String state;
 
-    public ResponseObject() {
-    }
+    public ResponseObject() {}
 
-    public ResponseObject(String vpToken, String presentationSubmission, String state)
-            throws JsonProcessingException {
+    public ResponseObject(String vpToken, String presentationSubmission, String state) throws JsonProcessingException {
         this.vpToken = requireNonBlank(vpToken, VP_TOKEN_KEY);
-        this.presentationSubmission = JsonSerialization.mapper
-                .readValue(requireNonBlank(presentationSubmission, PRESENTATION_SUBMISSION_KEY),
-                        PresentationSubmission.class);
+        this.presentationSubmission = JsonSerialization.mapper.readValue(
+                requireNonBlank(presentationSubmission, PRESENTATION_SUBMISSION_KEY), PresentationSubmission.class);
         this.state = requireNonBlank(state, STATE_KEY);
     }
 

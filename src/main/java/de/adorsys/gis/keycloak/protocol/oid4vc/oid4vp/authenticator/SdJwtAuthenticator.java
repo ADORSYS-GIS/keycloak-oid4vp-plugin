@@ -1,11 +1,15 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.List;
+import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -22,11 +26,6 @@ import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
-
-import java.util.List;
-import java.util.Objects;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
 /**
  * Authenticate by presenting a valid SD-JWT credential.
@@ -70,8 +69,7 @@ public class SdJwtAuthenticator implements Authenticator {
                     authReqs.getPresentationDefinition(),
                     List.of(new SelfTrustedSdJwtIssuer(context)),
                     authReqs.getIssuerSignedJwtVerificationOpts(),
-                    authReqs.getKeyBindingJwtVerificationOpts(nonce)
-            );
+                    authReqs.getKeyBindingJwtVerificationOpts(nonce));
         } catch (VerificationException e) {
             logger.errorf(e, "Token verification failed");
             failRejectingPresentedSdJwtToken(context, e.getMessage());
@@ -107,10 +105,7 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private SdJwtAuthRequirements getAuthenticationRequirements(AuthenticationFlowContext context) {
-        return new SdJwtAuthRequirements(
-                context.getSession().getContext(),
-                context.getAuthenticatorConfig()
-        );
+        return new SdJwtAuthRequirements(context.getSession().getContext(), context.getAuthenticatorConfig());
     }
 
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
@@ -118,11 +113,7 @@ public class SdJwtAuthenticator implements Authenticator {
         String username = readUsernameFromCredential(sdJwt);
 
         // Recover authenticating user
-        UserModel user = KeycloakModelUtils.findUserByNameOrEmail(
-                context.getSession(),
-                context.getRealm(),
-                username
-        );
+        UserModel user = KeycloakModelUtils.findUserByNameOrEmail(context.getSession(), context.getRealm(), username);
 
         // Import user if not found
         if (user == null) {
@@ -173,34 +164,28 @@ public class SdJwtAuthenticator implements Authenticator {
         logger.info("Presented SD-JWT will be rejected as invalid");
 
         var errorRep = new OAuth2ErrorRepresentation(
-                Errors.INVALID_USER_CREDENTIALS,
-                String.format("Invalid SD-JWT presentation (%s)", reason)
-        );
+                Errors.INVALID_USER_CREDENTIALS, String.format("Invalid SD-JWT presentation (%s)", reason));
 
         context.failure(
                 AuthenticationFlowError.INVALID_CREDENTIALS,
                 Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
                         .type(MediaType.APPLICATION_JSON_TYPE)
                         .entity(errorRep)
-                        .build()
-        );
+                        .build());
     }
 
     private void failDenyingAuthenticatingUser(AuthenticationFlowContext context) {
         logger.info("Presented SD-JWT will be rejected for associated user is unknown and could not be imported");
 
         var errorRep = new OAuth2ErrorRepresentation(
-                Errors.USER_NOT_FOUND,
-                "User with presented SD-JWT unknown and could not be imported"
-        );
+                Errors.USER_NOT_FOUND, "User with presented SD-JWT unknown and could not be imported");
 
         context.failure(
                 AuthenticationFlowError.UNKNOWN_USER,
                 Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
                         .type(MediaType.APPLICATION_JSON_TYPE)
                         .entity(errorRep)
-                        .build()
-        );
+                        .build());
     }
 
     @Override
@@ -214,10 +199,8 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     @Override
-    public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {
-    }
+    public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {}
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }

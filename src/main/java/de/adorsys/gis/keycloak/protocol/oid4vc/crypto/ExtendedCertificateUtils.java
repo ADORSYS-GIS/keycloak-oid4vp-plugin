@@ -1,15 +1,14 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.crypto;
 
-import org.keycloak.common.crypto.CryptoIntegration;
-import org.keycloak.common.crypto.CryptoProvider;
-import org.keycloak.common.util.CertificateUtils;
-import org.keycloak.crypto.def.BCCertificateUtilsProvider;
-
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Optional;
+import org.keycloak.common.crypto.CryptoIntegration;
+import org.keycloak.common.crypto.CryptoProvider;
+import org.keycloak.common.util.CertificateUtils;
+import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
 public class ExtendedCertificateUtils extends CertificateUtils {
 
@@ -37,13 +36,12 @@ public class ExtendedCertificateUtils extends CertificateUtils {
     }
 
     public static X509Certificate generateV3Certificate(
-            PrivateKey caPrivateKey, X509Certificate caCert,
-            PublicKey subPublicKey, String subject, List<String> subjectAltNames
-    ) {
+            PrivateKey caPrivateKey,
+            X509Certificate caCert,
+            PublicKey subPublicKey,
+            String subject,
+            List<String> subjectAltNames) {
         return getExtendedCertificateUtilsProvider()
-                .generateV3Certificate(
-                        caPrivateKey, caCert,
-                        subPublicKey, subject, subjectAltNames
-                );
+                .generateV3Certificate(caPrivateKey, caCert, subPublicKey, subject, subjectAltNames);
     }
 }

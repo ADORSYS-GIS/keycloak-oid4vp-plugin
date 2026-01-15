@@ -12,18 +12,17 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationCon
 import de.adorsys.gis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
 import jakarta.ws.rs.core.UriBuilder;
-import org.jboss.logging.Logger;
-import org.keycloak.OAuth2Constants;
-import org.keycloak.constants.ServiceUrlConstants;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
+import org.jboss.logging.Logger;
+import org.keycloak.OAuth2Constants;
+import org.keycloak.constants.ServiceUrlConstants;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -45,11 +44,7 @@ public class OID4VPUserAuthBean {
     private final OID4VPUserAuthEndpoint oid4vp;
     private AuthContextBean authContextBean;
 
-    public OID4VPUserAuthBean(
-            KeycloakSession session, RealmModel realm,
-            URI baseUri,
-            OID4VPUserAuthEndpoint oid4vp
-    ) {
+    public OID4VPUserAuthBean(KeycloakSession session, RealmModel realm, URI baseUri, OID4VPUserAuthEndpoint oid4vp) {
         this.session = session;
         this.realm = realm;
         this.baseUri = baseUri;
@@ -122,9 +117,7 @@ public class OID4VPUserAuthBean {
         String authStatusUrl = buildAuthStatusUrl(authContext.getTransactionId());
 
         // Collect and return context
-        authContextBean = new AuthContextBean()
-                .setAuthReqQrCode(authReqQrCode)
-                .setAuthStatusUrl(authStatusUrl);
+        authContextBean = new AuthContextBean().setAuthReqQrCode(authReqQrCode).setAuthStatusUrl(authStatusUrl);
         return authContextBean;
     }
 
@@ -142,11 +135,12 @@ public class OID4VPUserAuthBean {
         try {
             QRCodeWriter qrCodeWriter = new QRCodeWriter();
             BitMatrix bitMatrix = qrCodeWriter.encode(
-                    data, BarcodeFormat.QR_CODE,
-                    QR_CODE_IMAGE_SIZE, QR_CODE_IMAGE_SIZE,
+                    data,
+                    BarcodeFormat.QR_CODE,
+                    QR_CODE_IMAGE_SIZE,
+                    QR_CODE_IMAGE_SIZE,
                     // Set margin to 0 to remove default padding
-                    Map.of(EncodeHintType.MARGIN, 0)
-            );
+                    Map.of(EncodeHintType.MARGIN, 0));
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             MatrixToImageWriter.writeToStream(bitMatrix, QR_CODE_IMAGE_FORMAT, bos);
@@ -190,7 +184,8 @@ public class OID4VPUserAuthBean {
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             AuthContextBean that = (AuthContextBean) o;
-            return Objects.equals(authReqQrCode, that.authReqQrCode) && Objects.equals(authStatusUrl, that.authStatusUrl);
+            return Objects.equals(authReqQrCode, that.authReqQrCode)
+                    && Objects.equals(authStatusUrl, that.authStatusUrl);
         }
 
         @Override

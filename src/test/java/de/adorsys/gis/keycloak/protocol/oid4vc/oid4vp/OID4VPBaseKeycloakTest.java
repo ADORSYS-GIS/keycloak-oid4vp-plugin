@@ -1,8 +1,19 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
@@ -22,18 +33,6 @@ import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
-
-import java.io.IOException;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Base Keycloak test class with common operations for OpenID4VC scenarios.
@@ -57,7 +56,6 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
         return parseAuthorizationContext(response);
     }
-
 
     /**
      * Resolve the request object associated with the authorization request.
@@ -114,9 +112,8 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
                 .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
                 .toString();
 
-        Connection.Response res = Jsoup.connect(authEndpoint)
-                .method(Connection.Method.GET)
-                .execute();
+        Connection.Response res =
+                Jsoup.connect(authEndpoint).method(Connection.Method.GET).execute();
 
         // Parse the response HTML
         Document html = res.parse();
@@ -135,13 +132,9 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         assertEquals(2, actionUrlParts.length);
 
         String serverUrl = keycloak.getAuthServerUrl();
-        String absActionUrl = String.format("%s?%s",
-                KeycloakUriBuilder
-                        .fromUri(serverUrl)
-                        .path(actionUrlParts[0])
-                        .build(),
-                actionUrlParts[1]
-        );
+        String absActionUrl = String.format(
+                "%s?%s",
+                KeycloakUriBuilder.fromUri(serverUrl).path(actionUrlParts[0]).build(), actionUrlParts[1]);
 
         return new FormData(absActionUrl, cookies);
     }
@@ -160,16 +153,12 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
     protected static AuthorizationContext parseAuthorizationContext(HttpResponse response) throws IOException {
         return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8),
-                AuthorizationContext.class
-        );
+                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), AuthorizationContext.class);
     }
 
     protected static OAuth2ErrorRepresentation parseErrorResponse(HttpResponse response) throws IOException {
         return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8),
-                OAuth2ErrorRepresentation.class
-        );
+                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), OAuth2ErrorRepresentation.class);
     }
 
     /**
@@ -189,6 +178,5 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         return cookieStore;
     }
 
-    protected record FormData(String actionUrl, BasicCookieStore cookieStore) {
-    }
+    protected record FormData(String actionUrl, BasicCookieStore cookieStore) {}
 }

@@ -112,6 +112,22 @@
                     <argLine>-XX:+EnableDynamicAgentLoading</argLine>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <java>
+                        <palantirJavaFormat/>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                        <forbidWildcardImports/>
+                        <forbidModuleImports/>
+                        <formatAnnotations/>
+                    </java>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

@@ -1,5 +1,22 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.crypto;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.crypto.ExtendedBCCertificateUtilsProvider.getJcaContentSignerAlg;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.stream.Stream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -23,24 +40,6 @@ import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.BouncyIntegration;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.KeyType;
-
-import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.cert.X509Certificate;
-import java.security.spec.ECGenParameterSpec;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-import java.util.stream.Stream;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.crypto.ExtendedBCCertificateUtilsProvider.getJcaContentSignerAlg;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExtendedBCCertificateUtilsProviderTest {
 
@@ -67,8 +66,7 @@ class ExtendedBCCertificateUtilsProviderTest {
                 caCert,
                 subKeyPair.getPublic(),
                 "my-subject",
-                List.of("example.com", "www.example.com")
-        );
+                List.of("example.com", "www.example.com"));
 
         assertNotNull(cert);
         assertEquals("CN=my-subject", cert.getSubjectX500Principal().getName());
@@ -85,8 +83,7 @@ class ExtendedBCCertificateUtilsProviderTest {
                 ecCaCert,
                 subKeyPair.getPublic(),
                 "my-subject-ec",
-                List.of("example.com", "www.example.com")
-        );
+                List.of("example.com", "www.example.com"));
 
         assertNotNull(cert);
         assertEquals("CN=my-subject-ec", cert.getSubjectX500Principal().getName());
@@ -96,21 +93,13 @@ class ExtendedBCCertificateUtilsProviderTest {
     @Test
     void testGenerateV3Certificate_sanExtension() throws Exception {
         X509Certificate cert = provider.generateV3Certificate(
-                caKeyPair.getPrivate(),
-                caCert,
-                subKeyPair.getPublic(),
-                "test",
-                List.of("a.com", "b.com")
-        );
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "test", List.of("a.com", "b.com"));
 
         byte[] sanBytes = cert.getExtensionValue(Extension.subjectAlternativeName.getId());
         assertNotNull(sanBytes);
 
         GeneralNames gns = GeneralNames.getInstance(
-                ASN1Sequence.fromByteArray(
-                        ASN1OctetString.getInstance(sanBytes).getOctets()
-                )
-        );
+                ASN1Sequence.fromByteArray(ASN1OctetString.getInstance(sanBytes).getOctets()));
 
         GeneralName[] names = gns.getNames();
         assertEquals(2, names.length);
@@ -119,24 +108,14 @@ class ExtendedBCCertificateUtilsProviderTest {
     }
 
     private static Stream<List<String>> noSanInputProvider() {
-        return Stream.of(
-                null,
-                List.of(),
-                List.of(""),
-                Collections.singletonList(null)
-        );
+        return Stream.of(null, List.of(), List.of(""), Collections.singletonList(null));
     }
 
     @ParameterizedTest
     @MethodSource("noSanInputProvider")
     void testGenerateV3Certificate_NoSanExtension(List<String> subAltNames) {
         X509Certificate cert = provider.generateV3Certificate(
-                caKeyPair.getPrivate(),
-                caCert,
-                subKeyPair.getPublic(),
-                "test",
-                subAltNames
-        );
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "test", subAltNames);
 
         byte[] sanBytes = cert.getExtensionValue(Extension.subjectAlternativeName.getId());
         assertNull(sanBytes);
@@ -144,13 +123,8 @@ class ExtendedBCCertificateUtilsProviderTest {
 
     @Test
     void testGenerateV3Certificate_keyUsage() {
-        X509Certificate cert = provider.generateV3Certificate(
-                caKeyPair.getPrivate(),
-                caCert,
-                subKeyPair.getPublic(),
-                "ku",
-                List.of()
-        );
+        X509Certificate cert =
+                provider.generateV3Certificate(caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "ku", List.of());
 
         boolean[] ku = cert.getKeyUsage();
 
@@ -179,21 +153,13 @@ class ExtendedBCCertificateUtilsProviderTest {
     @Test
     void testGenerateV3Certificate_eku() throws Exception {
         X509Certificate cert = provider.generateV3Certificate(
-                caKeyPair.getPrivate(),
-                caCert,
-                subKeyPair.getPublic(),
-                "eku",
-                List.of()
-        );
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "eku", List.of());
 
         byte[] ekuBytes = cert.getExtensionValue(Extension.extendedKeyUsage.getId());
         assertNotNull(ekuBytes);
 
         ExtendedKeyUsage eku = ExtendedKeyUsage.getInstance(
-                ASN1Sequence.fromByteArray(
-                        ASN1OctetString.getInstance(ekuBytes).getOctets()
-                )
-        );
+                ASN1Sequence.fromByteArray(ASN1OctetString.getInstance(ekuBytes).getOctets()));
 
         assertTrue(eku.hasKeyPurposeId(KeyPurposeId.id_kp_emailProtection));
         assertTrue(eku.hasKeyPurposeId(KeyPurposeId.id_kp_serverAuth));
@@ -201,17 +167,11 @@ class ExtendedBCCertificateUtilsProviderTest {
 
     @Test
     void testGenerateV3Certificate_basicConstraints() throws Exception {
-        X509Certificate cert = provider.generateV3Certificate(
-                caKeyPair.getPrivate(),
-                caCert,
-                subKeyPair.getPublic(),
-                "bc",
-                List.of()
-        );
+        X509Certificate cert =
+                provider.generateV3Certificate(caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "bc", List.of());
 
-        BasicConstraints bc = BasicConstraints.fromExtensions(
-                new X509CertificateHolder(cert.getEncoded()).getExtensions()
-        );
+        BasicConstraints bc =
+                BasicConstraints.fromExtensions(new X509CertificateHolder(cert.getEncoded()).getExtensions());
 
         assertNotNull(bc);
         assertEquals(0, bc.getPathLenConstraint().intValue());
@@ -220,12 +180,7 @@ class ExtendedBCCertificateUtilsProviderTest {
     @Test
     void testGenerateV3Certificate_certificateIsSignedByCA() throws Exception {
         X509Certificate cert = provider.generateV3Certificate(
-                caKeyPair.getPrivate(),
-                caCert,
-                subKeyPair.getPublic(),
-                "sig-check",
-                List.of()
-        );
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "sig-check", List.of());
 
         // should throw no exception
         cert.verify(caKeyPair.getPublic());
@@ -245,8 +200,8 @@ class ExtendedBCCertificateUtilsProviderTest {
 
         // Test RSA key too small
         KeyPair rsa1024 = generateRSAKeyPair(1024);
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> getJcaContentSignerAlg(rsa1024.getPublic()));
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> getJcaContentSignerAlg(rsa1024.getPublic()));
         assertEquals("RSA key size too small: 1024 bits (minimum 2048)", ex.getMessage());
     }
 
@@ -266,20 +221,10 @@ class ExtendedBCCertificateUtilsProviderTest {
         Date now = new Date();
         Date later = new Date(now.getTime() + 86400000L);
 
-        X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
-                issuer,
-                serial,
-                now,
-                later,
-                issuer,
-                kp.getPublic()
-        );
+        X509v3CertificateBuilder builder =
+                new JcaX509v3CertificateBuilder(issuer, serial, now, later, issuer, kp.getPublic());
 
-        builder.addExtension(
-                Extension.basicConstraints,
-                true,
-                new BasicConstraints(true)
-        );
+        builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
 
         String alg = getJcaContentSignerAlg(kp.getPublic());
         ContentSigner signer = new JcaContentSignerBuilder(alg)

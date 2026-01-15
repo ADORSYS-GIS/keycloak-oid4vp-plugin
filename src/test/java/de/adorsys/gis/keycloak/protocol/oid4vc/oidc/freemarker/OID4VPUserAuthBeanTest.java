@@ -1,8 +1,20 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_CLIENT_ID;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_REALM_NAME;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import jakarta.ws.rs.core.UriBuilder;
+import java.net.URI;
+import java.util.UUID;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,19 +28,6 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.net.URI;
-import java.util.UUID;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_CLIENT_ID;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.BaseKeycloakTest.TEST_REALM_NAME;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyString;
-
 /**
  * Test that view data are properly constructed in OID4VPUserAuthBean.
  *
@@ -39,24 +38,23 @@ public class OID4VPUserAuthBeanTest {
 
     @Mock
     KeycloakSession session;
+
     @Mock
     KeycloakContext context;
+
     @Mock
     RealmModel realm;
+
     @Mock
     OID4VPUserAuthEndpoint oid4vp;
 
     @BeforeEach
     void setUp() {
         // session.getContext()
-        Mockito.lenient()
-                .when(session.getContext())
-                .thenReturn(context);
+        Mockito.lenient().when(session.getContext()).thenReturn(context);
 
         // realm.getName()
-        Mockito.lenient()
-                .when(realm.getName())
-                .thenReturn(TEST_REALM_NAME);
+        Mockito.lenient().when(realm.getName()).thenReturn(TEST_REALM_NAME);
 
         // oid4vp.checkClient()
         Mockito.lenient()
@@ -66,15 +64,14 @@ public class OID4VPUserAuthBeanTest {
                     }
                     return null;
                 })
-                .when(oid4vp).checkClient(anyString());
+                .when(oid4vp)
+                .checkClient(anyString());
 
         // oid4vp.startAuthentication()
         AuthorizationContext authContext = new AuthorizationContext();
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
-        Mockito.lenient()
-                .when(oid4vp.startAuthentication(TEST_CLIENT_ID))
-                .thenReturn(authContext);
+        Mockito.lenient().when(oid4vp.startAuthentication(TEST_CLIENT_ID)).thenReturn(authContext);
     }
 
     @Test
@@ -99,7 +96,7 @@ public class OID4VPUserAuthBeanTest {
     @Test
     public void shouldNotInjectLoginUrlIfInvalidClient() {
         OID4VPUserAuthBean bean = createTestBean("unknown-client", true);
-        assertNull(bean.getLoginUrl());  // Null because clientId is invalid
+        assertNull(bean.getLoginUrl()); // Null because clientId is invalid
     }
 
     @Test
@@ -124,8 +121,8 @@ public class OID4VPUserAuthBeanTest {
     }
 
     private OID4VPUserAuthBean createTestBean(String clientId, boolean withLoginMethod) {
-        UriBuilder uriBuilder = UriBuilder.fromUri("https://keycloak.org/")
-                .queryParam(OAuth2Constants.CLIENT_ID, clientId);
+        UriBuilder uriBuilder =
+                UriBuilder.fromUri("https://keycloak.org/").queryParam(OAuth2Constants.CLIENT_ID, clientId);
 
         if (withLoginMethod) {
             uriBuilder.queryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
@@ -141,18 +138,10 @@ public class OID4VPUserAuthBeanTest {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(uri);
         KeycloakUriInfo mockUri = Mockito.mock(KeycloakUriInfo.class);
 
-        Mockito.lenient()
-                .when(mockUri.getRequestUri())
-                .thenReturn(uriInfo.getRequestUri());
-        Mockito.lenient()
-                .when(mockUri.getBaseUri())
-                .thenReturn(uriInfo.getBaseUri());
-        Mockito.lenient()
-                .when(mockUri.getQueryParameters())
-                .thenReturn(uriInfo.getQueryParameters());
+        Mockito.lenient().when(mockUri.getRequestUri()).thenReturn(uriInfo.getRequestUri());
+        Mockito.lenient().when(mockUri.getBaseUri()).thenReturn(uriInfo.getBaseUri());
+        Mockito.lenient().when(mockUri.getQueryParameters()).thenReturn(uriInfo.getQueryParameters());
 
-        Mockito.lenient()
-                .when(session.getContext().getUri())
-                .thenReturn(mockUri);
+        Mockito.lenient().when(session.getContext().getUri()).thenReturn(mockUri);
     }
 }

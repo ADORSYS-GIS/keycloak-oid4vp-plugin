@@ -5,18 +5,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonValue;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({
-        "field_id",
-        "directive"
-})
+@JsonPropertyOrder({"field_id", "directive"})
 @Generated("jsonschema2pojo")
 public class SameSubject {
 
@@ -66,7 +62,10 @@ public class SameSubject {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(SameSubject.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(SameSubject.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("fieldId");
         sb.append('=');
         sb.append(((this.fieldId == null) ? "<null>" : this.fieldId));
@@ -100,15 +99,16 @@ public class SameSubject {
             return false;
         }
         SameSubject rhs = ((SameSubject) other);
-        return (((this.fieldId == rhs.fieldId) || ((this.fieldId != null) && this.fieldId.equals(rhs.fieldId))) && ((this.directive == rhs.directive) || ((this.directive != null) && this.directive.equals(rhs.directive))));
+        return (((this.fieldId == rhs.fieldId) || ((this.fieldId != null) && this.fieldId.equals(rhs.fieldId)))
+                && ((this.directive == rhs.directive)
+                        || ((this.directive != null) && this.directive.equals(rhs.directive))));
     }
 
     @Generated("jsonschema2pojo")
     public enum Directive {
-
         REQUIRED("required"),
         PREFERRED("preferred");
-        private final static Map<String, Directive> CONSTANTS = new HashMap<String, Directive>();
+        private static final Map<String, Directive> CONSTANTS = new HashMap<String, Directive>();
 
         static {
             for (Directive c : values()) {
@@ -141,7 +141,5 @@ public class SameSubject {
         public String value() {
             return this.value;
         }
-
     }
-
 }

@@ -3,6 +3,7 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
+import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.crypto.KeyUse;
@@ -15,8 +16,6 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.services.Urls;
 import org.keycloak.urls.UrlType;
-
-import java.util.List;
 
 /**
  * Discovers client metadata and other properties as Keycloak acts as an OpenID4VP client.
@@ -46,9 +45,7 @@ public class VerifierDiscoveryService {
         vpFormat.setVcSdJwt(getSdJwtVpFormat());
 
         // Aggregate metadata
-        return new ClientMetadata()
-                .setClientId(getClientId())
-                .setVpFormat(vpFormat);
+        return new ClientMetadata().setClientId(getClientId()).setVpFormat(vpFormat);
     }
 
     /**
@@ -79,10 +76,9 @@ public class VerifierDiscoveryService {
 
         // Fall back to available key if ES256 is not available or its certificate missing.
         if (key == null || key.getCertificate() == null) {
-            key = session.keys().getKeysStream(realm)
-                    .filter(k -> k.getStatus().isActive()
-                            && k.getUse() == KeyUse.SIG
-                            && k.getCertificate() != null)
+            key = session.keys()
+                    .getKeysStream(realm)
+                    .filter(k -> k.getStatus().isActive() && k.getUse() == KeyUse.SIG && k.getCertificate() != null)
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("No active signing key with certificate found"));
         }

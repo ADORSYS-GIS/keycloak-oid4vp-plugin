@@ -1,6 +1,9 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Pattern;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
@@ -17,10 +20,6 @@ import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
-
-import java.util.Objects;
-import java.util.Optional;
-import java.util.regex.Pattern;
 
 /**
  * Base endpoint class handling common routines needed by OpenID4VP routes.
@@ -47,9 +46,7 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
         AuthenticationFlowModel flow = realm.getFlowByAlias(OID4VP_AUTH_FLOW);
         if (flow == null) {
             throw new IllegalStateException(String.format(
-                    "Authentication flow '%s' not found. Such is supposed to be built-in",
-                    OID4VP_AUTH_FLOW
-            ));
+                    "Authentication flow '%s' not found. Such is supposed to be built-in", OID4VP_AUTH_FLOW));
         }
 
         return flow;
@@ -81,8 +78,8 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
         // polling the authentication status by an entity other than the wallet. Thus, we
         // create an ephemeral separate authentication session tab just for processors.
         AuthenticationSessionModel authSession = context.getAuthenticationSession();
-        AuthenticationSessionModel ephemeralAuthSession = authSession.getParentSession()
-                .createAuthenticationSession(authSession.getClient());
+        AuthenticationSessionModel ephemeralAuthSession =
+                authSession.getParentSession().createAuthenticationSession(authSession.getClient());
 
         return new AuthenticationProcessor()
                 .setAuthenticationSession(ephemeralAuthSession)
@@ -101,28 +98,26 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
      */
     protected Optional<AuthenticationSessionModel> getAuthSession(String authSessionId) {
         if (authSessionId == null || !authSessionId.contains(AUTH_SESSION_DELIMITER)) {
-            logger.debugf("Invalid authSessionId format: %s. Delimiter '%s' expected",
-                    authSessionId, AUTH_SESSION_DELIMITER);
+            logger.debugf(
+                    "Invalid authSessionId format: %s. Delimiter '%s' expected", authSessionId, AUTH_SESSION_DELIMITER);
             return Optional.empty();
         }
 
-        String[] authSessionIdParts = authSessionId
-                .split(Pattern.quote(AUTH_SESSION_DELIMITER));
+        String[] authSessionIdParts = authSessionId.split(Pattern.quote(AUTH_SESSION_DELIMITER));
 
         String rootAuthSessionId = authSessionIdParts[0];
         String tabSessionId = authSessionIdParts[1];
 
-        RootAuthenticationSessionModel rootAuthSession = session.authenticationSessions()
-                .getRootAuthenticationSession(realm, rootAuthSessionId);
+        RootAuthenticationSessionModel rootAuthSession =
+                session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId);
 
         if (rootAuthSession == null) {
             logger.tracef("Root authentication session not found for ID: %s", authSessionId);
             return Optional.empty();
         }
 
-        AuthenticationSessionModel authSession = rootAuthSession
-                .getAuthenticationSessions()
-                .get(tabSessionId);
+        AuthenticationSessionModel authSession =
+                rootAuthSession.getAuthenticationSessions().get(tabSessionId);
 
         if (authSession == null) {
             logger.tracef("Authentication session not found for ID: %s", authSessionId);

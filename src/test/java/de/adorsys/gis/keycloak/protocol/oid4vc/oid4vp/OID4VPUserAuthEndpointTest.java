@@ -1,5 +1,14 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -11,6 +20,17 @@ import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDef
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -34,27 +54,6 @@ import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
-
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Testing OpenID4VP user authentication via presentation of SD-JWT identity credentials.
@@ -151,8 +150,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         assertEquals(HttpStatus.SC_NOT_FOUND, response.getStatusLine().getStatusCode());
 
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
-        assertEquals("Authorization context not found for request ID: unknown-request-uri",
-                errorRep.getErrorDescription());
+        assertEquals(
+                "Authorization context not found for request ID: unknown-request-uri", errorRep.getErrorDescription());
     }
 
     @Test
@@ -179,7 +178,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Poll the status of the authorization context
         HttpResponse response = fetchAuthenticationStatus(requestId);
-        assertEquals(HttpStatus.SC_NOT_FOUND, response.getStatusLine().getStatusCode(),
+        assertEquals(
+                HttpStatus.SC_NOT_FOUND,
+                response.getStatusLine().getStatusCode(),
                 "Only transaction IDs should enable polling authorization statuses");
     }
 
@@ -284,7 +285,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
-        assertEquals("Authorization context is already closed. Cannot process further responses",
+        assertEquals(
+                "Authorization context is already closed. Cannot process further responses",
                 errorRep.getErrorDescription());
     }
 
@@ -298,13 +300,14 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         requestObject.setState("unknown-session-id");
 
         // Prepare and send the OpenID4VP response to Keycloak
-        HttpResponse response = sendAuthorizationResponseWithVPToken(
-                "sd-jwt-vptoken", requestObject, TestOpts.getDefault());
+        HttpResponse response =
+                sendAuthorizationResponseWithVPToken("sd-jwt-vptoken", requestObject, TestOpts.getDefault());
         assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
 
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
-        assertEquals("Authorization context not found for state (request ID): unknown-session-id",
+        assertEquals(
+                "Authorization context not found for state (request ID): unknown-session-id",
                 errorRep.getErrorDescription());
     }
 
@@ -318,14 +321,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         HttpResponse response = sendAuthorizationResponseWithVPToken(
                 "", // This token is invalid because empty
                 requestObject,
-                new TestOpts()
-        );
+                new TestOpts());
         assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
 
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
-        assertEquals("Unparseable response params (vp_token must not be null or blank)",
-                errorRep.getErrorDescription());
+        assertEquals(
+                "Unparseable response params (vp_token must not be null or blank)", errorRep.getErrorDescription());
     }
 
     @Test
@@ -334,15 +336,14 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
         // Use a non-matching presentation definition ID
-        TestOpts opts = TestOpts.getDefault()
-                .setOverridePresentationDefinitionId("unknown-presentation-definition-id");
+        TestOpts opts = TestOpts.getDefault().setOverridePresentationDefinitionId("unknown-presentation-definition-id");
 
         testFailingAuthentication(
-                sdJwt, opts,
+                sdJwt,
+                opts,
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Presentation submission does not match the expected presentation definition"
-        );
+                "Presentation submission does not match the expected presentation definition");
     }
 
     @Test
@@ -354,11 +355,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorPath("$[0]");
 
         testFailingAuthentication(
-                sdJwt, opts,
+                sdJwt,
+                opts,
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Invalid path in presentation submission descriptor: $[0]"
-        );
+                "Invalid path in presentation submission descriptor: $[0]");
     }
 
     @Test
@@ -370,11 +371,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.JWT_VP);
 
         testFailingAuthentication(
-                sdJwt, opts,
+                sdJwt,
+                opts,
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "SD-JWT VP token expected, but received: jwt_vp"
-        );
+                "SD-JWT VP token expected, but received: jwt_vp");
     }
 
     @Test
@@ -389,8 +390,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Could not parse `vp_token` as an SD-JWT VP token"
-        );
+                "Could not parse `vp_token` as an SD-JWT VP token");
     }
 
     @Test
@@ -400,11 +400,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Proceed to authentication
         testFailingAuthentication(
-                sdJwt, TestOpts.getDefault(),
+                sdJwt,
+                TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Pattern matching failed for required field"
-        );
+                "Pattern matching failed for required field");
     }
 
     @Test
@@ -414,11 +414,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Proceed to authentication
         testFailingAuthentication(
-                sdJwt, TestOpts.getDefault(),
+                sdJwt,
+                TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (A required field was not presented: `username`)"
-        );
+                "Invalid SD-JWT presentation (A required field was not presented: `username`)");
     }
 
     @Test
@@ -429,40 +429,37 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Proceed to authentication
         testFailingAuthentication(
-                sdJwt, TestOpts.getDefault(),
+                sdJwt,
+                TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (Token status verification failed)"
-        );
+                "Invalid SD-JWT presentation (Token status verification failed)");
     }
 
     @Test
     public void shouldFailAuthentication_InvalidKbJwt_SignedWithUnboundedKey() throws Exception {
         testFailAuthentication_InvalidKbJwt(
-                null, null, // Use expected nonce and aud
+                null,
+                null, // Use expected nonce and aud
                 SdJwtVPTestUtils.getStrayJwk(), // Use a stray JWK as holder key
                 null, // Use default KB-JWT lifespan
-                "Key binding JWT invalid"
-        );
+                "Key binding JWT invalid");
     }
 
     @Test
     public void shouldFailAuthentication_InvalidKbJwt_Expired() throws Exception {
         testFailAuthentication_InvalidKbJwt(
-                null, null,  // Use expected nonce and aud
+                null,
+                null, // Use expected nonce and aud
                 null, // Use expected holder key
                 -SdJwtVPTestUtils.KB_JWT_LIFESPAN_SECS, // Use a negative lifespan to expire the KB-JWT
-                "Token has expired"
-        );
+                "Token has expired");
     }
 
     @Test
     public void shouldFailAuthentication_InvalidKbJwt_InvalidNonce() throws Exception {
         testFailAuthentication_InvalidKbJwt(
-                "invalid-nonce", null,
-                null, null,
-                "claim 'nonce' does not match actual value 'invalid-nonce'"
-        );
+                "invalid-nonce", null, null, null, "claim 'nonce' does not match actual value 'invalid-nonce'");
     }
 
     @Test
@@ -470,15 +467,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         var invalidAuds = List.of(
                 "invalid-aud",
                 ":" + getVerifierClientId(), // Missing scheme
-                "double:scheme:" + getVerifierClientId()
-        );
+                "double:scheme:" + getVerifierClientId());
 
         for (String invalidAud : invalidAuds) {
             testFailAuthentication_InvalidKbJwt(
-                    null, invalidAud,
-                    null, null,
-                    "claim 'aud' does not match actual value"
-            );
+                    null, invalidAud, null, null, "claim 'aud' does not match actual value");
         }
     }
 
@@ -512,9 +505,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     private void assertAuthenticatingUser(TestOpts opts, String authCode) throws VerificationException, IOException {
         String accessTokenStr = requestAccessToken(authCode, opts.shouldEnforceRedirectUri());
-        AccessToken accessToken = TokenVerifier
-                .create(accessTokenStr, AccessToken.class)
-                .getToken();
+        AccessToken accessToken =
+                TokenVerifier.create(accessTokenStr, AccessToken.class).getToken();
 
         // Assert authenticating user
         assertEquals(opts.getTestUser(), accessToken.getPreferredUsername());
@@ -527,12 +519,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * Helper for failing flows.
      */
     private void testFailingAuthentication(
-            String sdJwt,
-            TestOpts opts,
-            int httpStatus,
-            String expectedError,
-            String expectedErrorDescription
-    ) throws Exception {
+            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
+            throws Exception {
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
@@ -545,12 +533,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Run assertions
         assertFailingAuthentication(
-                response,
-                authContext.getTransactionId(),
-                httpStatus,
-                expectedError,
-                expectedErrorDescription
-        );
+                response, authContext.getTransactionId(), httpStatus, expectedError, expectedErrorDescription);
     }
 
     /**
@@ -562,23 +545,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
             String transactionId,
             int httpStatus,
             String expectedError,
-            String expectedErrorDescription
-    ) throws Exception {
+            String expectedErrorDescription)
+            throws Exception {
         // Prepare and send the OpenID4VP response to Keycloak
-        HttpResponse response = sendAuthorizationResponseWithVPToken(
-                sdJwtVpToken,
-                requestObject,
-                new TestOpts()
-        );
+        HttpResponse response = sendAuthorizationResponseWithVPToken(sdJwtVpToken, requestObject, new TestOpts());
 
         // Run assertions
-        assertFailingAuthentication(
-                response,
-                transactionId,
-                httpStatus,
-                expectedError,
-                expectedErrorDescription
-        );
+        assertFailingAuthentication(response, transactionId, httpStatus, expectedError, expectedErrorDescription);
     }
 
     /**
@@ -589,8 +562,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
             String transactionId,
             int httpStatus,
             String expectedError,
-            String expectedErrorDescription
-    ) throws Exception {
+            String expectedErrorDescription)
+            throws Exception {
         assertEquals(httpStatus, postAuthResponse.getStatusLine().getStatusCode());
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(postAuthResponse);
         assertEquals(expectedError, errorRep.getError());
@@ -608,12 +581,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * Helper for failing flows (Invalid KB-JWTs).
      */
     private void testFailAuthentication_InvalidKbJwt(
-            String overrideNonce,
-            String overrideAud,
-            JWK holderkey,
-            Integer kbJwtLifespanSecs,
-            String errorMessage
-    ) throws Exception {
+            String overrideNonce, String overrideAud, JWK holderkey, Integer kbJwtLifespanSecs, String errorMessage)
+            throws Exception {
         // Request a SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
@@ -627,8 +596,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 overrideNonce == null ? requestObject.getNonce() : overrideNonce,
                 overrideAud == null ? requestObject.getClientId() : overrideAud,
                 holderkey == null ? SdJwtVPTestUtils.getUserJwk() : holderkey,
-                kbJwtLifespanSecs == null ? SdJwtVPTestUtils.KB_JWT_LIFESPAN_SECS : kbJwtLifespanSecs
-        );
+                kbJwtLifespanSecs == null ? SdJwtVPTestUtils.KB_JWT_LIFESPAN_SECS : kbJwtLifespanSecs);
 
         // Proceed to authentication
         testFailingAuthenticationWithVPToken(
@@ -637,8 +605,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                errorMessage
-        );
+                errorMessage);
     }
 
     /**
@@ -653,8 +620,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 opts.getOverridePresentationAud() == null
                         ? requestObject.getClientId()
                         : opts.getOverridePresentationAud(),
-                SdJwtVPTestUtils.getUserJwk()
-        );
+                SdJwtVPTestUtils.getUserJwk());
 
         // Base64-encode the SD-JWT VP token if requested
         if (opts.getShouldBase64EncodeVpToken()) {
@@ -670,16 +636,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * Sends an OpenID4VP response to Keycloak, producing an SD-JWT verifiable presentation.
      */
     private HttpResponse sendAuthorizationResponseWithVPToken(
-            String sdJwtVpToken,
-            RequestObject requestObject,
-            TestOpts opts
-    ) throws Exception {
+            String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws Exception {
         // Wrap the SD-JWT VP in an OpenID4VP response
-        List<BasicNameValuePair> oid4vpResponse = prepareOpenID4VPResponse(
-                sdJwtVpToken,
-                requestObject,
-                opts
-        );
+        List<BasicNameValuePair> oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
 
         // Send the OpenID4VP response to Keycloak
         String url = getOid4vpEndpoint("/response");
@@ -695,10 +654,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * @param requestObject the request object containing the presentation definition
      */
     private List<BasicNameValuePair> prepareOpenID4VPResponse(
-            String sdJwtVpToken,
-            RequestObject requestObject,
-            TestOpts opts
-    ) throws IOException {
+            String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws IOException {
         // Build presentation submission
 
         PresentationDefinition definition = requestObject.getPresentationDefinition();
@@ -710,22 +666,23 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         Descriptor descriptor = new Descriptor();
         descriptor.setId(inputDescriptor.getId());
-        descriptor.setFormat(opts.getOverrideDescriptorFormat() == null
-                ? Descriptor.Format.VC_SD_JWT
-                : opts.getOverrideDescriptorFormat());
-        descriptor.setPath(opts.getOverrideDescriptorPath() == null
-                ? AuthorizationResponseService.JSON_PATH_ROOT
-                : opts.getOverrideDescriptorPath());
+        descriptor.setFormat(
+                opts.getOverrideDescriptorFormat() == null
+                        ? Descriptor.Format.VC_SD_JWT
+                        : opts.getOverrideDescriptorFormat());
+        descriptor.setPath(
+                opts.getOverrideDescriptorPath() == null
+                        ? AuthorizationResponseService.JSON_PATH_ROOT
+                        : opts.getOverrideDescriptorPath());
         submission.setDescriptorMap(List.of(descriptor));
 
         // Compose the response object as form-urlencoded parameters
 
         return new ArrayList<>(List.of(
                 new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, sdJwtVpToken),
-                new BasicNameValuePair(ResponseObject.PRESENTATION_SUBMISSION_KEY,
-                        JsonSerialization.writeValueAsString(submission)),
-                new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())
-        ));
+                new BasicNameValuePair(
+                        ResponseObject.PRESENTATION_SUBMISSION_KEY, JsonSerialization.writeValueAsString(submission)),
+                new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
     }
 
     @Test
@@ -744,15 +701,17 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         BasicNameValuePair codeParam = new BasicNameValuePair(OAuth2Constants.CODE, authCode);
 
         // Continue OIDC flow with auth code
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create()
-                .setDefaultCookieStore(cookieStore)
-                .build()) {
+        try (CloseableHttpClient httpClient =
+                HttpClientBuilder.create().setDefaultCookieStore(cookieStore).build()) {
             HttpPost httpPost = new HttpPost(actionURI);
             httpPost.setEntity(new UrlEncodedFormEntity(List.of(codeParam)));
             HttpResponse httpResponse = httpClient.execute(httpPost);
-            assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, httpResponse.getStatusLine().getStatusCode());
+            assertEquals(
+                    HttpStatus.SC_MOVED_TEMPORARILY,
+                    httpResponse.getStatusLine().getStatusCode());
 
-            String redirectUri = httpResponse.getFirstHeader(HttpHeaders.LOCATION).getValue();
+            String redirectUri =
+                    httpResponse.getFirstHeader(HttpHeaders.LOCATION).getValue();
             assertTrue(redirectUri.startsWith(TEST_CLIENT_REDIRECT_URI));
 
             // Extract the authorization code from the redirect URI

@@ -3,20 +3,12 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import javax.annotation.processing.Generated;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({
-        "id",
-        "name",
-        "purpose",
-        "format",
-        "group",
-        "constraints"
-})
+@JsonPropertyOrder({"id", "name", "purpose", "format", "group", "constraints"})
 @Generated("jsonschema2pojo")
 public class InputDescriptor {
 
@@ -25,8 +17,10 @@ public class InputDescriptor {
      */
     @JsonProperty("id")
     private String id;
+
     @JsonProperty("name")
     private String name;
+
     @JsonProperty("purpose")
     private String purpose;
     /**
@@ -35,6 +29,7 @@ public class InputDescriptor {
      */
     @JsonProperty("format")
     private ClaimFormat format;
+
     @JsonProperty("group")
     private List<String> group = new ArrayList<String>();
     /**
@@ -126,7 +121,10 @@ public class InputDescriptor {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(InputDescriptor.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(InputDescriptor.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("id");
         sb.append('=');
         sb.append(((this.id == null) ? "<null>" : this.id));
@@ -180,7 +178,14 @@ public class InputDescriptor {
             return false;
         }
         InputDescriptor rhs = ((InputDescriptor) other);
-        return (((((((this.purpose == rhs.purpose) || ((this.purpose != null) && this.purpose.equals(rhs.purpose))) && ((this.name == rhs.name) || ((this.name != null) && this.name.equals(rhs.name)))) && ((this.format == rhs.format) || ((this.format != null) && this.format.equals(rhs.format)))) && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id)))) && ((this.constraints == rhs.constraints) || ((this.constraints != null) && this.constraints.equals(rhs.constraints)))) && ((this.group == rhs.group) || ((this.group != null) && this.group.equals(rhs.group))));
+        return (((((((this.purpose == rhs.purpose) || ((this.purpose != null) && this.purpose.equals(rhs.purpose)))
+                                                && ((this.name == rhs.name)
+                                                        || ((this.name != null) && this.name.equals(rhs.name))))
+                                        && ((this.format == rhs.format)
+                                                || ((this.format != null) && this.format.equals(rhs.format))))
+                                && ((this.id == rhs.id) || ((this.id != null) && this.id.equals(rhs.id))))
+                        && ((this.constraints == rhs.constraints)
+                                || ((this.constraints != null) && this.constraints.equals(rhs.constraints))))
+                && ((this.group == rhs.group) || ((this.group != null) && this.group.equals(rhs.group))));
     }
-
 }

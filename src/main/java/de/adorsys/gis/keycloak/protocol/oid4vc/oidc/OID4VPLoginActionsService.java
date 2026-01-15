@@ -1,5 +1,7 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oidc;
 
+import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
+
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.POST;
@@ -30,8 +32,6 @@ import org.keycloak.services.resources.SessionCodeChecks;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.CommonClientSessionModel.Action;
 
-import static de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
-
 /**
  * Adds form action endpoint for completing OpenID4VP authentication after QR code scanning.
  */
@@ -58,14 +58,27 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
     // Duplicated because private in superclass
     @SuppressWarnings("SameParameterValue")
     private SessionCodeChecks checksForCode(
-            String authSessionId, String code, String execution,
-            String clientId, String tabId, String clientData, String flowPath
-    ) {
+            String authSessionId,
+            String code,
+            String execution,
+            String clientId,
+            String tabId,
+            String clientData,
+            String flowPath) {
         SessionCodeChecks res = new SessionCodeChecks(
-                realm, session.getContext().getUri(), request, clientConnection, session, event,
-                authSessionId, code, execution,
-                clientId, tabId, clientData, flowPath
-        );
+                realm,
+                session.getContext().getUri(),
+                request,
+                clientConnection,
+                session,
+                event,
+                authSessionId,
+                code,
+                execution,
+                clientId,
+                tabId,
+                clientData,
+                flowPath);
 
         res.initialVerify();
         return res;
@@ -74,17 +87,16 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
     @Path(OID4VP_AUTH_LOGIN_PATH)
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    public Response oid4vpAuthLogin(@QueryParam(AUTH_SESSION_ID) String authSessionId,
-                                    @QueryParam(SESSION_CODE) String code,
-                                    @QueryParam(Constants.EXECUTION) String execution,
-                                    @QueryParam(Constants.CLIENT_ID) String clientId,
-                                    @QueryParam(Constants.CLIENT_DATA) String clientData,
-                                    @QueryParam(Constants.TAB_ID) String tabId,
-                                    @FormParam(OAuth2Constants.CODE) String authorizationCode) {
-        SessionCodeChecks checks = checksForCode(
-                authSessionId, code, execution,
-                clientId, tabId, clientData, AUTHENTICATE_PATH
-        );
+    public Response oid4vpAuthLogin(
+            @QueryParam(AUTH_SESSION_ID) String authSessionId,
+            @QueryParam(SESSION_CODE) String code,
+            @QueryParam(Constants.EXECUTION) String execution,
+            @QueryParam(Constants.CLIENT_ID) String clientId,
+            @QueryParam(Constants.CLIENT_DATA) String clientData,
+            @QueryParam(Constants.TAB_ID) String tabId,
+            @FormParam(OAuth2Constants.CODE) String authorizationCode) {
+        SessionCodeChecks checks =
+                checksForCode(authSessionId, code, execution, clientId, tabId, clientData, AUTHENTICATE_PATH);
 
         if (!checks.verifyActiveAndValidAction(Action.AUTHENTICATE.name(), ActionType.LOGIN)) {
             return checks.getResponse();
@@ -104,9 +116,10 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         }
 
         // Attach authenticated user to OIDC sessions
-        authSession.setAuthenticatedUser(result.getClientSession().getUserSession().getUser());
-        ClientSessionContext clientSessionCtx = AuthenticationProcessor.attachSession(
-                authSession, null, session, realm, clientConnection, event);
+        authSession.setAuthenticatedUser(
+                result.getClientSession().getUserSession().getUser());
+        ClientSessionContext clientSessionCtx =
+                AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
 
         // Append note conveying this login method
@@ -114,9 +127,15 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
-                session, realm, freshUserSession, clientSessionCtx,
-                request, uriInfo, clientConnection, event, authSession
-        );
+                session,
+                realm,
+                freshUserSession,
+                clientSessionCtx,
+                request,
+                uriInfo,
+                clientConnection,
+                event,
+                authSession);
     }
 
     @Override
@@ -125,6 +144,5 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }

@@ -8,7 +8,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public enum AuthorizationContextStatus {
-
     PENDING("pending"),
     SUCCESS("success"),
     ERROR("error");

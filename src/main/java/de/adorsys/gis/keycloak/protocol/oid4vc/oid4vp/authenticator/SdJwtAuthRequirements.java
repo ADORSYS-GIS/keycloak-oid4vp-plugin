@@ -1,6 +1,12 @@
 package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
+
 import de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -13,13 +19,6 @@ import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.consumer.SimplePresentationDefinition;
 import org.keycloak.sdjwt.vp.KeyBindingJwtVerificationOpts;
 import org.keycloak.utils.StringUtil;
-
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
 /**
  * Predefined presentation requirements on the SD-JWT VP token for
@@ -54,34 +53,27 @@ public class SdJwtAuthRequirements {
         this.kbJwtAudCheck = buildAudClaimCheck(kbJwtAud);
 
         // Reading authenticator configs
-        Map<String, String> config = (authConfig != null && authConfig.getConfig() != null)
-                ? authConfig.getConfig()
-                : Map.of();
+        Map<String, String> config =
+                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
 
         this.expectedVcts = parseMultiStr(config.getOrDefault(
-                SdJwtAuthenticatorFactory.VCT_CONFIG,
-                SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT
-        ));
+                SdJwtAuthenticatorFactory.VCT_CONFIG, SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT));
 
         this.kbJwtMaxAllowedAge = Integer.parseInt(config.getOrDefault(
                 SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG_DEFAULT)
-        ));
+                String.valueOf(SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG_DEFAULT)));
 
         this.requireNotBeforeClaim = Boolean.parseBoolean(config.getOrDefault(
                 SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG_DEFAULT)
-        ));
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_NBF_CLAIM_CONFIG_DEFAULT)));
 
         this.requireExpirationClaim = Boolean.parseBoolean(config.getOrDefault(
                 SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG_DEFAULT)
-        ));
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG_DEFAULT)));
 
         this.enforceRevocationStatus = Boolean.parseBoolean(config.getOrDefault(
                 SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)
-        ));
+                String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)));
 
         this.expectedVctsPattern = expectedVcts.stream()
                 .map(vct -> Pattern.quote("\"" + vct + "\""))
@@ -107,18 +99,12 @@ public class SdJwtAuthRequirements {
      */
     public PresentationRequirements getPresentationDefinition() {
         var definition = SimplePresentationDefinition.builder();
-        getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*")
-        );
+        getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
 
         return definition
+                .addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern)
                 .addClaimRequirement(
-                        SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM,
-                        expectedVctsPattern
-                )
-                .addClaimRequirement(
-                        SdJwtCredentialBuilder.ISSUER_CLAIM,
-                        Pattern.quote("\"%s\"".formatted(keycloakIssuerURI))
-                )
+                        SdJwtCredentialBuilder.ISSUER_CLAIM, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)))
                 .build();
     }
 
@@ -126,10 +112,7 @@ public class SdJwtAuthRequirements {
      * Constructs presentation definition in the DIF presentation exchange format.
      */
     public PresentationDefinition getDIFPresentationDefinition() {
-        return sdJwtCredentialConstrainer.generatePresentationDefinition(
-                getExpectedVcts(),
-                getRequiredClaims()
-        );
+        return sdJwtCredentialConstrainer.generatePresentationDefinition(getExpectedVcts(), getRequiredClaims());
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
@@ -155,13 +138,12 @@ public class SdJwtAuthRequirements {
         // Some wallets prepend a scheme to the expected audience. We accept any such scheme.
         String regex = String.format("([^:]+:)?%s", Pattern.quote(expectedKbJwtAud));
         Pattern expectedPattern = Pattern.compile(regex);
-        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud,
-                (expectedAud, aud) -> expectedPattern.matcher(aud).matches());
+        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, (expectedAud, aud) -> expectedPattern
+                .matcher(aud)
+                .matches());
     }
 
     private List<String> parseMultiStr(String str) {
-        return StringUtil.isBlank(str)
-                ? List.of()
-                : List.of(str.split("\\s*,\\s*"));
+        return StringUtil.isBlank(str) ? List.of() : List.of(str.split("\\s*,\\s*"));
     }
 }

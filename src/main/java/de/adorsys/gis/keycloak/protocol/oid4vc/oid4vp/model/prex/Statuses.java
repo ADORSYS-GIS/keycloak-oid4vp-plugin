@@ -3,22 +3,19 @@ package de.adorsys.gis.keycloak.protocol.oid4vc.oid4vp.model.prex;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({
-        "active",
-        "suspended",
-        "revoked"
-})
+@JsonPropertyOrder({"active", "suspended", "revoked"})
 @Generated("jsonschema2pojo")
 public class Statuses {
 
     @JsonProperty("active")
     private StatusDirective active;
+
     @JsonProperty("suspended")
     private StatusDirective suspended;
+
     @JsonProperty("revoked")
     private StatusDirective revoked;
 
@@ -55,7 +52,10 @@ public class Statuses {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(Statuses.class.getName()).append('@').append(Integer.toHexString(System.identityHashCode(this))).append('[');
+        sb.append(Statuses.class.getName())
+                .append('@')
+                .append(Integer.toHexString(System.identityHashCode(this)))
+                .append('[');
         sb.append("active");
         sb.append('=');
         sb.append(((this.active == null) ? "<null>" : this.active));
@@ -94,7 +94,10 @@ public class Statuses {
             return false;
         }
         Statuses rhs = ((Statuses) other);
-        return ((((this.active == rhs.active) || ((this.active != null) && this.active.equals(rhs.active))) && ((this.revoked == rhs.revoked) || ((this.revoked != null) && this.revoked.equals(rhs.revoked)))) && ((this.suspended == rhs.suspended) || ((this.suspended != null) && this.suspended.equals(rhs.suspended))));
+        return ((((this.active == rhs.active) || ((this.active != null) && this.active.equals(rhs.active)))
+                        && ((this.revoked == rhs.revoked)
+                                || ((this.revoked != null) && this.revoked.equals(rhs.revoked))))
+                && ((this.suspended == rhs.suspended)
+                        || ((this.suspended != null) && this.suspended.equals(rhs.suspended))));
     }
-
 }
