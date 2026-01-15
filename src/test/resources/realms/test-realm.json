@@ -62,7 +62,7 @@
       "alias": "sd-jwt-auth-config",
       "config": {
         "vct": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",
-        "enforceExpClaim": "true",
+        "requireExpClaim": "true",
         "enforceRevocationStatus": "true"
       }
     }
