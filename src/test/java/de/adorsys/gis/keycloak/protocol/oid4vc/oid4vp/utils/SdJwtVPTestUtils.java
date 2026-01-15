@@ -62,13 +62,10 @@ public class SdJwtVPTestUtils {
      * Requests that Keycloak issue an SD-JWT credential.
      *
      * @param vct            The verifiable credential type
-     * @param username       The username of the user whom the credential is issued
-     *                       for
-     * @param setKid         Specifies if the ID of the key used by Keycloak for
-     *                       issuing the credential
+     * @param username       The username of the user whom the credential is issued for
+     * @param setKid         Specifies if the ID of the key used by Keycloak for issuing the credential
      *                       should be set to the `kid` header of the SD-JWT
-     * @param setStatusClaim Specifies whether to include a status claim in the
-     *                       issued credential
+     * @param setStatusClaim Specifies whether to include a status claim in the issued credential
      */
     public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
 
