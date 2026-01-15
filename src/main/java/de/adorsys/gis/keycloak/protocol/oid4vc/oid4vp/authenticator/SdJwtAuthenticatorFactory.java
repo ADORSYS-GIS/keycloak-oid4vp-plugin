@@ -46,8 +46,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Credential types allowed");
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setDefaultValue(VCT_CONFIG_DEFAULT);
-        property.setHelpText(
-                "Only SD-JWTs of this comma-separated list of types (vct) will be accepted by the authenticator.");
+        property.setHelpText("Only SD-JWTs of this comma-separated list of types (vct) will be accepted by the authenticator.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -55,8 +54,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Require Not Before claim");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(REQUIRE_NBF_CLAIM_CONFIG_DEFAULT);
-        property.setHelpText(
-                "Verification policy whether or not to require the presence of the nbf time claim in presented credentials.");
+        property.setHelpText("Verification policy whether or not to require the presence of the nbf time claim in presented credentials.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -64,8 +62,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Require Expiration claim");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(REQUIRE_EXP_CLAIM_CONFIG_DEFAULT);
-        property.setHelpText(
-                "Verification policy whether or not to require the presence of the exp time claim in presented credentials.");
+        property.setHelpText("Verification policy whether or not to require the presence of the exp time claim in presented credentials.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -73,8 +70,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Maximum age (in seconds) of presented key-binding JWT");
         property.setType(ProviderConfigProperty.INTEGER_TYPE);
         property.setDefaultValue(KBJWT_MAX_AGE_CONFIG_DEFAULT);
-        property.setHelpText(
-                "Define a maximum age of accepted key-binding JWTs as part of measures to protect against replay.");
+        property.setHelpText("Define a maximum age of accepted key-binding JWTs as part of measures to protect against replay.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -82,8 +78,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Reject revoked credentials (Token Status List)");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT);
-        property.setHelpText(
-                "Reject credentials whose status indicates they are no longer valid as per the Token Status List mechanism.");
+        property.setHelpText("Reject credentials whose status indicates they are no longer valid as per the Token Status List mechanism.");
         configProperties.add(property);
     }
 
