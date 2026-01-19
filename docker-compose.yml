@@ -1,6 +1,6 @@
 services:
   keycloak-oid4vp:
-    image: quay.io/keycloak/keycloak:nightly
+    image: quay.io/keycloak/keycloak:26.5.0
     command: start-dev --features=oid4vc-vci --log-level=DEBUG
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin

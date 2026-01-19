@@ -10,7 +10,7 @@
     <description>Adds OpenID4VP authentication to Keycloak</description>
 
     <properties>
-        <keycloak.version>999.0.0-SNAPSHOT</keycloak.version>
+        <keycloak.version>26.5.0</keycloak.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
