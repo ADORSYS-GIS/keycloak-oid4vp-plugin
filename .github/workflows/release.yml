@@ -24,7 +24,7 @@ jobs:
           cache: 'maven'
 
       - name: Build with Maven
-        run: ./mvnw clean package -DskipTests --batch-mode
+        run: ./mvnw clean package -DskipTests -Drevision=${GITHUB_REF_NAME#v} --batch-mode
 
       - name: Create GitHub Release
         id: create_release
