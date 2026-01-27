@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>de.adorsys.gis</groupId>
     <artifactId>keycloak-oid4vp-plugin</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>Keycloak OpenID4VP Plugin</name>
     <description>Adds OpenID4VP authentication to Keycloak</description>
