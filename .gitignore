@@ -1,4 +1,5 @@
 # Maven target directory
+.flattened-pom.xml
 /target/
 
 # IDE specific files
@@ -9,5 +10,3 @@
 
 # Custom docker-compose files
 docker-compose.*.yml
-
-.flattened-pom.xml
