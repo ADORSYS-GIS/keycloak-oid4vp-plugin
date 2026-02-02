@@ -27,7 +27,7 @@ To enable user authentication over OpenID4VP, make sure to add the following fla
 
 [source,bash]
 ----
---features=oid4vc-vpauth,oid4vc-vci
+--features=oid4vc-vci
 ----
 
 Verify activation by checking the server logs.

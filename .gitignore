@@ -1,4 +1,5 @@
 # Maven target directory
+.flattened-pom.xml
 /target/
 
 # IDE specific files
