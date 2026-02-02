@@ -182,7 +182,8 @@ public class OID4VPUserAuthBean {
 
         @Override
         public boolean equals(Object o) {
-            if (o == null || getClass() != o.getClass()) return false;
+            if (o == null || getClass() != o.getClass())
+                return false;
             AuthContextBean that = (AuthContextBean) o;
             return Objects.equals(authReqQrCode, that.authReqQrCode)
                     && Objects.equals(authStatusUrl, that.authStatusUrl);

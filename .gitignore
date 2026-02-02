@@ -9,3 +9,5 @@
 
 # Custom docker-compose files
 docker-compose.*.yml
+
+.flattened-pom.xml
