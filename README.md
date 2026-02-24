@@ -2,6 +2,11 @@
 
 This plugin adds OpenID4VP authentication to Keycloak
 
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only).
+See [LICENSE](./LICENSE) for details.
+
 ## Compatibility
 
 This plugin has been tested with:
@@ -52,3 +57,15 @@ you are encouraged to create a `docker-compose.override.yml` based on the provid
 
 The AsciiDoc content in `docs/` is published with [Antora](https://docs.antora.org/antora/latest/).
 See `docs/README.md` for build and preview instructions.
+
+## Releasing to Maven Central
+
+Releases are published from GitHub Actions when a tag `vX.Y.Z` is pushed.
+The workflow expects these repository secrets:
+
+- `CENTRAL_TOKEN_USERNAME`
+- `CENTRAL_TOKEN_PASSWORD`
+- `GPG_PRIVATE_KEY`
+- `GPG_PASSPHRASE`
+
+The release build publishes signed artifacts (`jar`, `sources`, `javadoc`) for version `X.Y.Z`.

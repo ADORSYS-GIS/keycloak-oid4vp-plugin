@@ -7,7 +7,7 @@ on:
 
 jobs:
   release:
-    name: Create Release
+    name: Publish Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,15 +21,27 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
           cache: 'maven'
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-      - name: Build with Maven
-        run: ./mvnw clean package -DskipTests -Drevision=${GITHUB_REF_NAME#v} --batch-mode
+      - name: Publish to Maven Central
+        run: ./mvnw clean deploy -Prelease -DskipTests -Drevision=${GITHUB_REF_NAME#v} --batch-mode
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          files: target/keycloak-oid4vp-plugin-*.jar
+          files: |
+            target/keycloak-oid4vp-plugin-*.jar
+            target/keycloak-oid4vp-plugin-*-sources.jar
+            target/keycloak-oid4vp-plugin-*-javadoc.jar
           draft: false
           prerelease: false
           generate_release_notes: true
