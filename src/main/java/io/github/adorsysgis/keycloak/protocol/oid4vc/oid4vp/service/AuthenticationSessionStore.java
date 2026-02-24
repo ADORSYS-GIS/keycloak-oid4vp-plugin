@@ -1,0 +1,86 @@
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
+
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import java.io.IOException;
+import java.util.Objects;
+import org.jboss.logging.Logger;
+import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
+
+/**
+ * Dedicated service for persisting authorization contexts to authentication sessions.
+ *
+ * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
+ */
+public record AuthenticationSessionStore(AuthenticationSessionModel authenticationSession) {
+
+    private static final Logger logger = Logger.getLogger(AuthenticationSessionStore.class);
+
+    private static final String AUTH_CONTEXT_SESSION_KEY = "oid4vp-auth-context";
+
+    /**
+     * Stores the given authorization context in the authentication session.
+     */
+    public void storeAuthorizationContext(AuthorizationContext authorizationContext) {
+        String authContextJson;
+
+        try {
+            authContextJson = JsonSerialization.writeValueAsString(authorizationContext);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize authorization context", e);
+        }
+
+        authenticationSession.setAuthNote(AUTH_CONTEXT_SESSION_KEY, authContextJson);
+        logger.debugf(
+                "Stored authorization context in authentication session: requestId=%s",
+                authorizationContext.getRequestId());
+    }
+
+    /**
+     * Retrieves authorization context by request ID from the authentication session.
+     */
+    public AuthorizationContext getAuthorizationContextByRequestId(String requestId) {
+        AuthorizationContext authContext = getAuthorizationContext();
+        if (!Objects.equals(authContext.getRequestId(), requestId)) {
+            logger.warnf(
+                    "Authorization context does not match the provided request ID: " + "Expected=%s, Actual=%s",
+                    authContext.getRequestId(), requestId);
+            throw new IllegalArgumentException(
+                    "Authorization context does not match the provided request ID: " + requestId);
+        }
+
+        return authContext;
+    }
+
+    /**
+     * Retrieves authorization context by transaction ID from the authentication session.
+     */
+    public AuthorizationContext getAuthorizationContextByTransactionId(String transactionId) {
+        AuthorizationContext authContext = getAuthorizationContext();
+        if (!Objects.equals(authContext.getTransactionId(), transactionId)) {
+            logger.warnf(
+                    "Authorization context does not match the provided transaction ID: " + "Expected=%s, Actual=%s",
+                    authContext.getTransactionId(), transactionId);
+            throw new IllegalArgumentException(
+                    "Authorization context does not match the provided transaction ID: " + transactionId);
+        }
+
+        return authContext;
+    }
+
+    /**
+     * Retrieves authorization context from the authentication session.
+     */
+    private AuthorizationContext getAuthorizationContext() {
+        String authContextJson = authenticationSession.getAuthNote(AUTH_CONTEXT_SESSION_KEY);
+        if (authContextJson == null) {
+            throw new IllegalArgumentException("No authorization context found in authentication session");
+        }
+
+        try {
+            return JsonSerialization.readValue(authContextJson, AuthorizationContext.class);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to deserialize authorization context", e);
+        }
+    }
+}

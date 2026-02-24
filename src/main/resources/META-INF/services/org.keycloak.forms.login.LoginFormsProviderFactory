@@ -1,1 +1,1 @@
-de.adorsys.gis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPLoginFormsProviderFactory
+io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPLoginFormsProviderFactory
