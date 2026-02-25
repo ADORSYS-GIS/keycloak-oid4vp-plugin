@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     name: Publish Release
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
     permissions:
       contents: write
     steps:
