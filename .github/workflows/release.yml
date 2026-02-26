@@ -38,10 +38,7 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/keycloak-oid4vp-plugin-*.jar
-            target/keycloak-oid4vp-plugin-*-sources.jar
-            target/keycloak-oid4vp-plugin-*-javadoc.jar
+          files: target/keycloak-oid4vp-plugin-*.jar
           draft: false
           prerelease: false
           generate_release_notes: true
