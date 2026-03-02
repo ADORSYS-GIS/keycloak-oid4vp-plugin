@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import org.keycloak.representations.JsonWebToken;
 
@@ -43,7 +44,11 @@ public class RequestObject extends JsonWebToken {
     private String scope;
 
     @JsonProperty("presentation_definition")
+    @Deprecated
     private PresentationDefinition presentationDefinition;
+
+    @JsonProperty("dcql_query")
+    private DcqlQuery dcqlQuery;
 
     @JsonProperty("client_metadata")
     private ClientMetadata clientMetadata;
@@ -135,6 +140,15 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setPresentationDefinition(PresentationDefinition presentationDefinition) {
         this.presentationDefinition = presentationDefinition;
+        return this;
+    }
+
+    public DcqlQuery getDcqlQuery() {
+        return dcqlQuery;
+    }
+
+    public RequestObject setDcqlQuery(DcqlQuery dcqlQuery) {
+        this.dcqlQuery = dcqlQuery;
         return this;
     }
 

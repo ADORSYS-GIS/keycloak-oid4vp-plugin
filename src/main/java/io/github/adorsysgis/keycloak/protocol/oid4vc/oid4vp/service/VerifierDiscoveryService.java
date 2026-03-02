@@ -42,7 +42,7 @@ public class VerifierDiscoveryService {
 
         // Only SD-JWT presentations are supported for now.
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
-        vpFormat.setVcSdJwt(getSdJwtVpFormat());
+        vpFormat.setDcSdJwt(getSdJwtVpFormat());
 
         // Aggregate metadata
         return new ClientMetadata().setClientId(getClientId()).setVpFormat(vpFormat);

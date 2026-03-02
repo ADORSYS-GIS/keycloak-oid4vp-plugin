@@ -3,7 +3,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
+import java.util.List;
+import java.util.Map;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
@@ -21,21 +24,21 @@ public class ResponseObject {
     public static final String PRESENTATION_SUBMISSION_KEY = "presentation_submission";
     public static final String STATE_KEY = "state";
 
+    // This field is a String in Draft 20, and a Map<String, List<String>> in 1.0 final.
+    // We use Object here to support both formats for now.
     @JsonProperty(VP_TOKEN_KEY)
-    private String vpToken;
+    private Object vpToken;
 
     @JsonProperty(PRESENTATION_SUBMISSION_KEY)
+    @Deprecated
     private PresentationSubmission presentationSubmission;
 
     @JsonProperty(STATE_KEY)
     private String state;
 
-    public ResponseObject() {}
-
     public ResponseObject(String vpToken, String presentationSubmission, String state) throws JsonProcessingException {
-        this.vpToken = requireNonBlank(vpToken, VP_TOKEN_KEY);
-        this.presentationSubmission = JsonSerialization.mapper.readValue(
-                requireNonBlank(presentationSubmission, PRESENTATION_SUBMISSION_KEY), PresentationSubmission.class);
+        this.vpToken = parseVpToken(requireNonBlank(vpToken, VP_TOKEN_KEY));
+        this.presentationSubmission = parsePresentationSubmission(presentationSubmission);
         this.state = requireNonBlank(state, STATE_KEY);
     }
 
@@ -47,11 +50,28 @@ public class ResponseObject {
         return value;
     }
 
-    public String getVpToken() {
+    public static Object parseVpToken(String vpToken) throws JsonProcessingException {
+        if (vpToken.trim().startsWith("{")) {
+            return JsonSerialization.mapper.readValue(vpToken, new TypeReference<Map<String, List<String>>>() {});
+        } else {
+            return vpToken;
+        }
+    }
+
+    public static PresentationSubmission parsePresentationSubmission(String presentationSubmission)
+            throws JsonProcessingException {
+        if (StringUtil.isBlank(presentationSubmission)) {
+            return null;
+        }
+
+        return JsonSerialization.mapper.readValue(presentationSubmission, PresentationSubmission.class);
+    }
+
+    public Object getVpToken() {
         return vpToken;
     }
 
-    public ResponseObject setVpToken(String vpToken) {
+    public ResponseObject setVpToken(Object vpToken) {
         this.vpToken = vpToken;
         return this;
     }

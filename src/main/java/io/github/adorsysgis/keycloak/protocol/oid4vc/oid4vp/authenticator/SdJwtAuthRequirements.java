@@ -2,7 +2,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -11,7 +10,6 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakContext;
-import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider;
 import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBuilder;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
@@ -30,10 +28,7 @@ public class SdJwtAuthRequirements {
 
     private static final Logger logger = Logger.getLogger(SdJwtAuthRequirements.class);
 
-    private final SdJwtCredentialConstrainer sdJwtCredentialConstrainer;
-    private final String keycloakIssuerURI;
     private final ClaimCheck kbJwtAudCheck;
-
     private final List<String> expectedVcts;
     private final String expectedVctsPattern;
 
@@ -44,11 +39,9 @@ public class SdJwtAuthRequirements {
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting authentication requirements");
-        this.sdJwtCredentialConstrainer = new SdJwtCredentialConstrainer();
 
-        // We'll need to enforce that only credentials produced by and for this audience pass through.
+        // We need to enforce that only credentials produced for this audience pass through.
         // The audience is the client ID of the verifier, but some wallets prepend a scheme.
-        this.keycloakIssuerURI = OID4VCIssuerWellKnownProvider.getIssuer(context);
         String kbJwtAud = context.getUri().getBaseUri().getHost();
         this.kbJwtAudCheck = buildAudClaimCheck(kbJwtAud);
 
@@ -103,16 +96,11 @@ public class SdJwtAuthRequirements {
 
         return definition
                 .addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern)
-                .addClaimRequirement(
-                        SdJwtCredentialBuilder.ISSUER_CLAIM, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)))
                 .build();
     }
 
-    /**
-     * Constructs presentation definition in the DIF presentation exchange format.
-     */
-    public PresentationDefinition getDIFPresentationDefinition() {
-        return sdJwtCredentialConstrainer.generatePresentationDefinition(getExpectedVcts(), getRequiredClaims());
+    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
+        return new SdJwtCredentialConstrainer.QueryMap(getExpectedVcts(), getRequiredClaims());
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {

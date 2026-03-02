@@ -1,6 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Constraints;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Field;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Filter;
@@ -9,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Presentat
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.keycloak.protocol.oid4vc.model.Format;
 
 /**
  * Constructs a presentation definition for requesting an SD-JWT credential.
@@ -21,18 +26,45 @@ public class SdJwtCredentialConstrainer {
     private static final String CLAIM_PATH_TEMPLATE = "$.%s";
 
     /**
+     * Constructs a DCQL query requiring the disclosure of some claims.
+     */
+    public DcqlQuery generateDcqlQuery(QueryMap queryMap) {
+        Meta meta = new Meta();
+        meta.setVctValues(queryMap.expectedVcts());
+
+        List<Claim> claims = queryMap.requiredClaims().stream()
+                .map(claimName -> {
+                    Claim claim = new Claim();
+                    claim.setId(UUID.randomUUID().toString());
+                    claim.setPath(List.of(claimName));
+                    return claim;
+                })
+                .toList();
+
+        Credential credential = new Credential();
+        credential.setId(UUID.randomUUID().toString());
+        credential.setFormat(Format.SD_JWT_VC);
+        credential.setMeta(meta);
+        credential.setClaims(claims);
+
+        DcqlQuery query = new DcqlQuery();
+        query.setCredentials(List.of(credential));
+        return query;
+    }
+
+    /**
      * Constructs a presentation definition requiring the disclosure of some claims.
      */
-    public PresentationDefinition generatePresentationDefinition(List<String> issuerVcts, List<String> requiredClaims) {
-        PresentationDefinition def = this.prebuildPresentationDefinition(issuerVcts);
+    public PresentationDefinition generatePresentationDefinition(QueryMap queryMap) {
+        PresentationDefinition def = this.prebuildPresentationDefinition(queryMap.expectedVcts());
 
         // Set a unique identifier
         def.setId(UUID.randomUUID().toString());
 
         // Update field list with required claims
         List<Field> fieldList =
-                def.getInputDescriptors().get(0).getConstraints().getFields();
-        requiredClaims.forEach(claim -> {
+                def.getInputDescriptors().getFirst().getConstraints().getFields();
+        queryMap.requiredClaims().forEach(claim -> {
             String path = String.format(CLAIM_PATH_TEMPLATE, claim);
 
             Field field = new Field();
@@ -79,4 +111,6 @@ public class SdJwtCredentialConstrainer {
 
         return template;
     }
+
+    public record QueryMap(List<String> expectedVcts, List<String> requiredClaims) {}
 }
