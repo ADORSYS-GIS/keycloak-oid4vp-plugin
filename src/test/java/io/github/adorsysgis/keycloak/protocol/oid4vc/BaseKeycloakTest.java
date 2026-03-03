@@ -53,7 +53,8 @@ public abstract class BaseKeycloakTest {
 
     private static KeycloakContainer createKeycloak() {
         KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
-        container.withImagePullPolicy(PullPolicy.alwaysPull())
+        container
+                .withImagePullPolicy(PullPolicy.alwaysPull())
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci")
                 .withRealmImportFile("/realms/test-realm.json")

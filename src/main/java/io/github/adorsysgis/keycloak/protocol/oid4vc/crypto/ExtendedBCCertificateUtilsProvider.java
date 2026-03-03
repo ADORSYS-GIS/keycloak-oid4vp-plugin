@@ -1,23 +1,16 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
 import java.math.BigInteger;
-import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
@@ -39,18 +32,12 @@ import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvider
         implements ExtendedCertificateUtilsProvider {
 
-    private static final Logger logger = Logger.getLogger(ExtendedBCCertificateUtilsProvider.class.getName());
-
     private static final ExtendedBCCertificateUtilsProvider INSTANCE = new ExtendedBCCertificateUtilsProvider();
     public static final int SECURE_RANDOM_ENTROPY = 20;
-
-    private final Map<CacheKey, X509Certificate> certificateCache = new ConcurrentHashMap<>();
 
     public static ExtendedBCCertificateUtilsProvider getInstance() {
         return INSTANCE;
     }
-
-    private record CacheKey(String caCertHash, String subPubKeyHash, String subject, List<String> sans) {}
 
     @Override
     public X509Certificate generateV3Certificate(
@@ -59,26 +46,11 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
             PublicKey subPublicKey,
             String subject,
             List<String> subjectAltNames) {
-        CacheKey key = createCacheKey(caCert, subPublicKey, subject, subjectAltNames);
-
-        return certificateCache.compute(key, (k, existing) -> {
-            if (existing != null) {
-                try {
-                    existing.checkValidity();
-                    return existing;
-                } catch (CertificateExpiredException | CertificateNotYetValidException e) {
-                    logger.fine(() -> "Certificate expired or not yet valid, regenerating: " + subject + ", SANs="
-                            + subjectAltNames);
-                }
-            }
-
-            try {
-                logger.fine(() -> "Generating new certificate for subject=" + subject + ", SANs=" + subjectAltNames);
-                return generateNewCertificate(caPrivateKey, caCert, subPublicKey, subject, subjectAltNames);
-            } catch (Exception e) {
-                throw new RuntimeException("Error creating X509v3Certificate.", e);
-            }
-        });
+        try {
+            return generateNewCertificate(caPrivateKey, caCert, subPublicKey, subject, subjectAltNames);
+        } catch (Exception e) {
+            throw new RuntimeException("Error creating X509v3Certificate.", e);
+        }
     }
 
     private X509Certificate generateNewCertificate(
@@ -148,17 +120,6 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
         return new JcaX509CertificateConverter()
                 .setProvider(BouncyIntegration.PROVIDER)
                 .getCertificate(certGen.build(sigGen));
-    }
-
-    private CacheKey createCacheKey(X509Certificate caCert, PublicKey subPublicKey, String subject, List<String> sans) {
-        try {
-            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-            String caCertHash = Base64.getEncoder().encodeToString(sha256.digest(caCert.getEncoded()));
-            String subPubKeyHash = Base64.getEncoder().encodeToString(sha256.digest(subPublicKey.getEncoded()));
-            return new CacheKey(caCertHash, subPubKeyHash, subject, sans);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create cache key for certificate", e);
-        }
     }
 
     public static String getJcaContentSignerAlg(PublicKey publicKey) {
