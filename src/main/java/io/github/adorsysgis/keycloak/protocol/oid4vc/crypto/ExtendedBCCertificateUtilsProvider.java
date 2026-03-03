@@ -1,16 +1,23 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
 import java.math.BigInteger;
+import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
@@ -32,12 +39,18 @@ import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvider
         implements ExtendedCertificateUtilsProvider {
 
+    private static final Logger logger = Logger.getLogger(ExtendedBCCertificateUtilsProvider.class.getName());
+
     private static final ExtendedBCCertificateUtilsProvider INSTANCE = new ExtendedBCCertificateUtilsProvider();
     public static final int SECURE_RANDOM_ENTROPY = 20;
+
+    private final Map<CacheKey, X509Certificate> certificateCache = new ConcurrentHashMap<>();
 
     public static ExtendedBCCertificateUtilsProvider getInstance() {
         return INSTANCE;
     }
+
+    private record CacheKey(String caCertHash, String subPubKeyHash, String subject, List<String> sans) {}
 
     @Override
     public X509Certificate generateV3Certificate(
@@ -46,71 +59,105 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
             PublicKey subPublicKey,
             String subject,
             List<String> subjectAltNames) {
-        try {
-            X500Name subjectDN = new X500Name("CN=" + subject);
+        CacheKey key = createCacheKey(caCert, subPublicKey, subject, subjectAltNames);
 
-            // Validity
-            Date notBefore = caCert.getNotBefore();
-            Date notAfter = caCert.getNotAfter();
-
-            // SubjectPublicKeyInfo
-            SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(subPublicKey.getEncoded());
-
-            // Certificate Builder
-            BigInteger serialNumber = generateSerialNumber();
-            X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(
-                    new X500Name(caCert.getSubjectX500Principal().getName()),
-                    serialNumber,
-                    notBefore,
-                    notAfter,
-                    subjectDN,
-                    subjPubKeyInfo);
-
-            // Subject Key Identifier
-            JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
-            certGen.addExtension(
-                    Extension.subjectKeyIdentifier,
-                    false,
-                    x509ExtensionUtils.createSubjectKeyIdentifier(subjPubKeyInfo));
-
-            // Authority Key Identifier
-            certGen.addExtension(
-                    Extension.authorityKeyIdentifier, false, x509ExtensionUtils.createAuthorityKeyIdentifier(caCert));
-
-            // Key Usage
-            int keyUsageBits = KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.cRLSign;
-            certGen.addExtension(Extension.keyUsage, false, new KeyUsage(keyUsageBits));
-
-            // Extended Key Usage
-            KeyPurposeId[] EKU = new KeyPurposeId[2];
-            EKU[0] = KeyPurposeId.id_kp_emailProtection;
-            EKU[1] = KeyPurposeId.id_kp_serverAuth;
-            certGen.addExtension(Extension.extendedKeyUsage, false, new ExtendedKeyUsage(EKU));
-
-            // Basic Constraints
-            certGen.addExtension(Extension.basicConstraints, true, new BasicConstraints(0));
-
-            // Subject Alternative Names
-            GeneralName[] names = Optional.ofNullable(subjectAltNames).orElseGet(Collections::emptyList).stream()
-                    .filter(s -> s != null && !s.isBlank())
-                    .map(san -> new GeneralName(GeneralName.dNSName, san))
-                    .toArray(GeneralName[]::new);
-            if (names.length > 0) {
-                certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
+        return certificateCache.compute(key, (k, existing) -> {
+            if (existing != null) {
+                try {
+                    existing.checkValidity();
+                    return existing;
+                } catch (CertificateExpiredException | CertificateNotYetValidException e) {
+                    logger.fine(() -> "Certificate expired or not yet valid, regenerating: " + subject + ", SANs="
+                            + subjectAltNames);
+                }
             }
 
-            // Content Signer
-            String jcaContentSignerAlg = getJcaContentSignerAlg(caCert.getPublicKey());
-            ContentSigner sigGen = new JcaContentSignerBuilder(jcaContentSignerAlg)
-                    .setProvider(BouncyIntegration.PROVIDER)
-                    .build(caPrivateKey);
+            try {
+                logger.fine(() -> "Generating new certificate for subject=" + subject + ", SANs=" + subjectAltNames);
+                return generateNewCertificate(caPrivateKey, caCert, subPublicKey, subject, subjectAltNames);
+            } catch (Exception e) {
+                throw new RuntimeException("Error creating X509v3Certificate.", e);
+            }
+        });
+    }
 
-            // Certificate
-            return new JcaX509CertificateConverter()
-                    .setProvider(BouncyIntegration.PROVIDER)
-                    .getCertificate(certGen.build(sigGen));
+    private X509Certificate generateNewCertificate(
+            PrivateKey caPrivateKey,
+            X509Certificate caCert,
+            PublicKey subPublicKey,
+            String subject,
+            List<String> subjectAltNames)
+            throws Exception {
+        X500Name subjectDN = new X500Name("CN=" + subject);
+
+        // Validity
+        Date notBefore = caCert.getNotBefore();
+        Date notAfter = caCert.getNotAfter();
+
+        // SubjectPublicKeyInfo
+        SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(subPublicKey.getEncoded());
+
+        // Certificate Builder
+        BigInteger serialNumber = generateSerialNumber();
+        X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(
+                new X500Name(caCert.getSubjectX500Principal().getName()),
+                serialNumber,
+                notBefore,
+                notAfter,
+                subjectDN,
+                subjPubKeyInfo);
+
+        // Subject Key Identifier
+        JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
+        certGen.addExtension(
+                Extension.subjectKeyIdentifier, false, x509ExtensionUtils.createSubjectKeyIdentifier(subjPubKeyInfo));
+
+        // Authority Key Identifier
+        certGen.addExtension(
+                Extension.authorityKeyIdentifier, false, x509ExtensionUtils.createAuthorityKeyIdentifier(caCert));
+
+        // Key Usage
+        int keyUsageBits = KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.cRLSign;
+        certGen.addExtension(Extension.keyUsage, false, new KeyUsage(keyUsageBits));
+
+        // Extended Key Usage
+        KeyPurposeId[] EKU = new KeyPurposeId[2];
+        EKU[0] = KeyPurposeId.id_kp_emailProtection;
+        EKU[1] = KeyPurposeId.id_kp_serverAuth;
+        certGen.addExtension(Extension.extendedKeyUsage, false, new ExtendedKeyUsage(EKU));
+
+        // Basic Constraints
+        certGen.addExtension(Extension.basicConstraints, true, new BasicConstraints(0));
+
+        // Subject Alternative Names
+        GeneralName[] names = Optional.ofNullable(subjectAltNames).orElseGet(Collections::emptyList).stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(san -> new GeneralName(GeneralName.dNSName, san))
+                .toArray(GeneralName[]::new);
+        if (names.length > 0) {
+            certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
+        }
+
+        // Content Signer
+        String jcaContentSignerAlg = getJcaContentSignerAlg(caCert.getPublicKey());
+        ContentSigner sigGen = new JcaContentSignerBuilder(jcaContentSignerAlg)
+                .setProvider(BouncyIntegration.PROVIDER)
+                .build(caPrivateKey);
+
+        // Certificate
+        return new JcaX509CertificateConverter()
+                .setProvider(BouncyIntegration.PROVIDER)
+                .getCertificate(certGen.build(sigGen));
+    }
+
+    private CacheKey createCacheKey(X509Certificate caCert, PublicKey subPublicKey, String subject, List<String> sans) {
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            String caCertHash = Base64.getEncoder().encodeToString(sha256.digest(caCert.getEncoded()));
+            String subPubKeyHash = Base64.getEncoder().encodeToString(sha256.digest(subPublicKey.getEncoded()));
+            return new CacheKey(caCertHash, subPubKeyHash, subject, sans);
         } catch (Exception e) {
-            throw new RuntimeException("Error creating X509v3Certificate.", e);
+            throw new RuntimeException("Failed to create cache key for certificate", e);
         }
     }
 

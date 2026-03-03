@@ -4,7 +4,9 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedBCCer
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,9 +15,11 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -184,6 +188,72 @@ class ExtendedBCCertificateUtilsProviderTest {
 
         // should throw no exception
         cert.verify(caKeyPair.getPublic());
+    }
+
+    @Test
+    void testGenerateV3Certificate_caching() {
+        String subject = "cache-test";
+        List<String> sans = List.of("cache.com");
+
+        X509Certificate cert1 =
+                provider.generateV3Certificate(caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), subject, sans);
+        X509Certificate cert2 =
+                provider.generateV3Certificate(caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), subject, sans);
+
+        assertNotNull(cert1);
+        assertNotNull(cert2);
+        // Check that the same instance is returned from cache
+        assertSame(cert1, cert2, "Certificate should be cached and reused instance");
+    }
+
+    @Test
+    void testGenerateV3Certificate_cacheMissOnDifferentParams() {
+        X509Certificate cert1 = provider.generateV3Certificate(
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "s1", List.of("a.com"));
+        X509Certificate cert2 = provider.generateV3Certificate(
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "s2", List.of("a.com"));
+        X509Certificate cert3 = provider.generateV3Certificate(
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "s1", List.of("b.com"));
+
+        // Different subjects or SANs should yield different instances
+        assertNotSame(cert1, cert2, "Different subjects should result in different certificates");
+        assertNotSame(cert1, cert3, "Different SANs should result in different certificates");
+    }
+
+    @Test
+    void testGenerateV3Certificate_cacheMissOnCaRotation() throws Exception {
+        KeyPair caKeyPair2 = generateRSAKeyPair(2048);
+        X509Certificate caCert2 = createSelfSignedCaCert(caKeyPair2);
+
+        String subject = "rotation-test";
+
+        X509Certificate cert1 = provider.generateV3Certificate(
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), subject, List.of());
+        X509Certificate cert2 = provider.generateV3Certificate(
+                caKeyPair2.getPrivate(), caCert2, subKeyPair.getPublic(), subject, List.of());
+
+        // Cache should miss when CA changes
+        assertNotSame(cert1, cert2, "Different CA certificates should result in different verifier certificates");
+    }
+
+    @Test
+    void testGenerateV3Certificate_concurrency() throws Exception {
+        String subject = "concurrency-test";
+        int threadCount = 10;
+        List<CompletableFuture<X509Certificate>> futures = new ArrayList<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            futures.add(CompletableFuture.supplyAsync(() -> provider.generateV3Certificate(
+                    caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), subject, List.of())));
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        X509Certificate firstCert = futures.get(0).get();
+        for (int i = 1; i < threadCount; i++) {
+            // All threads should get the exact same instance
+            assertSame(firstCert, futures.get(i).get(), "All threads should receive the same cached instance");
+        }
     }
 
     @Test
