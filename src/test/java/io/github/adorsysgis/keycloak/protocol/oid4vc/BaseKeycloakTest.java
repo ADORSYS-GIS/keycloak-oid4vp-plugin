@@ -49,13 +49,18 @@ public abstract class BaseKeycloakTest {
     protected static CloseableHttpClient httpClient;
 
     @Container
-    protected static KeycloakContainer keycloak = new KeycloakContainer(TEST_KEYCLOAK_IMAGE)
-            .withImagePullPolicy(PullPolicy.alwaysPull())
-            .withProviderClassesFrom("target/classes", "target/test-classes")
-            .withFeaturesEnabled("oid4vc-vci")
-            .withRealmImportFile("/realms/test-realm.json")
-            .withRealmImportFile("/realms/test-realm-v2.json")
-            .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG");
+    protected static final KeycloakContainer keycloak = createKeycloak();
+
+    private static KeycloakContainer createKeycloak() {
+        KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
+        container.withImagePullPolicy(PullPolicy.alwaysPull())
+                .withProviderClassesFrom("target/classes", "target/test-classes")
+                .withFeaturesEnabled("oid4vc-vci")
+                .withRealmImportFile("/realms/test-realm.json")
+                .withRealmImportFile("/realms/test-realm-v2.json")
+                .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG");
+        return container;
+    }
 
     @BeforeAll
     public static void setup() {
