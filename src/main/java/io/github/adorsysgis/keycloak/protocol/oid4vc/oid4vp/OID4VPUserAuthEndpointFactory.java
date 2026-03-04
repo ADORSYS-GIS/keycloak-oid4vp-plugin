@@ -76,7 +76,7 @@ public class OID4VPUserAuthEndpointFactory implements RealmResourceProviderFacto
         oid4vpAuthFlow.setDescription("Authenticate via OpenID4VP presentations of self-issued identity credentials");
         oid4vpAuthFlow.setProviderId(AuthenticationFlow.BASIC_FLOW);
         oid4vpAuthFlow.setTopLevel(true);
-        oid4vpAuthFlow.setBuiltIn(true);
+        oid4vpAuthFlow.setBuiltIn(false);
         oid4vpAuthFlow = realm.addAuthenticationFlow(oid4vpAuthFlow);
 
         AuthenticationExecutionModel execution = new AuthenticationExecutionModel();
