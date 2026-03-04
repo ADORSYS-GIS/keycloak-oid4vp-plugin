@@ -103,5 +103,34 @@ The integration of OpenID4VP authentication into the OIDC login flow is readily 
 
 === Configuring the verifier policy for OpenID4VP authentication
 
-Find the built-in authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
+Find the authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
 The single SdJwt authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs, including: the accepted credential types, the maximum age of VP tokens presented, and other parameters governing the verifier policy.
+
+=== Technical Configuration (Performance & Security)
+
+==== Certificate Cache
+
+The plugin uses a cache for internally generated self-signed certificates.
+
+|===
+|System Property |Default |Description
+
+|`keycloak.oid4vp.crypto.maxCacheSize`
+|`1000`
+|The maximum number of certificates to keep in the cache.
+|===
+
+Set it as a Java system property at startup:
+
+[source,bash]
+----
+# Via Command Line
+bin/kc.sh start -Dkeycloak.oid4vp.crypto.maxCacheSize=2000
+
+# Via Docker (environment variable)
+JAVA_OPTS_APPEND="-Dkeycloak.oid4vp.crypto.maxCacheSize=2000"
+----
+
+==== Certificate Lifespan
+
+Self-signed certificates used for OpenID4VP authorization requests have a limited lifespan of **1 hour**.

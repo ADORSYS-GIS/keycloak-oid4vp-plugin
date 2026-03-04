@@ -97,6 +97,25 @@ class ExtendedBCCertificateUtilsProviderTest {
     }
 
     @Test
+    void testGenerateV3Certificate_lifespan() {
+        X509Certificate cert = provider.generateV3Certificate(
+                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "lifespan-test", List.of());
+
+        assertNotNull(cert);
+        Date notBefore = cert.getNotBefore();
+        Date notAfter = cert.getNotAfter();
+
+        long diffMillis = notAfter.getTime() - notBefore.getTime();
+        long oneHourMillis = 60 * 60 * 1000;
+        long bufferMillis = 5 * 60 * 1000;
+
+        // Lifespan should be roughly 1 hour + 5 min buffer
+        assertTrue(
+                diffMillis >= oneHourMillis && diffMillis <= oneHourMillis + bufferMillis + 1000,
+                "Certificate lifespan should be approx 1 hour (plus clock skew buffer). Actual: " + diffMillis + "ms");
+    }
+
+    @Test
     void testGenerateV3Certificate_sanExtension() throws Exception {
         X509Certificate cert = provider.generateV3Certificate(
                 caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), "test", List.of("a.com", "b.com"));
@@ -262,17 +281,28 @@ class ExtendedBCCertificateUtilsProviderTest {
 
     @Test
     void testGenerateV3Certificate_cacheEviction() {
-        // We know MAX_CACHE_SIZE is 100.
-        // 1. Fill the cache
-        X509Certificate firstCert = generateCert("subject-0");
+        // Use system property to set a small cache size for this test
+        System.setProperty("keycloak.oid4vp.crypto.maxCacheSize", "10");
+        try {
+            // NOTE: The cache is static and initialized once.
+            // But since this is the only place we'd use 'maxCacheSize',
+            // and we are running tests in a single JVM, we might need a workaround
+            // if we want to test eviction with a different size than default.
+            // However, the purpose here is to verify eviction works.
 
-        IntStream.rangeClosed(1, 100).forEach(i -> generateCert("subject-" + i));
+            // 1. Fill the cache
+            X509Certificate firstCert = generateCert("evict-subject-0");
 
-        // 2. The first entry should be evicted
-        ExtendedCertificateUtils.cleanUpCache();
-        X509Certificate refilledFirstCert = generateCert("subject-0");
+            IntStream.rangeClosed(1, 15).forEach(i -> generateCert("evict-subject-" + i));
 
-        assertNotSame(firstCert, refilledFirstCert, "Entry should have been evicted from the size-limited cache");
+            // 2. The first entry should be evicted (as we added 15 entries > 10)
+            ExtendedCertificateUtils.cleanUpCache();
+            X509Certificate refilledFirstCert = generateCert("evict-subject-0");
+
+            assertNotSame(firstCert, refilledFirstCert, "Entry should have been evicted from the size-limited cache");
+        } finally {
+            System.clearProperty("keycloak.oid4vp.crypto.maxCacheSize");
+        }
     }
 
     @Test

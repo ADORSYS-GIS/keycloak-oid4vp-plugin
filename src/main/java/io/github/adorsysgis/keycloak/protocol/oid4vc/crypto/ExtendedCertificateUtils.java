@@ -23,10 +23,23 @@ public class ExtendedCertificateUtils extends CertificateUtils {
 
     private static final Logger logger = Logger.getLogger(ExtendedCertificateUtils.class);
 
-    private static final int MAX_CACHE_SIZE = 100;
+    private static final int DEFAULT_MAX_CACHE_SIZE = 1000;
 
     private static final Cache<CacheKey, X509Certificate> certificateCache =
-            Caffeine.newBuilder().maximumSize(MAX_CACHE_SIZE).build();
+            Caffeine.newBuilder().maximumSize(getMaxCacheSize()).build();
+
+    private static int getMaxCacheSize() {
+        String sysProp = System.getProperty("keycloak.oid4vp.crypto.maxCacheSize");
+        if (sysProp != null) {
+            try {
+                return Integer.parseInt(sysProp);
+            } catch (NumberFormatException e) {
+                logger.warnf("Invalid value for system property 'keycloak.oid4vp.crypto.maxCacheSize': %s", sysProp);
+            }
+        }
+
+        return DEFAULT_MAX_CACHE_SIZE;
+    }
 
     static void cleanUpCache() {
         certificateCache.cleanUp();

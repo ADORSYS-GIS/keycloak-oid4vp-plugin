@@ -62,9 +62,15 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
             throws Exception {
         X500Name subjectDN = new X500Name("CN=" + subject);
 
-        // Validity
-        Date notBefore = caCert.getNotBefore();
-        Date notAfter = caCert.getNotAfter();
+        // Validity: 1 hour (plus 5 min buffer for clock skew), capped by CA cert validity
+        long now = System.currentTimeMillis();
+        long notBeforeMillis =
+                Math.max(now - (5 * 60 * 1000), caCert.getNotBefore().getTime());
+        long notAfterMillis =
+                Math.min(now + (60 * 60 * 1000), caCert.getNotAfter().getTime());
+
+        Date notBefore = new Date(notBeforeMillis);
+        Date notAfter = new Date(notAfterMillis);
 
         // SubjectPublicKeyInfo
         SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(subPublicKey.getEncoded());
