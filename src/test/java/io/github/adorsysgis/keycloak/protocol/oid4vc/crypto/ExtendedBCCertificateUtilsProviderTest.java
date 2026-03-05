@@ -8,18 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.math.BigInteger;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
-import java.security.spec.ECGenParameterSpec;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Stream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.Extension;
@@ -27,19 +23,12 @@ import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cert.X509v3CertificateBuilder;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.keycloak.common.crypto.CryptoIntegration;
-import org.keycloak.common.util.BouncyIntegration;
 import org.keycloak.crypto.JavaAlgorithm;
-import org.keycloak.crypto.KeyType;
 
 class ExtendedBCCertificateUtilsProviderTest {
 
@@ -54,9 +43,9 @@ class ExtendedBCCertificateUtilsProviderTest {
         provider = ExtendedBCCertificateUtilsProvider.getInstance();
 
         // --- Generate CA keypair and minimal certificate ---
-        subKeyPair = generateRSAKeyPair(2048);
-        caKeyPair = generateRSAKeyPair(2048);
-        caCert = createSelfSignedCaCert(caKeyPair);
+        subKeyPair = TestCryptoUtils.generateRSAKeyPair(2048);
+        caKeyPair = TestCryptoUtils.generateRSAKeyPair(2048);
+        caCert = TestCryptoUtils.createSelfSignedCaCert(caKeyPair);
     }
 
     @Test
@@ -75,11 +64,11 @@ class ExtendedBCCertificateUtilsProviderTest {
 
     @Test
     void testGenerateV3Certificate_basicFields_EC() throws Exception {
-        KeyPair ecCaKeyPair = generateECKeyPair(ECCurves.SECP256R1);
-        X509Certificate ecCaCert = createSelfSignedCaCert(ecCaKeyPair);
+        KeyPair ecKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate ecCaCert = TestCryptoUtils.createSelfSignedCaCert(ecKeyPair);
 
         X509Certificate cert = provider.generateV3Certificate(
-                ecCaKeyPair.getPrivate(),
+                ecKeyPair.getPrivate(),
                 ecCaCert,
                 subKeyPair.getPublic(),
                 "my-subject-ec",
@@ -208,9 +197,9 @@ class ExtendedBCCertificateUtilsProviderTest {
     @Test
     public void testGetJcaContentSignerAlg() throws Exception {
         // Test EC curves
-        testECCurve(ECCurves.SECP256R1, JavaAlgorithm.ES256);
-        testECCurve(ECCurves.SECP384R1, JavaAlgorithm.ES384);
-        testECCurve(ECCurves.SECP521R1, JavaAlgorithm.ES512);
+        testECCurve(TestCryptoUtils.ECCurves.SECP256R1, JavaAlgorithm.ES256);
+        testECCurve(TestCryptoUtils.ECCurves.SECP384R1, JavaAlgorithm.ES384);
+        testECCurve(TestCryptoUtils.ECCurves.SECP521R1, JavaAlgorithm.ES512);
 
         // Test RSA key sizes
         testRSAKeySize(2048, JavaAlgorithm.RS256);
@@ -218,58 +207,19 @@ class ExtendedBCCertificateUtilsProviderTest {
         testRSAKeySize(4096, JavaAlgorithm.RS512);
 
         // Test RSA key too small
-        KeyPair rsa1024 = generateRSAKeyPair(1024);
+        KeyPair rsa1024 = TestCryptoUtils.generateRSAKeyPair(1024);
         IllegalArgumentException ex =
                 assertThrows(IllegalArgumentException.class, () -> getJcaContentSignerAlg(rsa1024.getPublic()));
         assertEquals("RSA key size too small: 1024 bits (minimum 2048)", ex.getMessage());
     }
 
     private void testECCurve(String curveName, String expectedAlgorithm) throws Exception {
-        KeyPair keyPair = generateECKeyPair(curveName);
+        KeyPair keyPair = TestCryptoUtils.generateECKeyPair(curveName);
         assertEquals(expectedAlgorithm, getJcaContentSignerAlg(keyPair.getPublic()));
     }
 
     private void testRSAKeySize(int keySize, String expectedAlgorithm) throws Exception {
-        KeyPair keyPair = generateRSAKeyPair(keySize);
+        KeyPair keyPair = TestCryptoUtils.generateRSAKeyPair(keySize);
         assertEquals(expectedAlgorithm, getJcaContentSignerAlg(keyPair.getPublic()));
-    }
-
-    private static X509Certificate createSelfSignedCaCert(KeyPair kp) throws Exception {
-        X500Name issuer = new X500Name("CN=TestCA");
-        BigInteger serial = BigInteger.ONE;
-        Date now = new Date();
-        Date later = new Date(now.getTime() + 86400000L);
-
-        X509v3CertificateBuilder builder =
-                new JcaX509v3CertificateBuilder(issuer, serial, now, later, issuer, kp.getPublic());
-
-        builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
-
-        String alg = getJcaContentSignerAlg(kp.getPublic());
-        ContentSigner signer = new JcaContentSignerBuilder(alg)
-                .setProvider(BouncyIntegration.PROVIDER)
-                .build(kp.getPrivate());
-
-        return new JcaX509CertificateConverter()
-                .setProvider(BouncyIntegration.PROVIDER)
-                .getCertificate(builder.build(signer));
-    }
-
-    private static KeyPair generateRSAKeyPair(int keySize) throws Exception {
-        KeyPairGenerator gen = KeyPairGenerator.getInstance(KeyType.RSA);
-        gen.initialize(keySize);
-        return gen.generateKeyPair();
-    }
-
-    private static KeyPair generateECKeyPair(String curveName) throws Exception {
-        KeyPairGenerator gen = KeyPairGenerator.getInstance(KeyType.EC);
-        gen.initialize(new ECGenParameterSpec(curveName));
-        return gen.generateKeyPair();
-    }
-
-    public static class ECCurves {
-        public static final String SECP256R1 = "secp256r1";
-        public static final String SECP384R1 = "secp384r1";
-        public static final String SECP521R1 = "secp521r1";
     }
 }

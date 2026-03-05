@@ -7,37 +7,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.math.BigInteger;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x509.BasicConstraints;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 import org.keycloak.Config;
 import org.keycloak.common.crypto.CryptoIntegration;
-import org.keycloak.common.util.BouncyIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.HashException;
-import org.keycloak.crypto.KeyType;
+import org.mockito.ArgumentMatchers;
+import org.mockito.stubbing.Answer;
 
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ExtendedCertificateUtilsTest {
 
     private static KeyPair subKeyPair;
@@ -47,12 +34,25 @@ class ExtendedCertificateUtilsTest {
     @BeforeAll
     static void setup() throws Exception {
         CryptoIntegration.init(ExtendedCertificateUtilsTest.class.getClassLoader());
-        // Set a small offset to ensure notBefore (based on Time) is strictly in the past for checkValidity()
-        Time.setOffset(10);
+        subKeyPair = TestCryptoUtils.generateRSAKeyPair(2048);
+        caKeyPair = TestCryptoUtils.generateRSAKeyPair(2048);
+        caCert = TestCryptoUtils.createSelfSignedCaCert(caKeyPair);
+    }
 
-        subKeyPair = generateRSAKeyPair(2048);
-        caKeyPair = generateRSAKeyPair(2048);
-        caCert = createSelfSignedCaCert(caKeyPair);
+    @BeforeEach
+    void initCache() {
+        // Explicitly re-initialize the cache before every test to ensure isolation
+        ExtendedCertificateUtils.init(createDefaultConfig());
+        Time.setOffset(0);
+    }
+
+    private Config.Scope createDefaultConfig() {
+        Config.Scope mockConfig = mock(Config.Scope.class);
+        // Ensure that getInt returns the default value passed as the second argument
+        Answer<Integer> defaultAnswer = invocation -> invocation.getArgument(1);
+        when(mockConfig.getInt(ArgumentMatchers.anyString(), ArgumentMatchers.anyInt()))
+                .thenAnswer(defaultAnswer);
+        return mockConfig;
     }
 
     @AfterAll
@@ -61,7 +61,6 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(1)
     void testGenerateV3Certificate_caching() {
         String subject = "cache-test";
         List<String> sans = List.of("cache.com");
@@ -75,7 +74,6 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(2)
     void testGenerateV3Certificate_cacheMissOnDifferentParams() {
         X509Certificate cert1 = generateCert("s1", List.of("a.com"));
         X509Certificate cert2 = generateCert("s2", List.of("a.com"));
@@ -86,10 +84,9 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(3)
     void testGenerateV3Certificate_cacheMissOnCaRotation() throws Exception {
-        KeyPair caKeyPair2 = generateRSAKeyPair(2048);
-        X509Certificate caCert2 = createSelfSignedCaCert(caKeyPair2);
+        KeyPair caKeyPair2 = TestCryptoUtils.generateRSAKeyPair(2048);
+        X509Certificate caCert2 = TestCryptoUtils.createSelfSignedCaCert(caKeyPair2);
 
         String subject = "rotation-test";
 
@@ -101,7 +98,6 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(4)
     void testGenerateV3Certificate_concurrency() {
         String subject = "concurrency-test";
         int threadCount = 10;
@@ -119,7 +115,6 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(5)
     void testCreateCacheKey_HashException() throws Exception {
         X509Certificate brokenCert = mock(X509Certificate.class);
         when(brokenCert.getEncoded()).thenThrow(new CertificateEncodingException("broken"));
@@ -131,7 +126,6 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(6)
     void testGenerateV3Certificate_cacheEviction() {
         Config.Scope mockConfig = mock(Config.Scope.class);
         when(mockConfig.getInt("cache-max-size", 1000)).thenReturn(10);
@@ -153,29 +147,17 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @Order(7)
-    void testGenerateV3Certificate_cacheExpiration() throws InterruptedException {
-        Config.Scope mockConfig = mock(Config.Scope.class);
-        when(mockConfig.getInt("cache-max-size", 1000)).thenReturn(100);
-        // Set max age to 1 second
-        when(mockConfig.getInt("cache-max-age", 3600)).thenReturn(1);
+    void testGenerateV3Certificate_cacheExpiration() {
+        // Use default configuration (1h expiration)
+        X509Certificate firstCert = generateCert("expire-subject");
 
-        ExtendedCertificateUtils.init(mockConfig);
+        // Advance time by 2 hours using Time.setOffset
+        Time.setOffset(2 * 3600);
 
-        try {
-            X509Certificate firstCert = generateCert("expire-subject");
+        ExtendedCertificateUtils.getCache().cleanUp();
+        X509Certificate refilledCert = generateCert("expire-subject");
 
-            // Wait for expiration + a bit of buffer
-            Thread.sleep(1100);
-
-            ExtendedCertificateUtils.getCache().cleanUp();
-            X509Certificate refilledCert = generateCert("expire-subject");
-
-            assertNotSame(firstCert, refilledCert, "Entry should have expired from the cache");
-        } finally {
-            // Restore default configuration
-            ExtendedCertificateUtils.init(mock(Config.Scope.class));
-        }
+        assertNotSame(firstCert, refilledCert, "Entry should have expired from the cache");
     }
 
     private X509Certificate generateCert(String subject) {
@@ -185,31 +167,5 @@ class ExtendedCertificateUtilsTest {
     private X509Certificate generateCert(String subject, List<String> sans) {
         return ExtendedCertificateUtils.generateV3Certificate(
                 caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), subject, sans);
-    }
-
-    private static X509Certificate createSelfSignedCaCert(KeyPair kp) throws Exception {
-        X500Name issuer = new X500Name("CN=TestCA");
-        BigInteger serial = BigInteger.ONE;
-        Date now = new Date(System.currentTimeMillis() - 3600000); // 1 hour ago
-        Date later = new Date(System.currentTimeMillis() + 86400000L);
-
-        JcaX509v3CertificateBuilder builder =
-                new JcaX509v3CertificateBuilder(issuer, serial, now, later, issuer, kp.getPublic());
-        builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
-
-        ContentSigner signer = new JcaContentSignerBuilder(
-                        ExtendedBCCertificateUtilsProvider.getJcaContentSignerAlg(kp.getPublic()))
-                .setProvider(BouncyIntegration.PROVIDER)
-                .build(kp.getPrivate());
-
-        return new JcaX509CertificateConverter()
-                .setProvider(BouncyIntegration.PROVIDER)
-                .getCertificate(builder.build(signer));
-    }
-
-    private static KeyPair generateRSAKeyPair(int keySize) throws Exception {
-        KeyPairGenerator gen = KeyPairGenerator.getInstance(KeyType.RSA);
-        gen.initialize(keySize);
-        return gen.generateKeyPair();
     }
 }
