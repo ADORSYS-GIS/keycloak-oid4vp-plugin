@@ -156,9 +156,14 @@ public class AuthorizationResponseService {
      */
     private String extractSdJwtVpTokenWithDCQL(
             ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
-        // Ensure that VP token map matches the DCQL credential query
         var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
-        var credentialQuery = dcqlQuery.getCredentials().get(0);
+        if (dcqlQuery == null || dcqlQuery.getCredentials().size() != 1) {
+            throw new IllegalStateException(
+                    "Invalid DCQL query in authorization context. Expected exactly one credential query.");
+        }
+
+        // Ensure that VP token map matches the DCQL credential query
+        var credentialQuery = dcqlQuery.getCredentials().getFirst();
         var vpToken = responseObject.getVpToken();
         if (!(vpToken instanceof Map<?, ?> vpTokenMap) || !(vpTokenMap.containsKey(credentialQuery.getId()))) {
             throw failWithHttpException(
@@ -172,16 +177,15 @@ public class AuthorizationResponseService {
         // Check that the VP token map provides a VP token, and only one
         var tokens = (List<?>) vpTokenMap.get(credentialQuery.getId());
         if (tokens.size() != 1) {
+            String errorMsg = String.format(
+                    "Presented vp_token map must contain exactly one token as requested. Found: %d", tokens.size());
+
+            logger.error(errorMsg);
             throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Presented vp_token map must contain exactly one token for the credential query. Found: "
-                            + tokens.size(),
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
+                    ProcessingError.INVALID_VP_TOKEN, errorMsg, Response.Status.BAD_REQUEST, authContext, store);
         }
 
-        return (String) tokens.get(0);
+        return (String) tokens.getFirst();
     }
 
     /**
@@ -204,7 +208,7 @@ public class AuthorizationResponseService {
         }
 
         // Check that the submission's descriptor is of SD-JWT VP format
-        var descriptor = submission.getDescriptorMap().get(0);
+        var descriptor = submission.getDescriptorMap().getFirst();
         if (!List.of(Format.SD_JWT_VC, Descriptor.Format.VC_SD_JWT.value())
                 .contains(descriptor.getFormat().value())) {
             throw failWithHttpException(
