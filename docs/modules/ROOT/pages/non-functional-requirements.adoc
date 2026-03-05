@@ -36,7 +36,15 @@ spi-realm-resource-oid4vp-auth-cache-max-age=7200
 **Example via Command Line:**
 [source,bash]
 ----
-bin/kc.sh start --optimized -Dspi-realm-resource-oid4vp-auth-cache-max-size=2000
+bin/kc.sh start --spi-realm-resource-oid4vp-auth-cache-max-size=2000 --spi-realm-resource-oid4vp-auth-cache-max-age=7200
+----
+
+**Example via Environment Variables:**
+[source,bash]
+----
+export KC_SPI_REALM_RESOURCE_OID4VP_AUTH_CACHE_MAX_SIZE=2000
+export KC_SPI_REALM_RESOURCE_OID4VP_AUTH_CACHE_MAX_AGE=7200
+bin/kc.sh start
 ----
 
 === Certificate Lifespan

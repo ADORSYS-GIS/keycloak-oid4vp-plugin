@@ -27,12 +27,13 @@ public class ExtendedCertificateUtils extends CertificateUtils {
 
     private static final int DEFAULT_MAX_CACHE_SIZE = 1000;
 
-    private static Cache<CacheKey, X509Certificate> certificateCache = createCache(DEFAULT_MAX_CACHE_SIZE);
+    private static Cache<CacheKey, X509Certificate> certificateCache =
+            createCache(DEFAULT_MAX_CACHE_SIZE, ExtendedBCCertificateUtilsProvider.DEFAULT_CERT_VALIDITY_MS);
 
-    private static Cache<CacheKey, X509Certificate> createCache(int maxSize) {
+    private static Cache<CacheKey, X509Certificate> createCache(int maxSize, long maxAgeMs) {
         return Caffeine.newBuilder()
                 .maximumSize(maxSize)
-                .expireAfterWrite(ExtendedBCCertificateUtilsProvider.DEFAULT_CERT_VALIDITY_MS, TimeUnit.MILLISECONDS)
+                .expireAfterWrite(maxAgeMs, TimeUnit.MILLISECONDS)
                 .build();
     }
 
@@ -42,8 +43,12 @@ public class ExtendedCertificateUtils extends CertificateUtils {
      */
     public static synchronized void init(Config.Scope config) {
         int maxSize = config.getInt("cache-max-size", DEFAULT_MAX_CACHE_SIZE);
-        logger.debugf("Initializing ExtendedCertificateUtils with max cache size: %d", maxSize);
-        certificateCache = createCache(maxSize);
+        int maxAgeSeconds = config.getInt(
+                "cache-max-age", (int) (ExtendedBCCertificateUtilsProvider.DEFAULT_CERT_VALIDITY_MS / 1000));
+        long maxAgeMs = maxAgeSeconds * 1000L;
+        logger.debugf(
+                "Initializing ExtendedCertificateUtils with max cache size: %d, max age: %d s", maxSize, maxAgeSeconds);
+        certificateCache = createCache(maxSize, maxAgeMs);
     }
 
     static Cache<CacheKey, X509Certificate> getCache() {

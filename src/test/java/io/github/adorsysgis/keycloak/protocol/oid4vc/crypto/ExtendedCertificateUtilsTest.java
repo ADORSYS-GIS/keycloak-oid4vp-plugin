@@ -24,8 +24,12 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.keycloak.Config;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.BouncyIntegration;
@@ -33,7 +37,7 @@ import org.keycloak.common.util.Time;
 import org.keycloak.crypto.HashException;
 import org.keycloak.crypto.KeyType;
 
-@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ExtendedCertificateUtilsTest {
 
     private static KeyPair subKeyPair;
@@ -51,13 +55,13 @@ class ExtendedCertificateUtilsTest {
         caCert = createSelfSignedCaCert(caKeyPair);
     }
 
-    @org.junit.jupiter.api.AfterAll
+    @AfterAll
     static void tearDown() {
         Time.setOffset(0);
     }
 
     @Test
-    @org.junit.jupiter.api.Order(1)
+    @Order(1)
     void testGenerateV3Certificate_caching() {
         String subject = "cache-test";
         List<String> sans = List.of("cache.com");
@@ -71,7 +75,7 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(2)
+    @Order(2)
     void testGenerateV3Certificate_cacheMissOnDifferentParams() {
         X509Certificate cert1 = generateCert("s1", List.of("a.com"));
         X509Certificate cert2 = generateCert("s2", List.of("a.com"));
@@ -82,7 +86,7 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(3)
+    @Order(3)
     void testGenerateV3Certificate_cacheMissOnCaRotation() throws Exception {
         KeyPair caKeyPair2 = generateRSAKeyPair(2048);
         X509Certificate caCert2 = createSelfSignedCaCert(caKeyPair2);
@@ -97,7 +101,7 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(4)
+    @Order(4)
     void testGenerateV3Certificate_concurrency() {
         String subject = "concurrency-test";
         int threadCount = 10;
@@ -115,7 +119,7 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(5)
+    @Order(5)
     void testCreateCacheKey_HashException() throws Exception {
         X509Certificate brokenCert = mock(X509Certificate.class);
         when(brokenCert.getEncoded()).thenThrow(new CertificateEncodingException("broken"));
@@ -127,7 +131,7 @@ class ExtendedCertificateUtilsTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(6)
+    @Order(6)
     void testGenerateV3Certificate_cacheEviction() {
         Config.Scope mockConfig = mock(Config.Scope.class);
         when(mockConfig.getInt("cache-max-size", 1000)).thenReturn(10);
@@ -142,6 +146,32 @@ class ExtendedCertificateUtilsTest {
             X509Certificate refilledFirstCert = generateCert("evict-subject-0");
 
             assertNotSame(firstCert, refilledFirstCert, "Entry should have been evicted from the size-limited cache");
+        } finally {
+            // Restore default configuration
+            ExtendedCertificateUtils.init(mock(Config.Scope.class));
+        }
+    }
+
+    @Test
+    @Order(7)
+    void testGenerateV3Certificate_cacheExpiration() throws InterruptedException {
+        Config.Scope mockConfig = mock(Config.Scope.class);
+        when(mockConfig.getInt("cache-max-size", 1000)).thenReturn(100);
+        // Set max age to 1 second
+        when(mockConfig.getInt("cache-max-age", 3600)).thenReturn(1);
+
+        ExtendedCertificateUtils.init(mockConfig);
+
+        try {
+            X509Certificate firstCert = generateCert("expire-subject");
+
+            // Wait for expiration + a bit of buffer
+            Thread.sleep(1100);
+
+            ExtendedCertificateUtils.getCache().cleanUp();
+            X509Certificate refilledCert = generateCert("expire-subject");
+
+            assertNotSame(firstCert, refilledCert, "Entry should have expired from the cache");
         } finally {
             // Restore default configuration
             ExtendedCertificateUtils.init(mock(Config.Scope.class));
