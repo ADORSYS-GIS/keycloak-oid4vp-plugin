@@ -26,6 +26,7 @@ import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.keycloak.common.util.BouncyIntegration;
+import org.keycloak.common.util.Time;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
@@ -34,6 +35,9 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
 
     private static final ExtendedBCCertificateUtilsProvider INSTANCE = new ExtendedBCCertificateUtilsProvider();
     public static final int SECURE_RANDOM_ENTROPY = 20;
+
+    public static final long DEFAULT_CERT_VALIDITY_MS = 60 * 60 * 1000L; // 1 hour
+    public static final long CLOCK_SKEW_BUFFER_MS = 5 * 60 * 1000L; // 5 minutes
 
     public static ExtendedBCCertificateUtilsProvider getInstance() {
         return INSTANCE;
@@ -47,71 +51,85 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
             String subject,
             List<String> subjectAltNames) {
         try {
-            X500Name subjectDN = new X500Name("CN=" + subject);
-
-            // Validity
-            Date notBefore = caCert.getNotBefore();
-            Date notAfter = caCert.getNotAfter();
-
-            // SubjectPublicKeyInfo
-            SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(subPublicKey.getEncoded());
-
-            // Certificate Builder
-            BigInteger serialNumber = generateSerialNumber();
-            X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(
-                    new X500Name(caCert.getSubjectX500Principal().getName()),
-                    serialNumber,
-                    notBefore,
-                    notAfter,
-                    subjectDN,
-                    subjPubKeyInfo);
-
-            // Subject Key Identifier
-            JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
-            certGen.addExtension(
-                    Extension.subjectKeyIdentifier,
-                    false,
-                    x509ExtensionUtils.createSubjectKeyIdentifier(subjPubKeyInfo));
-
-            // Authority Key Identifier
-            certGen.addExtension(
-                    Extension.authorityKeyIdentifier, false, x509ExtensionUtils.createAuthorityKeyIdentifier(caCert));
-
-            // Key Usage
-            int keyUsageBits = KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.cRLSign;
-            certGen.addExtension(Extension.keyUsage, false, new KeyUsage(keyUsageBits));
-
-            // Extended Key Usage
-            KeyPurposeId[] EKU = new KeyPurposeId[2];
-            EKU[0] = KeyPurposeId.id_kp_emailProtection;
-            EKU[1] = KeyPurposeId.id_kp_serverAuth;
-            certGen.addExtension(Extension.extendedKeyUsage, false, new ExtendedKeyUsage(EKU));
-
-            // Basic Constraints
-            certGen.addExtension(Extension.basicConstraints, true, new BasicConstraints(0));
-
-            // Subject Alternative Names
-            GeneralName[] names = Optional.ofNullable(subjectAltNames).orElseGet(Collections::emptyList).stream()
-                    .filter(s -> s != null && !s.isBlank())
-                    .map(san -> new GeneralName(GeneralName.dNSName, san))
-                    .toArray(GeneralName[]::new);
-            if (names.length > 0) {
-                certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
-            }
-
-            // Content Signer
-            String jcaContentSignerAlg = getJcaContentSignerAlg(caCert.getPublicKey());
-            ContentSigner sigGen = new JcaContentSignerBuilder(jcaContentSignerAlg)
-                    .setProvider(BouncyIntegration.PROVIDER)
-                    .build(caPrivateKey);
-
-            // Certificate
-            return new JcaX509CertificateConverter()
-                    .setProvider(BouncyIntegration.PROVIDER)
-                    .getCertificate(certGen.build(sigGen));
+            return generateNewCertificate(caPrivateKey, caCert, subPublicKey, subject, subjectAltNames);
         } catch (Exception e) {
             throw new RuntimeException("Error creating X509v3Certificate.", e);
         }
+    }
+
+    private X509Certificate generateNewCertificate(
+            PrivateKey caPrivateKey,
+            X509Certificate caCert,
+            PublicKey subPublicKey,
+            String subject,
+            List<String> subjectAltNames)
+            throws Exception {
+        X500Name subjectDN = new X500Name("CN=" + subject);
+
+        // Validity: 1 hour (plus 5 min buffer for clock skew), capped by CA cert validity
+        long now = Time.currentTimeMillis();
+        long notBeforeMillis =
+                Math.max(now - CLOCK_SKEW_BUFFER_MS, caCert.getNotBefore().getTime());
+        long notAfterMillis =
+                Math.min(now + DEFAULT_CERT_VALIDITY_MS, caCert.getNotAfter().getTime());
+
+        Date notBefore = new Date(notBeforeMillis);
+        Date notAfter = new Date(notAfterMillis);
+
+        // SubjectPublicKeyInfo
+        SubjectPublicKeyInfo subjPubKeyInfo = SubjectPublicKeyInfo.getInstance(subPublicKey.getEncoded());
+
+        // Certificate Builder
+        BigInteger serialNumber = generateSerialNumber();
+        X509v3CertificateBuilder certGen = new X509v3CertificateBuilder(
+                new X500Name(caCert.getSubjectX500Principal().getName()),
+                serialNumber,
+                notBefore,
+                notAfter,
+                subjectDN,
+                subjPubKeyInfo);
+
+        // Subject Key Identifier
+        JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
+        certGen.addExtension(
+                Extension.subjectKeyIdentifier, false, x509ExtensionUtils.createSubjectKeyIdentifier(subjPubKeyInfo));
+
+        // Authority Key Identifier
+        certGen.addExtension(
+                Extension.authorityKeyIdentifier, false, x509ExtensionUtils.createAuthorityKeyIdentifier(caCert));
+
+        // Key Usage
+        int keyUsageBits = KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.cRLSign;
+        certGen.addExtension(Extension.keyUsage, false, new KeyUsage(keyUsageBits));
+
+        // Extended Key Usage
+        KeyPurposeId[] EKU = new KeyPurposeId[2];
+        EKU[0] = KeyPurposeId.id_kp_emailProtection;
+        EKU[1] = KeyPurposeId.id_kp_serverAuth;
+        certGen.addExtension(Extension.extendedKeyUsage, false, new ExtendedKeyUsage(EKU));
+
+        // Basic Constraints
+        certGen.addExtension(Extension.basicConstraints, true, new BasicConstraints(0));
+
+        // Subject Alternative Names
+        GeneralName[] names = Optional.ofNullable(subjectAltNames).orElseGet(Collections::emptyList).stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(san -> new GeneralName(GeneralName.dNSName, san))
+                .toArray(GeneralName[]::new);
+        if (names.length > 0) {
+            certGen.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(names));
+        }
+
+        // Content Signer
+        String jcaContentSignerAlg = getJcaContentSignerAlg(caCert.getPublicKey());
+        ContentSigner sigGen = new JcaContentSignerBuilder(jcaContentSignerAlg)
+                .setProvider(BouncyIntegration.PROVIDER)
+                .build(caPrivateKey);
+
+        // Certificate
+        return new JcaX509CertificateConverter()
+                .setProvider(BouncyIntegration.PROVIDER)
+                .getCertificate(certGen.build(sigGen));
     }
 
     public static String getJcaContentSignerAlg(PublicKey publicKey) {

@@ -105,3 +105,8 @@ The integration of OpenID4VP authentication into the OIDC login flow is readily 
 
 Find the authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
 The single SdJwt authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs, including: the accepted credential types, the maximum age of VP tokens presented, and other parameters governing the verifier policy.
+
+=== Technical Configuration (Performance & Security)
+
+For details on certificate caching, lifespan, and other performance/security configurations, see link:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].
+
