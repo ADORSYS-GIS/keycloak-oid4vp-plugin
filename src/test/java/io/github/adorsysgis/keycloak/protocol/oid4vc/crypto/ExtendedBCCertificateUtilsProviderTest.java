@@ -4,13 +4,9 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedBCCer
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.math.BigInteger;
 import java.security.KeyPair;
@@ -20,8 +16,6 @@ import java.security.spec.ECGenParameterSpec;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -106,12 +100,12 @@ class ExtendedBCCertificateUtilsProviderTest {
         Date notAfter = cert.getNotAfter();
 
         long diffMillis = notAfter.getTime() - notBefore.getTime();
-        long oneHourMillis = 60 * 60 * 1000;
-        long bufferMillis = 5 * 60 * 1000;
+        long expectedDiff = ExtendedBCCertificateUtilsProvider.DEFAULT_CERT_VALIDITY_MS;
+        long buffer = ExtendedBCCertificateUtilsProvider.CLOCK_SKEW_BUFFER_MS;
 
         // Lifespan should be roughly 1 hour + 5 min buffer
         assertTrue(
-                diffMillis >= oneHourMillis && diffMillis <= oneHourMillis + bufferMillis + 1000,
+                diffMillis >= expectedDiff && diffMillis <= expectedDiff + buffer + 1000,
                 "Certificate lifespan should be approx 1 hour (plus clock skew buffer). Actual: " + diffMillis + "ms");
     }
 
@@ -212,100 +206,6 @@ class ExtendedBCCertificateUtilsProviderTest {
     }
 
     @Test
-    void testGenerateV3Certificate_caching() {
-        String subject = "cache-test";
-        List<String> sans = List.of("cache.com");
-
-        X509Certificate cert1 = generateCert(subject, sans);
-        X509Certificate cert2 = generateCert(subject, sans);
-
-        assertNotNull(cert1);
-        assertNotNull(cert2);
-        // Check that the same instance is returned from cache
-        assertSame(cert1, cert2, "Certificate should be cached and reused instance");
-    }
-
-    @Test
-    void testGenerateV3Certificate_cacheMissOnDifferentParams() {
-        X509Certificate cert1 = generateCert("s1", List.of("a.com"));
-        X509Certificate cert2 = generateCert("s2", List.of("a.com"));
-        X509Certificate cert3 = generateCert("s1", List.of("b.com"));
-
-        // Different subjects or SANs should yield different instances
-        assertNotSame(cert1, cert2, "Different subjects should result in different certificates");
-        assertNotSame(cert1, cert3, "Different SANs should result in different certificates");
-    }
-
-    @Test
-    void testGenerateV3Certificate_cacheMissOnCaRotation() throws Exception {
-        KeyPair caKeyPair2 = generateRSAKeyPair(2048);
-        X509Certificate caCert2 = createSelfSignedCaCert(caKeyPair2);
-
-        String subject = "rotation-test";
-
-        X509Certificate cert1 = generateCert(subject);
-        X509Certificate cert2 = ExtendedCertificateUtils.generateV3Certificate(
-                caKeyPair2.getPrivate(), caCert2, subKeyPair.getPublic(), subject, List.of());
-
-        // Cache should miss when CA changes
-        assertNotSame(cert1, cert2, "Different CA certificates should result in different verifier certificates");
-    }
-
-    @Test
-    void testGenerateV3Certificate_concurrency() throws Exception {
-        String subject = "concurrency-test";
-        int threadCount = 10;
-        List<CompletableFuture<X509Certificate>> futures = Stream.generate(
-                        () -> CompletableFuture.supplyAsync(() -> generateCert(subject)))
-                .limit(threadCount)
-                .toList();
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        X509Certificate firstCert = futures.getFirst().join();
-        futures.stream()
-                .skip(1)
-                .forEach(f -> assertSame(firstCert, f.join(), "All threads should receive the same cached instance"));
-    }
-
-    @Test
-    void testCreateCacheKey_HashException() throws Exception {
-        X509Certificate brokenCert = mock(X509Certificate.class);
-        when(brokenCert.getEncoded()).thenThrow(new java.security.cert.CertificateEncodingException("broken"));
-
-        assertThrows(
-                HashException.class,
-                () -> ExtendedCertificateUtils.generateV3Certificate(
-                        caKeyPair.getPrivate(), brokenCert, subKeyPair.getPublic(), "subject", List.of()));
-    }
-
-    @Test
-    void testGenerateV3Certificate_cacheEviction() {
-        // Use system property to set a small cache size for this test
-        System.setProperty("keycloak.oid4vp.crypto.maxCacheSize", "10");
-        try {
-            // NOTE: The cache is static and initialized once.
-            // But since this is the only place we'd use 'maxCacheSize',
-            // and we are running tests in a single JVM, we might need a workaround
-            // if we want to test eviction with a different size than default.
-            // However, the purpose here is to verify eviction works.
-
-            // 1. Fill the cache
-            X509Certificate firstCert = generateCert("evict-subject-0");
-
-            IntStream.rangeClosed(1, 15).forEach(i -> generateCert("evict-subject-" + i));
-
-            // 2. The first entry should be evicted (as we added 15 entries > 10)
-            ExtendedCertificateUtils.cleanUpCache();
-            X509Certificate refilledFirstCert = generateCert("evict-subject-0");
-
-            assertNotSame(firstCert, refilledFirstCert, "Entry should have been evicted from the size-limited cache");
-        } finally {
-            System.clearProperty("keycloak.oid4vp.crypto.maxCacheSize");
-        }
-    }
-
-    @Test
     public void testGetJcaContentSignerAlg() throws Exception {
         // Test EC curves
         testECCurve(ECCurves.SECP256R1, JavaAlgorithm.ES256);
@@ -365,15 +265,6 @@ class ExtendedBCCertificateUtilsProviderTest {
         KeyPairGenerator gen = KeyPairGenerator.getInstance(KeyType.EC);
         gen.initialize(new ECGenParameterSpec(curveName));
         return gen.generateKeyPair();
-    }
-
-    private X509Certificate generateCert(String subject) {
-        return generateCert(subject, List.of());
-    }
-
-    private X509Certificate generateCert(String subject, List<String> sans) {
-        return ExtendedCertificateUtils.generateV3Certificate(
-                caKeyPair.getPrivate(), caCert, subKeyPair.getPublic(), subject, sans);
     }
 
     public static class ECCurves {

@@ -108,29 +108,5 @@ The single SdJwt authenticator in the flow is pre-configured with sensible defau
 
 === Technical Configuration (Performance & Security)
 
-==== Certificate Cache
+For details on certificate caching, lifespan, and other performance/security configurations, see link:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].
 
-The plugin uses a cache for internally generated self-signed certificates.
-
-|===
-|System Property |Default |Description
-
-|`keycloak.oid4vp.crypto.maxCacheSize`
-|`1000`
-|The maximum number of certificates to keep in the cache.
-|===
-
-Set it as a Java system property at startup:
-
-[source,bash]
-----
-# Via Command Line
-bin/kc.sh start -Dkeycloak.oid4vp.crypto.maxCacheSize=2000
-
-# Via Docker (environment variable)
-JAVA_OPTS_APPEND="-Dkeycloak.oid4vp.crypto.maxCacheSize=2000"
-----
-
-==== Certificate Lifespan
-
-Self-signed certificates used for OpenID4VP authorization requests have a limited lifespan of **1 hour**.

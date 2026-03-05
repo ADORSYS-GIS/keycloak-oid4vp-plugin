@@ -3,19 +3,21 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertificateEncodingException;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import org.jboss.logging.Logger;
+import org.keycloak.Config;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.crypto.CryptoProvider;
 import org.keycloak.common.util.CertificateUtils;
+import org.keycloak.crypto.HashException;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
@@ -25,24 +27,27 @@ public class ExtendedCertificateUtils extends CertificateUtils {
 
     private static final int DEFAULT_MAX_CACHE_SIZE = 1000;
 
-    private static final Cache<CacheKey, X509Certificate> certificateCache =
-            Caffeine.newBuilder().maximumSize(getMaxCacheSize()).build();
+    private static Cache<CacheKey, X509Certificate> certificateCache = createCache(DEFAULT_MAX_CACHE_SIZE);
 
-    private static int getMaxCacheSize() {
-        String sysProp = System.getProperty("keycloak.oid4vp.crypto.maxCacheSize");
-        if (sysProp != null) {
-            try {
-                return Integer.parseInt(sysProp);
-            } catch (NumberFormatException e) {
-                logger.warnf("Invalid value for system property 'keycloak.oid4vp.crypto.maxCacheSize': %s", sysProp);
-            }
-        }
-
-        return DEFAULT_MAX_CACHE_SIZE;
+    private static Cache<CacheKey, X509Certificate> createCache(int maxSize) {
+        return Caffeine.newBuilder()
+                .maximumSize(maxSize)
+                .expireAfterWrite(ExtendedBCCertificateUtilsProvider.DEFAULT_CERT_VALIDITY_MS, TimeUnit.MILLISECONDS)
+                .build();
     }
 
-    static void cleanUpCache() {
-        certificateCache.cleanUp();
+    /**
+     * Initializes the certificate cache with configuration from Keycloak.
+     * @param config The configuration scope.
+     */
+    public static synchronized void init(Config.Scope config) {
+        int maxSize = config.getInt("cache-max-size", DEFAULT_MAX_CACHE_SIZE);
+        logger.debugf("Initializing ExtendedCertificateUtils with max cache size: %d", maxSize);
+        certificateCache = createCache(maxSize);
+    }
+
+    static Cache<CacheKey, X509Certificate> getCache() {
+        return certificateCache;
     }
 
     private record CacheKey(String caCertHash, String subPubKeyHash, String subject, List<String> sans) {}
@@ -98,24 +103,16 @@ public class ExtendedCertificateUtils extends CertificateUtils {
             List<String> subjectAltNames) {
         CacheKey key = createCacheKey(caCert, subPublicKey, subject, subjectAltNames);
 
-        // 1. Peek at the cache to handle validity and logging
+        // 1. Peek at the cache
         X509Certificate cached = certificateCache.getIfPresent(key);
         if (cached != null) {
-            try {
-                cached.checkValidity();
-                logger.debugf("Cache hit: valid certificate found for subject [%s]", subject);
-                return cached;
-            } catch (CertificateExpiredException | CertificateNotYetValidException e) {
-                logger.infof("Cache entry expired: regenerating certificate for subject [%s]", subject);
-                certificateCache.invalidate(key);
-            }
-        } else {
-            logger.debugf("Cache miss: no entry found for subject [%s]", subject);
+            logger.debugf("Cache hit for key: %s", key);
+            return cached;
         }
 
-        // 2. Load the certificate atomically (ensures single generation if multiple concurrent misses)
+        // 2. Load the certificate atomically
         return certificateCache.get(key, k -> {
-            logger.debugf("Generating new certificate for subject [%s], SANs: %s", subject, subjectAltNames);
+            logger.debugf("Generating new certificate for key: %s", k);
             return getExtendedCertificateUtilsProvider()
                     .generateV3Certificate(caPrivateKey, caCert, subPublicKey, subject, subjectAltNames);
         });
@@ -128,7 +125,7 @@ public class ExtendedCertificateUtils extends CertificateUtils {
             String caCertHash = Base64.getEncoder().encodeToString(sha256.digest(caCert.getEncoded()));
             String subPubKeyHash = Base64.getEncoder().encodeToString(sha256.digest(subPublicKey.getEncoded()));
             return new CacheKey(caCertHash, subPubKeyHash, subject, sans);
-        } catch (java.security.NoSuchAlgorithmException | CertificateEncodingException e) {
+        } catch (NoSuchAlgorithmException | CertificateEncodingException e) {
             throw new HashException("Failed to create cache key for certificate", e);
         }
     }

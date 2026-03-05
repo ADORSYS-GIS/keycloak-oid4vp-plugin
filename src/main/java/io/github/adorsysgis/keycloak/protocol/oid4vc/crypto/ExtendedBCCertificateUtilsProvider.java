@@ -26,6 +26,7 @@ import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.keycloak.common.util.BouncyIntegration;
+import org.keycloak.common.util.Time;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.def.BCCertificateUtilsProvider;
 
@@ -34,6 +35,9 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
 
     private static final ExtendedBCCertificateUtilsProvider INSTANCE = new ExtendedBCCertificateUtilsProvider();
     public static final int SECURE_RANDOM_ENTROPY = 20;
+
+    public static final long DEFAULT_CERT_VALIDITY_MS = 60 * 60 * 1000L; // 1 hour
+    public static final long CLOCK_SKEW_BUFFER_MS = 5 * 60 * 1000L; // 5 minutes
 
     public static ExtendedBCCertificateUtilsProvider getInstance() {
         return INSTANCE;
@@ -63,11 +67,11 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
         X500Name subjectDN = new X500Name("CN=" + subject);
 
         // Validity: 1 hour (plus 5 min buffer for clock skew), capped by CA cert validity
-        long now = System.currentTimeMillis();
+        long now = Time.currentTimeMillis();
         long notBeforeMillis =
-                Math.max(now - (5 * 60 * 1000), caCert.getNotBefore().getTime());
+                Math.max(now - CLOCK_SKEW_BUFFER_MS, caCert.getNotBefore().getTime());
         long notAfterMillis =
-                Math.min(now + (60 * 60 * 1000), caCert.getNotAfter().getTime());
+                Math.min(now + DEFAULT_CERT_VALIDITY_MS, caCert.getNotAfter().getTime());
 
         Date notBefore = new Date(notBeforeMillis);
         Date notAfter = new Date(notAfterMillis);
