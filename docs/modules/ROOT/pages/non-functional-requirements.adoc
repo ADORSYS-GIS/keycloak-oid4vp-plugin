@@ -1,0 +1,46 @@
+[[non-functional-requirements]]
+== Non-Functional Requirements & Technical Configuration
+
+This page describes technical performance and security configurations for the OpenID4VP plugin.
+
+=== Certificate Cache
+
+The plugin uses a cache for internally generated self-signed certificates to improve performance and avoid expensive cryptographic operations on every request.
+
+==== Configuration
+
+You can tune the cache behavior in `keycloak.conf` or via command line arguments.
+
+[cols="1,1,2"]
+|===
+|Property |Default |Description
+
+|`cache-max-size`
+|`1000`
+|The maximum number of certificates to keep in the cache.
+|===
+
+These properties must be configured under the `oid4vp-auth` realm resource provider.
+
+**Example in `keycloak.conf`:**
+[source,properties]
+----
+spi-realm-resource-oid4vp-auth-cache-max-size=2000
+----
+
+**Example via Command Line:**
+[source,bash]
+----
+bin/kc.sh start --spi-realm-resource-oid4vp-auth-cache-max-size=2000
+----
+
+**Example via Environment Variables:**
+[source,bash]
+----
+export KC_SPI_REALM_RESOURCE_OID4VP_AUTH_CACHE_MAX_SIZE=2000
+bin/kc.sh start
+----
+
+=== Certificate Lifespan
+
+For security best practices, self-signed certificates used for OpenID4VP authorization requests are generated with a limited lifespan (default **1 hour**). These certificates are transient and only intended for the duration of the authentication session.
