@@ -11,6 +11,7 @@ import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -126,6 +127,72 @@ public class AuthorizationResponseService {
      */
     private String extractSdJwtVpToken(
             ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
+        String parsedVpToken;
+        if (responseObject.getPresentationSubmission() == null) {
+            logger.debug("Extracting SD-JWT VP token from response object with DCQL matching");
+            parsedVpToken = extractSdJwtVpTokenWithDCQL(responseObject, authContext, store);
+        } else {
+            logger.debug("Extracting SD-JWT VP token from response object with Presentation Exchange format");
+            parsedVpToken = extractSdJwtVpTokenWithPrexFormat(responseObject, authContext, store);
+        }
+
+        try {
+            String vpToken = decodeIfBase64Url(parsedVpToken);
+            SdJwtVP.of(vpToken);
+            return vpToken;
+        } catch (IllegalArgumentException e) {
+            logger.errorf(e, "Failed to parse SD-JWT VP token");
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN,
+                    "Could not parse `vp_token` as an SD-JWT VP token",
+                    Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
+        }
+    }
+
+    /**
+     * Extract SD-JWT VP token from response object (DCQL era)
+     */
+    private String extractSdJwtVpTokenWithDCQL(
+            ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
+        var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+        if (dcqlQuery == null || dcqlQuery.getCredentials().size() != 1) {
+            throw new IllegalStateException(
+                    "Invalid DCQL query in authorization context. Expected exactly one credential query.");
+        }
+
+        // Ensure that VP token map matches the DCQL credential query
+        var credentialQuery = dcqlQuery.getCredentials().getFirst();
+        var vpToken = responseObject.getVpToken();
+        if (!(vpToken instanceof Map<?, ?> vpTokenMap) || !(vpTokenMap.containsKey(credentialQuery.getId()))) {
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN,
+                    "Presented vp_token map does not match DCQL credential query",
+                    Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
+        }
+
+        // Check that the VP token map provides a VP token, and only one
+        var tokens = (List<?>) vpTokenMap.get(credentialQuery.getId());
+        if (tokens.size() != 1) {
+            String errorMsg = String.format(
+                    "Presented vp_token map must contain exactly one token as requested. Found: %d", tokens.size());
+
+            logger.error(errorMsg);
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN, errorMsg, Response.Status.BAD_REQUEST, authContext, store);
+        }
+
+        return (String) tokens.getFirst();
+    }
+
+    /**
+     * Extract SD-JWT VP token from response object (Presentation Exchange format)
+     */
+    private String extractSdJwtVpTokenWithPrexFormat(
+            ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
         // Ensure that the presentation submission matches the expected presentation definition
         var definition = authContext.getRequestObject().getPresentationDefinition();
         var submission = responseObject.getPresentationSubmission();
@@ -141,7 +208,7 @@ public class AuthorizationResponseService {
         }
 
         // Check that the submission's descriptor is of SD-JWT VP format
-        var descriptor = submission.getDescriptorMap().get(0);
+        var descriptor = submission.getDescriptorMap().getFirst();
         if (!List.of(Format.SD_JWT_VC, Descriptor.Format.VC_SD_JWT.value())
                 .contains(descriptor.getFormat().value())) {
             throw failWithHttpException(
@@ -169,7 +236,7 @@ public class AuthorizationResponseService {
         }
 
         // Check that a vp_token was submitted
-        if (responseObject.getVpToken() == null || responseObject.getVpToken().isEmpty()) {
+        if (!(responseObject.getVpToken() instanceof String vpToken)) {
             throw failWithHttpException(
                     ProcessingError.INVALID_PRESENTATION_SUBMISSION,
                     "Could not parse submission in search for SD-JWT VP token",
@@ -178,19 +245,7 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        try {
-            String vpToken = decodeIfBase64Url(responseObject.getVpToken());
-            SdJwtVP.of(vpToken);
-            return vpToken;
-        } catch (IllegalArgumentException e) {
-            logger.errorf(e, "Failed to parse SD-JWT VP token");
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Could not parse `vp_token` as an SD-JWT VP token",
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
+        return vpToken;
     }
 
     /**

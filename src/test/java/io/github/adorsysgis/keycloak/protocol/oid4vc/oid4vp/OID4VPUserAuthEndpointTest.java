@@ -3,14 +3,18 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -30,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
@@ -92,6 +97,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         String expectedSessionId = pruneAuthSessionId(authContext.getTransactionId());
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
+
+        // Assert: Ensure the request object contains a DCQL query and a legacy presentation definition
+        var queryMap = new QueryMap(List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(OAuth2Constants.USERNAME));
+        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
+        SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
     }
 
     @Test
@@ -219,6 +229,16 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         // Proceed to authentication (Use 'dc-sd+jwt' in presentation submission descriptor)
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.DC_SD_JWT);
+        testSuccessfulAuthentication(sdJwt, opts);
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_VpTokenMapToDCQL() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Proceed to authentication
+        TestOpts opts = TestOpts.getDefault().setShouldPrepareLegacyResponse(false);
         testSuccessfulAuthentication(sdJwt, opts);
     }
 
@@ -638,7 +658,12 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     private HttpResponse sendAuthorizationResponseWithVPToken(
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws Exception {
         // Wrap the SD-JWT VP in an OpenID4VP response
-        List<BasicNameValuePair> oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
+        List<BasicNameValuePair> oid4vpResponse;
+        if (opts.shouldPrepareLegacyResponse()) {
+            oid4vpResponse = prepareLegacyOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
+        } else {
+            oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject);
+        }
 
         // Send the OpenID4VP response to Keycloak
         String url = getOid4vpEndpoint("/response");
@@ -653,7 +678,26 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
      * @param requestObject the request object containing the presentation definition
      */
-    private List<BasicNameValuePair> prepareOpenID4VPResponse(
+    private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
+            throws IOException {
+        // Build presentation submission
+        DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
+        Credential credentialQuery = dcqlQuery.getCredentials().getFirst();
+        var vpTokenMap = Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
+
+        // Compose the response object as form-urlencoded parameters
+        return new ArrayList<>(List.of(
+                new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, JsonSerialization.writeValueAsString(vpTokenMap)),
+                new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
+    }
+
+    /**
+     * Prepare the OpenID4VP response object to be sent to Keycloak (Legacy).
+     *
+     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
+     * @param requestObject the request object containing the presentation definition
+     */
+    private List<BasicNameValuePair> prepareLegacyOpenID4VPResponse(
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws IOException {
         // Build presentation submission
 
@@ -736,6 +780,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         private String testUser = TEST_USER;
         private boolean shouldBase64EncodeVpToken;
         private boolean shouldRetrieveAccessToken = true;
+        private boolean shouldPrepareLegacyResponse = true;
         private boolean shouldEnforceRedirectUri = false;
         private String overridePresentationDefinitionId;
         private String overridePresentationAud;
@@ -770,6 +815,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
         public TestOpts setShouldRetrieveAccessToken(boolean retrieveAccessToken) {
             this.shouldRetrieveAccessToken = retrieveAccessToken;
+            return this;
+        }
+
+        public boolean shouldPrepareLegacyResponse() {
+            return shouldPrepareLegacyResponse;
+        }
+
+        public TestOpts setShouldPrepareLegacyResponse(boolean shouldPrepareLegacyResponse) {
+            this.shouldPrepareLegacyResponse = shouldPrepareLegacyResponse;
             return this;
         }
 

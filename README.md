@@ -12,12 +12,26 @@ See [LICENSE](./LICENSE) for details.
 This plugin has been tested with:
 
 | **Requirement** | **Version** |
-| --------------- |-------------|
+|-----------------|-------------|
 | **Java**        | 21          |
 | **Keycloak**    | 26.5.4      |
 
 While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
 versions for best results.
+
+Additionally, the following features of [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
+are supported:
+
+- **1.0-Draft20** ✅
+    - Client Identifier Scheme: `x509_san_dns`
+    - Response Mode: `direct_post`
+    - Response Type: `vp_token`
+    - DIF Presentation Exchange
+
+- **1.0-Final** ⚠️
+    - DCQL Query Language
+
+Confirmed support for 1.0-Final is pending further updates, review, and testing.
 
 ## Build the Plugin
 
@@ -60,7 +74,10 @@ See `docs/README.md` for build and preview instructions.
 
 ## Releasing to Maven Central
 
+The plugin is available on
+[Maven Central](https://central.sonatype.com/artifact/io.github.adorsys-gis/keycloak-oid4vp-plugin).
 Releases are published from GitHub Actions when a tag `vX.Y.Z` is pushed.
+
 The workflow expects these repository secrets:
 
 - `CENTRAL_TOKEN_USERNAME`

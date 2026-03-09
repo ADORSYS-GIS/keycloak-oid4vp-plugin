@@ -10,7 +10,7 @@ import javax.annotation.processing.Generated;
  * <p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"jwt", "jwt_vc", "jwt_vp", "ldp", "ldp_vc", "ldp_vp", "vc+sd-jwt"})
+@JsonPropertyOrder({"dc+sd-jwt", "jwt", "jwt_vc", "jwt_vp", "ldp", "ldp_vc", "ldp_vp"})
 @Generated("jsonschema2pojo")
 public class ClaimFormat {
 
@@ -32,8 +32,8 @@ public class ClaimFormat {
     @JsonProperty("ldp_vp")
     private GenericFormat ldpVp;
 
-    @JsonProperty("vc+sd-jwt")
-    private SdGenericFormat vcSdJwt;
+    @JsonProperty("dc+sd-jwt")
+    private SdGenericFormat dcSdJwt;
 
     @JsonProperty("jwt")
     public GenericFormat getJwt() {
@@ -95,14 +95,14 @@ public class ClaimFormat {
         this.ldpVp = ldpVp;
     }
 
-    @JsonProperty("vc+sd-jwt")
-    public SdGenericFormat getVcSdJwt() {
-        return vcSdJwt;
+    @JsonProperty("dc+sd-jwt")
+    public SdGenericFormat getDcSdJwt() {
+        return dcSdJwt;
     }
 
-    @JsonProperty("vc+sd-jwt")
-    public void setVcSdJwt(SdGenericFormat vcSdJwt) {
-        this.vcSdJwt = vcSdJwt;
+    @JsonProperty("dc+sd-jwt")
+    public void setDcSdJwt(SdGenericFormat dcSdJwt) {
+        this.dcSdJwt = dcSdJwt;
     }
 
     @Override
@@ -138,7 +138,7 @@ public class ClaimFormat {
         sb.append(',');
         sb.append("vcSdJwt");
         sb.append('=');
-        sb.append(((this.vcSdJwt == null) ? "<null>" : this.vcSdJwt));
+        sb.append(((this.dcSdJwt == null) ? "<null>" : this.dcSdJwt));
         sb.append(',');
         if (sb.charAt((sb.length() - 1)) == ',') {
             sb.setCharAt((sb.length() - 1), ']');
@@ -154,7 +154,7 @@ public class ClaimFormat {
         result = ((result * 31) + ((this.ldpVp == null) ? 0 : this.ldpVp.hashCode()));
         result = ((result * 31) + ((this.ldpVc == null) ? 0 : this.ldpVc.hashCode()));
         result = ((result * 31) + ((this.jwt == null) ? 0 : this.jwt.hashCode()));
-        result = ((result * 31) + ((this.vcSdJwt == null) ? 0 : this.vcSdJwt.hashCode()));
+        result = ((result * 31) + ((this.dcSdJwt == null) ? 0 : this.dcSdJwt.hashCode()));
         result = ((result * 31) + ((this.jwtVc == null) ? 0 : this.jwtVc.hashCode()));
         result = ((result * 31) + ((this.ldp == null) ? 0 : this.ldp.hashCode()));
         result = ((result * 31) + ((this.jwtVp == null) ? 0 : this.jwtVp.hashCode()));
@@ -176,8 +176,8 @@ public class ClaimFormat {
                                                                         && this.ldpVc.equals(rhs.ldpVc))))
                                                 && ((this.jwt == rhs.jwt)
                                                         || ((this.jwt != null) && this.jwt.equals(rhs.jwt))))
-                                        && ((this.vcSdJwt == rhs.vcSdJwt)
-                                                || ((this.vcSdJwt != null) && this.vcSdJwt.equals(rhs.vcSdJwt))))
+                                        && ((this.dcSdJwt == rhs.dcSdJwt)
+                                                || ((this.dcSdJwt != null) && this.dcSdJwt.equals(rhs.dcSdJwt))))
                                 && ((this.jwtVc == rhs.jwtVc)
                                         || ((this.jwtVc != null) && this.jwtVc.equals(rhs.jwtVc))))
                         && ((this.ldp == rhs.ldp) || ((this.ldp != null) && this.ldp.equals(rhs.ldp))))
