@@ -263,16 +263,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
-    public void shouldAuthenticateSuccessfully_UnknownUser() throws Exception {
-        // Request a SD-JWT credential from Keycloak to use for authentication
-        String testUser = "unknown-user";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testUser);
-
-        // Proceed to authentication
-        testSuccessfulAuthentication(sdJwt, TestOpts.getDefault().setTestUser(testUser));
-    }
-
-    @Test
     public void shouldFailAuthentication_IfInvalidClient() throws Exception {
         URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
                 .addParameter("client_id", "unknown-client")
@@ -439,6 +429,21 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
                 "Invalid SD-JWT presentation (A required field was not presented: `username`)");
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfUserUnknown() throws Exception {
+        // Request a SD-JWT credential from Keycloak to use for authentication.
+        String testUser = "unknown-user";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testUser);
+
+        // Proceed to authentication
+        testFailingAuthentication(
+                sdJwt,
+                TestOpts.getDefault(),
+                HttpStatus.SC_UNAUTHORIZED,
+                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                "User with presented SD-JWT is unknown");
     }
 
     @Test
