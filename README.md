@@ -35,13 +35,20 @@ Confirmed support for 1.0-Final is pending further updates, review, and testing.
 
 ## Build the Plugin
 
-To compile the plugin, run:
+To compile the plugin without running tests (recommended for a first-time build), run:
 
 ```sh
-./mvnw clean package
+./mvnw clean package -DskipTests
 ```
 
 The built JAR will be located at `target/keycloak-oid4vp-plugin-{version}.jar`.
+
+If you want to run the tests, make sure **Docker is installed and running** because the test suite uses
+[Testcontainers](https://testcontainers.com/) and a Keycloak container. Then use:
+
+```sh
+./mvnw clean verify
+```
 
 ## Deploying the Plugin
 
@@ -63,6 +70,15 @@ docker compose up
 ```
 
 This will mount the plugin JAR into the Keycloak container as configured in the compose file.
+
+Once the container is up, you can access the Keycloak Admin Console at:
+
+- `http://localhost:8080/admin/master/console/`
+- Username: `admin`
+- Password: `admin`
+
+For more information about using the Keycloak Admin Console and managing realms, clients, and users, see the
+[Keycloak Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/).
 
 If you need to make specific changes (e.g., environment variables, ports, or database settings),
 you are encouraged to create a `docker-compose.override.yml` based on the provided `docker-compose.yml`.
