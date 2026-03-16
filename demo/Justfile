@@ -1,0 +1,26 @@
+set shell := ["bash", "-cu"]
+
+# Run the full end-to-end demo
+
+demo:
+  ./run-demo.sh
+
+# Start Keycloak and import the demo realm
+
+setup:
+  ./setup-realm.sh
+
+# Create or update the demo user
+
+user:
+  ./create-test-user.sh
+
+# Stop the demo stack
+
+stop:
+  source _common.sh; compose down -v
+
+# Tail Keycloak logs
+
+logs:
+  source _common.sh; compose logs -f --tail=200 keycloak
