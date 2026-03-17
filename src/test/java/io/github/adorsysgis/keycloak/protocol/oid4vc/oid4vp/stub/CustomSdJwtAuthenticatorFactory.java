@@ -57,7 +57,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
             return exampleStatusListJwt(String.format("/tokenstatus/%s.txt", resource));
         }
 
-        static String exampleStatusListJwt(String filename) {
+        public static String exampleStatusListJwt(String filename) {
             try (InputStream stream = CustomSdJwtAuthenticatorFactory.class.getResourceAsStream(filename)) {
                 if (stream == null) {
                     throw new IllegalArgumentException("Resource not found: " + filename);

@@ -29,6 +29,7 @@ import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.util.JsonSerialization;
 import org.testcontainers.images.PullPolicy;
+import org.testcontainers.utility.MountableFile;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -68,7 +69,11 @@ public abstract class BaseKeycloakTest {
                 .withRealmImportFile("/realms/test-realm-haip.json")
                 .withRealmImportFile("/realms/test-realm-v2.json")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
-                .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG");
+                .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
+                .withCopyToContainer(MountableFile.forHostPath("src/test/resources/truststore.jks"), "/opt/keycloak/conf/truststore.jks")
+                .withEnv("KC_SPI_TRUSTSTORE_FILE_FILE", "/opt/keycloak/conf/truststore.jks")
+                .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
+                .withEnv("KC_SPI_TRUSTSTORE_FILE_HOSTNAME_VERIFICATION_POLICY", "ANY");
         return container;
     }
 
@@ -119,9 +124,10 @@ public abstract class BaseKeycloakTest {
     }
 
     protected List<NameValuePair> getDefaultHttpParams() {
-        return new ArrayList<>(List.of(
-                new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.CLIENT_SECRET, TEST_CLIENT_SECRET)));
+        ArrayList<NameValuePair> params = new ArrayList<>();
+        params.add(new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID));
+        params.add(new BasicNameValuePair(OAuth2Constants.CLIENT_SECRET, TEST_CLIENT_SECRET));
+        return params;
     }
 
     /**
