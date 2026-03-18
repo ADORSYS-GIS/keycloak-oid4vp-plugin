@@ -42,17 +42,21 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
+import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
@@ -444,6 +448,27 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
                 "User with presented SD-JWT is unknown");
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfUserDisabled() throws Exception {
+        // Disable test user, then attempt authentication
+        String adminToken = getAdminAccessToken();
+        String userId = getUserIdByUsername(adminToken, getActiveTestRealm(), TEST_USER);
+
+        try {
+            setUserEnabled(adminToken, getActiveTestRealm(), userId, false);
+
+            String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+            testFailingAuthentication(
+                    sdJwt,
+                    TestOpts.getDefault(),
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "USER_DISABLED");
+        } finally {
+            setUserEnabled(adminToken, getActiveTestRealm(), userId, true);
+        }
     }
 
     @Test
@@ -876,5 +901,64 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
             this.overrideDescriptorPath = overrideDescriptorPath;
             return this;
         }
+    }
+
+    private String getAdminAccessToken() throws IOException {
+        String serverUrl = keycloak.getAuthServerUrl();
+        String tokenEndpoint = KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/realms/master/protocol/openid-connect/token")
+                .build()
+                .toString();
+
+        HttpPost httpPost = new HttpPost(tokenEndpoint);
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(
+                new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, OAuth2Constants.PASSWORD),
+                new BasicNameValuePair(OAuth2Constants.CLIENT_ID, "admin-cli"),
+                new BasicNameValuePair(OAuth2Constants.USERNAME, "admin"),
+                new BasicNameValuePair(OAuth2Constants.PASSWORD, "admin"))));
+
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        String json = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        var node = JsonSerialization.mapper.readTree(json);
+        return node.get(OAuth2Constants.ACCESS_TOKEN).asText();
+    }
+
+    private String getUserIdByUsername(String adminToken, String realm, String username) throws IOException {
+        String serverUrl = keycloak.getAuthServerUrl();
+        String url = KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/admin/realms/{realm}/users")
+                .queryParam("username", username)
+                .build(realm)
+                .toString();
+
+        HttpGet httpGet = new HttpGet(url);
+        httpGet.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken);
+        HttpResponse response = httpClient.execute(httpGet);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        String json = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        var users = JsonSerialization.mapper.readTree(json);
+        if (!users.isArray() || users.isEmpty()) {
+            throw new AssertionError("User not found: " + username);
+        }
+        return users.get(0).get("id").asText();
+    }
+
+    private void setUserEnabled(String adminToken, String realm, String userId, boolean enabled) throws IOException {
+        String serverUrl = keycloak.getAuthServerUrl();
+        String url = KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/admin/realms/{realm}/users/{id}")
+                .build(realm, userId)
+                .toString();
+
+        HttpPut httpPut = new HttpPut(url);
+        httpPut.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken);
+        httpPut.setHeader(HttpHeaders.CONTENT_TYPE, "application/json");
+        httpPut.setEntity(new StringEntity("{\"enabled\":" + enabled + "}", StandardCharsets.UTF_8));
+
+        HttpResponse response = httpClient.execute(httpPut);
+        assertEquals(HttpStatus.SC_NO_CONTENT, response.getStatusLine().getStatusCode());
     }
 }
