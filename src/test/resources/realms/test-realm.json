@@ -16,6 +16,19 @@
           "value": "password"
         }
       ]
+    },
+    {
+      "username": "disabled-user@localhost",
+      "enabled": false,
+      "email": "disabled-user@localhost",
+      "firstName": "Disabled",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password"
+        }
+      ]
     }
   ],
   "clients": [
