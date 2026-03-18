@@ -1,8 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jboss.logging.Logger;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.util.SecretGenerator;
@@ -299,12 +298,12 @@ public class AuthorizationResponseService {
         if (!OID4VPConfig.verboseErrors()) {
             clientMessage = switch (error) {
                 case AUTH_CONTEXT_CLOSED -> message;
-                case VP_TOKEN_AUTH_ERROR -> ErrorResponseSanitizer.clientDescription(
-                        "Invalid verifiable presentation", message, correlationId);
-                case INVALID_VP_TOKEN -> ErrorResponseSanitizer.clientDescription(
-                        "Invalid vp_token", message, correlationId);
-                case INVALID_PRESENTATION_SUBMISSION -> ErrorResponseSanitizer.clientDescription(
-                        "Invalid presentation_submission", message, correlationId);
+                case VP_TOKEN_AUTH_ERROR ->
+                    ErrorResponseSanitizer.clientDescription("Invalid verifiable presentation", message, correlationId);
+                case INVALID_VP_TOKEN ->
+                    ErrorResponseSanitizer.clientDescription("Invalid vp_token", message, correlationId);
+                case INVALID_PRESENTATION_SUBMISSION ->
+                    ErrorResponseSanitizer.clientDescription("Invalid presentation_submission", message, correlationId);
                 default -> ErrorResponseSanitizer.clientDescription("Invalid request", message, correlationId);
             };
         }

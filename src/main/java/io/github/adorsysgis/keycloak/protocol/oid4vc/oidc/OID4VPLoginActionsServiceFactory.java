@@ -1,7 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
 import org.keycloak.Config;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakContext;

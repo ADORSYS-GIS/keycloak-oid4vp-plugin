@@ -47,4 +47,3 @@ public final class OID4VPConfig {
         initialized = true;
     }
 }
-
