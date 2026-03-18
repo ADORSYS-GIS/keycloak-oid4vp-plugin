@@ -71,9 +71,16 @@ docker compose up
 
 This will mount the plugin JAR into the Keycloak container as configured in the compose file.
 
+By default the compose file mounts `keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar`. If you built a different version,
+set `VERSION` when starting compose:
+
+```sh
+VERSION=1.0.0-SNAPSHOT docker compose up
+```
+
 Once the container is up, you can access the Keycloak Admin Console at:
 
-- `http://localhost:8080/admin/master/console/`
+- URL:`http://localhost:8080/admin/master/console/`
 - Username: `admin`
 - Password: `admin`
 
