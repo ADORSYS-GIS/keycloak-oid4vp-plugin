@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import java.util.ArrayList;
@@ -134,7 +135,9 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     }
 
     @Override
-    public void init(Config.Scope config) {}
+    public void init(Config.Scope config) {
+        OID4VPConfig.init(config);
+    }
 
     @Override
     public void postInit(KeycloakSessionFactory factory) {}

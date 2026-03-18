@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.Referenc
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
@@ -72,7 +73,7 @@ public class SdJwtAuthenticator implements Authenticator {
                     authReqs.getKeyBindingJwtVerificationOpts(nonce));
         } catch (VerificationException e) {
             logger.errorf(e, "Token verification failed");
-            failRejectingPresentedSdJwtToken(context, e.getMessage());
+            failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
             return;
         }
 
@@ -82,7 +83,7 @@ public class SdJwtAuthenticator implements Authenticator {
                 tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
             } catch (ReferencedTokenValidationException e) {
                 logger.errorf(e, "Token status verification failed");
-                failRejectingPresentedSdJwtToken(context, "Token status verification failed");
+                failRejectingPresentedSdJwtToken(context, "Token status verification failed", e);
                 return;
             }
         }
@@ -144,11 +145,15 @@ public class SdJwtAuthenticator implements Authenticator {
         return null;
     }
 
-    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {
-        logger.info("Presented SD-JWT will be rejected as invalid");
+    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
+        String correlationId = ErrorResponseSanitizer.newCorrelationId();
+        ErrorResponseSanitizer.logDetailed(correlationId, "Presented SD-JWT rejected: " + reason, cause);
 
-        var errorRep = new OAuth2ErrorRepresentation(
-                Errors.INVALID_USER_CREDENTIALS, String.format("Invalid SD-JWT presentation (%s)", reason));
+        String description = ErrorResponseSanitizer.clientDescription(
+                "Invalid verifiable presentation",
+                String.format("Invalid SD-JWT presentation (%s)", reason),
+                correlationId);
+        var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);
 
         context.failure(
                 AuthenticationFlowError.INVALID_CREDENTIALS,

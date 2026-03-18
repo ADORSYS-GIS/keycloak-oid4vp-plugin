@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import org.keycloak.Config;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakContext;
@@ -27,7 +28,9 @@ public class OID4VPLoginActionsServiceFactory
     }
 
     @Override
-    public void init(Config.Scope config) {}
+    public void init(Config.Scope config) {
+        OID4VPConfig.init(config);
+    }
 
     @Override
     public void postInit(KeycloakSessionFactory factory) {}
