@@ -181,8 +181,6 @@ public class AuthorizationRequestService {
     }
 
     private String signRequestObject(RequestObject requestObject) {
-        // Request "state" is an opaque value; do not log it.
-        logger.debug("Signing request object");
         Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
         requestObject.issuedNow().exp(expiration);
 
