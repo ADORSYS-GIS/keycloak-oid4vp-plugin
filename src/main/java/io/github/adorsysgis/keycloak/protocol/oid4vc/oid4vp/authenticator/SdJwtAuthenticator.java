@@ -24,8 +24,8 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
-import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.services.Urls;
+import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -112,9 +112,7 @@ public class SdJwtAuthenticator implements Authenticator {
         if (presentedUsername != null && !presentedUsername.equals(user.getUsername())) {
             logger.warnf(
                     "Username mismatch for subject '%s': credential='%s', user='%s'",
-                    subject,
-                    presentedUsername,
-                    user.getUsername());
+                    subject, presentedUsername, user.getUsername());
         }
 
         context.setUser(user);
