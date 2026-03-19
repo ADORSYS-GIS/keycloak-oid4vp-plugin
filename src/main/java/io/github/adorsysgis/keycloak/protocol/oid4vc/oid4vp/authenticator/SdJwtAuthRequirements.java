@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBuilder;
@@ -35,6 +34,7 @@ public class SdJwtAuthRequirements {
     private final int kbJwtMaxAllowedAge;
     private final boolean requireNotBeforeClaim;
     private final boolean requireExpirationClaim;
+    private final boolean verifyIssuerClaim;
     private final boolean enforceRevocationStatus;
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
@@ -64,6 +64,10 @@ public class SdJwtAuthRequirements {
                 SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG_DEFAULT)));
 
+        this.verifyIssuerClaim = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.VERIFY_ISSUER_CLAIM_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.VERIFY_ISSUER_CLAIM_CONFIG_DEFAULT)));
+
         this.enforceRevocationStatus = Boolean.parseBoolean(config.getOrDefault(
                 SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)));
@@ -78,13 +82,16 @@ public class SdJwtAuthRequirements {
     }
 
     public List<String> getRequiredClaims() {
-        // A username field is required so as to reliably recover
-        // the user associated with the presented credential
-        return List.of(OAuth2Constants.USERNAME);
+        // A subject is required so we can recover the user by stable identifier
+        return List.of(JsonWebToken.SUBJECT);
     }
 
     public boolean shouldEnforceRevocationStatus() {
         return enforceRevocationStatus;
+    }
+
+    public boolean shouldVerifyIssuerClaim() {
+        return verifyIssuerClaim;
     }
 
     /**
