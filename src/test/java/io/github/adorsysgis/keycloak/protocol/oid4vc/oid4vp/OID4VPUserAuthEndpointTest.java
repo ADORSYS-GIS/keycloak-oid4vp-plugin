@@ -207,7 +207,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_SdJwtWithoutKid() throws Exception {
         // Request a valid SD-JWT credential from Keycloak without explicit kid
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER, false, true);
+        String sdJwt =
+                sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER, false, true);
 
         // Proceed to authentication
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
@@ -407,7 +408,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_SdJwtWithUnexpectedVct() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential("https://this-vct-is-not-expected.com", TEST_USER_ID, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(
+                "https://this-vct-is-not-expected.com", TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -451,7 +453,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     public void shouldFailAuthentication_SdJwtWithoutStatusClaim() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
         // Token status is enforced, but we omit the status claim, causing authentication to fail
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER, false, false);
+        String sdJwt =
+                sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER, false, false);
 
         // Proceed to authentication
         testFailingAuthentication(
