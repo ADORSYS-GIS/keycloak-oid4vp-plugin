@@ -57,6 +57,7 @@ import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.AccessToken;
+import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -99,7 +100,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         assertEquals(expectedSessionId, actualSessionId);
 
         // Assert: Ensure the request object contains a DCQL query and a legacy presentation definition
-        var queryMap = new QueryMap(List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(OAuth2Constants.USERNAME));
+        var queryMap = new QueryMap(List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT));
         SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
         SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
     }
@@ -197,7 +198,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_SdJwtWithKid() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
@@ -206,7 +207,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_SdJwtWithoutKid() throws Exception {
         // Request a valid SD-JWT credential from Keycloak without explicit kid
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER, false, true);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER, false, true);
 
         // Proceed to authentication
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
@@ -215,7 +216,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_Base64EncodedVpToken() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication (Base64-encoded VP token)
         TestOpts opts = TestOpts.getDefault().setShouldBase64EncodeVpToken(true);
@@ -225,7 +226,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_NewDcSdJwtFormat() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication (Use 'dc-sd+jwt' in presentation submission descriptor)
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.DC_SD_JWT);
@@ -235,7 +236,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_VpTokenMapToDCQL() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication
         TestOpts opts = TestOpts.getDefault().setShouldPrepareLegacyResponse(false);
@@ -245,7 +246,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_SchemedAud() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication (Prefix aud with scheme)
         String aud = "x509_san_dns:%s".formatted(getVerifierClientId());
@@ -256,7 +257,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_OtherAcceptedVct() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_ALT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_ALT, TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication (Should pass with other accepted VCT)
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
@@ -279,7 +280,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_IfRepeatedAfterSuccess() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
@@ -343,7 +344,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_NonMatchingPresentationDefinitionId() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Use a non-matching presentation definition ID
         TestOpts opts = TestOpts.getDefault().setOverridePresentationDefinitionId("unknown-presentation-definition-id");
@@ -359,7 +360,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_UnsupportedSubmissionDescriptorPath() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Only the root ($) path is supported
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorPath("$[0]");
@@ -375,7 +376,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_UnsupportedSubmissionFormat() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Only VC_SD_JWT is supported
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.JWT_VP);
@@ -406,7 +407,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_SdJwtWithUnexpectedVct() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential("https://this-vct-is-not-expected.com", TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential("https://this-vct-is-not-expected.com", TEST_USER_ID, TEST_USER);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -418,9 +419,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
-    public void shouldFailAuthentication_SdJwtWithNoUsername() throws Exception {
+    public void shouldFailAuthentication_SdJwtWithNoSubject() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null, TEST_USER);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -428,14 +429,14 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (A required field was not presented: `username`)");
+                "Invalid SD-JWT presentation (A required field was not presented: `sub`)");
     }
 
     @Test
     public void shouldFailAuthentication_IfUserUnknown() throws Exception {
         // Request a SD-JWT credential from Keycloak to use for authentication.
-        String testUser = "unknown-user";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testUser);
+        String testSubject = "unknown-subject";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testSubject, TEST_USER);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -450,7 +451,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     public void shouldFailAuthentication_SdJwtWithoutStatusClaim() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
         // Token status is enforced, but we omit the status claim, causing authentication to fail
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER, false, false);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER, false, false);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -609,7 +610,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
             String overrideNonce, String overrideAud, JWK holderkey, Integer kbJwtLifespanSecs, String errorMessage)
             throws Exception {
         // Request a SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
@@ -737,7 +738,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldAuthenticateSuccessfully_InOIDCFlow() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, TEST_USER);
 
         // Collect OIDC session data
         FormData formData = getFreshOid4vpFormActionUrl();
