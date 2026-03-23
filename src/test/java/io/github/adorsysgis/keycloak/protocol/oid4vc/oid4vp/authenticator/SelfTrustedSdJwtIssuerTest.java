@@ -76,20 +76,17 @@ public class SelfTrustedSdJwtIssuerTest {
         Mockito.lenient()
                 .when(session.getProvider(SignatureProvider.class, Algorithm.RS256))
                 .thenReturn(signatureProvider);
-        Mockito.lenient()
-                .doReturn(verifierContext)
-                .when(signatureProvider)
-                .verifier(Mockito.any(KeyWrapper.class));
+        Mockito.lenient().doReturn(verifierContext).when(signatureProvider).verifier(Mockito.any(KeyWrapper.class));
     }
 
     @Test
     void shouldRejectDisabledSigningKeys() {
-        List<SignatureVerifierContext> disabledKeyVerifiers = new SelfTrustedSdJwtIssuer(context)
-                .resolveIssuerVerifyingKeys(issuerSignedJwtWithKid("disabled-kid"));
+        List<SignatureVerifierContext> disabledKeyVerifiers =
+                new SelfTrustedSdJwtIssuer(context).resolveIssuerVerifyingKeys(issuerSignedJwtWithKid("disabled-kid"));
         assertTrue(disabledKeyVerifiers.isEmpty(), "Disabled keys must not be used for verification");
 
-        List<SignatureVerifierContext> activeKeyVerifiers = new SelfTrustedSdJwtIssuer(context)
-                .resolveIssuerVerifyingKeys(issuerSignedJwtWithKid("active-kid"));
+        List<SignatureVerifierContext> activeKeyVerifiers =
+                new SelfTrustedSdJwtIssuer(context).resolveIssuerVerifyingKeys(issuerSignedJwtWithKid("active-kid"));
         assertEquals(1, activeKeyVerifiers.size(), "Enabled keys should still be eligible for verification");
     }
 
