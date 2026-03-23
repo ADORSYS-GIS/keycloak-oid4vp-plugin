@@ -455,7 +455,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (User with presented SD-JWT is disabled)");
+                "USER_DISABLED: User with presented SD-JWT is disabled");
     }
 
     @Test
