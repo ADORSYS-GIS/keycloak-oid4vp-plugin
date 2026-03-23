@@ -36,7 +36,8 @@ public class SelfTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
 
         RealmModel realm = session.getContext().getRealm();
         KeyManager keyManager = session.keys();
-        Stream<KeyWrapper> keyStream = keyManager.getKeysStream(realm)
+        Stream<KeyWrapper> keyStream = keyManager
+                .getKeysStream(realm)
                 .filter(key -> KeyUse.SIG.equals(key.getUse()))
                 .filter(key -> key.getStatus() != null && key.getStatus().isEnabled());
 
