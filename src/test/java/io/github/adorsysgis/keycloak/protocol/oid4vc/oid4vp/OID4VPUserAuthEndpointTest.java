@@ -448,7 +448,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     @Test
     public void shouldFailAuthentication_IfUserDisabled() throws Exception {
-        // The disabled user is configured directly in the test realm JSON to avoid mutating shared state.
         String disabledUser = "disabled-user@localhost";
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledUser);
         testFailingAuthentication(

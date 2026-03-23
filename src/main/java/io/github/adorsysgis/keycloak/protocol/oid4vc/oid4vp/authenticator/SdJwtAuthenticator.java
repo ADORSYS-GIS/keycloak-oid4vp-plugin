@@ -178,8 +178,7 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private void failDenyingDisabledUser(AuthenticationFlowContext context) {
-        var errorRep = new OAuth2ErrorRepresentation(
-                Errors.USER_DISABLED, "Invalid SD-JWT presentation (User with presented SD-JWT is disabled)");
+        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_DISABLED, "User with presented SD-JWT is disabled");
 
         context.failure(
                 AuthenticationFlowError.USER_DISABLED,
