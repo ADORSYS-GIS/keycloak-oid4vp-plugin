@@ -11,8 +11,6 @@ import org.keycloak.Config;
  */
 public final class OID4VPConfig {
 
-    private static volatile boolean initialized = false;
-
     private static volatile boolean verboseErrors = false;
 
     private OID4VPConfig() {}
@@ -22,14 +20,6 @@ public final class OID4VPConfig {
     }
 
     public static synchronized void init(Config.Scope config) {
-        if (initialized) {
-            return;
-        }
-
-        // Global overrides (work well for containers and tests).
-        // Examples:
-        // - env:  OID4VP_VERBOSE_ERRORS=true
-        // - prop: -Doid4vp.verboseErrors=true
         String env = System.getenv("OID4VP_VERBOSE_ERRORS");
         String prop = System.getProperty("oid4vp.verboseErrors");
 
@@ -38,12 +28,9 @@ public final class OID4VPConfig {
         } else if (prop != null) {
             verboseErrors = Boolean.parseBoolean(prop);
         } else if (config != null) {
-            // Local scope fallback for Keycloak SPI configs
-            verboseErrors = config.getBoolean("verboseErrors", false);
+            verboseErrors = verboseErrors || config.getBoolean("verboseErrors", false);
         } else {
             verboseErrors = false;
         }
-
-        initialized = true;
     }
 }

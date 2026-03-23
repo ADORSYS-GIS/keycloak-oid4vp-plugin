@@ -14,6 +14,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
@@ -41,6 +43,8 @@ public class AuthorizationResponseService {
     private static final Logger logger = Logger.getLogger(AuthorizationResponseService.class);
 
     public static final String JSON_PATH_ROOT = "$";
+
+    private static final Pattern REF_PATTERN = Pattern.compile("\\(ref:\\s*([^\\)]+)\\)");
 
     private final KeycloakSession session;
 
@@ -121,7 +125,6 @@ public class AuthorizationResponseService {
         }
 
         if (!OID4VPConfig.verboseErrors()) {
-            // Authenticator response is already sanitized; do not add additional details.
             return errorResponse.getErrorDescription();
         }
 
@@ -291,21 +294,30 @@ public class AuthorizationResponseService {
             Response.Status status,
             AuthorizationContext authorizationContext,
             AuthenticationSessionStore store) {
-        String correlationId = ErrorResponseSanitizer.newCorrelationId();
+        String correlationIdFromMessage = extractCorrelationIdFromMessage(message);
+        String correlationId =
+                correlationIdFromMessage != null ? correlationIdFromMessage : ErrorResponseSanitizer.newCorrelationId();
+
         ErrorResponseSanitizer.logDetailed(correlationId, error + ": " + message, null);
 
         String clientMessage = message;
         if (!OID4VPConfig.verboseErrors()) {
-            clientMessage = switch (error) {
-                case AUTH_CONTEXT_CLOSED -> message;
-                case VP_TOKEN_AUTH_ERROR ->
-                    ErrorResponseSanitizer.clientDescription("Invalid verifiable presentation", message, correlationId);
-                case INVALID_VP_TOKEN ->
-                    ErrorResponseSanitizer.clientDescription("Invalid vp_token", message, correlationId);
-                case INVALID_PRESENTATION_SUBMISSION ->
-                    ErrorResponseSanitizer.clientDescription("Invalid presentation_submission", message, correlationId);
-                default -> ErrorResponseSanitizer.clientDescription("Invalid request", message, correlationId);
-            };
+            if (correlationIdFromMessage != null) {
+                clientMessage = message;
+            } else {
+                clientMessage = switch (error) {
+                    case AUTH_CONTEXT_CLOSED -> message;
+                    case VP_TOKEN_AUTH_ERROR ->
+                        ErrorResponseSanitizer.clientDescription(
+                                "Invalid verifiable presentation", message, correlationId);
+                    case INVALID_VP_TOKEN ->
+                        ErrorResponseSanitizer.clientDescription("Invalid vp_token", message, correlationId);
+                    case INVALID_PRESENTATION_SUBMISSION ->
+                        ErrorResponseSanitizer.clientDescription(
+                                "Invalid presentation_submission", message, correlationId);
+                    default -> ErrorResponseSanitizer.clientDescription("Invalid request", message, correlationId);
+                };
+            }
         }
 
         var errorResponse = new OAuth2ErrorRepresentation(error.getErrorString(), clientMessage);
@@ -324,6 +336,19 @@ public class AuthorizationResponseService {
         }
 
         return exception;
+    }
+
+    private static String extractCorrelationIdFromMessage(String message) {
+        if (message == null) {
+            return null;
+        }
+
+        Matcher matcher = REF_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        return matcher.group(1);
     }
 
     /**

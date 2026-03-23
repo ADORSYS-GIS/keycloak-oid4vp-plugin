@@ -166,7 +166,13 @@ public class SdJwtAuthenticator implements Authenticator {
     private void failDenyingAuthenticatingUser(AuthenticationFlowContext context) {
         logger.info("Presented SD-JWT will be rejected for associated user is unknown");
 
-        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, "User with presented SD-JWT is unknown");
+        String correlationId = ErrorResponseSanitizer.newCorrelationId();
+        ErrorResponseSanitizer.logDetailed(correlationId, "User with presented SD-JWT is unknown", null);
+
+        String description = ErrorResponseSanitizer.clientDescription(
+                "Invalid verifiable presentation", "User with presented SD-JWT is unknown", correlationId);
+
+        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, description);
 
         context.failure(
                 AuthenticationFlowError.UNKNOWN_USER,
