@@ -181,7 +181,7 @@ public class AuthorizationRequestService {
     }
 
     private String signRequestObject(RequestObject requestObject) {
-        logger.debugf("Signing request object (%s)", requestObject.getState());
+        logger.debug("Signing request object");
         Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
         requestObject.issuedNow().exp(expiration);
 

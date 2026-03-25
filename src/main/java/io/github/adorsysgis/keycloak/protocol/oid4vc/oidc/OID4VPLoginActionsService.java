@@ -107,7 +107,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         AuthenticationSessionModel authSession = checks.getAuthenticationSession();
 
         // Validate authorization code
-        logger.debugf("Validating authorization code: %s", authorizationCode);
+        logger.debug("Validating authorization code");
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, authorizationCode, realm, event);
         if (result.isIllegalCode() || result.isExpiredCode()) {
             String errorMessage = "Authorization code not valid";
