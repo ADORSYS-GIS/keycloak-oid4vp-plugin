@@ -67,11 +67,26 @@ public class SdJwtVPTestUtils {
      * @param setStatusClaim Specifies whether to include a status claim in the issued credential
      */
     public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
+        return requestSdJwtCredential(vct, username, setKid, setStatusClaim, getKeycloakJwk());
+    }
+
+    /**
+     * Requests that Keycloak issue an SD-JWT credential with a specific issuer key.
+     *
+     * @param vct            The verifiable credential type
+     * @param username       The username of the user whom the credential is issued for
+     * @param setKid         Specifies if the ID of the key used by Keycloak for issuing the credential
+     *                       should be set to the `kid` header of the SD-JWT
+     * @param setStatusClaim Specifies whether to include a status claim in the issued credential
+     * @param issuerJwk      The issuer key to sign the credential
+     */
+    public String requestSdJwtCredential(
+            String vct, String username, boolean setKid, boolean setStatusClaim, JWK issuerJwk) {
 
         SignatureSignerContext signer;
 
         try {
-            KeyWrapper keyWrapper = RSATestUtils.getRsaKeyWrapper(getKeycloakJwk());
+            KeyWrapper keyWrapper = RSATestUtils.getRsaKeyWrapper(issuerJwk);
             if (!setKid) {
                 keyWrapper.setKid(null);
             }
@@ -171,6 +186,10 @@ public class SdJwtVPTestUtils {
 
     public static JWK getKeycloakJwk() {
         return testJwkResource("/keys/keycloak.json");
+    }
+
+    public static JWK getDisabledKeycloakJwk() {
+        return testJwkResource("/keys/keycloak-disabled.json");
     }
 
     public static JWK getUserJwk() {
