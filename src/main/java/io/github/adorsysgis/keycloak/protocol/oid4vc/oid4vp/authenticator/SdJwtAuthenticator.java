@@ -94,6 +94,12 @@ public class SdJwtAuthenticator implements Authenticator {
             return;
         }
 
+        if (!user.isEnabled()) {
+            logger.debugf("Rejecting authentication for disabled user '%s'", user.getUsername());
+            failDenyingDisabledUser(context);
+            return;
+        }
+
         context.setUser(user);
         context.success(); // Mark authentication as successful
         logger.debugf("User '%s' successfully authenticated", user.getUsername());
@@ -165,6 +171,17 @@ public class SdJwtAuthenticator implements Authenticator {
 
         context.failure(
                 AuthenticationFlowError.UNKNOWN_USER,
+                Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
+                        .type(MediaType.APPLICATION_JSON_TYPE)
+                        .entity(errorRep)
+                        .build());
+    }
+
+    private void failDenyingDisabledUser(AuthenticationFlowContext context) {
+        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_DISABLED, "User with presented SD-JWT is disabled");
+
+        context.failure(
+                AuthenticationFlowError.USER_DISABLED,
                 Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
                         .type(MediaType.APPLICATION_JSON_TYPE)
                         .entity(errorRep)

@@ -447,6 +447,18 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
+    public void shouldFailAuthentication_IfUserDisabled() throws Exception {
+        String disabledUser = "disabled-user@localhost";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledUser);
+        testFailingAuthentication(
+                sdJwt,
+                TestOpts.getDefault(),
+                HttpStatus.SC_UNAUTHORIZED,
+                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                "USER_DISABLED: User with presented SD-JWT is disabled");
+    }
+
+    @Test
     public void shouldFailAuthentication_SdJwtWithoutStatusClaim() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
         // Token status is enforced, but we omit the status claim, causing authentication to fail
