@@ -471,7 +471,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Signature could not be verified");
+                "Invalid Issuer-Signed JWT: Signature could not be verified");
     }
 
     @Test
