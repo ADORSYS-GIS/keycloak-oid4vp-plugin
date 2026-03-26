@@ -474,6 +474,19 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
+    public void shouldFailAuthentication_SdJwtSignedWithDisabledKey() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(
+                VCT_CONFIG_DEFAULT, TEST_USER, true, true, SdJwtVPTestUtils.getDisabledKeycloakJwk());
+
+        testFailingAuthentication(
+                sdJwt,
+                TestOpts.getDefault(),
+                HttpStatus.SC_UNAUTHORIZED,
+                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                "Invalid Issuer-Signed JWT: Signature could not be verified");
+    }
+
+    @Test
     public void shouldFailAuthentication_InvalidKbJwt_SignedWithUnboundedKey() throws Exception {
         testFailAuthentication_InvalidKbJwt(
                 null,
