@@ -146,7 +146,7 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
-        String correlationId = ErrorResponseSanitizer.newCorrelationId();
+        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
         ErrorResponseSanitizer.logDetailed(correlationId, "Presented SD-JWT rejected: " + reason, cause);
 
         String description = ErrorResponseSanitizer.clientDescription(
@@ -166,7 +166,7 @@ public class SdJwtAuthenticator implements Authenticator {
     private void failDenyingAuthenticatingUser(AuthenticationFlowContext context) {
         logger.info("Presented SD-JWT will be rejected for associated user is unknown");
 
-        String correlationId = ErrorResponseSanitizer.newCorrelationId();
+        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
         ErrorResponseSanitizer.logDetailed(correlationId, "User with presented SD-JWT is unknown", null);
 
         String description = ErrorResponseSanitizer.clientDescription(

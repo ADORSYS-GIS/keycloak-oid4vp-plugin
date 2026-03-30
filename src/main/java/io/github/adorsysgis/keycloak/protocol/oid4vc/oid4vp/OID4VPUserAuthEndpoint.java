@@ -137,7 +137,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         try {
             responseObject = new ResponseObject(vpToken, presentationSubmission, state);
         } catch (IllegalArgumentException | JsonProcessingException e) {
-            String correlationId = ErrorResponseSanitizer.newCorrelationId();
+            String correlationId = ErrorResponseSanitizer.correlationIdFromState(state);
             ErrorResponseSanitizer.logDetailed(
                     correlationId,
                     "Unparseable response parameters (exception type: "

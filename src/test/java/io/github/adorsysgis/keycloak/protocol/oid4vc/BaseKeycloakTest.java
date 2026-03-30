@@ -59,6 +59,9 @@ public abstract class BaseKeycloakTest {
                 .withFeaturesEnabled("oid4vc-vci")
                 .withRealmImportFile("/realms/test-realm.json")
                 .withRealmImportFile("/realms/test-realm-v2.json")
+                .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
+                .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_LOGIN_ACTIONS_VERBOSE_ERRORS", "true")
+                .withEnv("KC_SPI_AUTHENTICATOR_SD_JWT_AUTHENTICATOR_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG");
         return container;
     }

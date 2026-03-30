@@ -353,7 +353,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 opts,
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Invalid presentation_submission");
+                "Presentation submission does not match the expected presentation definition");
     }
 
     @Test
@@ -369,7 +369,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 opts,
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Invalid presentation_submission");
+                "Invalid path in presentation submission descriptor: $[0]");
     }
 
     @Test
@@ -385,7 +385,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 opts,
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Invalid presentation_submission");
+                "SD-JWT VP token expected, but received: jwt_vp");
     }
 
     @Test
@@ -400,7 +400,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Invalid vp_token");
+                "Could not parse `vp_token` as an SD-JWT VP token");
     }
 
     @Test
@@ -414,7 +414,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid verifiable presentation");
+                "Pattern matching failed for required field");
     }
 
     @Test
@@ -428,7 +428,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid verifiable presentation");
+                "Invalid SD-JWT presentation (A required field was not presented: `username`)");
     }
 
     @Test
@@ -443,7 +443,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid verifiable presentation");
+                "User with presented SD-JWT is unknown");
     }
 
     @Test
@@ -458,7 +458,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid verifiable presentation");
+                "Invalid SD-JWT presentation (Token status verification failed)");
     }
 
     @Test
@@ -630,7 +630,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid verifiable presentation");
+                errorMessage);
     }
 
     /**

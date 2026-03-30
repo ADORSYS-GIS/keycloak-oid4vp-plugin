@@ -20,17 +20,12 @@ public final class OID4VPConfig {
     }
 
     public static synchronized void init(Config.Scope config) {
-        String env = System.getenv("OID4VP_VERBOSE_ERRORS");
-        String prop = System.getProperty("oid4vp.verboseErrors");
-
-        if (env != null) {
-            verboseErrors = Boolean.parseBoolean(env);
-        } else if (prop != null) {
-            verboseErrors = Boolean.parseBoolean(prop);
-        } else if (config != null) {
-            verboseErrors = verboseErrors || config.getBoolean("verboseErrors", false);
-        } else {
+        if (config == null) {
             verboseErrors = false;
+            return;
         }
+
+        boolean enabled = config.getBoolean("verbose-errors", false) || config.getBoolean("verboseErrors", false);
+        verboseErrors = verboseErrors || enabled;
     }
 }

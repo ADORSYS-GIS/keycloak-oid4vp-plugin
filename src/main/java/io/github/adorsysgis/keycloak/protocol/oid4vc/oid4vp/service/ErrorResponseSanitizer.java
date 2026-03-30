@@ -1,8 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import java.util.UUID;
 import org.jboss.logging.Logger;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
  * Produces safe client-facing error descriptions while keeping detailed reasons in server logs.
@@ -15,6 +17,21 @@ public final class ErrorResponseSanitizer {
 
     public static String newCorrelationId() {
         return UUID.randomUUID().toString();
+    }
+
+    public static String correlationIdFromAuthSession(AuthenticationSessionModel authSession) {
+        if (authSession == null) {
+            return newCorrelationId();
+        }
+        return OID4VPUserAuthEndpointBase.getAuthSessionId(authSession);
+    }
+
+    public static String correlationIdFromState(String state) {
+        try {
+            return OID4VPUserAuthEndpointBase.pruneAuthSessionId(state);
+        } catch (IllegalArgumentException e) {
+            return newCorrelationId();
+        }
     }
 
     public static String clientDescription(String generic, String detailed, String correlationId) {

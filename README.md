@@ -67,6 +67,28 @@ This will mount the plugin JAR into the Keycloak container as configured in the 
 If you need to make specific changes (e.g., environment variables, ports, or database settings),
 you are encouraged to create a `docker-compose.override.yml` based on the provided `docker-compose.yml`.
 
+## Configuration
+
+This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to
+clients. By default, verbose errors are disabled (safe-by-default).
+
+Provider configuration should use Keycloak's SPI configuration mechanism (e.g., `keycloak.conf`, `KC_*` environment
+variables, or CLI flags), which is exposed to providers via `init(Config.Scope config)`.
+
+Examples (from Keycloak docs: `spi-<spi-id>--<provider-id>--<property>=<value>`):
+
+- Enable verbose errors for the OpenID4VP user auth endpoint provider:
+
+  `spi-realm-restapi-extension--oid4vp-auth--verbose-errors=true`
+
+- Enable verbose errors for the login actions provider:
+
+  `spi-realm-restapi-extension--oid4vp-login-actions--verbose-errors=true`
+
+- Enable verbose errors for the SD-JWT authenticator provider:
+
+  `spi-authenticator--sd-jwt-authenticator--verbose-errors=true`
+
 ## Documentation site (Antora)
 
 The AsciiDoc content in `docs/` is published with [Antora](https://docs.antora.org/antora/latest/).
