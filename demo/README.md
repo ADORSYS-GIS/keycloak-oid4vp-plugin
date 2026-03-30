@@ -118,7 +118,7 @@ cp demo/.env.example demo/.env
 Then edit:
 
 ```bash
-KC_HTTP_PORT=18080
+KC_HTTP_PORT=8080
 ```
 
 The demo scripts load `demo/.env` automatically, so you do not need to export variables into your shell.
