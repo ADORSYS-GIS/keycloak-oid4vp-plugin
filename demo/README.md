@@ -1,100 +1,143 @@
-# OID4VP Local Demo (Walletless)
+# OID4VP Local Demo
 
-This demo spins up Keycloak with the OID4VP plugin, creates a demo realm + user, and runs a Java flow that **acts like a wallet**. You get a full end-to-end OpenID4VP authentication without any external wallet app.
+This demo is designed as a teaching tool for the OID4VP authentication flow implemented by the plugin.
+
+It splits the flow into two CLI actors:
+
+- an **app** that starts authentication, displays the `openid4vp` offer link, polls transaction status, and can retrieve an access token;
+- a **wallet** that accepts an offer link, lets you choose a credential scenario, and submits the presentation.
+
+There is also a retained one-shot **smoke** flow for quick automation.
 
 ## Prerequisites
 
 - Docker (Compose v2 recommended)
-- Java 21 (for building and running the demo flow)
+- Java 21
 - `bash`
-- Optional: `just` for convenient commands
+- Optional: `just`
 
-## What This Demo Does
+## Demo Layout
 
-1. Starts Keycloak with the OID4VP plugin (`demo/docker-compose.yml`)
-2. Imports a demo realm (`demo/realm.json`)
-3. Creates a test user (`demo/create-test-user.sh`)
-4. Runs a Java flow (`demo/sample-flow.java`) that:
-   - Calls `/oid4vp-auth/request`
-   - Resolves the signed request object
-   - Builds an SD-JWT credential + VP token (wallet replacement)
-   - Posts `/oid4vp-auth/response`
-   - Polls `/oid4vp-auth/status/{transactionId}`
-   - Exchanges the authorization code for an access token
+- `app/`
+  - interactive verifier/app CLI
+- `wallet/`
+  - interactive wallet CLI
+- `lib/`
+  - shared Java helpers for HTTP, SD-JWT, and OID4VP protocol handling
+- `smoke/`
+  - one-shot end-to-end automation built on the same shared helpers
+- `realm.json`
+  - demo realm, client, auth flow, and demo users
+- `docker-compose.yml`
+  - local Keycloak runtime for the demo
 
-## Quick Start
+## Interactive Flow
 
-From the repo root:
+Open two terminals.
 
-```bash
-just -f demo/Justfile demo
-```
-
-Or without `just`:
+Terminal 1:
 
 ```bash
-./demo/run-demo.sh
+cd demo
+just start app
 ```
 
-First run may take a few minutes while Maven downloads dependencies and builds the plugin.
+Terminal 2:
+
+```bash
+cd demo
+just start wallet
+```
+
+Then:
+
+1. In the app terminal, choose to start an authentication flow.
+2. The app prints an `openid4vp://...` offer link and starts polling in the background.
+3. Copy that link into the wallet terminal.
+4. In the wallet terminal, choose one of the credential scenarios.
+5. The wallet sends the presentation and returns to its prompt.
+6. The app reports success or failure.
+7. On success, the app can optionally exchange the authorization code for an access token and print the authenticated user details.
+
+The wallet currently supports these scenarios:
+
+- valid credential issued to Alice
+- valid credential issued to Bob
+- valid credential issued to an unknown user
+- invalid credential issued to Alice (expired)
+
+## One-Shot Smoke Flow
+
+For automation or a quick end-to-end check:
+
+```bash
+cd demo
+just smoke
+```
+
+or from the repo root:
+
+```bash
+just -f demo/Justfile smoke
+```
+
+This keeps the old “do everything in one stroke” behavior, but it now sits beside the interactive demo instead of replacing it.
 
 ## Scripts
 
-- `demo/setup-realm.sh`
-  - Builds the plugin if needed
-  - Starts Keycloak (Docker Compose)
-  - Imports the demo realm
+- `just start app`
+  - starts Keycloak if needed
+  - imports the demo realm if needed
+  - runs the interactive app CLI
+- `just start wallet`
+  - runs the interactive wallet CLI
+- `just smoke`
+  - runs the non-interactive end-to-end smoke demo
+- `just stop`
+  - tears down the local Keycloak demo stack
+- `just logs`
+  - tails Keycloak logs
 
-- `demo/create-test-user.sh`
-  - Creates or updates the demo user and password
+## Demo Users
 
-- `demo/run-demo.sh`
-  - Runs `setup-realm.sh`
-  - Runs `create-test-user.sh`
-  - Compiles and executes `sample-flow.java`
+The realm imports these demo users directly:
 
-## Expected Output
-
-You should see log lines like:
-
-- `Received authorization_request and transaction_id`
-- `Prepared SD-JWT VP token`
-- `Authentication succeeded. Received authorization_code`
-- `Access token issued for user: test-user@localhost`
+- `alice@localhost`
+- `bob@localhost`
 
 ## Configuration
 
-All scripts read the following environment variables (defaults shown):
+Most users do not need to configure anything.
 
-- `KC_HTTP_PORT=8080`
-- `KC_ADMIN_USER=admin`
-- `KC_ADMIN_PASS=admin`
-- `DEMO_REALM=oid4vp-demo`
-- `DEMO_CLIENT_ID=test-app`
-- `DEMO_CLIENT_SECRET=password`
-- `DEMO_REDIRECT_URI=http://localhost:4200/callback`
-- `DEMO_USERNAME=test-user@localhost`
-- `DEMO_PASSWORD=password`
-- `DEMO_VCT=https://credentials.example.com/identity_credential`
-- `DEMO_ISSUER_JWK=demo/keys/keycloak.json`
-- `DEMO_HOLDER_JWK=demo/keys/user-wallet-key.json`
+If you need to override the default host port, create a `demo/.env` file:
 
-If you want to change the realm name or client IDs, update `demo/realm.json` and the variables above together.
+```bash
+cp demo/.env.example demo/.env
+```
+
+Then edit:
+
+```bash
+KC_HTTP_PORT=18080
+```
+
+The demo scripts load `demo/.env` automatically, so you do not need to export variables into your shell.
+
+If you need deeper overrides for local debugging, the scripts still honor environment variables from `.env`, but the common case is just changing `KC_HTTP_PORT`.
 
 ## Notes
 
 - The demo disables token-status enforcement to avoid external HTTP calls during local development.
-- The SD-JWT issuer key in `demo/keys/keycloak.json` matches the realm key provider in `demo/realm.json`, so verification succeeds locally.
-- The demo uses HTTP (`start-dev`) and is **not** production-ready.
+- The issuer key in `keys/keycloak.json` matches the realm key provider in `realm.json`, so local verification succeeds.
+- The wallet CLI accepts a raw `openid4vp` offer link. That keeps it reusable for future browser-assisted flows too.
+- The demo uses HTTP and `start-dev`. It is not production-ready.
+- If you previously ran the older one-shot demo, use `just stop` before your first interactive run so the realm is recreated cleanly.
 
 ## Tear Down
 
 ```bash
-just -f demo/Justfile stop
+cd demo
+just stop
 ```
 
-or
-
-```bash
-docker compose -f demo/docker-compose.yml -p oid4vp-demo down -v
-```
+The app script also tears the stack down automatically when you choose to stop the app.

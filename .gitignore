@@ -2,6 +2,7 @@
 .flattened-pom.xml
 /target/
 demo/target/
+demo/.env
 
 # IDE specific files
 .idea/

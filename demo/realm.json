@@ -3,14 +3,39 @@
   "realm": "oid4vp-demo",
   "enabled": true,
   "sslRequired": "none",
+  "users": [
+    {
+      "username": "alice@localhost",
+      "enabled": true,
+      "email": "alice@localhost",
+      "firstName": "Alice",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password"
+        }
+      ]
+    },
+    {
+      "username": "bob@localhost",
+      "enabled": true,
+      "email": "bob@localhost",
+      "firstName": "Bob",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password"
+        }
+      ]
+    }
+  ],
   "clients": [
     {
       "clientId": "test-app",
       "enabled": true,
       "secret": "password",
-      "redirectUris": [
-        "http://localhost:4200/*"
-      ],
       "attributes": {
         "login_theme": "keycloak.v2+oid4vp"
       }

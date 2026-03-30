@@ -1,3 +1,5 @@
+package demo.lib;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -46,106 +48,50 @@ import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.util.JWKSUtils;
 
-class SampleFlow {
-    private static final int ISSUER_SIGNED_JWT_LIFESPAN_SECS = 300;
-    private static final int KB_JWT_LIFESPAN_SECS = 60;
+public final class DemoSupport {
 
-    public static void main(String[] args) throws Exception {
-        CryptoIntegration.init(SampleFlow.class.getClassLoader());
-        DemoConfig cfg = DemoConfig.fromEnv();
+    public static final int ISSUER_SIGNED_JWT_LIFESPAN_SECS = 300;
+    public static final int KB_JWT_LIFESPAN_SECS = 60;
 
-        log("Starting OID4VP demo flow");
-        log("Base URL: " + cfg.baseUrl);
-        log("Realm: " + cfg.realm);
-        log("OIDC Client ID: " + cfg.clientId);
-        log("Username: " + cfg.username);
+    private DemoSupport() {}
 
-        HttpClient http = HttpClient.newBuilder()
+    public static void bootstrapCrypto() {
+        CryptoIntegration.init(DemoSupport.class.getClassLoader());
+    }
+
+    public static HttpClient newHttpClient() {
+        return HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
-
-        // 1) Request an OpenID4VP authorization request
-        String requestUrl = cfg.baseUrl + "/realms/" + cfg.realm + "/oid4vp-auth/request?client_id="
-                + urlEncode(cfg.clientId);
-        AuthorizationContext authContext = getJson(http, requestUrl, AuthorizationContext.class);
-        requireNonBlank(authContext.getAuthorizationRequest(), "authorization_request");
-        requireNonBlank(authContext.getTransactionId(), "transaction_id");
-        log("Received authorization_request and transaction_id");
-
-        // 2) Resolve the signed request object
-        String requestUri = extractQueryParam(authContext.getAuthorizationRequest(), "request_uri");
-        String signedRequestJwt = getText(http, requestUri);
-        RequestObject requestObject = new JWSInput(signedRequestJwt).readJsonContent(RequestObject.class);
-        log("Resolved request object");
-        log("nonce: " + requestObject.getNonce());
-        log("verifier client_id: " + requestObject.getClientId());
-
-        // 3) Build an SD-JWT credential and a VP token (wallet replacement)
-        JWK issuerJwk = loadJwk(Path.of(cfg.issuerJwkPath));
-        JWK holderPrivateJwk = loadJwk(Path.of(cfg.holderJwkPath));
-        JWK holderPublicJwk = loadJwk(Path.of(cfg.holderJwkPath));
-
-        String sdJwt = buildSdJwtCredential(cfg, issuerJwk, holderPublicJwk);
-        String vpToken = presentSdJwt(sdJwt, requestObject.getNonce(), requestObject.getClientId(), holderPrivateJwk);
-        log("Prepared SD-JWT VP token");
-
-        // 4) Build an OpenID4VP response
-        Map<String, String> responseForm = new LinkedHashMap<>();
-        if (requestObject.getPresentationDefinition() != null) {
-            PresentationSubmission submission = buildPresentationSubmission(requestObject.getPresentationDefinition());
-            responseForm.put(ResponseObject.VP_TOKEN_KEY, vpToken);
-            responseForm.put(
-                    ResponseObject.PRESENTATION_SUBMISSION_KEY,
-                    JsonSerialization.writeValueAsString(submission));
-        } else if (requestObject.getDcqlQuery() != null) {
-            DcqlQuery query = requestObject.getDcqlQuery();
-            Credential credential = query.getCredentials().getFirst();
-            Map<String, List<String>> vpTokenMap = Map.of(credential.getId(), List.of(vpToken));
-            responseForm.put(ResponseObject.VP_TOKEN_KEY, JsonSerialization.writeValueAsString(vpTokenMap));
-        } else {
-            throw new IllegalStateException("Request object contains neither presentation_definition nor dcql_query");
-        }
-        responseForm.put(ResponseObject.STATE_KEY, requestObject.getState());
-
-        String responseUrl = cfg.baseUrl + "/realms/" + cfg.realm + "/oid4vp-auth/response";
-        postForm(http, responseUrl, responseForm);
-        log("Submitted OpenID4VP response");
-
-        // 5) Poll for status
-        String statusUrl = cfg.baseUrl + "/realms/" + cfg.realm + "/oid4vp-auth/status/" + authContext.getTransactionId();
-        AuthorizationContext status = pollStatus(http, statusUrl, 30, Duration.ofSeconds(1));
-        if (status.getStatus() != AuthorizationContextStatus.SUCCESS) {
-            throw new IllegalStateException("Authentication failed: " + status.getErrorDescription());
-        }
-        requireNonBlank(status.getAuthorizationCode(), "authorization_code");
-        log("Authentication succeeded. Received authorization_code");
-
-        // 6) Exchange the auth code for an access token
-        String tokenUrl = cfg.baseUrl + "/realms/" + cfg.realm + "/protocol/openid-connect/token";
-        Map<String, String> tokenForm = new LinkedHashMap<>();
-        tokenForm.put(OAuth2Constants.GRANT_TYPE, OAuth2Constants.AUTHORIZATION_CODE);
-        tokenForm.put(OAuth2Constants.CLIENT_ID, cfg.clientId);
-        tokenForm.put(OAuth2Constants.CLIENT_SECRET, cfg.clientSecret);
-        tokenForm.put(OAuth2Constants.CODE, status.getAuthorizationCode());
-        if (cfg.redirectUri != null && !cfg.redirectUri.isBlank()) {
-            tokenForm.put(OAuth2Constants.REDIRECT_URI, cfg.redirectUri);
-        }
-
-        JsonNode tokenResponse = postFormJson(http, tokenUrl, tokenForm);
-        String accessTokenStr = tokenResponse.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
-        requireNonBlank(accessTokenStr, "access_token");
-
-        AccessToken accessToken = new JWSInput(accessTokenStr).readJsonContent(AccessToken.class);
-        log("Access token issued for user: " + accessToken.getPreferredUsername());
-        log("Issuer: " + accessToken.getIssuer());
-        log("OID4VP demo flow complete.");
     }
 
-    private static AuthorizationContext pollStatus(
-            HttpClient http, String url, int attempts, Duration sleep) throws Exception {
+    public static AuthorizationContext requestAuthorizationContext(HttpClient http, DemoConfig cfg) throws Exception {
+        String requestUrl = cfg.baseUrl() + "/realms/" + cfg.realm() + "/oid4vp-auth/request?client_id="
+                + urlEncode(cfg.clientId());
+        return getJson(http, requestUrl, AuthorizationContext.class);
+    }
+
+    public static RequestObject resolveRequestObject(HttpClient http, AuthorizationContext authContext) throws Exception {
+        return resolveRequestObject(http, authContext.getAuthorizationRequest());
+    }
+
+    public static RequestObject resolveRequestObject(HttpClient http, String authorizationRequest) throws Exception {
+        String requestUri = extractQueryParam(authorizationRequest, "request_uri");
+        String signedRequestJwt = getText(http, requestUri);
+        return new JWSInput(signedRequestJwt).readJsonContent(RequestObject.class);
+    }
+
+    public static AuthorizationContext fetchStatus(HttpClient http, DemoConfig cfg, String transactionId)
+            throws Exception {
+        String statusUrl = cfg.baseUrl() + "/realms/" + cfg.realm() + "/oid4vp-auth/status/" + transactionId;
+        return getJson(http, statusUrl, AuthorizationContext.class);
+    }
+
+    public static AuthorizationContext pollUntilTerminal(
+            HttpClient http, DemoConfig cfg, String transactionId, int attempts, Duration sleep) throws Exception {
         for (int i = 1; i <= attempts; i++) {
-            AuthorizationContext status = getJson(http, url, AuthorizationContext.class);
+            AuthorizationContext status = fetchStatus(http, cfg, transactionId);
             if (status.getStatus() == AuthorizationContextStatus.SUCCESS
                     || status.getStatus() == AuthorizationContextStatus.ERROR) {
                 return status;
@@ -153,6 +99,61 @@ class SampleFlow {
             Thread.sleep(sleep.toMillis());
         }
         throw new IllegalStateException("Timed out waiting for authentication status");
+    }
+
+    public static JsonNode exchangeAuthorizationCode(HttpClient http, DemoConfig cfg, String authorizationCode)
+            throws Exception {
+        String tokenUrl = cfg.baseUrl() + "/realms/" + cfg.realm() + "/protocol/openid-connect/token";
+        Map<String, String> tokenForm = new LinkedHashMap<>();
+        tokenForm.put(OAuth2Constants.GRANT_TYPE, OAuth2Constants.AUTHORIZATION_CODE);
+        tokenForm.put(OAuth2Constants.CLIENT_ID, cfg.clientId());
+        tokenForm.put(OAuth2Constants.CLIENT_SECRET, cfg.clientSecret());
+        tokenForm.put(OAuth2Constants.CODE, authorizationCode);
+
+        return postFormJson(http, tokenUrl, tokenForm);
+    }
+
+    public static AccessToken parseAccessToken(String accessTokenStr) throws Exception {
+        return new JWSInput(accessTokenStr).readJsonContent(AccessToken.class);
+    }
+
+    public static String describeResponseFormat(RequestObject requestObject) {
+        if (requestObject.getPresentationDefinition() != null) {
+            return "presentation-exchange";
+        }
+        if (requestObject.getDcqlQuery() != null) {
+            return "dcql";
+        }
+        return "unknown";
+    }
+
+    public static String presentScenario(DemoConfig cfg, CredentialScenario scenario, RequestObject requestObject)
+            throws Exception {
+        String sdJwt = buildSdJwtCredential(cfg, scenario);
+        JWK holderKey = loadJwk(Path.of(cfg.holderJwkPath()));
+        return presentSdJwt(sdJwt, requestObject.getNonce(), requestObject.getClientId(), holderKey);
+    }
+
+    public static void submitPresentation(HttpClient http, RequestObject requestObject, String vpToken) throws Exception {
+        Map<String, String> responseForm = new LinkedHashMap<>();
+
+        if (requestObject.getPresentationDefinition() != null) {
+            PresentationSubmission submission = buildPresentationSubmission(requestObject.getPresentationDefinition());
+            responseForm.put(ResponseObject.VP_TOKEN_KEY, vpToken);
+            responseForm.put(
+                    ResponseObject.PRESENTATION_SUBMISSION_KEY, JsonSerialization.writeValueAsString(submission));
+        } else if (requestObject.getDcqlQuery() != null) {
+            DcqlQuery query = requestObject.getDcqlQuery();
+            Credential credential = query.getCredentials().getFirst();
+            Map<String, List<String>> vpTokenMap = Map.of(credential.getId(), List.of(vpToken));
+            responseForm.put(ResponseObject.VP_TOKEN_KEY, JsonSerialization.writeValueAsString(vpTokenMap));
+        } else {
+            throw new IllegalStateException(
+                    "Request object contains neither presentation_definition nor dcql_query");
+        }
+
+        responseForm.put(ResponseObject.STATE_KEY, requestObject.getState());
+        postForm(http, requestObject.getResponseUri(), responseForm);
     }
 
     private static PresentationSubmission buildPresentationSubmission(PresentationDefinition definition) {
@@ -171,21 +172,22 @@ class SampleFlow {
         return submission;
     }
 
-    private static String buildSdJwtCredential(DemoConfig cfg, JWK issuerJwk, JWK holderPublicJwk) throws Exception {
+    private static String buildSdJwtCredential(DemoConfig cfg, CredentialScenario scenario) throws Exception {
+        JWK issuerJwk = loadJwk(Path.of(cfg.issuerJwkPath()));
+        JWK holderPublicJwk = loadJwk(Path.of(cfg.holderJwkPath()));
         KeyWrapper issuerKeyWrapper = getRsaKeyWrapper(issuerJwk);
         SignatureSignerContext issuerSigner = new AsymmetricSignatureSignerContext(issuerKeyWrapper);
 
+        long now = Time.currentTime();
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
-        claimSet.put(OAuth2Constants.ISSUER, cfg.issuer);
-        claimSet.put("vct", cfg.vct);
-        claimSet.put(OAuth2Constants.USERNAME, cfg.username);
-        claimSet.put("iat", Time.currentTime());
-        claimSet.put("exp", Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
+        claimSet.put(OAuth2Constants.ISSUER, cfg.issuer());
+        claimSet.put("vct", cfg.vct());
+        claimSet.put(OAuth2Constants.USERNAME, scenario.username(cfg));
+        claimSet.put("iat", now);
+        claimSet.put("exp", now + scenario.expirationOffsetSeconds());
 
-        // Bind to holder key
-        JWK publicOnly = stripEcPrivateKey(holderPublicJwk);
         ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
-        cnf.set("jwk", JsonSerialization.mapper.valueToTree(publicOnly));
+        cnf.set("jwk", JsonSerialization.mapper.valueToTree(stripEcPrivateKey(holderPublicJwk)));
         claimSet.set("cnf", cnf);
 
         DisclosureSpec.Builder disclosure = DisclosureSpec.builder()
@@ -232,7 +234,8 @@ class SampleFlow {
 
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() / 100 != 2) {
-            throw new IllegalStateException("GET " + url + " failed: " + response.statusCode() + " -> " + response.body());
+            throw new IllegalStateException(
+                    "GET " + url + " failed: " + response.statusCode() + " -> " + response.body());
         }
         return response.body();
     }
@@ -247,7 +250,8 @@ class SampleFlow {
 
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() / 100 != 2) {
-            throw new IllegalStateException("POST " + url + " failed: " + response.statusCode() + " -> " + response.body());
+            throw new IllegalStateException(
+                    "POST " + url + " failed: " + response.statusCode() + " -> " + response.body());
         }
     }
 
@@ -261,7 +265,8 @@ class SampleFlow {
 
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() / 100 != 2) {
-            throw new IllegalStateException("POST " + url + " failed: " + response.statusCode() + " -> " + response.body());
+            throw new IllegalStateException(
+                    "POST " + url + " failed: " + response.statusCode() + " -> " + response.body());
         }
         return JsonSerialization.readValue(response.body(), JsonNode.class);
     }
@@ -269,7 +274,9 @@ class SampleFlow {
     private static String formEncode(Map<String, String> form) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, String> entry : form.entrySet()) {
-            if (sb.length() > 0) sb.append("&");
+            if (sb.length() > 0) {
+                sb.append("&");
+            }
             sb.append(urlEncode(entry.getKey()));
             sb.append("=");
             sb.append(urlEncode(entry.getValue()));
@@ -285,7 +292,9 @@ class SampleFlow {
 
         for (String pair : query.split("&")) {
             int idx = pair.indexOf('=');
-            if (idx <= 0) continue;
+            if (idx <= 0) {
+                continue;
+            }
             String key = decode(pair.substring(0, idx));
             String value = decode(pair.substring(idx + 1));
             if (name.equals(key)) {
@@ -304,16 +313,11 @@ class SampleFlow {
         return java.net.URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
-    private static void requireNonBlank(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing required field: " + field);
-        }
-    }
-
     private static JWK loadJwk(Path path) throws IOException {
         if (!Files.exists(path)) {
             throw new IllegalArgumentException("JWK file not found: " + path);
         }
+
         try (InputStream in = Files.newInputStream(path)) {
             return JsonSerialization.readValue(in, JWK.class);
         }
@@ -342,29 +346,27 @@ class SampleFlow {
         return keyWrapper;
     }
 
-    private static void log(String msg) {
-        System.out.println("[demo] " + msg);
-    }
-
-    private record DemoConfig(
+    public record DemoConfig(
             String baseUrl,
             String realm,
             String clientId,
             String clientSecret,
-            String redirectUri,
-            String username,
+            String aliceUsername,
+            String bobUsername,
+            String unknownUsername,
             String vct,
             String issuer,
             String issuerJwkPath,
             String holderJwkPath) {
 
-        static DemoConfig fromEnv() {
-            String baseUrl = env("DEMO_BASE_URL", "http://localhost:8080");
+        public static DemoConfig fromEnv() {
+            String baseUrl = env("DEMO_BASE_URL", "http://localhost:18080");
             String realm = env("DEMO_REALM", "oid4vp-demo");
             String clientId = env("DEMO_CLIENT_ID", "test-app");
             String clientSecret = env("DEMO_CLIENT_SECRET", "password");
-            String redirectUri = env("DEMO_REDIRECT_URI", "http://localhost:4200/callback");
-            String username = env("DEMO_USERNAME", "test-user@localhost");
+            String aliceUsername = env("DEMO_ALICE_USERNAME", "alice@localhost");
+            String bobUsername = env("DEMO_BOB_USERNAME", "bob@localhost");
+            String unknownUsername = env("DEMO_UNKNOWN_USERNAME", "mallory@localhost");
             String vct = env("DEMO_VCT", "https://credentials.example.com/identity_credential");
             String issuerJwk = env("DEMO_ISSUER_JWK", "demo/keys/keycloak.json");
             String holderJwk = env("DEMO_HOLDER_JWK", "demo/keys/user-wallet-key.json");
@@ -375,8 +377,9 @@ class SampleFlow {
                     realm,
                     clientId,
                     clientSecret,
-                    redirectUri,
-                    username,
+                    aliceUsername,
+                    bobUsername,
+                    unknownUsername,
                     vct,
                     issuer,
                     issuerJwk,
@@ -389,7 +392,71 @@ class SampleFlow {
         }
     }
 
-    // Minimal RSA/EC helpers (adapted from src/test/utils)
+    public enum CredentialScenario {
+        VALID_ALICE(
+                "1",
+                "Valid credential issued to Alice",
+                "Expected result: authentication succeeds for Alice"),
+        VALID_BOB(
+                "2",
+                "Valid credential issued to Bob",
+                "Expected result: authentication succeeds for Bob"),
+        UNKNOWN_USER(
+                "3",
+                "Valid credential issued to an unknown user",
+                "Expected result: presentation is accepted, user lookup fails"),
+        INVALID_ALICE(
+                "4",
+                "Invalid credential issued to Alice (expired)",
+                "Expected result: credential validation fails");
+
+        private final String choice;
+        private final String label;
+        private final String outcome;
+
+        CredentialScenario(String choice, String label, String outcome) {
+            this.choice = choice;
+            this.label = label;
+            this.outcome = outcome;
+        }
+
+        public String choice() {
+            return choice;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public String outcome() {
+            return outcome;
+        }
+
+        public String username(DemoConfig cfg) {
+            return switch (this) {
+                case VALID_ALICE, INVALID_ALICE -> cfg.aliceUsername();
+                case VALID_BOB -> cfg.bobUsername();
+                case UNKNOWN_USER -> cfg.unknownUsername();
+            };
+        }
+
+        public long expirationOffsetSeconds() {
+            return switch (this) {
+                case INVALID_ALICE -> -30;
+                default -> ISSUER_SIGNED_JWT_LIFESPAN_SECS;
+            };
+        }
+
+        public static CredentialScenario fromChoice(String choice) {
+            for (CredentialScenario scenario : values()) {
+                if (scenario.choice.equalsIgnoreCase(choice)) {
+                    return scenario;
+                }
+            }
+            return null;
+        }
+    }
+
     private static final class RSATestUtils {
         private static java.security.PrivateKey getRsaPrivateKey(JWK jwk) throws Exception {
             byte[] n = Base64.getUrlDecoder().decode((String) jwk.getOtherClaims().get("n"));

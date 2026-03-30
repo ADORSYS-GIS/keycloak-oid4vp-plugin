@@ -1,26 +1,24 @@
 set shell := ["bash", "-cu"]
 
-# Run the full end-to-end demo
+demo_dir := justfile_directory()
 
-demo:
-  ./run-demo.sh
-
-# Start Keycloak and import the demo realm
+start actor:
+  cd '{{demo_dir}}' && case "{{actor}}" in \
+    app) ./app/start.sh ;; \
+    wallet) ./wallet/start.sh ;; \
+    *) echo "Use 'just start app' or 'just start wallet'." >&2; exit 1 ;; \
+  esac
 
 setup:
-  ./setup-realm.sh
+  cd '{{demo_dir}}' && source _common.sh && ensure_demo_realm
 
-# Create or update the demo user
+smoke:
+  cd '{{demo_dir}}' && ./smoke/run.sh
 
-user:
-  ./create-test-user.sh
-
-# Stop the demo stack
+demo: smoke
 
 stop:
-  source _common.sh; compose down -v
-
-# Tail Keycloak logs
+  cd '{{demo_dir}}' && source _common.sh && ensure_plugin_jar >/dev/null && compose down -v
 
 logs:
-  source _common.sh; compose logs -f --tail=200 keycloak
+  cd '{{demo_dir}}' && source _common.sh && ensure_plugin_jar >/dev/null && compose logs -f --tail=200 keycloak
