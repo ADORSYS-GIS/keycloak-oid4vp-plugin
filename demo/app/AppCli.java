@@ -1,8 +1,9 @@
 package demo.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import demo.lib.DemoSupport;
-import demo.lib.DemoSupport.DemoConfig;
+import demo.lib.DemoConfig;
+import demo.lib.DemoRuntime;
+import demo.lib.Oid4vpClient;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import java.io.BufferedReader;
@@ -23,10 +24,11 @@ public final class AppCli {
     private AppCli() {}
 
     public static void main(String[] args) throws Exception {
-        DemoSupport.bootstrapCrypto();
+        DemoRuntime.bootstrapCrypto();
 
         DemoConfig cfg = DemoConfig.fromEnv();
-        HttpClient http = DemoSupport.newHttpClient();
+        HttpClient http = DemoRuntime.newHttpClient();
+        Oid4vpClient oid4vpClient = new Oid4vpClient(http, cfg);
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
 
         printBanner(cfg);
@@ -39,7 +41,7 @@ public final class AppCli {
 
             String choice = prompt(input, "[app] > ").trim().toLowerCase();
             switch (choice) {
-                case "1", "s", "start" -> startAuthenticationFlow(http, cfg, input);
+                case "1", "s", "start" -> startAuthenticationFlow(oid4vpClient, input);
                 case "q", "quit", "exit" -> {
                     System.out.println("[app] Stopping app...");
                     return;
@@ -49,9 +51,9 @@ public final class AppCli {
         }
     }
 
-    private static void startAuthenticationFlow(HttpClient http, DemoConfig cfg, BufferedReader input) {
+    private static void startAuthenticationFlow(Oid4vpClient oid4vpClient, BufferedReader input) {
         try {
-            AuthorizationContext authContext = DemoSupport.requestAuthorizationContext(http, cfg);
+            AuthorizationContext authContext = oid4vpClient.startAuthentication();
 
             System.out.println();
             System.out.println("[app] Authentication flow started.");
@@ -59,12 +61,14 @@ public final class AppCli {
             System.out.println();
             System.out.println(authContext.getAuthorizationRequest());
             System.out.println();
-            System.out.println("[app] The app is now polling transaction status in the background...");
+            System.out.println(
+                    "[app] The app is now polling transaction status in the background...");
 
+            // Poll asynchronously so the app can keep acting like a separate terminal from the wallet.
             CompletableFuture<AuthorizationContext> poller = CompletableFuture.supplyAsync(() -> {
                 try {
-                    return DemoSupport.pollUntilTerminal(
-                            http, cfg, authContext.getTransactionId(), POLL_ATTEMPTS, POLL_INTERVAL);
+                    return oid4vpClient.pollUntilTerminal(
+                            authContext.getTransactionId(), POLL_ATTEMPTS, POLL_INTERVAL);
                 } catch (Exception e) {
                     throw new CompletionException(e);
                 }
@@ -91,19 +95,21 @@ public final class AppCli {
             System.out.println("[app] authorization_code: " + status.getAuthorizationCode());
 
             if (confirm(input, "[app] Retrieve an access token now? [Y/n] ", true)) {
-                JsonNode tokenResponse = DemoSupport.exchangeAuthorizationCode(http, cfg, status.getAuthorizationCode());
+                JsonNode tokenResponse =
+                        oid4vpClient.exchangeAuthorizationCode(status.getAuthorizationCode());
                 String accessTokenStr = tokenResponse.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
-                AccessToken accessToken = DemoSupport.parseAccessToken(accessTokenStr);
+                AccessToken accessToken = oid4vpClient.readAccessToken(accessTokenStr);
 
                 System.out.println("[app] Access token retrieved.");
-                System.out.println("[app] preferred_username: " + accessToken.getPreferredUsername());
+                System.out.println(
+                        "[app] preferred_username: " + accessToken.getPreferredUsername());
                 System.out.println("[app] subject: " + accessToken.getSubject());
                 System.out.println("[app] issuer: " + accessToken.getIssuer());
             }
         } catch (CompletionException e) {
-            System.out.println("[app] Polling failed: " + rootCauseMessage(e));
+            System.out.println("[app] Polling failed: " + DemoRuntime.rootCauseMessage(e));
         } catch (Exception e) {
-            System.out.println("[app] Flow failed: " + rootCauseMessage(e));
+            System.out.println("[app] Flow failed: " + DemoRuntime.rootCauseMessage(e));
         }
     }
 
@@ -113,7 +119,8 @@ public final class AppCli {
         System.out.println("[app] Keycloak: " + cfg.baseUrl());
         System.out.println("[app] Realm: " + cfg.realm());
         System.out.println("[app] OIDC client: " + cfg.clientId());
-        System.out.println("[app] Demo users in realm: " + cfg.aliceUsername() + ", " + cfg.bobUsername());
+        System.out.println(
+                "[app] Demo users in realm: " + cfg.aliceUsername() + ", " + cfg.bobUsername());
     }
 
     private static boolean confirm(BufferedReader input, String prompt, boolean defaultYes) throws Exception {
@@ -132,13 +139,5 @@ public final class AppCli {
         System.out.print(prompt);
         String line = input.readLine();
         return line == null ? "" : line;
-    }
-
-    private static String rootCauseMessage(Throwable throwable) {
-        Throwable current = throwable;
-        while (current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current.getMessage();
     }
 }
