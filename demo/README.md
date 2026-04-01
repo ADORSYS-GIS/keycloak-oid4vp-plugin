@@ -23,7 +23,10 @@ There is also a retained one-shot **smoke** flow for quick automation.
 - `wallet/`
   - interactive wallet CLI
 - `lib/`
-  - shared Java helpers for HTTP, SD-JWT, and OID4VP protocol handling
+  - `Oid4vpClient`: Keycloak-facing HTTP flow
+  - `WalletPresentationService`: hardcoded demo credentials and presentations
+  - `DemoKeyMaterial`: checked-in key loading and signer setup
+  - `DemoConfig` / `CredentialScenario`: small shared domain types
 - `smoke/`
   - one-shot end-to-end automation built on the same shared helpers
 - `realm.json`
