@@ -1,9 +1,11 @@
 package demo.smoke;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import demo.lib.DemoSupport;
-import demo.lib.DemoSupport.CredentialScenario;
-import demo.lib.DemoSupport.DemoConfig;
+import demo.lib.CredentialScenario;
+import demo.lib.DemoConfig;
+import demo.lib.DemoRuntime;
+import demo.lib.Oid4vpClient;
+import demo.lib.WalletPresentationService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -17,32 +19,35 @@ public final class SmokeDemo {
     private SmokeDemo() {}
 
     public static void main(String[] args) throws Exception {
-        DemoSupport.bootstrapCrypto();
+        DemoRuntime.bootstrapCrypto();
 
         DemoConfig cfg = DemoConfig.fromEnv();
-        HttpClient http = DemoSupport.newHttpClient();
+        HttpClient http = DemoRuntime.newHttpClient();
+        Oid4vpClient oid4vpClient = new Oid4vpClient(http, cfg);
+        WalletPresentationService walletPresentationService = new WalletPresentationService(cfg);
 
         log("Starting one-shot smoke flow");
-        AuthorizationContext authContext = DemoSupport.requestAuthorizationContext(http, cfg);
+        AuthorizationContext authContext = oid4vpClient.startAuthentication();
         log("Received authorization_request and transaction_id");
 
-        RequestObject requestObject = DemoSupport.resolveRequestObject(http, authContext);
+        RequestObject requestObject = oid4vpClient.resolveRequestObject(authContext);
         log("Resolved request object");
 
-        String vpToken = DemoSupport.presentScenario(cfg, CredentialScenario.VALID_ALICE, requestObject);
-        DemoSupport.submitPresentation(http, requestObject, vpToken);
+        String vpToken =
+                walletPresentationService.buildPresentation(requestObject, CredentialScenario.VALID_ALICE);
+        oid4vpClient.submitPresentation(requestObject, vpToken);
         log("Submitted OpenID4VP response");
 
-        AuthorizationContext status = DemoSupport.pollUntilTerminal(
-                http, cfg, authContext.getTransactionId(), 30, Duration.ofSeconds(1));
+        AuthorizationContext status =
+                oid4vpClient.pollUntilTerminal(authContext.getTransactionId(), 30, Duration.ofSeconds(1));
         if (status.getStatus() != AuthorizationContextStatus.SUCCESS) {
             throw new IllegalStateException("Authentication failed: " + status.getErrorDescription());
         }
         log("Authentication succeeded. Received authorization_code");
 
-        JsonNode tokenResponse = DemoSupport.exchangeAuthorizationCode(http, cfg, status.getAuthorizationCode());
+        JsonNode tokenResponse = oid4vpClient.exchangeAuthorizationCode(status.getAuthorizationCode());
         String accessTokenStr = tokenResponse.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
-        AccessToken accessToken = DemoSupport.parseAccessToken(accessTokenStr);
+        AccessToken accessToken = oid4vpClient.readAccessToken(accessTokenStr);
 
         log("Access token issued for user: " + accessToken.getPreferredUsername());
         log("Issuer: " + accessToken.getIssuer());
