@@ -1,0 +1,12 @@
+services:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.5.4}
+    command: start-dev --features=oid4vc-vci --log-level=${KC_LOG_LEVEL:-INFO}
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_ADMIN_USER:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_ADMIN_PASS:-admin}
+    ports:
+      - "${KC_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ${PLUGIN_JAR}:/opt/keycloak/providers/keycloak-oid4vp-plugin.jar:ro
+      - ./realm.json:/opt/keycloak/data/import/oid4vp-demo-realm.json:ro
