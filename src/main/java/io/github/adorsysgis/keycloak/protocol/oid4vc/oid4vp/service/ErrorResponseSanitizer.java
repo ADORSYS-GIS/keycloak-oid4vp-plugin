@@ -3,7 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import java.util.UUID;
-import org.jboss.logging.Logger;
+import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
@@ -11,9 +11,18 @@ import org.keycloak.sessions.AuthenticationSessionModel;
  */
 public final class ErrorResponseSanitizer {
 
-    private static final Logger logger = Logger.getLogger(ErrorResponseSanitizer.class);
+    private final String correlationId;
 
-    private ErrorResponseSanitizer() {}
+    private ErrorResponseSanitizer(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    /**
+     * Creates a sanitizer bound to a specific correlation id to avoid passing it around.
+     */
+    public static ErrorResponseSanitizer withCorrelationId(String correlationId) {
+        return new ErrorResponseSanitizer(correlationId);
+    }
 
     public static String newCorrelationId() {
         return UUID.randomUUID().toString();
@@ -36,16 +45,28 @@ public final class ErrorResponseSanitizer {
 
     public static String clientDescription(String generic, String detailed, String correlationId) {
         if (OID4VPConfig.verboseErrors()) {
-            return detailed;
+            return String.format("%s (ref: %s)", detailed, correlationId);
         }
         return String.format("%s (ref: %s)", generic, correlationId);
     }
 
-    public static void logDetailed(String correlationId, String message, Throwable cause) {
-        if (cause != null) {
-            logger.errorf(cause, "[%s] %s", correlationId, message);
-        } else {
-            logger.errorf("[%s] %s", correlationId, message);
+    public String clientDescription(String generic, String detailed) {
+        return clientDescription(generic, detailed, correlationId);
+    }
+
+    public String correlationId() {
+        return correlationId;
+    }
+
+    /**
+     * Client-facing text for an {@link OAuth2ErrorRepresentation} produced by the SD-JWT authenticator.
+     */
+    public static String authenticatorOAuth2ClientMessage(OAuth2ErrorRepresentation error, String correlationId) {
+        if (OID4VPConfig.verboseErrors()) {
+            return String.format(
+                    "%s: %s (ref: %s)", error.getError().toUpperCase(), error.getErrorDescription(), correlationId);
         }
+        return withCorrelationId(correlationId)
+                .clientDescription("Invalid SD-JWT presentation", error.getErrorDescription());
     }
 }

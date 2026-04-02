@@ -72,7 +72,7 @@ public class SdJwtAuthenticator implements Authenticator {
                     authReqs.getIssuerSignedJwtVerificationOpts(),
                     authReqs.getKeyBindingJwtVerificationOpts(nonce));
         } catch (VerificationException e) {
-            logger.errorf(e, "Token verification failed");
+            logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
             failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
             return;
         }
@@ -82,7 +82,7 @@ public class SdJwtAuthenticator implements Authenticator {
             try {
                 tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
             } catch (ReferencedTokenValidationException e) {
-                logger.errorf(e, "Token status verification failed");
+                logger.errorf(e, "Token status verification failed (authSession = %s)", correlationId(context));
                 failRejectingPresentedSdJwtToken(context, "Token status verification failed", e);
                 return;
             }
@@ -145,14 +145,17 @@ public class SdJwtAuthenticator implements Authenticator {
         return null;
     }
 
+    private static String correlationId(AuthenticationFlowContext context) {
+        return ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
+    }
+
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        ErrorResponseSanitizer.logDetailed(correlationId, "Presented SD-JWT rejected: " + reason, cause);
+        ErrorResponseSanitizer sanitizer = ErrorResponseSanitizer.withCorrelationId(correlationId);
+        logger.errorf(cause, "Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
 
-        String description = ErrorResponseSanitizer.clientDescription(
-                "Invalid verifiable presentation",
-                String.format("Invalid SD-JWT presentation (%s)", reason),
-                correlationId);
+        String description = sanitizer.clientDescription(
+                "Invalid SD-JWT presentation", String.format("Invalid SD-JWT presentation (%s)", reason));
         var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);
 
         context.failure(
@@ -167,10 +170,11 @@ public class SdJwtAuthenticator implements Authenticator {
         logger.info("Presented SD-JWT will be rejected for associated user is unknown");
 
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        ErrorResponseSanitizer.logDetailed(correlationId, "User with presented SD-JWT is unknown", null);
+        ErrorResponseSanitizer sanitizer = ErrorResponseSanitizer.withCorrelationId(correlationId);
+        logger.errorf("User with presented SD-JWT is unknown (authSession = %s)", correlationId);
 
-        String description = ErrorResponseSanitizer.clientDescription(
-                "Invalid verifiable presentation", "User with presented SD-JWT is unknown", correlationId);
+        String description =
+                sanitizer.clientDescription("Invalid verifiable presentation", "User with presented SD-JWT is unknown");
 
         var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, description);
 

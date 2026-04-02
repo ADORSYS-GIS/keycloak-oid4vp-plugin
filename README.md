@@ -69,25 +69,12 @@ you are encouraged to create a `docker-compose.override.yml` based on the provid
 
 ## Configuration
 
-This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to
-clients. By default, verbose errors are disabled (safe-by-default).
+This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to clients.
+By default, verbose errors are disabled (safe-by-default).
 
-Provider configuration should use Keycloak's SPI configuration mechanism (e.g., `keycloak.conf`, `KC_*` environment
-variables, or CLI flags), which is exposed to providers via `init(Config.Scope config)`.
-
-Examples (from Keycloak docs: `spi-<spi-id>--<provider-id>--<property>=<value>`):
-
-- Enable verbose errors for the OpenID4VP user auth endpoint provider:
-
-  `spi-realm-restapi-extension--oid4vp-auth--verbose-errors=true`
-
-- Enable verbose errors for the login actions provider:
-
-  `spi-realm-restapi-extension--oid4vp-login-actions--verbose-errors=true`
-
-- Enable verbose errors for the SD-JWT authenticator provider:
-
-  `spi-authenticator--sd-jwt-authenticator--verbose-errors=true`
+For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see the
+documentation site sources in `docs/`, especially
+[`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc).
 
 ## Documentation site (Antora)
 

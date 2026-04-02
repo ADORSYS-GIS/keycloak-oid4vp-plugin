@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.jboss.logging.Logger;
-import org.keycloak.Config;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.crypto.CryptoProvider;
 import org.keycloak.common.util.CertificateUtils;
@@ -26,7 +25,7 @@ public class ExtendedCertificateUtils extends CertificateUtils {
 
     private static final Logger logger = Logger.getLogger(ExtendedCertificateUtils.class);
 
-    private static final int DEFAULT_MAX_CACHE_SIZE = 1000;
+    public static final int DEFAULT_MAX_CACHE_SIZE = 1000;
 
     private static Cache<CacheKey, X509Certificate> certificateCache = createCache(DEFAULT_MAX_CACHE_SIZE);
 
@@ -39,13 +38,12 @@ public class ExtendedCertificateUtils extends CertificateUtils {
     }
 
     /**
-     * Initializes the certificate cache with configuration from Keycloak.
-     * @param config The configuration scope.
+     * Rebuilds the certificate cache with the given maximum size (LRU eviction).
      */
-    public static synchronized void init(Config.Scope config) {
-        int maxSize = config.getInt("cache-max-size", DEFAULT_MAX_CACHE_SIZE);
-        logger.debugf("Initializing ExtendedCertificateUtils with max cache size: %d", maxSize);
-        certificateCache = createCache(maxSize);
+    public static synchronized void initCache(int maxSize) {
+        int size = maxSize > 0 ? maxSize : DEFAULT_MAX_CACHE_SIZE;
+        logger.debugf("Initializing ExtendedCertificateUtils with max cache size: %d", size);
+        certificateCache = createCache(size);
     }
 
     static Cache<CacheKey, X509Certificate> getCache() {
