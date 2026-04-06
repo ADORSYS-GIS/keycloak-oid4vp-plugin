@@ -23,6 +23,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.services.resources.LoginActionsService;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -108,7 +109,8 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        AuthorizationContext authContext = oid4vp.startAuthentication(clientId);
+        String oidcAuthSessionId = params.getFirst(LoginActionsService.AUTH_SESSION_ID);
+        AuthorizationContext authContext = oid4vp.startAuthentication(clientId, oidcAuthSessionId);
 
         // Convert authorization request to QR code
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());

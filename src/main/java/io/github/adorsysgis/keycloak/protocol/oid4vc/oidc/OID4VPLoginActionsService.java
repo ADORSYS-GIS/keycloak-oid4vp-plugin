@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.PARENT_AUTH_SESSION_ID;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.SCOPE_OPENID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import jakarta.ws.rs.Consumes;
@@ -9,6 +11,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
@@ -31,6 +34,7 @@ import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.SessionCodeChecks;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.CommonClientSessionModel.Action;
+import org.keycloak.util.TokenUtil;
 
 /**
  * Adds form action endpoint for completing OpenID4VP authentication after QR code scanning.
@@ -110,9 +114,17 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         logger.debug("Validating authorization code");
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, authorizationCode, realm, event);
         if (result.isIllegalCode() || result.isExpiredCode()) {
-            String errorMessage = "Authorization code not valid";
-            event.error(Errors.INVALID_CODE);
-            return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, errorMessage);
+            return fireInvalidCode(authSession, "Authorization code not valid");
+        }
+
+        // Only accept OpenID4VP authorization codes (by scope matching)
+        if (!TokenUtil.hasScope(result.getCodeData().getScope(), SCOPE_OPENID4VP)) {
+            return fireInvalidCode(authSession, "Authorization code does not have required `openid4vp` scope");
+        }
+
+        // Validate that the code was issued for this OIDC session
+        if (!Objects.equals(authSessionId, result.getClientSession().getNote(PARENT_AUTH_SESSION_ID))) {
+            return fireInvalidCode(authSession, "Authorization code was not issued for this authentication session");
         }
 
         // Attach authenticated user to OIDC sessions
@@ -136,6 +148,11 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 clientConnection,
                 event,
                 authSession);
+    }
+
+    private Response fireInvalidCode(AuthenticationSessionModel authSession, String message) {
+        event.error(Errors.INVALID_CODE);
+        return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, message);
     }
 
     @Override

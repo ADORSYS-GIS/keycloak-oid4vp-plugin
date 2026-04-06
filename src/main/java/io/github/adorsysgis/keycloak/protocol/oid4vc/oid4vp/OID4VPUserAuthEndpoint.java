@@ -85,7 +85,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     e);
         }
 
-        AuthorizationContext authContext = startAuthentication(clientId);
+        AuthorizationContext authContext = startAuthentication(clientId, null);
         AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
 
         return CorsService.forWebOrigins(authSession).add(Response.ok(authContext));
@@ -206,7 +206,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     /**
      * Initializes OpenID4VP authentication and return authorization context
      */
-    public AuthorizationContext startAuthentication(String clientId) {
+    public AuthorizationContext startAuthentication(String clientId, String parentAuthSessionId) {
         logger.debug("Generating new authentication context...");
 
         ClientModel client = checkClient(clientId);
@@ -216,7 +216,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext =
-                authorizationRequestService.createAuthorizationRequest(authSession, authReqs);
+                authorizationRequestService.createAuthorizationRequest(authReqs, authSession, parentAuthSessionId);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())

@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -71,7 +73,9 @@ public class OID4VPUserAuthBeanTest {
         AuthorizationContext authContext = new AuthorizationContext();
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
-        Mockito.lenient().when(oid4vp.startAuthentication(TEST_CLIENT_ID)).thenReturn(authContext);
+        Mockito.lenient()
+                .when(oid4vp.startAuthentication(eq(TEST_CLIENT_ID), nullable(String.class)))
+                .thenReturn(authContext);
     }
 
     @Test
