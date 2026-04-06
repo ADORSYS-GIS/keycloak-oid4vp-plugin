@@ -150,8 +150,12 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
             }
 
             if (truststoreProvider.getTruststore() == null) {
+                logger.warn(
+                        "Keycloak global truststore not configured. Certificate validation may rely on internal system defaults.");
                 throw new ReferencedTokenValidationException("Truststore not configured");
             }
+
+            logger.debug("Using Keycloak global truststore for certificate chain validation");
 
             Set<X509Certificate> trustedRoots = truststoreProvider.getRootCertificates().values().stream()
                     .flatMap(List::stream)
@@ -163,14 +167,16 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
                             .collect(Collectors.toSet());
 
             if (trustedRoots.isEmpty()) {
-                throw new ReferencedTokenValidationException("No trusted root certificates configured");
+                throw new ReferencedTokenValidationException("No trusted root certificates available for validation");
             }
 
             buildAndValidatePKIX(certChain, trustedRoots, trustedIntermediates, validationDate);
 
         } catch (ReferencedTokenValidationException e) {
+            logger.errorf("Token validation failed: %s", e.getMessage());
             throw e;
         } catch (Exception e) {
+            logger.errorf(e, "Certificate chain validation failed: %s", e.getMessage());
             throw new ReferencedTokenValidationException("Certificate chain validation failed", e);
         }
     }
@@ -208,6 +214,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
         CertPathBuilder builder = CryptoIntegration.getProvider().getCertPathBuilder();
         builder.build(params);
+        logger.debug("Certificate chain validation successful");
     }
 
     private void validateAlgorithmCompatibility(X509Certificate cert, String alg) throws VerificationException {

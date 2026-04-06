@@ -133,7 +133,7 @@ public class TrustedStatusListJwtFetcherTest {
         Mockito.when(truststoreProvider.getRootCertificates()).thenReturn(Map.of());
 
         var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
-        assertEquals("No trusted root certificates configured", e.getMessage());
+        assertEquals("No trusted root certificates available for validation", e.getMessage());
     }
 
     @Test

@@ -29,9 +29,9 @@ import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.util.JsonSerialization;
 import org.testcontainers.images.PullPolicy;
-import org.testcontainers.utility.MountableFile;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
 /**
  * Base Keycloak test class for leveraging the TestContainers infrastructure.
@@ -70,10 +70,12 @@ public abstract class BaseKeycloakTest {
                 .withRealmImportFile("/realms/test-realm-v2.json")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
-                .withCopyToContainer(MountableFile.forHostPath("src/test/resources/truststore.jks"), "/opt/keycloak/conf/truststore.jks")
+                .withCopyToContainer(
+                        MountableFile.forHostPath("src/test/resources/truststore.jks"),
+                        "/opt/keycloak/conf/truststore.jks")
                 .withEnv("KC_SPI_TRUSTSTORE_FILE_FILE", "/opt/keycloak/conf/truststore.jks")
                 .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
-                .withEnv("KC_SPI_TRUSTSTORE_FILE_HOSTNAME_VERIFICATION_POLICY", "ANY");
+                .withEnv("KC_TLS_HOSTNAME_VERIFIER", "ANY");
         return container;
     }
 
