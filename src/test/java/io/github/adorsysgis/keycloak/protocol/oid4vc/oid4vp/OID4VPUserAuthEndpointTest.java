@@ -466,14 +466,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_IfUserDisabled() throws Exception {
         String disabledUser = "disabled-user@localhost";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledUser);
+        String disabledSubject = "disabled-user-id";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledSubject, disabledUser);
 
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "USER_DISABLED: User with presented SD-JWT is disabled");
+                "User with presented SD-JWT is disabled");
     }
 
     @Test
