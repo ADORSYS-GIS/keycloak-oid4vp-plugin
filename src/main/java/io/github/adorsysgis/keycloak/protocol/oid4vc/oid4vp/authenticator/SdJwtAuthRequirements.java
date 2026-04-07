@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBuilder;
@@ -15,6 +16,7 @@ import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.consumer.SimplePresentationDefinition;
 import org.keycloak.sdjwt.vp.KeyBindingJwtVerificationOpts;
+import org.keycloak.services.Urls;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -30,6 +32,7 @@ public class SdJwtAuthRequirements {
     private final ClaimCheck kbJwtAudCheck;
     private final List<String> expectedVcts;
     private final String expectedVctsPattern;
+    private final String keycloakIssuerURI;
 
     private final int kbJwtMaxAllowedAge;
     private final boolean requireNotBeforeClaim;
@@ -72,6 +75,9 @@ public class SdJwtAuthRequirements {
                 SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)));
 
+        this.keycloakIssuerURI = Urls.realmIssuer(
+                context.getUri().getBaseUri(), context.getRealm().getName());
+
         this.expectedVctsPattern = expectedVcts.stream()
                 .map(vct -> Pattern.quote("\"" + vct + "\""))
                 .collect(Collectors.joining("|", "(", ")"));
@@ -83,7 +89,8 @@ public class SdJwtAuthRequirements {
 
     public List<String> getRequiredClaims() {
         // A subject is required so we can recover the user by stable identifier
-        return List.of(JsonWebToken.SUBJECT);
+        // A username is required so we can cross-check the presented user
+        return List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
     }
 
     public boolean shouldEnforceRevocationStatus() {
@@ -101,9 +108,12 @@ public class SdJwtAuthRequirements {
         var definition = SimplePresentationDefinition.builder();
         getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
 
-        return definition
-                .addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern)
-                .build();
+        definition.addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern);
+        if (verifyIssuerClaim) {
+            definition.addClaimRequirement(
+                    SdJwtCredentialBuilder.ISSUER_CLAIM, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+        }
+        return definition.build();
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {

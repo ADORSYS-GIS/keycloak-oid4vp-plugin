@@ -24,7 +24,6 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
-import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
 
@@ -88,31 +87,9 @@ public class SdJwtAuthenticator implements Authenticator {
             }
         }
 
-        if (!verifyIssuerClaim(context, authReqs, sdJwt)) {
-            return;
-        }
-
-        String subject = readSubjectFromCredential(sdJwt);
-        if (StringUtil.isBlank(subject)) {
-            logger.warn("Presented SD-JWT is missing required subject claim");
-            failRejectingPresentedSdJwtToken(context, "Missing subject claim");
-            return;
-        }
-        logger.debugf("Presented subject: %s", subject);
-
-        UserModel user = recoverAuthenticatingUser(context, subject);
+        UserModel user = recoverAuthenticatingUser(context, sdJwt);
         if (user == null) {
-            logger.debugf("Authentication passed but authenticating user is unknown");
-            failDenyingAuthenticatingUser(context);
             return;
-        }
-        logger.debugf("Resolved user id: %s", user.getId());
-
-        String presentedUsername = readUsernameFromCredential(sdJwt);
-        if (presentedUsername != null && !presentedUsername.equals(user.getUsername())) {
-            logger.warnf(
-                    "Username mismatch for subject '%s': credential='%s', user='%s'",
-                    subject, presentedUsername, user.getUsername());
         }
 
         context.setUser(user);
@@ -129,9 +106,41 @@ public class SdJwtAuthenticator implements Authenticator {
         return new SdJwtAuthRequirements(context.getSession().getContext(), context.getAuthenticatorConfig());
     }
 
-    private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, String subject) {
+    private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
         logger.info("Recovering authenticating user");
-        return context.getSession().users().getUserById(context.getRealm(), subject);
+
+        String subject = readSubjectFromCredential(sdJwt);
+        if (StringUtil.isBlank(subject)) {
+            logger.warn("Presented SD-JWT is missing required subject claim");
+            failRejectingPresentedSdJwtToken(context, "Missing subject claim");
+            return null;
+        }
+        logger.debugf("Presented subject: %s", subject);
+
+        UserModel user = context.getSession().users().getUserById(context.getRealm(), subject);
+        if (user == null) {
+            logger.debugf("Authentication passed but authenticating user is unknown");
+            failDenyingAuthenticatingUser(context);
+            return null;
+        }
+        logger.debugf("Resolved user id: %s", user.getId());
+
+        String presentedUsername = readUsernameFromCredential(sdJwt);
+        if (StringUtil.isBlank(presentedUsername)) {
+            logger.warn("Presented SD-JWT is missing required username claim");
+            failRejectingPresentedSdJwtToken(context, "Missing username claim");
+            return null;
+        }
+
+        if (!presentedUsername.equals(user.getUsername())) {
+            logger.warnf(
+                    "Username mismatch for subject '%s': credential='%s', user='%s'",
+                    subject, presentedUsername, user.getUsername());
+            failRejectingPresentedSdJwtToken(context, "Username mismatch");
+            return null;
+        }
+
+        return user;
     }
 
     private String readSubjectFromCredential(SdJwtVP sdJwt) {
@@ -166,39 +175,6 @@ public class SdJwtAuthenticator implements Authenticator {
         }
 
         return null;
-    }
-
-    private boolean verifyIssuerClaim(
-            AuthenticationFlowContext context, SdJwtAuthRequirements authReqs, SdJwtVP sdJwt) {
-        String issuer = readClaimFromCredential(sdJwt, OAuth2Constants.ISSUER);
-
-        if (!authReqs.shouldVerifyIssuerClaim()) {
-            if (StringUtil.isBlank(issuer)) {
-                logger.warn("Issuer claim missing but issuer validation is disabled");
-            } else {
-                logger.warnf("Issuer claim validation disabled. Presented issuer: %s", issuer);
-            }
-            return true;
-        }
-
-        if (StringUtil.isBlank(issuer)) {
-            logger.warn("Issuer claim is missing from presented credential");
-            failRejectingPresentedSdJwtToken(context, "Missing issuer claim");
-            return false;
-        }
-
-        String expectedIssuer = Urls.realmIssuer(
-                context.getSession().getContext().getUri().getBaseUri(),
-                context.getRealm().getName());
-
-        if (!expectedIssuer.equals(issuer)) {
-            logger.warnf("Issuer mismatch. Expected '%s' but got '%s'", expectedIssuer, issuer);
-            failRejectingPresentedSdJwtToken(context, "Issuer mismatch");
-            return false;
-        }
-        logger.debugf("Issuer claim verified: %s", issuer);
-
-        return true;
     }
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {

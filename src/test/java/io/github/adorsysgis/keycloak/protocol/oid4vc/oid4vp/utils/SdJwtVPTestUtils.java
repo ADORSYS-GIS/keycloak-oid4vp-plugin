@@ -53,6 +53,21 @@ public class SdJwtVPTestUtils {
     /**
      * Requests that Keycloak issue an SD-JWT credential.
      */
+    public String requestSdJwtCredential(String vct, String username) {
+        return requestSdJwtCredential(vct, username, true, true);
+    }
+
+    /**
+     * Requests that Keycloak issue an SD-JWT credential.
+     */
+    public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
+        String subject = username != null ? username + "-id" : null;
+        return requestSdJwtCredential(vct, subject, username, setKid, setStatusClaim);
+    }
+
+    /**
+     * Requests that Keycloak issue an SD-JWT credential.
+     */
     public String requestSdJwtCredential(String vct, String subject, String username) {
         return requestSdJwtCredential(vct, subject, username, true, true);
     }
