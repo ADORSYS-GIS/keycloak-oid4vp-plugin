@@ -1,0 +1,24 @@
+set shell := ["bash", "-cu"]
+
+demo_dir := justfile_directory()
+
+start actor:
+  cd '{{demo_dir}}' && case "{{actor}}" in \
+    app) ./app/start.sh ;; \
+    wallet) ./wallet/start.sh ;; \
+    *) echo "Use 'just start app' or 'just start wallet'." >&2; exit 1 ;; \
+  esac
+
+setup:
+  cd '{{demo_dir}}' && source _common.sh && ensure_demo_realm
+
+smoke:
+  cd '{{demo_dir}}' && ./smoke/run.sh
+
+demo: smoke
+
+stop:
+  cd '{{demo_dir}}' && source _common.sh && ensure_plugin_jar >/dev/null && compose down -v
+
+logs:
+  cd '{{demo_dir}}' && source _common.sh && ensure_plugin_jar >/dev/null && compose logs -f --tail=200 keycloak

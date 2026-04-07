@@ -8,4 +8,4 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./target/keycloak-oid4vp-plugin-1.0.0-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-oid4vp-plugin-1.0.0-SNAPSHOT.jar
+      - ./target/keycloak-oid4vp-plugin-${VERSION:-999.0.0-SNAPSHOT}.jar:/opt/keycloak/providers/keycloak-oid4vp-plugin-${VERSION:-999.0.0-SNAPSHOT}.jar
