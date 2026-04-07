@@ -2,7 +2,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.PARENT_AUTH_SESSION_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.SCOPE_OPENID4VP;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -134,8 +133,11 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
 
-        // Append note conveying this login method
-        freshUserSession.setNote(PARAM_LOGIN_METHOD, OID4VP_AUTH_LOGIN_PATH);
+        // Propagate openid4vp scope to the auth code to be generated
+        String scope = authSession.getClientNote(OAuth2Constants.SCOPE);
+        if (!TokenUtil.hasScope(scope, SCOPE_OPENID4VP)) {
+            authSession.setClientNote(OAuth2Constants.SCOPE, String.join(" ", scope, SCOPE_OPENID4VP));
+        }
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
