@@ -136,8 +136,8 @@ public class OID4VPUserAuthBeanTest {
         URI uri = uriBuilder.build();
         mockContextUri(uri);
 
-        String authSessionTabId = UUID.randomUUID().toString();
-        return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionTabId);
+        String authSessionId = UUID.randomUUID().toString();
+        return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
     }
 
     private void mockContextUri(URI uri) {

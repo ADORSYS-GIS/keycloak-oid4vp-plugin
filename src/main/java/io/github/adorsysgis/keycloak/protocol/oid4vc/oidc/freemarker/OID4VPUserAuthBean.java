@@ -40,7 +40,7 @@ public class OID4VPUserAuthBean {
     private final KeycloakSession session;
     private final RealmModel realm;
     private final URI baseUri;
-    private final String authSessionTabId;
+    private final String authSessionId;
 
     private final OID4VPUserAuthEndpoint oid4vp;
     private AuthContextBean authContextBean;
@@ -50,12 +50,12 @@ public class OID4VPUserAuthBean {
             RealmModel realm,
             OID4VPUserAuthEndpoint oid4vp,
             URI baseUri,
-            String authSessionTabId) {
+            String authSessionId) {
         this.session = session;
         this.realm = realm;
         this.oid4vp = oid4vp;
         this.baseUri = baseUri;
-        this.authSessionTabId = authSessionTabId;
+        this.authSessionId = authSessionId;
     }
 
     /**
@@ -115,7 +115,7 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        AuthorizationContext authContext = oid4vp.startAuthentication(clientId, authSessionTabId);
+        AuthorizationContext authContext = oid4vp.startAuthentication(clientId, authSessionId);
 
         // Convert authorization request to QR code
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());

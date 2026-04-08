@@ -22,7 +22,7 @@
     },
     {
       "id": "disabled-user-id",
-      "username": "disabled-user@localhost",
+      "username": "disabled-user",
       "enabled": false,
       "email": "disabled-user@localhost",
       "firstName": "Disabled",
