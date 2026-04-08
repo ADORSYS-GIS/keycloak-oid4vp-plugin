@@ -25,7 +25,6 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
-import org.keycloak.representations.idm.EventRepresentation;
 import org.keycloak.util.JsonSerialization;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
@@ -45,6 +44,7 @@ public abstract class BaseKeycloakTest {
     public static final String TEST_REALM_V2_NAME = "test-v2";
     public static final String TEST_USER = "test-user";
     public static final String TEST_USER_ID = "test-user-id";
+    public static final String TEST_USER_PASSWORD = "password";
     public static final String TEST_CLIENT_ID = "test-app";
     public static final String TEST_CLIENT_SECRET = "password";
     public static final String TEST_CLIENT_REDIRECT_URI = "http://localhost:4200/callback";
