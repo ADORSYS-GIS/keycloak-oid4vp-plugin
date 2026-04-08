@@ -58,9 +58,7 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
     public AuthorizationContext getAuthorizationContextByTransactionId(String transactionId) {
         AuthorizationContext authContext = getAuthorizationContext();
         if (!Objects.equals(authContext.getTransactionId(), transactionId)) {
-            logger.warnf(
-                    "Authorization context does not match the provided transaction ID: " + "Expected=%s, Actual=%s",
-                    authContext.getTransactionId(), transactionId);
+            logger.warnf("Authorization context does not match the provided transaction ID: %s", transactionId);
             throw new IllegalArgumentException(
                     "Authorization context does not match the provided transaction ID: " + transactionId);
         }

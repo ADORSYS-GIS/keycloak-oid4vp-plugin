@@ -10,6 +10,16 @@
                  style="max-width: 300px;"
                  alt="QR Code" />
         </div>
+
+        <div class="pf-v5-u-text-align-center">
+            <p>${msg('oid4vpSameDevicePrompt')}</p>
+            <p>
+                <a href="${oid4vp.authContext.authReqLink}"
+                   id="kc-oid4vp-link" target="_blank">
+                    ${msg('oid4vpSameDeviceLinkLbl')}
+                </a>
+            </p>
+        </div>
         
         <form action="${oid4vp.loginActionUrl}"
               id="kc-oid4vp-completion-form"

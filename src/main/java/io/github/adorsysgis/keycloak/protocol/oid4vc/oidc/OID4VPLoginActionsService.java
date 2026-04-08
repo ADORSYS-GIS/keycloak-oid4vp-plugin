@@ -1,8 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.PARENT_AUTH_SESSION_ID;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.SCOPE_OPENID4VP;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.POST;
@@ -15,8 +17,10 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.ClientConnection;
+import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.http.HttpRequest;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.Constants;
@@ -33,7 +37,6 @@ import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.SessionCodeChecks;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.CommonClientSessionModel.Action;
-import org.keycloak.util.TokenUtil;
 
 /**
  * Adds form action endpoint for completing OpenID4VP authentication after QR code scanning.
@@ -98,6 +101,8 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
             @QueryParam(Constants.CLIENT_DATA) String clientData,
             @QueryParam(Constants.TAB_ID) String tabId,
             @FormParam(OAuth2Constants.CODE) String authorizationCode) {
+        event.event(EventType.LOGIN);
+
         SessionCodeChecks checks =
                 checksForCode(authSessionId, code, execution, clientId, tabId, clientData, AUTHENTICATE_PATH);
 
@@ -113,17 +118,19 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         logger.debug("Validating authorization code");
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, authorizationCode, realm, event);
         if (result.isIllegalCode() || result.isExpiredCode()) {
-            return fireInvalidCode(authSession, "Authorization code not valid");
+            return failOnInvalidCode(authSession, "Authorization code validation failed");
         }
 
-        // Only accept OpenID4VP authorization codes (by scope matching)
-        if (!TokenUtil.hasScope(result.getCodeData().getScope(), SCOPE_OPENID4VP)) {
-            return fireInvalidCode(authSession, "Authorization code does not have required `openid4vp` scope");
+        // Only accept OpenID4VP authorization codes
+        String clientLoginMethod = result.getClientSession().getNote(PARAM_LOGIN_METHOD);
+        if (!Objects.equals(LOGIN_METHOD_OID4VP, clientLoginMethod)) {
+            return failOnInvalidCode(authSession, "Authorization code was not issued upon OpenID4VP authentication");
         }
 
         // Validate that the code was issued for this OIDC session
-        if (!Objects.equals(authSessionId, result.getClientSession().getNote(PARENT_AUTH_SESSION_ID))) {
-            return fireInvalidCode(authSession, "Authorization code was not issued for this authentication session");
+        String fullAuthSessionId = OID4VPUserAuthEndpointBase.getAuthSessionId(authSession);
+        if (!Objects.equals(fullAuthSessionId, result.getClientSession().getNote(PARENT_AUTH_SESSION_ID))) {
+            return failOnInvalidCode(authSession, "Authorization code was not issued for this OIDC session");
         }
 
         // Attach authenticated user to OIDC sessions
@@ -132,12 +139,6 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
-
-        // Propagate openid4vp scope to the auth code to be generated
-        String scope = authSession.getClientNote(OAuth2Constants.SCOPE);
-        if (!TokenUtil.hasScope(scope, SCOPE_OPENID4VP)) {
-            authSession.setClientNote(OAuth2Constants.SCOPE, String.join(" ", scope, SCOPE_OPENID4VP));
-        }
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
@@ -152,9 +153,9 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 authSession);
     }
 
-    private Response fireInvalidCode(AuthenticationSessionModel authSession, String message) {
-        event.error(Errors.INVALID_CODE);
-        return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, message);
+    private Response failOnInvalidCode(AuthenticationSessionModel authSession, String reason) {
+        event.event(EventType.LOGIN_ERROR).detail(Details.REASON, reason).error(Errors.INVALID_CODE);
+        return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, "Authorization code not valid");
     }
 
     @Override

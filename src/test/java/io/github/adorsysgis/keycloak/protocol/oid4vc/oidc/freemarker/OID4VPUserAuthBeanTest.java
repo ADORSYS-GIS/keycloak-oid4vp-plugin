@@ -93,6 +93,7 @@ public class OID4VPUserAuthBeanTest {
 
         // Auth Context should be created
         var authContext = bean.getAuthContext();
+        assertTrue(authContext.getAuthReqLink().startsWith("openid4vp://"));
         assertTrue(authContext.getAuthReqQrCode().startsWith("data:image/png;base64,"));
         assertNotNull(authContext.getAuthStatusUrl());
     }
@@ -135,7 +136,8 @@ public class OID4VPUserAuthBeanTest {
         URI uri = uriBuilder.build();
         mockContextUri(uri);
 
-        return new OID4VPUserAuthBean(session, realm, uri, oid4vp);
+        String authSessionTabId = UUID.randomUUID().toString();
+        return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionTabId);
     }
 
     private void mockContextUri(URI uri) {

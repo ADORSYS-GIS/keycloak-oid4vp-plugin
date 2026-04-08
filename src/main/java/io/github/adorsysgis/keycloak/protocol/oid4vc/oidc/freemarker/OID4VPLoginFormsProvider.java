@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
@@ -31,7 +32,8 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
         URI baseUri = baseUriBuilder.build();
 
         // Inject OID4VP specific attributes
-        this.attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, baseUri, oid4vp));
+        String authSessionId = OID4VPUserAuthEndpointBase.getAuthSessionId(authenticationSession);
+        this.attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, oid4vp, baseUri, authSessionId));
         logger.debugf("Injected OID4VPUserAuthBean into login form attributes for realm %s", realm.getName());
     }
 }

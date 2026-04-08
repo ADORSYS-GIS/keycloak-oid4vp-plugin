@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import static org.keycloak.OAuth2Constants.SCOPE_OPENID;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jboss.logging.Logger;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.common.util.Time;
@@ -42,7 +44,6 @@ public class AuthorizationResponseService {
     private static final Logger logger = Logger.getLogger(AuthorizationResponseService.class);
 
     public static final String JSON_PATH_ROOT = "$";
-    public static final String SCOPE_OPENID4VP = "openid4vp";
     public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
 
     private final KeycloakSession session;
@@ -275,6 +276,8 @@ public class AuthorizationResponseService {
      */
     private String produceAuthorizationCode(
             AuthenticatedClientSessionModel clientSession, AuthorizationContext authContext) {
+        // Decorate client session with contextual notes
+
         if (authContext.getParentAuthSessionId() != null) {
             clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
         }
@@ -285,16 +288,19 @@ public class AuthorizationResponseService {
                         session.getContext().getUri().getBaseUri(),
                         session.getContext().getRealm().getName()));
 
+        clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
+
+        // Gather code data and generate authorization code
+
         String code = UUID.randomUUID().toString();
         String nonce = SecretGenerator.getInstance().randomString();
-        String scope = String.join(" ", SCOPE_OPENID, SCOPE_OPENID4VP);
         int expiration = Time.currentTime() + clientSession.getRealm().getAccessCodeLifespan();
 
         OAuth2Code codeData = new OAuth2Code(
                 code,
                 expiration,
                 nonce,
-                scope,
+                OAuth2Constants.SCOPE_OPENID,
                 null,
                 null,
                 null,

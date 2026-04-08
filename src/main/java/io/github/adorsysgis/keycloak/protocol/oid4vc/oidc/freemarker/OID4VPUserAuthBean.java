@@ -23,7 +23,6 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.resources.LoginActionsService;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -41,15 +40,22 @@ public class OID4VPUserAuthBean {
     private final KeycloakSession session;
     private final RealmModel realm;
     private final URI baseUri;
+    private final String authSessionTabId;
 
     private final OID4VPUserAuthEndpoint oid4vp;
     private AuthContextBean authContextBean;
 
-    public OID4VPUserAuthBean(KeycloakSession session, RealmModel realm, URI baseUri, OID4VPUserAuthEndpoint oid4vp) {
+    public OID4VPUserAuthBean(
+            KeycloakSession session,
+            RealmModel realm,
+            OID4VPUserAuthEndpoint oid4vp,
+            URI baseUri,
+            String authSessionTabId) {
         this.session = session;
         this.realm = realm;
-        this.baseUri = baseUri;
         this.oid4vp = oid4vp;
+        this.baseUri = baseUri;
+        this.authSessionTabId = authSessionTabId;
     }
 
     /**
@@ -109,8 +115,7 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        String oidcAuthSessionId = params.getFirst(LoginActionsService.AUTH_SESSION_ID);
-        AuthorizationContext authContext = oid4vp.startAuthentication(clientId, oidcAuthSessionId);
+        AuthorizationContext authContext = oid4vp.startAuthentication(clientId, authSessionTabId);
 
         // Convert authorization request to QR code
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
@@ -118,8 +123,12 @@ public class OID4VPUserAuthBean {
         // Build URL for polling status
         String authStatusUrl = buildAuthStatusUrl(authContext.getTransactionId());
 
-        // Collect and return context
-        authContextBean = new AuthContextBean().setAuthReqQrCode(authReqQrCode).setAuthStatusUrl(authStatusUrl);
+        // Gather context
+        authContextBean = new AuthContextBean()
+                .setAuthReqLink(authContext.getAuthorizationRequest())
+                .setAuthReqQrCode(authReqQrCode)
+                .setAuthStatusUrl(authStatusUrl);
+
         return authContextBean;
     }
 
@@ -161,8 +170,18 @@ public class OID4VPUserAuthBean {
      */
     public static class AuthContextBean {
 
+        private String authReqLink;
         private String authReqQrCode;
         private String authStatusUrl;
+
+        public String getAuthReqLink() {
+            return authReqLink;
+        }
+
+        public AuthContextBean setAuthReqLink(String authReqLink) {
+            this.authReqLink = authReqLink;
+            return this;
+        }
 
         public String getAuthReqQrCode() {
             return authReqQrCode;
@@ -186,13 +205,14 @@ public class OID4VPUserAuthBean {
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             AuthContextBean that = (AuthContextBean) o;
-            return Objects.equals(authReqQrCode, that.authReqQrCode)
-                    && Objects.equals(authStatusUrl, that.authStatusUrl);
+            return Objects.equals(getAuthReqLink(), that.getAuthReqLink())
+                    && Objects.equals(getAuthReqQrCode(), that.getAuthReqQrCode())
+                    && Objects.equals(getAuthStatusUrl(), that.getAuthStatusUrl());
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(authReqQrCode, authStatusUrl);
+            return Objects.hash(getAuthReqLink(), getAuthReqQrCode(), getAuthStatusUrl());
         }
     }
 }

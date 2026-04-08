@@ -3,6 +3,8 @@
   "realm": "test",
   "enabled": true,
   "sslRequired": "none",
+  "eventsEnabled": true,
+  "enabledEventTypes": ["LOGIN", "LOGIN_ERROR"],
   "users": [
     {
       "id": "test-user-id",

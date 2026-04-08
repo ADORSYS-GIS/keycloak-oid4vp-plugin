@@ -14,6 +14,8 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
@@ -45,16 +47,20 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Request a fresh OpenID4VP authorization request from Keycloak.
      * A request is sent to the endpoint for this purpose.
      */
-    protected AuthorizationContext requestAuthorizationRequest() throws Exception {
-        URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
-                .addParameter("client_id", TEST_CLIENT_ID)
-                .build();
+    protected AuthorizationContext requestAuthorizationRequest() {
+        try {
+            URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
+                    .addParameter("client_id", TEST_CLIENT_ID)
+                    .build();
 
-        HttpGet httpGet = new HttpGet(uri);
-        HttpResponse response = httpClient.execute(httpGet);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            HttpGet httpGet = new HttpGet(uri);
+            HttpResponse response = httpClient.execute(httpGet);
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        return parseAuthorizationContext(response);
+            return parseAuthorizationContext(response);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -136,7 +142,21 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
                 "%s?%s",
                 KeycloakUriBuilder.fromUri(serverUrl).path(actionUrlParts[0]).build(), actionUrlParts[1]);
 
-        return new FormData(absActionUrl, cookies);
+        // Collect authorization context details
+
+        Element authLinkTag = html.selectFirst("a#kc-oid4vp-link");
+        assertNotNull(authLinkTag, "Authentication link should be present in the response");
+        String authReqLink = authLinkTag.attr("href");
+
+        Element script = html.selectFirst("script:containsData(checkAuthStatus)");
+        assertNotNull(script, "A script should be present in the response");
+        Matcher m = Pattern.compile("checkAuthStatus\\(.*/([^/]+)\",").matcher(script.data());
+        String transactionId = m.find() ? m.group(1) : null;
+
+        AuthorizationContext authContext =
+                new AuthorizationContext().setAuthorizationRequest(authReqLink).setTransactionId(transactionId);
+
+        return new FormData(authContext, absActionUrl, cookies);
     }
 
     protected String getOid4vpEndpoint(String route) {
@@ -157,8 +177,8 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     protected static OAuth2ErrorRepresentation parseErrorResponse(HttpResponse response) throws IOException {
-        return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), OAuth2ErrorRepresentation.class);
+        String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        return JsonSerialization.readValue(payload, OAuth2ErrorRepresentation.class);
     }
 
     /**
@@ -178,5 +198,5 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         return cookieStore;
     }
 
-    protected record FormData(String actionUrl, BasicCookieStore cookieStore) {}
+    protected record FormData(AuthorizationContext authContext, String actionUrl, BasicCookieStore cookieStore) {}
 }
