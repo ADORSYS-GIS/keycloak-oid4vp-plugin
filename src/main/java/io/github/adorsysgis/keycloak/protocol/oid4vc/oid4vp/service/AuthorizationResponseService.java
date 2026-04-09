@@ -306,8 +306,10 @@ public class AuthorizationResponseService {
             AuthorizationContext authorizationContext,
             AuthenticationSessionStore store) {
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(store.authenticationSession());
-        String message = ErrorResponseSanitizer.withCorrelationId(correlationId)
-                .clientDescription(genericMessage, detailedMessage);
+        String message = ProcessingError.AUTH_CONTEXT_CLOSED.equals(error)
+                ? genericMessage
+                : ErrorResponseSanitizer.withCorrelationId(correlationId)
+                        .clientDescription(genericMessage, detailedMessage);
 
         logger.errorf("[%s] %s: %s", correlationId, error, detailedMessage);
 
