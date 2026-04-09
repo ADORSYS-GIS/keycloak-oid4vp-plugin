@@ -16,6 +16,7 @@ import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.consumer.SimplePresentationDefinition;
 import org.keycloak.sdjwt.vp.KeyBindingJwtVerificationOpts;
+import org.keycloak.services.Urls;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -31,10 +32,12 @@ public class SdJwtAuthRequirements {
     private final ClaimCheck kbJwtAudCheck;
     private final List<String> expectedVcts;
     private final String expectedVctsPattern;
+    private final String keycloakIssuerURI;
 
     private final int kbJwtMaxAllowedAge;
     private final boolean requireNotBeforeClaim;
     private final boolean requireExpirationClaim;
+    private final boolean verifyIssuerClaim;
     private final boolean enforceRevocationStatus;
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
@@ -64,9 +67,16 @@ public class SdJwtAuthRequirements {
                 SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_EXP_CLAIM_CONFIG_DEFAULT)));
 
+        this.verifyIssuerClaim = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.VERIFY_ISSUER_CLAIM_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.VERIFY_ISSUER_CLAIM_CONFIG_DEFAULT)));
+
         this.enforceRevocationStatus = Boolean.parseBoolean(config.getOrDefault(
                 SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)));
+
+        this.keycloakIssuerURI = Urls.realmIssuer(
+                context.getUri().getBaseUri(), context.getRealm().getName());
 
         this.expectedVctsPattern = expectedVcts.stream()
                 .map(vct -> Pattern.quote("\"" + vct + "\""))
@@ -78,13 +88,17 @@ public class SdJwtAuthRequirements {
     }
 
     public List<String> getRequiredClaims() {
-        // A username field is required so as to reliably recover
-        // the user associated with the presented credential
-        return List.of(OAuth2Constants.USERNAME);
+        // A subject is required so we can recover the user by stable identifier
+        // A username is required so we can cross-check the presented user
+        return List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
     }
 
     public boolean shouldEnforceRevocationStatus() {
         return enforceRevocationStatus;
+    }
+
+    public boolean shouldVerifyIssuerClaim() {
+        return verifyIssuerClaim;
     }
 
     /**
@@ -94,9 +108,12 @@ public class SdJwtAuthRequirements {
         var definition = SimplePresentationDefinition.builder();
         getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
 
-        return definition
-                .addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern)
-                .build();
+        definition.addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern);
+        if (verifyIssuerClaim) {
+            definition.addClaimRequirement(
+                    SdJwtCredentialBuilder.ISSUER_CLAIM, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+        }
+        return definition.build();
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {

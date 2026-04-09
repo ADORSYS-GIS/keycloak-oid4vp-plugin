@@ -57,6 +57,7 @@ import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.AccessToken;
+import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -99,7 +100,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         assertEquals(expectedSessionId, actualSessionId);
 
         // Assert: Ensure the request object contains a DCQL query and a legacy presentation definition
-        var queryMap = new QueryMap(List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(OAuth2Constants.USERNAME));
+        var queryMap = new QueryMap(
+                List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
         SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
         SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
     }
@@ -418,9 +420,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
-    public void shouldFailAuthentication_SdJwtWithNoUsername() throws Exception {
+    public void shouldFailAuthentication_SdJwtWithNoSubject() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null, TEST_USER);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -428,14 +430,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (A required field was not presented: `username`)");
+                "Invalid SD-JWT presentation (A required field was not presented: `sub`)");
     }
 
     @Test
     public void shouldFailAuthentication_IfUserUnknown() throws Exception {
         // Request a SD-JWT credential from Keycloak to use for authentication.
-        String testUser = "unknown-user";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testUser);
+        String testSubject = "unknown-user-id";
+        String testUsername = "unknown-user";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testSubject, testUsername);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -447,15 +450,31 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
-    public void shouldFailAuthentication_IfUserDisabled() throws Exception {
-        String disabledUser = "disabled-user@localhost";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledUser);
+    public void shouldFailAuthentication_SdJwtWithMismatchedUsername() throws Exception {
+        // Request SD-JWT credentials from Keycloak with a correct subject but mismatched username
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
+
+        // Proceed to authentication
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "USER_DISABLED: User with presented SD-JWT is disabled");
+                "Username mismatch");
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfUserDisabled() throws Exception {
+        String disabledUser = "disabled-user@localhost";
+        String disabledSubject = "disabled-user-id";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledSubject, disabledUser);
+
+        testFailingAuthentication(
+                sdJwt,
+                TestOpts.getDefault(),
+                HttpStatus.SC_UNAUTHORIZED,
+                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                "User with presented SD-JWT is disabled");
     }
 
     @Test

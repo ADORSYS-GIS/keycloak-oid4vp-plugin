@@ -35,6 +35,9 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     public static final String REQUIRE_EXP_CLAIM_CONFIG = "requireExpClaim";
     public static final boolean REQUIRE_EXP_CLAIM_CONFIG_DEFAULT = false;
 
+    public static final String VERIFY_ISSUER_CLAIM_CONFIG = "verifyIssuerClaim";
+    public static final boolean VERIFY_ISSUER_CLAIM_CONFIG_DEFAULT = true;
+
     public static final String ENFORCE_REVOCATION_STATUS_CONFIG = "enforceRevocationStatus";
     public static final boolean ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT = false;
 
@@ -66,6 +69,14 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setDefaultValue(REQUIRE_EXP_CLAIM_CONFIG_DEFAULT);
         property.setHelpText(
                 "Verification policy whether or not to require the presence of the exp time claim in presented credentials.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(VERIFY_ISSUER_CLAIM_CONFIG);
+        property.setLabel("Verify issuer claim");
+        property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+        property.setDefaultValue(VERIFY_ISSUER_CLAIM_CONFIG_DEFAULT);
+        property.setHelpText("Require the iss claim to match this realm's issuer URL.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();

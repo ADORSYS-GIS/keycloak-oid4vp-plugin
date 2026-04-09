@@ -5,7 +5,8 @@
   "sslRequired": "none",
   "users": [
     {
-      "username": "test-user@localhost",
+      "id": "test-user-id",
+      "username": "test-user",
       "enabled": true,
       "email": "test-user@localhost",
       "firstName": "Tom",
@@ -18,6 +19,7 @@
       ]
     },
     {
+      "id": "disabled-user-id",
       "username": "disabled-user@localhost",
       "enabled": false,
       "email": "disabled-user@localhost",

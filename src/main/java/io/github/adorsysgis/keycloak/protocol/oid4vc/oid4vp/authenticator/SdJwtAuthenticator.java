@@ -9,7 +9,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusList
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
-import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -20,12 +19,13 @@ import org.keycloak.events.Errors;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
-import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Authenticate by presenting a valid SD-JWT credential.
@@ -89,8 +89,6 @@ public class SdJwtAuthenticator implements Authenticator {
 
         UserModel user = recoverAuthenticatingUser(context, sdJwt);
         if (user == null) {
-            logger.debugf("Authentication passed but authenticating user is unknown");
-            failDenyingAuthenticatingUser(context);
             return;
         }
 
@@ -116,30 +114,65 @@ public class SdJwtAuthenticator implements Authenticator {
 
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
         logger.info("Recovering authenticating user");
-        String username = readUsernameFromCredential(sdJwt);
 
-        return KeycloakModelUtils.findUserByNameOrEmail(context.getSession(), context.getRealm(), username);
+        String subject = readSubjectFromCredential(sdJwt);
+        if (StringUtil.isBlank(subject)) {
+            logger.warn("Presented SD-JWT is missing required subject claim");
+            failRejectingPresentedSdJwtToken(context, "Missing subject claim");
+            return null;
+        }
+        logger.debugf("Presented subject: %s", subject);
+
+        UserModel user = context.getSession().users().getUserById(context.getRealm(), subject);
+        if (user == null) {
+            logger.debugf("Authentication passed but authenticating user is unknown");
+            failDenyingAuthenticatingUser(context);
+            return null;
+        }
+        logger.debugf("Resolved user id: %s", user.getId());
+
+        String presentedUsername = readUsernameFromCredential(sdJwt);
+        if (StringUtil.isBlank(presentedUsername)) {
+            logger.warn("Presented SD-JWT is missing required username claim");
+            failRejectingPresentedSdJwtToken(context, "Missing username claim");
+            return null;
+        }
+
+        if (!presentedUsername.equals(user.getUsername())) {
+            logger.warnf(
+                    "Username mismatch for subject '%s': credential='%s', user='%s'",
+                    subject, presentedUsername, user.getUsername());
+            failRejectingPresentedSdJwtToken(context, "Username mismatch");
+            return null;
+        }
+
+        return user;
+    }
+
+    private String readSubjectFromCredential(SdJwtVP sdJwt) {
+        return readClaimFromCredential(sdJwt, JsonWebToken.SUBJECT);
     }
 
     private String readUsernameFromCredential(SdJwtVP sdJwt) {
-        // Read username from SD-JWT
-        JsonNode issuerSignedJwtPayload = sdJwt.getIssuerSignedJWT().getPayload();
-        JsonNode username = issuerSignedJwtPayload.get(OAuth2Constants.USERNAME);
-
-        // Attempt to read from disclosures
-        if (username == null) {
-            username = readSelectivelyDisclosedUsername(sdJwt);
-            Objects.requireNonNull(username, "Disclosing a username is a presentation requirement");
-        }
-
-        return username.asText();
+        return readClaimFromCredential(sdJwt, OAuth2Constants.USERNAME);
     }
 
-    private JsonNode readSelectivelyDisclosedUsername(SdJwtVP sdJwt) {
+    private String readClaimFromCredential(SdJwtVP sdJwt, String claimName) {
+        JsonNode issuerSignedJwtPayload = sdJwt.getIssuerSignedJWT().getPayload();
+        JsonNode claim = issuerSignedJwtPayload.get(claimName);
+
+        if (claim == null) {
+            claim = readSelectivelyDisclosedClaim(sdJwt, claimName);
+        }
+
+        return claim != null ? claim.asText() : null;
+    }
+
+    private JsonNode readSelectivelyDisclosedClaim(SdJwtVP sdJwt, String claimName) {
         for (String disclosure : sdJwt.getDisclosuresString()) {
             try {
                 ArrayNode arrayNode = SdJwtUtils.decodeDisclosureString(disclosure);
-                if (arrayNode.size() == 3 && arrayNode.get(1).asText().equals(OAuth2Constants.USERNAME)) {
+                if (arrayNode.size() == 3 && arrayNode.get(1).asText().equals(claimName)) {
                     return arrayNode.get(2);
                 }
             } catch (VerificationException e) {

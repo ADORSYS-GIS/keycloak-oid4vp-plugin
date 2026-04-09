@@ -41,7 +41,8 @@ public abstract class BaseKeycloakTest {
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_V2_NAME = "test-v2";
-    public static final String TEST_USER = "test-user@localhost";
+    public static final String TEST_USER = "test-user";
+    public static final String TEST_USER_ID = "test-user-id";
     public static final String TEST_CLIENT_ID = "test-app";
     public static final String TEST_CLIENT_SECRET = "password";
     public static final String TEST_CLIENT_REDIRECT_URI = "http://localhost:4200/callback";

@@ -59,15 +59,31 @@ public class SdJwtVPTestUtils {
 
     /**
      * Requests that Keycloak issue an SD-JWT credential.
+     */
+    public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
+        return requestSdJwtCredential(vct, username, setKid, setStatusClaim, getKeycloakJwk());
+    }
+
+    /**
+     * Requests that Keycloak issue an SD-JWT credential.
+     */
+    public String requestSdJwtCredential(String vct, String subject, String username) {
+        return requestSdJwtCredential(vct, subject, username, true, true);
+    }
+
+    /**
+     * Requests that Keycloak issue an SD-JWT credential.
      *
      * @param vct            The verifiable credential type
+     * @param subject        The stable subject identifier to bind the credential to
      * @param username       The username of the user whom the credential is issued for
      * @param setKid         Specifies if the ID of the key used by Keycloak for issuing the credential
      *                       should be set to the `kid` header of the SD-JWT
      * @param setStatusClaim Specifies whether to include a status claim in the issued credential
      */
-    public String requestSdJwtCredential(String vct, String username, boolean setKid, boolean setStatusClaim) {
-        return requestSdJwtCredential(vct, username, setKid, setStatusClaim, getKeycloakJwk());
+    public String requestSdJwtCredential(
+            String vct, String subject, String username, boolean setKid, boolean setStatusClaim) {
+        return requestSdJwtCredential(vct, subject, username, setKid, setStatusClaim, getKeycloakJwk());
     }
 
     /**
@@ -82,6 +98,15 @@ public class SdJwtVPTestUtils {
      */
     public String requestSdJwtCredential(
             String vct, String username, boolean setKid, boolean setStatusClaim, JWK issuerJwk) {
+        String subject = username != null ? username + "-id" : null;
+        return requestSdJwtCredential(vct, subject, username, setKid, setStatusClaim, issuerJwk);
+    }
+
+    /**
+     * Requests that Keycloak issue an SD-JWT credential with a specific issuer key.
+     */
+    public String requestSdJwtCredential(
+            String vct, String subject, String username, boolean setKid, boolean setStatusClaim, JWK issuerJwk) {
 
         SignatureSignerContext signer;
 
@@ -102,7 +127,8 @@ public class SdJwtVPTestUtils {
                 .build(activeTestRealm)
                 .toString();
 
-        IssuerSignedJWT issuerSignedJWT = exampleSdJwtCredential(keycloakIssuerURI, vct, username, setStatusClaim);
+        IssuerSignedJWT issuerSignedJWT =
+                exampleSdJwtCredential(keycloakIssuerURI, vct, subject, username, setStatusClaim);
         return SdJwt.builder()
                 .withIssuerSignedJwt(issuerSignedJWT)
                 .withIssuerSigningContext(signer)
@@ -114,12 +140,15 @@ public class SdJwtVPTestUtils {
      * Scaffold an SD-JWT identity credential that can clear authentication.
      */
     private static IssuerSignedJWT exampleSdJwtCredential(
-            String iss, String vct, String username, boolean setStatusClaim) {
+            String iss, String vct, String subject, String username, boolean setStatusClaim) {
         Objects.requireNonNull(iss);
         Objects.requireNonNull(vct);
 
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
         claimSet.put(OAuth2Constants.ISSUER, iss);
+        if (subject != null) {
+            claimSet.put(JsonWebToken.SUBJECT, subject);
+        }
         claimSet.put(SdJwtAuthenticatorFactory.VCT_CONFIG, vct);
         claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
 
