@@ -149,9 +149,17 @@ public class SdJwtAuthenticator implements Authenticator {
         return ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
     }
 
+    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {
+        failRejectingPresentedSdJwtToken(context, reason, null);
+    }
+
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        logger.errorf(cause, "Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
+        if (cause != null) {
+            logger.errorf(cause, "Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
+        } else {
+            logger.errorf("Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
+        }
 
         String description = String.format("Invalid SD-JWT presentation (%s)", reason);
         var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);
