@@ -1,9 +1,9 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -16,12 +16,12 @@ class ErrorResponseSanitizerTest {
 
     @AfterEach
     void resetConfigProperty() {
-        OID4VPConfig.init(null);
+        ErrorResponseSanitizer.init(new OID4VPConfig(null));
     }
 
     @Test
     void shouldReturnGenericDescriptionByDefault() {
-        OID4VPConfig.init(null);
+        ErrorResponseSanitizer.init(new OID4VPConfig(null));
         String correlationId = "test-ref-123";
 
         String description = ErrorResponseSanitizer.clientDescription(
@@ -33,9 +33,8 @@ class ErrorResponseSanitizerTest {
     @Test
     void shouldReturnDetailedDescriptionWhenVerboseErrorsEnabledViaProperty() {
         Config.Scope config = mock(Config.Scope.class);
-        when(config.getBoolean(anyString(), anyBoolean())).thenReturn(false);
-        when(config.getBoolean("verbose-errors", false)).thenReturn(true);
-        OID4VPConfig.init(config);
+        when(config.getBoolean(eq("verbose-errors"), anyBoolean())).thenReturn(true);
+        ErrorResponseSanitizer.init(new OID4VPConfig(config));
 
         String description = ErrorResponseSanitizer.clientDescription(
                 "Invalid verifiable presentation", "Detailed root cause", "test-ref-123");

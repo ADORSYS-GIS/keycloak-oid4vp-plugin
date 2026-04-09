@@ -6,6 +6,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Descriptor;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
@@ -63,6 +64,7 @@ public class AuthorizationResponseService {
             throw failWithHttpException(
                     ProcessingError.AUTH_CONTEXT_CLOSED,
                     "Authorization context is already closed. Cannot process further responses",
+                    "Authorization context is already closed. Cannot process further responses",
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -84,12 +86,13 @@ public class AuthorizationResponseService {
         logger.debug("Running authentication processor to validate SD-JWT VP token...");
         try (Response response = authProcessor.authenticateOnly()) {
             if (response != null) {
-                String message = getAuthenticatorErrorMessage(response, store);
-                logger.errorf("Authentication processor failed. [%s] %s", response.getStatus(), message);
+                String detailed = getAuthenticatorErrorMessage(response);
+                logger.errorf("Authentication processor failed. [%s] %s", response.getStatus(), detailed);
 
                 throw failWithHttpException(
                         ProcessingError.VP_TOKEN_AUTH_ERROR,
-                        message,
+                        "Invalid SD-JWT presentation",
+                        detailed,
                         Response.Status.fromStatusCode(response.getStatus()),
                         authContext,
                         store);
@@ -111,7 +114,7 @@ public class AuthorizationResponseService {
         store.storeAuthorizationContext(authContext);
     }
 
-    private static String getAuthenticatorErrorMessage(Response response, AuthenticationSessionStore store) {
+    private static String getAuthenticatorErrorMessage(Response response) {
         Object responseEntity = response.getEntity();
         if (!(responseEntity instanceof OAuth2ErrorRepresentation errorResponse)) {
             throw new IllegalStateException(String.format(
@@ -119,8 +122,7 @@ public class AuthorizationResponseService {
                     responseEntity.getClass().getName()));
         }
 
-        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(store.authenticationSession());
-        return ErrorResponseSanitizer.authenticatorOAuth2ClientMessage(errorResponse, correlationId);
+        return String.format("%s: %s", errorResponse.getError().toUpperCase(), errorResponse.getErrorDescription());
     }
 
     /**
@@ -146,7 +148,8 @@ public class AuthorizationResponseService {
             String detailed = "Could not parse `vp_token` as an SD-JWT VP token";
             throw failWithHttpException(
                     ProcessingError.INVALID_VP_TOKEN,
-                    clientDesc("Invalid vp_token", detailed, store),
+                    "Invalid vp_token",
+                    detailed,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -171,7 +174,8 @@ public class AuthorizationResponseService {
             String detailed = "Presented vp_token map does not match DCQL credential query";
             throw failWithHttpException(
                     ProcessingError.INVALID_VP_TOKEN,
-                    clientDesc("Invalid vp_token", detailed, store),
+                    "Invalid vp_token",
+                    detailed,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -185,7 +189,8 @@ public class AuthorizationResponseService {
 
             throw failWithHttpException(
                     ProcessingError.INVALID_VP_TOKEN,
-                    clientDesc("Invalid vp_token", errorMsg, store),
+                    "Invalid vp_token",
+                    errorMsg,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -208,7 +213,8 @@ public class AuthorizationResponseService {
             String detailed = "Presentation submission does not match the expected presentation definition";
             throw failWithHttpException(
                     ProcessingError.INVALID_PRESENTATION_SUBMISSION,
-                    clientDesc("Invalid presentation_submission", detailed, store),
+                    "Invalid presentation_submission",
+                    detailed,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -222,7 +228,8 @@ public class AuthorizationResponseService {
                     + descriptor.getFormat().value();
             throw failWithHttpException(
                     ProcessingError.INVALID_PRESENTATION_SUBMISSION,
-                    clientDesc("Invalid presentation_submission", detailed, store),
+                    "Invalid presentation_submission",
+                    detailed,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -238,7 +245,8 @@ public class AuthorizationResponseService {
                     descriptor.getPath(), JSON_PATH_ROOT);
             throw failWithHttpException(
                     ProcessingError.INVALID_PRESENTATION_SUBMISSION,
-                    clientDesc("Invalid presentation_submission", detailed, store),
+                    "Invalid presentation_submission",
+                    detailed,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -249,7 +257,8 @@ public class AuthorizationResponseService {
             String detailed = "Could not parse submission in search for SD-JWT VP token";
             throw failWithHttpException(
                     ProcessingError.INVALID_PRESENTATION_SUBMISSION,
-                    clientDesc("Invalid presentation_submission", detailed, store),
+                    "Invalid presentation_submission",
+                    detailed,
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
@@ -291,13 +300,16 @@ public class AuthorizationResponseService {
      */
     private WebApplicationException failWithHttpException(
             ProcessingError error,
-            String message,
+            String genericMessage,
+            String detailedMessage,
             Response.Status status,
             AuthorizationContext authorizationContext,
             AuthenticationSessionStore store) {
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(store.authenticationSession());
+        String message =
+                ErrorResponseSanitizer.withCorrelationId(correlationId).clientDescription(genericMessage, detailedMessage);
 
-        logger.errorf("[%s] %s: %s", correlationId, error, message);
+        logger.errorf("[%s] %s: %s", correlationId, error, detailedMessage);
 
         var errorResponse = new OAuth2ErrorRepresentation(error.getErrorString(), message);
         var httpErrorResponse = Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON);
@@ -315,16 +327,6 @@ public class AuthorizationResponseService {
         }
 
         return exception;
-    }
-
-    /**
-     * OAuth2 {@code error_description} for this request: binds the auth session as correlation id and applies
-     * generic vs. detailed wording per {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig#verboseErrors()}.
-     */
-    private String clientDesc(String genericDescription, String detailedDescription, AuthenticationSessionStore store) {
-        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(store.authenticationSession());
-        return ErrorResponseSanitizer.withCorrelationId(correlationId)
-                .clientDescription(genericDescription, detailedDescription);
     }
 
     /**

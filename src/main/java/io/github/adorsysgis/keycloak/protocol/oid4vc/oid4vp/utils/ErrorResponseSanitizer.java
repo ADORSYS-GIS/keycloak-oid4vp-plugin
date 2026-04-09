@@ -1,15 +1,17 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import java.util.Objects;
 import java.util.UUID;
-import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
  * Produces safe client-facing error descriptions while keeping detailed reasons in server logs.
  */
 public final class ErrorResponseSanitizer {
+
+    private static volatile OID4VPConfig config = new OID4VPConfig(null);
 
     private final String correlationId;
 
@@ -28,6 +30,10 @@ public final class ErrorResponseSanitizer {
         return UUID.randomUUID().toString();
     }
 
+    public static synchronized void init(OID4VPConfig config) {
+        ErrorResponseSanitizer.config = Objects.requireNonNull(config);
+    }
+
     public static String correlationIdFromAuthSession(AuthenticationSessionModel authSession) {
         if (authSession == null) {
             return newCorrelationId();
@@ -44,7 +50,7 @@ public final class ErrorResponseSanitizer {
     }
 
     public static String clientDescription(String generic, String detailed, String correlationId) {
-        if (OID4VPConfig.verboseErrors()) {
+        if (config.verboseErrors()) {
             return String.format("%s (ref: %s)", detailed, correlationId);
         }
         return String.format("%s (ref: %s)", generic, correlationId);
@@ -56,17 +62,5 @@ public final class ErrorResponseSanitizer {
 
     public String correlationId() {
         return correlationId;
-    }
-
-    /**
-     * Client-facing text for an {@link OAuth2ErrorRepresentation} produced by the SD-JWT authenticator.
-     */
-    public static String authenticatorOAuth2ClientMessage(OAuth2ErrorRepresentation error, String correlationId) {
-        if (OID4VPConfig.verboseErrors()) {
-            return String.format(
-                    "%s: %s (ref: %s)", error.getError().toUpperCase(), error.getErrorDescription(), correlationId);
-        }
-        return withCorrelationId(correlationId)
-                .clientDescription("Invalid SD-JWT presentation", error.getErrorDescription());
     }
 }

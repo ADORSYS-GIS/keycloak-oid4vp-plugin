@@ -4,7 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.Referenc
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
@@ -151,11 +151,9 @@ public class SdJwtAuthenticator implements Authenticator {
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        ErrorResponseSanitizer sanitizer = ErrorResponseSanitizer.withCorrelationId(correlationId);
         logger.errorf(cause, "Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
 
-        String description = sanitizer.clientDescription(
-                "Invalid SD-JWT presentation", String.format("Invalid SD-JWT presentation (%s)", reason));
+        String description = String.format("Invalid SD-JWT presentation (%s)", reason);
         var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);
 
         context.failure(
@@ -170,11 +168,9 @@ public class SdJwtAuthenticator implements Authenticator {
         logger.info("Presented SD-JWT will be rejected for associated user is unknown");
 
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        ErrorResponseSanitizer sanitizer = ErrorResponseSanitizer.withCorrelationId(correlationId);
         logger.errorf("User with presented SD-JWT is unknown (authSession = %s)", correlationId);
 
-        String description =
-                sanitizer.clientDescription("Invalid verifiable presentation", "User with presented SD-JWT is unknown");
+        String description = "User with presented SD-JWT is unknown";
 
         var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, description);
 

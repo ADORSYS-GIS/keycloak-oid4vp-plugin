@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -38,9 +39,21 @@ public class ExtendedCertificateUtils extends CertificateUtils {
     }
 
     /**
-     * Rebuilds the certificate cache with the given maximum size (LRU eviction).
+     * Initializes certificate caching from centralized OID4VP configuration.
+     *
+     * <p>This signature keeps initialization APIs consistent across modules that depend on plugin config.</p>
      */
-    public static synchronized void initCache(int maxSize) {
+    public static synchronized void init(OID4VPConfig config) {
+        int configuredSize = config.cacheMaxSize();
+        initCache(configuredSize);
+    }
+
+    /**
+     * Rebuilds the certificate cache with the given maximum size.
+     *
+     * <p>Eviction behavior is delegated to Caffeine's size-based policy.</p>
+     */
+    static synchronized void initCache(int maxSize) {
         int size = maxSize > 0 ? maxSize : DEFAULT_MAX_CACHE_SIZE;
         logger.debugf("Initializing ExtendedCertificateUtils with max cache size: %d", size);
         certificateCache = createCache(size);

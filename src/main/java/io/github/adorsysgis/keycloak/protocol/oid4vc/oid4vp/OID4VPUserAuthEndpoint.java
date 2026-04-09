@@ -8,7 +8,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.ErrorResponseSanitizer;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -137,14 +136,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         try {
             responseObject = new ResponseObject(vpToken, presentationSubmission, state);
         } catch (IllegalArgumentException | JsonProcessingException e) {
-            // `state` is not trusted until the response object parses; do not derive correlation from it here.
-            String correlationId = ErrorResponseSanitizer.newCorrelationId();
-            logger.errorf(
-                    "[%s] Unparseable response parameters (exception type: %s)",
-                    correlationId, e.getClass().getSimpleName());
-            String clientMessage = String.format("Unparseable response parameters (ref: %s)", correlationId);
             throw new BadRequestException(
-                    errorResponse(Response.Status.BAD_REQUEST, OAuthErrorException.INVALID_REQUEST, clientMessage));
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            String.format("Unparseable response params (%s)", e.getMessage())),
+                    e);
         }
 
         // Recover the auth session and context given the state field

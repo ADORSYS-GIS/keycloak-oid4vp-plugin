@@ -21,23 +21,25 @@ You can tune the cache behavior in `keycloak.conf` or via command line arguments
 |===
 
 These properties must be configured under the `oid4vp-auth` realm resource provider.
+In Keycloak configuration naming, this provider belongs to the `realm-restapi-extension` SPI,
+which is why the examples use the `spi-realm-restapi-extension-oid4vp-auth-*` prefix.
 
 **Example in `keycloak.conf`:**
 [source,properties]
 ----
-spi-realm-resource-oid4vp-auth-cache-max-size=2000
+spi-realm-restapi-extension-oid4vp-auth-cache-max-size=2000
 ----
 
 **Example via Command Line:**
 [source,bash]
 ----
-bin/kc.sh start --spi-realm-resource-oid4vp-auth-cache-max-size=2000
+bin/kc.sh start --spi-realm-restapi-extension-oid4vp-auth-cache-max-size=2000
 ----
 
 **Example via Environment Variables:**
 [source,bash]
 ----
-export KC_SPI_REALM_RESOURCE_OID4VP_AUTH_CACHE_MAX_SIZE=2000
+export KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_CACHE_MAX_SIZE=2000
 bin/kc.sh start
 ----
 
@@ -51,6 +53,8 @@ By default, this plugin returns generic client-safe error descriptions (recommen
 verification errors to clients for debugging, enable `verbose-errors`.
 
 These properties must be configured under the `oid4vp-auth` realm resource provider.
+In Keycloak configuration naming, this provider belongs to the `realm-restapi-extension` SPI,
+which is why the examples use the `spi-realm-restapi-extension-oid4vp-auth-*` prefix.
 
 **Example in `keycloak.conf`:**
 [source,properties]

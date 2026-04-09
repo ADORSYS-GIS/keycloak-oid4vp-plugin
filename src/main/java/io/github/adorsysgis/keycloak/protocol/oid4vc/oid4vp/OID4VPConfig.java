@@ -9,35 +9,25 @@ import org.keycloak.Config;
  */
 public final class OID4VPConfig {
 
-    private static volatile boolean verboseErrors = false;
-
-    private static volatile int certificateCacheMaxSize = ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE;
-
-    private OID4VPConfig() {}
-
-    public static boolean verboseErrors() {
-        return verboseErrors;
-    }
+    private final boolean verboseErrors;
+    private final int certificateCacheMaxSize;
 
     /**
      * Configured max entries for the SD-JWT / authorization-request certificate cache
      * ({@code cache-max-size}).
      */
-    public static int certificateCacheMaxSize() {
+    public int cacheMaxSize() {
         return certificateCacheMaxSize;
     }
 
-    public static synchronized void init(Config.Scope config) {
-        if (config == null) {
-            verboseErrors = false;
-            certificateCacheMaxSize = ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE;
-            ExtendedCertificateUtils.initCache(certificateCacheMaxSize);
-            return;
-        }
+    public boolean verboseErrors() {
+        return verboseErrors;
+    }
 
-        verboseErrors = config.getBoolean("verbose-errors", false);
-
-        certificateCacheMaxSize = config.getInt("cache-max-size", ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE);
-        ExtendedCertificateUtils.initCache(certificateCacheMaxSize);
+    public OID4VPConfig(Config.Scope config) {
+        this.verboseErrors = config != null && config.getBoolean("verbose-errors", false);
+        this.certificateCacheMaxSize = config == null
+                ? ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE
+                : config.getInt("cache-max-size", ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE);
     }
 }
