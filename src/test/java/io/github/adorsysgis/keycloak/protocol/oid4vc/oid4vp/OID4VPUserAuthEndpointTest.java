@@ -27,6 +27,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUti
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -83,6 +84,25 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         // The authorization request must be a valid URL of scheme "openid4vp".
         URI authRequest = new URI(authContext.getAuthorizationRequest());
         assertEquals("openid4vp", authRequest.getScheme());
+    }
+
+    @Test
+    public void shouldProduceAuthorizationRequestsWithSchemedClientId() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+
+        URI authRequest = new URI(authContext.getAuthorizationRequest());
+
+        // Parse query parameters
+        ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
+        String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
+        assertNotNull(clientIdParam, "client_id parameter should be present");
+
+        // Decode URL-encoded client ID
+        String decodedClientId = URLDecoder.decode(clientIdParam, StandardCharsets.UTF_8);
+
+        // Assert full expected format
+        String expectedClientId = "x509_san_dns:" + getVerifierClientId();
+        assertEquals(expectedClientId, decodedClientId, "Client ID should be correctly prefixed with scheme");
     }
 
     @Test
