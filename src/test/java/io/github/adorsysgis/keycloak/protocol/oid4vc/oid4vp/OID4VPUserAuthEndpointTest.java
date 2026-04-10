@@ -470,6 +470,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_WithUsernameFallback() throws Exception {
+        // Request SD-JWT credentials with an unknown subject but valid username
+        String testSubject = "unknown-user-id";
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testSubject, TEST_USER);
+
+        testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
+    }
+
+    @Test
     public void shouldFailAuthentication_SdJwtWithMismatchedUsername() throws Exception {
         // Request SD-JWT credentials from Keycloak with a correct subject but mismatched username
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
