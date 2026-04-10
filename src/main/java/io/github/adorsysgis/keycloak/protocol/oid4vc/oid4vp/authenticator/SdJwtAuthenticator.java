@@ -117,24 +117,35 @@ public class SdJwtAuthenticator implements Authenticator {
 
         String subject = readSubjectFromCredential(sdJwt);
         if (StringUtil.isBlank(subject)) {
-            logger.warn("Presented SD-JWT is missing required subject claim");
-            failRejectingPresentedSdJwtToken(context, "Missing subject claim");
-            return null;
+            logger.warn("Presented SD-JWT is missing subject claim");
+        } else {
+            logger.debugf("Presented subject: %s", subject);
         }
-        logger.debugf("Presented subject: %s", subject);
-
-        UserModel user = context.getSession().users().getUserById(context.getRealm(), subject);
-        if (user == null) {
-            logger.debugf("Authentication passed but authenticating user is unknown");
-            failDenyingAuthenticatingUser(context);
-            return null;
-        }
-        logger.debugf("Resolved user id: %s", user.getId());
 
         String presentedUsername = readUsernameFromCredential(sdJwt);
         if (StringUtil.isBlank(presentedUsername)) {
             logger.warn("Presented SD-JWT is missing required username claim");
             failRejectingPresentedSdJwtToken(context, "Missing username claim");
+            return null;
+        }
+
+        UserModel user = null;
+        if (!StringUtil.isBlank(subject)) {
+            user = context.getSession().users().getUserById(context.getRealm(), subject);
+            if (user != null) {
+                logger.debugf("Resolved user id: %s", user.getId());
+            }
+        }
+
+        if (user == null) {
+            // TODO: Remove username-only fallback once SubjectID mapper is fixed and stable.
+            logger.warn("Subject did not resolve to a user. Falling back to username lookup.");
+            user = context.getSession().users().getUserByUsername(context.getRealm(), presentedUsername);
+        }
+
+        if (user == null) {
+            logger.debugf("Authentication passed but authenticating user is unknown");
+            failDenyingAuthenticatingUser(context);
             return null;
         }
 
