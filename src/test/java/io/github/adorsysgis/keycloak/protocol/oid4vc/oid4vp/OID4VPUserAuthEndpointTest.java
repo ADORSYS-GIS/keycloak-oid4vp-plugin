@@ -32,13 +32,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -65,8 +63,7 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 /**
- * Testing OpenID4VP user authentication via presentation of SD-JWT identity
- * credentials.
+ * Testing OpenID4VP user authentication via presentation of SD-JWT identity credentials.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
@@ -94,17 +91,10 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         AuthorizationContext authContext = requestAuthorizationRequest();
 
         URI authRequest = new URI(authContext.getAuthorizationRequest());
-        String query = authRequest.getQuery();
 
-        assertNotNull(query, "Authorization request query should not be null");
-
-        // Parse query parameters into a map
-        Map<String, String> params = Arrays.stream(query.split("&"))
-                .map(param -> param.split("=", 2))
-                .filter(pair -> pair.length == 2)
-                .collect(Collectors.toMap(pair -> pair[0], pair -> pair[1]));
-
-        String clientIdParam = params.get("client_id");
+        // Parse query parameters
+        ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
+        String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
 
         // Decode URL-encoded client ID
@@ -129,8 +119,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
 
-        // Assert: Ensure the request object contains a DCQL query and a legacy
-        // presentation definition
+        // Assert: Ensure the request object contains a DCQL query and a legacy presentation definition
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
         SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
@@ -260,8 +249,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
-        // Proceed to authentication (Use 'dc-sd+jwt' in presentation submission
-        // descriptor)
+        // Proceed to authentication (Use 'dc-sd+jwt' in presentation submission descriptor)
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.DC_SD_JWT);
         testSuccessfulAuthentication(sdJwt, opts);
     }
@@ -483,8 +471,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     @Test
     public void shouldFailAuthentication_SdJwtWithMismatchedUsername() throws Exception {
-        // Request SD-JWT credentials from Keycloak with a correct subject but
-        // mismatched username
+        // Request SD-JWT credentials from Keycloak with a correct subject but mismatched username
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
 
         // Proceed to authentication
@@ -513,8 +500,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     @Test
     public void shouldFailAuthentication_SdJwtWithoutStatusClaim() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
-        // Token status is enforced, but we omit the status claim, causing
-        // authentication to fail
+        // Token status is enforced, but we omit the status claim, causing authentication to fail
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER, false, false);
 
         // Proceed to authentication
@@ -712,8 +698,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     /**
-     * Sends an OpenID4VP response to Keycloak, producing an SD-JWT verifiable
-     * presentation.
+     * Sends an OpenID4VP response to Keycloak, producing an SD-JWT verifiable presentation.
      */
     private HttpResponse sendAuthorizationResponse(String sdJwt, RequestObject requestObject, TestOpts opts)
             throws Exception {
@@ -737,8 +722,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
     }
 
     /**
-     * Sends an OpenID4VP response to Keycloak, producing an SD-JWT verifiable
-     * presentation.
+     * Sends an OpenID4VP response to Keycloak, producing an SD-JWT verifiable presentation.
      */
     private HttpResponse sendAuthorizationResponseWithVPToken(
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws Exception {
@@ -761,8 +745,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * Prepare the OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation
-     *                      definition
+     * @param requestObject the request object containing the presentation definition
      */
     private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
@@ -781,8 +764,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
      * Prepare the OpenID4VP response object to be sent to Keycloak (Legacy).
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation
-     *                      definition
+     * @param requestObject the request object containing the presentation definition
      */
     private List<BasicNameValuePair> prepareLegacyOpenID4VPResponse(
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws IOException {
@@ -854,8 +836,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
             assertNotEquals("New code must be issued", authCode, freshAuthCode);
 
             // TODO: A login method param must be appended to the redirect URI
-            // String loginMethod =
-            // uriInfo.getQueryParameters().getFirst(PARAM_LOGIN_METHOD);
+            // String loginMethod = uriInfo.getQueryParameters().getFirst(PARAM_LOGIN_METHOD);
             // assertEquals(OID4VP_AUTH_LOGIN_PATH, loginMethod);
         }
     }
