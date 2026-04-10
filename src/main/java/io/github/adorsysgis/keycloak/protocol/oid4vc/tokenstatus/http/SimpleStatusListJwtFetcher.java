@@ -25,6 +25,10 @@ public class SimpleStatusListJwtFetcher implements StatusListJwtFetcher {
 
     @Override
     public String fetchStatusListJwt(String uri) throws ReferencedTokenValidationException {
+        return _fetchStatusListJwt(uri);
+    }
+
+    protected String _fetchStatusListJwt(String uri) throws ReferencedTokenValidationException {
         try {
             return SimpleHttp.doGet(uri, session)
                     .header("Accept", STATUS_LIST_JWT_ACCEPT_HEADER)

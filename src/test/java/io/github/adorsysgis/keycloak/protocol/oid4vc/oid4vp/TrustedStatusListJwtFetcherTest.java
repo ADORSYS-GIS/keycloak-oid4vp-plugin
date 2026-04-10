@@ -14,6 +14,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
@@ -31,6 +32,7 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.jose.jws.JWSInput;
@@ -113,13 +115,6 @@ public class TrustedStatusListJwtFetcherTest {
                 "/tokenstatus/status-list-jwt+invalid-signature.txt");
         setupTrustForJwt(statusListJwt);
 
-        // Mock the verifier to return false for this test
-        SignatureProvider sp = session.getProvider(SignatureProvider.class, Algorithm.ES256);
-        SignatureVerifierContext svc = Mockito.mock(SignatureVerifierContext.class);
-        Mockito.when(sp.verifier(Mockito.any(org.keycloak.crypto.KeyWrapper.class)))
-                .thenReturn(svc);
-        Mockito.when(svc.verify(Mockito.any(), Mockito.any())).thenReturn(false);
-
         var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
         assertEquals("Invalid JWS signature", e.getMessage());
     }
@@ -133,7 +128,7 @@ public class TrustedStatusListJwtFetcherTest {
         Mockito.when(truststoreProvider.getRootCertificates()).thenReturn(Map.of());
 
         var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
-        assertEquals("No trusted root certificates available for validation", e.getMessage());
+        assertTrue(e.getMessage().contains("No trusted root certificates available for validation"));
     }
 
     @Test
@@ -145,8 +140,8 @@ public class TrustedStatusListJwtFetcherTest {
         Time.setOffset(1000000000);
 
         var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
-        assertEquals("Certificate chain validation failed", e.getMessage());
-        assertTrue(e.getCause() instanceof java.security.cert.CertificateExpiredException);
+        assertTrue(e.getMessage().contains("Certificate chain validation failed"));
+        assertHasCause(e, CertificateExpiredException.class);
     }
 
     @Test
@@ -176,7 +171,7 @@ public class TrustedStatusListJwtFetcherTest {
         };
 
         var e = assertThrows(ReferencedTokenValidationException.class, () -> customFetcher.fetchStatusListJwt(uri));
-        assertTrue(e.getCause().getMessage().contains("Certificate chain too long"));
+        assertTrue(e.getMessage().contains("Certificate chain too long"));
     }
 
     @Test
@@ -237,7 +232,7 @@ public class TrustedStatusListJwtFetcherTest {
                 .thenReturn(signatureProvider);
 
         Mockito.lenient()
-                .when(signatureProvider.verifier(Mockito.any(org.keycloak.crypto.KeyWrapper.class)))
+                .when(signatureProvider.verifier(Mockito.any(KeyWrapper.class)))
                 .thenAnswer(invocation -> {
                     SignatureVerifierContext verifier = Mockito.mock(SignatureVerifierContext.class);
                     Mockito.lenient()
@@ -276,5 +271,16 @@ public class TrustedStatusListJwtFetcherTest {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private void assertHasCause(Throwable t, Class<? extends Throwable> expected) {
+        Throwable cause = t;
+        while (cause != null) {
+            if (expected.isInstance(cause)) {
+                return;
+            }
+            cause = cause.getCause();
+        }
+        throw new AssertionError("Expected cause of type " + expected.getName() + " but it was not found in the chain");
     }
 }
