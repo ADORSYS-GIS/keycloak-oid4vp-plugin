@@ -174,9 +174,12 @@ public class AuthorizationRequestService {
         var clientId = clientMetadata.getClientId();
         var requestUri = openID4VPRootUrl + "%s/%s".formatted(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH, requestId);
 
+        // For x509_san_dns scheme, the client ID must be prefixed with the scheme
+        var prefixedClientId = ClientIdScheme.X509_SAN_DNS.getValue() + ":" + clientId;
+
         return String.format(
                 "openid4vp://authorize?client_id=%s&request_uri=%s",
-                URLEncoder.encode(clientId, StandardCharsets.UTF_8),
+                URLEncoder.encode(prefixedClientId, StandardCharsets.UTF_8),
                 URLEncoder.encode(requestUri, StandardCharsets.UTF_8));
     }
 
