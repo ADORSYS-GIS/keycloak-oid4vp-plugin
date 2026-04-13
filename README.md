@@ -90,6 +90,15 @@ For more information about using the Keycloak Admin Console and managing realms,
 If you need to make specific changes (e.g., environment variables, ports, or database settings),
 you are encouraged to create a `docker-compose.override.yml` based on the provided `docker-compose.yml`.
 
+## Configuration
+
+This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to clients.
+By default, verbose errors are disabled (safe-by-default).
+
+For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see the
+documentation site sources in `docs/`, especially
+[`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc).
+
 ## Documentation site (Antora)
 
 The AsciiDoc content in `docs/` is published with [Antora](https://docs.antora.org/antora/latest/).

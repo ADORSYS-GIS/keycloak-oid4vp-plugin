@@ -18,12 +18,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.keycloak.Config;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.HashException;
-import org.mockito.ArgumentMatchers;
-import org.mockito.stubbing.Answer;
 
 class ExtendedCertificateUtilsTest {
 
@@ -42,17 +39,8 @@ class ExtendedCertificateUtilsTest {
     @BeforeEach
     void initCache() {
         // Explicitly re-initialize the cache before every test to ensure isolation
-        ExtendedCertificateUtils.init(createDefaultConfig());
+        ExtendedCertificateUtils.initCache(ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE);
         Time.setOffset(0);
-    }
-
-    private Config.Scope createDefaultConfig() {
-        Config.Scope mockConfig = mock(Config.Scope.class);
-        // Ensure that getInt returns the default value passed as the second argument
-        Answer<Integer> defaultAnswer = invocation -> invocation.getArgument(1);
-        when(mockConfig.getInt(ArgumentMatchers.anyString(), ArgumentMatchers.anyInt()))
-                .thenAnswer(defaultAnswer);
-        return mockConfig;
     }
 
     @AfterAll
@@ -127,10 +115,7 @@ class ExtendedCertificateUtilsTest {
 
     @Test
     void testGenerateV3Certificate_cacheEviction() {
-        Config.Scope mockConfig = mock(Config.Scope.class);
-        when(mockConfig.getInt("cache-max-size", 1000)).thenReturn(10);
-
-        ExtendedCertificateUtils.init(mockConfig);
+        ExtendedCertificateUtils.initCache(10);
 
         try {
             X509Certificate firstCert = generateCert("evict-subject-0");
@@ -141,8 +126,7 @@ class ExtendedCertificateUtilsTest {
 
             assertNotSame(firstCert, refilledFirstCert, "Entry should have been evicted from the size-limited cache");
         } finally {
-            // Restore default configuration
-            ExtendedCertificateUtils.init(mock(Config.Scope.class));
+            ExtendedCertificateUtils.initCache(ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE);
         }
     }
 

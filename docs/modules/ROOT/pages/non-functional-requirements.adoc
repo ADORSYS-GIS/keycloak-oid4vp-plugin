@@ -21,26 +21,56 @@ You can tune the cache behavior in `keycloak.conf` or via command line arguments
 |===
 
 These properties must be configured under the `oid4vp-auth` realm resource provider.
+In Keycloak configuration naming, this provider belongs to the `realm-restapi-extension` SPI,
+which is why the examples use the `spi-realm-restapi-extension-oid4vp-auth-*` prefix.
 
 **Example in `keycloak.conf`:**
 [source,properties]
 ----
-spi-realm-resource-oid4vp-auth-cache-max-size=2000
+spi-realm-restapi-extension-oid4vp-auth-cache-max-size=2000
 ----
 
 **Example via Command Line:**
 [source,bash]
 ----
-bin/kc.sh start --spi-realm-resource-oid4vp-auth-cache-max-size=2000
+bin/kc.sh start --spi-realm-restapi-extension-oid4vp-auth-cache-max-size=2000
 ----
 
 **Example via Environment Variables:**
 [source,bash]
 ----
-export KC_SPI_REALM_RESOURCE_OID4VP_AUTH_CACHE_MAX_SIZE=2000
+export KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_CACHE_MAX_SIZE=2000
 bin/kc.sh start
 ----
 
 === Certificate Lifespan
 
 For security best practices, self-signed certificates used for OpenID4VP authorization requests are generated with a limited lifespan (default **1 hour**). These certificates are transient and only intended for the duration of the authentication session.
+
+=== Error response verbosity
+
+By default, this plugin returns generic client-safe error descriptions (recommended). To return more detailed
+verification errors to clients for debugging, enable `verbose-errors`.
+
+These properties must be configured under the `oid4vp-auth` realm resource provider.
+In Keycloak configuration naming, this provider belongs to the `realm-restapi-extension` SPI,
+which is why the examples use the `spi-realm-restapi-extension-oid4vp-auth-*` prefix.
+
+**Example in `keycloak.conf`:**
+[source,properties]
+----
+spi-realm-restapi-extension-oid4vp-auth-verbose-errors=true
+----
+
+**Example via Command Line:**
+[source,bash]
+----
+bin/kc.sh start --spi-realm-restapi-extension-oid4vp-auth-verbose-errors=true
+----
+
+**Example via Environment Variables:**
+[source,bash]
+----
+export KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS=true
+bin/kc.sh start
+----

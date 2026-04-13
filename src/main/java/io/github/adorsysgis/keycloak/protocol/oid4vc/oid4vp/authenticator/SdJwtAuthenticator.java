@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.Referenc
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
@@ -71,8 +72,8 @@ public class SdJwtAuthenticator implements Authenticator {
                     authReqs.getIssuerSignedJwtVerificationOpts(),
                     authReqs.getKeyBindingJwtVerificationOpts(nonce));
         } catch (VerificationException e) {
-            logger.errorf(e, "Token verification failed");
-            failRejectingPresentedSdJwtToken(context, e.getMessage());
+            logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
+            failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
             return;
         }
 
@@ -81,8 +82,8 @@ public class SdJwtAuthenticator implements Authenticator {
             try {
                 tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
             } catch (ReferencedTokenValidationException e) {
-                logger.errorf(e, "Token status verification failed");
-                failRejectingPresentedSdJwtToken(context, "Token status verification failed");
+                logger.errorf(e, "Token status verification failed (authSession = %s)", correlationId(context));
+                failRejectingPresentedSdJwtToken(context, "Token status verification failed", e);
                 return;
             }
         }
@@ -194,11 +195,24 @@ public class SdJwtAuthenticator implements Authenticator {
         return null;
     }
 
-    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {
-        logger.info("Presented SD-JWT will be rejected as invalid");
+    private static String correlationId(AuthenticationFlowContext context) {
+        return ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
+    }
 
-        var errorRep = new OAuth2ErrorRepresentation(
-                Errors.INVALID_USER_CREDENTIALS, String.format("Invalid SD-JWT presentation (%s)", reason));
+    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {
+        failRejectingPresentedSdJwtToken(context, reason, null);
+    }
+
+    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
+        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
+        if (cause != null) {
+            logger.errorf(cause, "Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
+        } else {
+            logger.errorf("Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
+        }
+
+        String description = String.format("Invalid SD-JWT presentation (%s)", reason);
+        var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);
 
         context.failure(
                 AuthenticationFlowError.INVALID_CREDENTIALS,
@@ -211,7 +225,12 @@ public class SdJwtAuthenticator implements Authenticator {
     private void failDenyingAuthenticatingUser(AuthenticationFlowContext context) {
         logger.info("Presented SD-JWT will be rejected for associated user is unknown");
 
-        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, "User with presented SD-JWT is unknown");
+        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
+        logger.errorf("User with presented SD-JWT is unknown (authSession = %s)", correlationId);
+
+        String description = "User with presented SD-JWT is unknown";
+
+        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, description);
 
         context.failure(
                 AuthenticationFlowError.UNKNOWN_USER,

@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAut
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.authentication.AuthenticationFlow;
@@ -45,7 +46,9 @@ public class OID4VPUserAuthEndpointFactory implements RealmResourceProviderFacto
 
     @Override
     public void init(Config.Scope config) {
-        ExtendedCertificateUtils.init(config);
+        OID4VPConfig pluginConfig = new OID4VPConfig(config);
+        ExtendedCertificateUtils.init(pluginConfig);
+        ErrorResponseSanitizer.init(pluginConfig);
     }
 
     @Override
