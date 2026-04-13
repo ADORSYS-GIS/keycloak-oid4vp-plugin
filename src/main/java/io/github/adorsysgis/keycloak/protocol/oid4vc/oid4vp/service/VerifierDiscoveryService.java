@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import java.util.List;
@@ -27,6 +28,8 @@ import org.keycloak.urls.UrlType;
 public class VerifierDiscoveryService {
 
     private static final Logger logger = Logger.getLogger(VerifierDiscoveryService.class);
+
+    public static final String CLIENT_ID_SCHEME = ClientIdScheme.X509_SAN_DNS.getValue();
 
     private final KeycloakSession session;
 
@@ -88,7 +91,9 @@ public class VerifierDiscoveryService {
 
     private String getClientId() {
         // The client ID is typically the hostname of the Keycloak server.
-        return session.getContext().getUri().getBaseUri().getHost();
+        String clientId = session.getContext().getUri().getBaseUri().getHost();
+        // Prefix with scheme as per spec requirements
+        return String.join(":", CLIENT_ID_SCHEME, clientId);
     }
 
     private SdGenericFormat getSdJwtVpFormat() {

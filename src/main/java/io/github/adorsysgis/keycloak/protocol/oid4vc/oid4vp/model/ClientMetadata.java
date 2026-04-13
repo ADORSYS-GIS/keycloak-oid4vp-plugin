@@ -1,8 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.ClaimFormat;
+import java.util.Optional;
 
 /**
  * Model for Client Metadata.
@@ -27,6 +29,13 @@ public class ClientMetadata {
     public ClientMetadata setClientId(String clientId) {
         this.clientId = clientId;
         return this;
+    }
+
+    @JsonIgnore
+    public String getSchemelessClientId() {
+        return Optional.ofNullable(clientId)
+                .map(id -> id.substring(id.indexOf(':') + 1))
+                .orElse(null);
     }
 
     public VpFormat getVpFormat() {
