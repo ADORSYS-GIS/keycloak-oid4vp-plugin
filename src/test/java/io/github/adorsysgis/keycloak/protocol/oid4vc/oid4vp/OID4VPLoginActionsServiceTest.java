@@ -82,7 +82,8 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     public void shouldFailAuthentication_IfOid4vpCodeNotBoundToOIDCSession() throws Exception {
         // This OpenID4VP authorization context is not tied to any browser OIDC session
         AuthorizationContext authContext = requestAuthorizationRequest();
-        shouldFailAuthenticationWithAltContext(authContext);
+        String authCode = completeOid4vpAuth(authContext);
+        shouldFailAuthenticationWithAltAuthCode(authCode, "Authorization code was not issued for this OIDC session");
     }
 
     @Test
@@ -92,23 +93,37 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         AuthorizationContext authContext = formData.authContext();
 
         // Authentication is expected to fail because a new, unrelated OIDC session will be started
-        shouldFailAuthenticationWithAltContext(authContext);
+        String authCode = completeOid4vpAuth(authContext);
+        shouldFailAuthenticationWithAltAuthCode(authCode, "Authorization code was not issued for this OIDC session");
+
+        // Try reusing authCode in original session - expected to fail again because the code must
+        // have been invalidated upon first malicious use
+        getActiveTestRealmResource().clearEvents();
+        shouldFailAuthenticationWithAuthCode(formData, authCode, "Authorization code validation failed");
     }
 
-    private void shouldFailAuthenticationWithAltContext(AuthorizationContext authContext) throws Exception {
+    /**
+     * Complete API authentication and return auth code.
+     */
+    private String completeOid4vpAuth(AuthorizationContext authContext) throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
         // Complete authentication with alternate context
         TestOpts opts =
                 TestOpts.getDefault().setAuthorizationContext(authContext).setShouldRetrieveAccessToken(false);
-        String authCode = testSuccessfulAuthentication(sdJwt, opts);
-        shouldFailAuthenticationWithAltAuthCode(authCode, "Authorization code was not issued for this OIDC session");
+        return testSuccessfulAuthentication(sdJwt, opts);
     }
 
     private void shouldFailAuthenticationWithAltAuthCode(String authCode, String reason) throws Exception {
-        // Start new OIDC authentication and collect session data
+        // Start new, unrelated OIDC authentication session
         FormData formData = getFreshOid4vpFormActionUrl();
+        shouldFailAuthenticationWithAuthCode(formData, authCode, reason);
+    }
+
+    private void shouldFailAuthenticationWithAuthCode(FormData formData, String authCode, String reason)
+            throws Exception {
+        // Collect session data
         String actionURI = formData.actionUrl();
         BasicCookieStore cookieStore = formData.cookieStore();
 
