@@ -337,7 +337,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains("Unparseable response params"));
+        assertTrue(errorRep.getErrorDescription()
+                .contains("Unparseable response params (vp_token must not be null or blank)"));
     }
 
     @Test
