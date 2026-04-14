@@ -58,11 +58,11 @@ public class VerifierConfig {
 
     private static ResponseMode validateResponseMode(String responseMode) {
         try {
-            return ResponseMode.valueOf(responseMode);
+            return ResponseMode.fromValue(responseMode);
         } catch (IllegalArgumentException e) {
             String defaultResponseMode = SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT;
             logger.warnf("Invalid response mode: %s. Defaulting to %s", responseMode, defaultResponseMode);
-            return ResponseMode.valueOf(defaultResponseMode);
+            return ResponseMode.fromValue(defaultResponseMode);
         }
     }
 
