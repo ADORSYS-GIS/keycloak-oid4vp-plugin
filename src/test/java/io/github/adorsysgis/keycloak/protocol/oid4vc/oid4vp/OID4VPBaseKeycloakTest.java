@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.BaseKeycloakTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -13,16 +14,26 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.cookie.BasicClientCookie;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -45,16 +56,20 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Request a fresh OpenID4VP authorization request from Keycloak.
      * A request is sent to the endpoint for this purpose.
      */
-    protected AuthorizationContext requestAuthorizationRequest() throws Exception {
-        URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
-                .addParameter("client_id", TEST_CLIENT_ID)
-                .build();
+    protected AuthorizationContext requestAuthorizationRequest() {
+        try {
+            URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
+                    .addParameter("client_id", TEST_CLIENT_ID)
+                    .build();
 
-        HttpGet httpGet = new HttpGet(uri);
-        HttpResponse response = httpClient.execute(httpGet);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            HttpGet httpGet = new HttpGet(uri);
+            HttpResponse response = httpClient.execute(httpGet);
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        return parseAuthorizationContext(response);
+            return parseAuthorizationContext(response);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -101,11 +116,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Scrapes the action URL of the OpenID4VP login form.
      */
     protected FormData getFreshOid4vpFormActionUrl() throws IOException {
-        URI authEndpointUri = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
-                .path("protocol/openid-connect/auth")
-                .build();
-
-        String authEndpoint = new URIBuilder(authEndpointUri)
+        String authEndpoint = new URIBuilder(getAuthEndpointURI())
                 .addParameter(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
                 .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
                 .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
@@ -136,7 +147,65 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
                 "%s?%s",
                 KeycloakUriBuilder.fromUri(serverUrl).path(actionUrlParts[0]).build(), actionUrlParts[1]);
 
-        return new FormData(absActionUrl, cookies);
+        // Collect authorization context details
+
+        Element authLinkTag = html.selectFirst("a#kc-oid4vp-link");
+        assertNotNull(authLinkTag, "Authentication link should be present in the response");
+        String authReqLink = authLinkTag.attr("href");
+
+        Element script = html.selectFirst("script:containsData(checkAuthStatus)");
+        assertNotNull(script, "A script should be present in the response");
+        Matcher m = Pattern.compile("checkAuthStatus\\(.*/([^/]+)\",").matcher(script.data());
+        String transactionId = m.find() ? m.group(1) : null;
+
+        AuthorizationContext authContext =
+                new AuthorizationContext().setAuthorizationRequest(authReqLink).setTransactionId(transactionId);
+
+        return new FormData(authContext, absActionUrl, cookies);
+    }
+
+    /**
+     * Gets an authorization code by logging in with username/password.
+     */
+    protected String getFreshAuthorizationCode() throws IOException {
+        String authEndpoint = new URIBuilder(getAuthEndpointURI())
+                .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
+                .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
+                .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
+                .toString();
+
+        Connection.Response res =
+                Jsoup.connect(authEndpoint).method(Connection.Method.GET).execute();
+
+        // Capture cookies for session continuity
+        Map<String, String> cookieMap = new HashMap<>(res.cookies());
+        BasicCookieStore cookies = convertCookiesMapToStore(cookieMap);
+
+        // Parse the response HTML
+        Document html = res.parse();
+
+        Element form = html.selectFirst("form");
+        assertNotNull(form, "Login form should be present in the response");
+
+        String actionUrl = form.attr("action");
+        assertFalse(actionUrl.isBlank(), "Login form action URL should not be blank");
+
+        try (CloseableHttpClient httpClient =
+                HttpClientBuilder.create().setDefaultCookieStore(cookies).build()) {
+            HttpPost httpPost = new HttpPost(actionUrl);
+            httpPost.setEntity(new UrlEncodedFormEntity(List.of(
+                    new BasicNameValuePair(OAuth2Constants.USERNAME, TEST_USER),
+                    new BasicNameValuePair(OAuth2Constants.PASSWORD, TEST_USER_PASSWORD))));
+
+            HttpResponse httpResponse = httpClient.execute(httpPost);
+            return extractAuthCodeInRedirect(httpResponse);
+        }
+    }
+
+    protected URI getAuthEndpointURI() {
+        return KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
+                .path("protocol/openid-connect/auth")
+                .build();
     }
 
     protected String getOid4vpEndpoint(String route) {
@@ -157,8 +226,22 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     protected static OAuth2ErrorRepresentation parseErrorResponse(HttpResponse response) throws IOException {
-        return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), OAuth2ErrorRepresentation.class);
+        String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        return JsonSerialization.readValue(payload, OAuth2ErrorRepresentation.class);
+    }
+
+    /**
+     * Extracts the authorization code from the redirection response after form submission.
+     */
+    protected static String extractAuthCodeInRedirect(HttpResponse response) throws IOException {
+        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusLine().getStatusCode());
+
+        String redirectUri = response.getFirstHeader(HttpHeaders.LOCATION).getValue();
+        assertTrue(redirectUri.startsWith(TEST_CLIENT_REDIRECT_URI));
+
+        // Extract the authorization code from the redirect URI
+        ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(redirectUri));
+        return uriInfo.getQueryParameters().getFirst(OAuth2Constants.CODE);
     }
 
     /**
@@ -178,5 +261,5 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         return cookieStore;
     }
 
-    protected record FormData(String actionUrl, BasicCookieStore cookieStore) {}
+    protected record FormData(AuthorizationContext authContext, String actionUrl, BasicCookieStore cookieStore) {}
 }

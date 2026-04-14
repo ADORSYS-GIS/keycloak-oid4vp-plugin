@@ -42,6 +42,14 @@ public class AuthorizationContext {
     private String requestId;
 
     /**
+     * Reference parent authentication session if any. This is used to link the
+     * authorization context to an existing authentication session, for example
+     * in the case of an OIDC login.
+     */
+    @JsonProperty("parent_auth_session_id")
+    private String parentAuthSessionId;
+
+    /**
      * The request object.
      */
     @JsonProperty("request_object")
@@ -104,6 +112,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setRequestId(String requestId) {
         this.requestId = requestId;
+        return this;
+    }
+
+    public String getParentAuthSessionId() {
+        return parentAuthSessionId;
+    }
+
+    public AuthorizationContext setParentAuthSessionId(String parentAuthSessionId) {
+        this.parentAuthSessionId = parentAuthSessionId;
         return this;
     }
 

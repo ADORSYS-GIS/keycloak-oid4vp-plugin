@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -71,7 +73,9 @@ public class OID4VPUserAuthBeanTest {
         AuthorizationContext authContext = new AuthorizationContext();
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
-        Mockito.lenient().when(oid4vp.startAuthentication(TEST_CLIENT_ID)).thenReturn(authContext);
+        Mockito.lenient()
+                .when(oid4vp.startAuthentication(eq(TEST_CLIENT_ID), nullable(String.class)))
+                .thenReturn(authContext);
     }
 
     @Test
@@ -89,6 +93,7 @@ public class OID4VPUserAuthBeanTest {
 
         // Auth Context should be created
         var authContext = bean.getAuthContext();
+        assertTrue(authContext.getAuthReqLink().startsWith("openid4vp://"));
         assertTrue(authContext.getAuthReqQrCode().startsWith("data:image/png;base64,"));
         assertNotNull(authContext.getAuthStatusUrl());
     }
@@ -131,7 +136,8 @@ public class OID4VPUserAuthBeanTest {
         URI uri = uriBuilder.build();
         mockContextUri(uri);
 
-        return new OID4VPUserAuthBean(session, realm, uri, oid4vp);
+        String authSessionId = UUID.randomUUID().toString();
+        return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
     }
 
     private void mockContextUri(URI uri) {

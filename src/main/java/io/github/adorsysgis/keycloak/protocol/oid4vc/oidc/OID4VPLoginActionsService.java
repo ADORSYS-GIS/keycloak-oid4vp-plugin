@@ -1,7 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService.PARENT_AUTH_SESSION_ID;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.POST;
@@ -9,12 +12,15 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.ClientConnection;
+import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.http.HttpRequest;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.Constants;
@@ -95,6 +101,8 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
             @QueryParam(Constants.CLIENT_DATA) String clientData,
             @QueryParam(Constants.TAB_ID) String tabId,
             @FormParam(OAuth2Constants.CODE) String authorizationCode) {
+        event.event(EventType.LOGIN);
+
         SessionCodeChecks checks =
                 checksForCode(authSessionId, code, execution, clientId, tabId, clientData, AUTHENTICATE_PATH);
 
@@ -110,9 +118,19 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         logger.debug("Validating authorization code");
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, authorizationCode, realm, event);
         if (result.isIllegalCode() || result.isExpiredCode()) {
-            String errorMessage = "Authorization code not valid";
-            event.error(Errors.INVALID_CODE);
-            return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, errorMessage);
+            return failOnInvalidCode(authSession, "Authorization code validation failed");
+        }
+
+        // Only accept OpenID4VP authorization codes
+        String clientLoginMethod = result.getClientSession().getNote(PARAM_LOGIN_METHOD);
+        if (!Objects.equals(LOGIN_METHOD_OID4VP, clientLoginMethod)) {
+            return failOnInvalidCode(authSession, "Authorization code was not issued upon OpenID4VP authentication");
+        }
+
+        // Validate that the code was issued for this OIDC session
+        String fullAuthSessionId = OID4VPUserAuthEndpointBase.getAuthSessionId(authSession);
+        if (!Objects.equals(fullAuthSessionId, result.getClientSession().getNote(PARENT_AUTH_SESSION_ID))) {
+            return failOnInvalidCode(authSession, "Authorization code was not issued for this OIDC session");
         }
 
         // Attach authenticated user to OIDC sessions
@@ -121,9 +139,6 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
-
-        // Append note conveying this login method
-        freshUserSession.setNote(PARAM_LOGIN_METHOD, OID4VP_AUTH_LOGIN_PATH);
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
@@ -136,6 +151,11 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 clientConnection,
                 event,
                 authSession);
+    }
+
+    private Response failOnInvalidCode(AuthenticationSessionModel authSession, String reason) {
+        event.event(EventType.LOGIN_ERROR).detail(Details.REASON, reason).error(Errors.INVALID_CODE);
+        return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, "Authorization code not valid");
     }
 
     @Override

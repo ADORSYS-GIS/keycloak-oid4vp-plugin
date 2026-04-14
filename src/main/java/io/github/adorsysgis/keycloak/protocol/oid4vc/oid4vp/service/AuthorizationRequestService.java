@@ -85,7 +85,7 @@ public class AuthorizationRequestService {
      * Creates a fresh authorization request for user authentication.
      */
     public AuthorizationContext createAuthorizationRequest(
-            AuthenticationSessionModel authSession, SdJwtAuthRequirements authReqs) {
+            SdJwtAuthRequirements authReqs, AuthenticationSessionModel authSession, String parentAuthSessionId) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
         // Generate random request and transaction IDs.
@@ -115,6 +115,7 @@ public class AuthorizationRequestService {
                 .setStatus(AuthorizationContextStatus.PENDING)
                 .setRequestId(requestId)
                 .setTransactionId(transactionId)
+                .setParentAuthSessionId(parentAuthSessionId)
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink);

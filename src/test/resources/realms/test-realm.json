@@ -3,6 +3,8 @@
   "realm": "test",
   "enabled": true,
   "sslRequired": "none",
+  "eventsEnabled": true,
+  "enabledEventTypes": ["LOGIN", "LOGIN_ERROR"],
   "users": [
     {
       "id": "test-user-id",
@@ -20,7 +22,7 @@
     },
     {
       "id": "disabled-user-id",
-      "username": "disabled-user@localhost",
+      "username": "disabled-user",
       "enabled": false,
       "email": "disabled-user@localhost",
       "firstName": "Disabled",

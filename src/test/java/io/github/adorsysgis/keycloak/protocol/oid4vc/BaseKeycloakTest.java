@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.util.JsonSerialization;
@@ -37,12 +38,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public abstract class BaseKeycloakTest {
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.5.4";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.5.6";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_V2_NAME = "test-v2";
     public static final String TEST_USER = "test-user";
     public static final String TEST_USER_ID = "test-user-id";
+    public static final String TEST_USER_PASSWORD = "password";
     public static final String TEST_CLIENT_ID = "test-app";
     public static final String TEST_CLIENT_SECRET = "password";
     public static final String TEST_CLIENT_REDIRECT_URI = "http://localhost:4200/callback";
@@ -82,6 +84,10 @@ public abstract class BaseKeycloakTest {
 
     protected String getActiveTestRealm() {
         return TEST_REALM_NAME;
+    }
+
+    protected RealmResource getActiveTestRealmResource() {
+        return keycloak.getKeycloakAdminClient().realm(getActiveTestRealm());
     }
 
     protected String getTestRealmEndpoint() {

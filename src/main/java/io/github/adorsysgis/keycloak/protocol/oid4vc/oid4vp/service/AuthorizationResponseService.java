@@ -1,5 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
+
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -41,6 +44,7 @@ public class AuthorizationResponseService {
     private static final Logger logger = Logger.getLogger(AuthorizationResponseService.class);
 
     public static final String JSON_PATH_ROOT = "$";
+    public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
 
     private final KeycloakSession session;
 
@@ -106,7 +110,7 @@ public class AuthorizationResponseService {
         logger.infof("Client session id: %s", clientSession.getId());
 
         // Produce an authorization code for the authenticated user
-        String authorizationCode = produceAuthorizationCode(clientSession);
+        String authorizationCode = produceAuthorizationCode(clientSession, authContext);
         authContext.setStatus(AuthorizationContextStatus.SUCCESS);
         authContext.setAuthorizationCode(authorizationCode);
 
@@ -270,12 +274,23 @@ public class AuthorizationResponseService {
     /**
      * Issues an authorization code provided successful authentication.
      */
-    private String produceAuthorizationCode(AuthenticatedClientSessionModel clientSession) {
+    private String produceAuthorizationCode(
+            AuthenticatedClientSessionModel clientSession, AuthorizationContext authContext) {
+        // Decorate client session with contextual notes
+
+        if (authContext.getParentAuthSessionId() != null) {
+            clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
+        }
+
         clientSession.setNote(
                 OIDCLoginProtocol.ISSUER,
                 Urls.realmIssuer(
                         session.getContext().getUri().getBaseUri(),
                         session.getContext().getRealm().getName()));
+
+        clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
+
+        // Gather code data and generate authorization code
 
         String code = UUID.randomUUID().toString();
         String nonce = SecretGenerator.getInstance().randomString();
