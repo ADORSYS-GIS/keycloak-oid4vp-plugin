@@ -92,11 +92,11 @@ public final class AppCli {
             }
 
             System.out.println("[app] Authentication succeeded.");
-            System.out.println("[app] authorization_code: " + status.getAuthorizationCode());
+            String authorizationCode = oid4vpClient.redeemAuthorizationCode(authContext.getTransactionId());
+            System.out.println("[app] authorization_code: " + authorizationCode);
 
             if (confirm(input, "[app] Retrieve an access token now? [Y/n] ", true)) {
-                JsonNode tokenResponse =
-                        oid4vpClient.exchangeAuthorizationCode(status.getAuthorizationCode());
+                JsonNode tokenResponse = oid4vpClient.exchangeAuthorizationCode(authorizationCode);
                 String accessTokenStr = tokenResponse.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
                 AccessToken accessToken = oid4vpClient.readAccessToken(accessTokenStr);
 
