@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
@@ -30,9 +31,11 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Endpoint class for user authentication over
@@ -49,6 +52,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public static final String REQUEST_JWT_PATH = "/request.jwt";
     public static final String RESPONSE_URI_PATH = "/response";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
+    public static final String AUTH_CODE_PATH = "/code";
 
     private final AuthorizationRequestService authorizationRequestService;
     private final AuthorizationResponseService authorizationResponseService;
@@ -71,7 +75,10 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     @GET
     @Path("/request")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getAuthenticationRequest(@QueryParam(OAuth2Constants.CLIENT_ID) String clientId) {
+    public Response getAuthenticationRequest(
+            @QueryParam(OAuth2Constants.CLIENT_ID) String clientId,
+            @QueryParam(OAuth2Constants.CODE_CHALLENGE) String codeChallenge,
+            @QueryParam(OAuth2Constants.CODE_CHALLENGE_METHOD) String codeChallengeMethod) {
         logger.debug("Initiating user authentication over OpenID4VP...");
 
         try {
@@ -85,7 +92,18 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     e);
         }
 
-        AuthorizationContext authContext = startAuthentication(clientId, null);
+        AuthorizationContext authContext;
+        try {
+            authContext = startAuthentication(clientId, null, codeChallenge, codeChallengeMethod);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            e.getMessage()),
+                    e);
+        }
+
         AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
 
         return CorsService.forWebOrigins(authSession).add(Response.ok(authContext));
@@ -196,18 +214,101 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         AuthorizationContext reducedContext = new AuthorizationContext()
                 .setStatus(authorizationContext.getStatus())
-                .setAuthorizationCode(authorizationContext.getAuthorizationCode())
                 .setError(authorizationContext.getError())
                 .setErrorDescription(authorizationContext.getErrorDescription());
 
+        if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
+            reducedContext.setAuthorizationCode(authorizationContext.getAuthorizationCode());
+        }
+
         return CorsService.forWebOrigins(authSession).add(Response.ok(reducedContext));
+    }
+
+    /**
+     * Redeems an authorization code from a completed API authentication flow.
+     */
+    @POST
+    @Path(AUTH_CODE_PATH)
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response redeemAuthorizationCode(
+            @FormParam("transaction_id") String transactionId,
+            @FormParam(OAuth2Constants.CODE_VERIFIER) String codeVerifier) {
+        logger.debug("Redeeming authorization code for completed authentication...");
+
+        AuthenticationSessionModel authSession;
+        AuthorizationContext authorizationContext;
+        try {
+            authSession = this.recoverAuthenticationSession(transactionId);
+            authorizationContext =
+                    new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
+        } catch (IllegalArgumentException e) {
+            throw new NotFoundException(
+                    errorResponse(
+                            Response.Status.NOT_FOUND,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization context not found for transaction ID: " + transactionId),
+                    e);
+        }
+
+        if (!AuthorizationContextStatus.SUCCESS.equals(authorizationContext.getStatus())) {
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization has not completed successfully"));
+        }
+
+        if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization code must be completed through the bound OIDC session"));
+        }
+
+        if (StringUtil.isBlank(authorizationContext.getCodeChallenge())
+                || StringUtil.isBlank(authorizationContext.getCodeChallengeMethod())) {
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization code redemption is not configured for this flow"));
+        }
+
+        if (StringUtil.isBlank(codeVerifier)
+                || !PkceUtils.validateCodeChallenge(
+                        codeVerifier,
+                        authorizationContext.getCodeChallenge(),
+                        authorizationContext.getCodeChallengeMethod())) {
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_GRANT,
+                            "Authorization code verifier not valid"));
+        }
+
+        AuthorizationContext responseContext =
+                new AuthorizationContext().setAuthorizationCode(authorizationContext.getAuthorizationCode());
+        return CorsService.forWebOrigins(authSession).add(Response.ok(responseContext));
     }
 
     /**
      * Initializes OpenID4VP authentication and return authorization context
      */
     public AuthorizationContext startAuthentication(String clientId, String parentAuthSessionId) {
+        return startAuthentication(clientId, parentAuthSessionId, null, null);
+    }
+
+    /**
+     * Initializes OpenID4VP authentication and return authorization context
+     */
+    public AuthorizationContext startAuthentication(
+            String clientId, String parentAuthSessionId, String codeChallenge, String codeChallengeMethod) {
         logger.debug("Generating new authentication context...");
+
+        String resolvedCodeChallengeMethod =
+                validateOwnershipBinding(parentAuthSessionId, codeChallenge, codeChallengeMethod);
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
@@ -215,8 +316,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         SdJwtAuthRequirements authReqs = new SdJwtAuthRequirements(session.getContext(), authConfig);
 
         // Call delegate service to create an authorization request
-        AuthorizationContext authorizationContext =
-                authorizationRequestService.createAuthorizationRequest(authReqs, authSession, parentAuthSessionId);
+        AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
+                authReqs, authSession, parentAuthSessionId, codeChallenge, resolvedCodeChallengeMethod);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -260,6 +361,37 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         var errorResponse = new OAuth2ErrorRepresentation(error, errorDescription);
         return CorsService.open()
                 .add(Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON));
+    }
+
+    private String validateOwnershipBinding(
+            String parentAuthSessionId, String codeChallenge, String codeChallengeMethod) {
+        boolean hasParentAuthSession = !StringUtil.isBlank(parentAuthSessionId);
+        boolean hasCodeChallenge = !StringUtil.isBlank(codeChallenge);
+        boolean hasCodeChallengeMethod = !StringUtil.isBlank(codeChallengeMethod);
+
+        if (hasParentAuthSession) {
+            if (hasCodeChallenge || hasCodeChallengeMethod) {
+                throw new IllegalArgumentException(
+                        "OIDC-bound OpenID4VP flows do not accept code challenge parameters");
+            }
+            return null;
+        }
+
+        if (!hasCodeChallenge && !hasCodeChallengeMethod) {
+            throw new IllegalArgumentException(
+                    "Public API requests must provide a code challenge for authorization code redemption");
+        }
+
+        if (!hasCodeChallenge || !hasCodeChallengeMethod) {
+            throw new IllegalArgumentException(
+                    "Both code_challenge and code_challenge_method are required");
+        }
+
+        if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeMethod)) {
+            throw new IllegalArgumentException("Only S256 code challenge method is supported");
+        }
+
+        return codeChallengeMethod;
     }
 
     @Override
