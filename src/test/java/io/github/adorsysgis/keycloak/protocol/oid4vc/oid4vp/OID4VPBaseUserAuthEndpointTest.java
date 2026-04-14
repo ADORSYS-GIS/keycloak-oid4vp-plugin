@@ -50,8 +50,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      */
     protected String testSuccessfulAuthentication(String sdJwt, TestOpts opts) throws Exception {
         // Retrieve an authorization request
+        ApiFlowData apiFlow = opts.getAuthContext() == null ? startApiAuthorizationRequest() : null;
         AuthorizationContext authContext =
-                Optional.ofNullable(opts.getAuthContext()).orElseGet(this::requestAuthorizationRequest);
+                Optional.ofNullable(opts.getAuthContext()).orElseGet(() -> apiFlow.authContext());
+        String codeVerifier =
+                Optional.ofNullable(opts.getCodeVerifier()).orElseGet(() -> apiFlow == null ? null : apiFlow.codeVerifier());
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
         // Prepare and send the OpenID4VP response to Keycloak
@@ -63,8 +66,13 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
 
-        // Exchange authorization code for access token
+        // Redeem authorization code when it is not disclosed in the status response
         String authCode = statusPayload.getAuthorizationCode();
+        if (authCode == null) {
+            assertNotNull(codeVerifier, "Code verifier should not be null for API flows");
+            authCode = redeemAuthorizationCode(authContext.getTransactionId(), codeVerifier);
+        }
+
         assertNotNull(authCode, "Authorization code should not be null");
         if (opts.shouldRetrieveAccessToken()) {
             assertAuthenticatingUser(opts, authCode);
@@ -294,6 +302,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         private String testUser = TEST_USER;
         private AuthorizationContext authContext;
+        private String codeVerifier;
         private boolean shouldBase64EncodeVpToken;
         private boolean shouldRetrieveAccessToken = true;
         private boolean shouldPrepareLegacyResponse = true;
@@ -322,6 +331,15 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         public TestOpts setAuthorizationContext(AuthorizationContext authContext) {
             this.authContext = authContext;
+            return this;
+        }
+
+        public String getCodeVerifier() {
+            return codeVerifier;
+        }
+
+        public TestOpts setCodeVerifier(String codeVerifier) {
+            this.codeVerifier = codeVerifier;
             return this;
         }
 
