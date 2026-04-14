@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
+import java.util.List;
 import org.keycloak.representations.JsonWebToken;
 
 /**
@@ -52,6 +53,9 @@ public class RequestObject extends JsonWebToken {
 
     @JsonProperty("client_metadata")
     private ClientMetadata clientMetadata;
+
+    @JsonProperty("verifier_info")
+    private List<VerifierInfo> verifierInfo;
 
     public String getState() {
         return state;
@@ -158,6 +162,15 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setClientMetadata(ClientMetadata clientMetadata) {
         this.clientMetadata = clientMetadata;
+        return this;
+    }
+
+    public List<VerifierInfo> getVerifierInfo() {
+        return verifierInfo;
+    }
+
+    public RequestObject setVerifierInfo(List<VerifierInfo> verifierInfo) {
+        this.verifierInfo = verifierInfo;
         return this;
     }
 

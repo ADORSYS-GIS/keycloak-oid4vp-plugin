@@ -1,7 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
@@ -212,11 +212,11 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
         AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-        SdJwtAuthRequirements authReqs = new SdJwtAuthRequirements(session.getContext(), authConfig);
+        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext =
-                authorizationRequestService.createAuthorizationRequest(authReqs, authSession, parentAuthSessionId);
+                authorizationRequestService.createAuthorizationRequest(config, authSession, parentAuthSessionId);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())

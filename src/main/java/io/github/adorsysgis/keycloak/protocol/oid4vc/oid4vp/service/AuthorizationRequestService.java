@@ -5,11 +5,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
@@ -22,6 +23,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.naming.ldap.LdapName;
@@ -47,6 +49,7 @@ public class AuthorizationRequestService {
 
     public static final String AUTH_REQ_JWT = "oauth-authz-req+jwt";
     public static final String X509_ATTR_CN = "CN";
+    public static final String REGISTRATION_CERT_FORMAT = "registration_cert";
 
     // The number of bytes to generate for secure random strings,
     // including request IDs, transaction IDs, and nonces (doubled).
@@ -85,7 +88,7 @@ public class AuthorizationRequestService {
      * Creates a fresh authorization request for user authentication.
      */
     public AuthorizationContext createAuthorizationRequest(
-            SdJwtAuthRequirements authReqs, AuthenticationSessionModel authSession, String parentAuthSessionId) {
+            VerifierConfig config, AuthenticationSessionModel authSession, String parentAuthSessionId) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
         // Generate random request and transaction IDs.
@@ -94,21 +97,25 @@ public class AuthorizationRequestService {
         String transactionId = generateRequestOrTransactionId(authSession);
 
         // Load query map for SD-JWT authentication
+        SdJwtAuthRequirements authReqs = config.getAuthRequirements();
         var queryMap = authReqs.getSdJwtQueryMap();
 
         // Build request object
         var constrainer = new SdJwtCredentialConstrainer();
-        RequestObject requestObject = bootstrapRequestObject()
+        RequestObject requestObject = bootstrapRequestObject(config)
                 .setState(requestId)
                 .setDcqlQuery(constrainer.generateDcqlQuery(queryMap))
                 // Kept for backward compatibility with Draft 20 wallets
                 .setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
 
         // Sign request object
-        String requestObjectJwt = signRequestObject(requestObject);
+        X509Certificate certificate =
+                Optional.ofNullable(config.getAccessCertificate()).orElse(getSelfSignedCertificate());
+        String requestObjectJwt = signRequestObject(requestObject, certificate);
 
         // Build authorization request link
-        String authorizationRequestLink = buildAuthorizationRequestLink(requestId);
+        String scheme = config.getAuthReqUrlScheme();
+        String authorizationRequestLink = buildAuthorizationRequestLink(scheme, requestId);
 
         // Gather authorization context
         AuthorizationContext authorizationContext = new AuthorizationContext()
@@ -151,7 +158,7 @@ public class AuthorizationRequestService {
     /**
      * Returns a starter for building request objects.
      */
-    private RequestObject bootstrapRequestObject() {
+    private RequestObject bootstrapRequestObject(VerifierConfig config) {
         String clientId = clientMetadata.getClientId();
         String responseUri = openID4VPRootUrl + OID4VPUserAuthEndpoint.RESPONSE_URI_PATH;
 
@@ -159,36 +166,46 @@ public class AuthorizationRequestService {
                 .limit(2)
                 .collect(Collectors.joining("."));
 
+        // If registration certificate configured, expose it under verifier info.
+        // See https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/rp/onboarding/Example_BDB/
+        String registrationCertificate = config.getRegistrationCertificate();
+        List<VerifierInfo> verifierInfo = Optional.ofNullable(registrationCertificate)
+                .map(rc -> new VerifierInfo().setData(rc).setFormat(REGISTRATION_CERT_FORMAT))
+                .map(List::of)
+                .orElse(null);
+
         return new RequestObject()
                 .setIssuer(clientId)
-                .setResponseMode(ResponseMode.DIRECT_POST)
+                .setResponseMode(config.getResponseMode())
                 .setResponseUri(responseUri)
                 .setResponseType(ResponseType.VP_TOKEN)
                 .setClientId(clientId)
                 .setClientIdScheme(ClientIdScheme.X509_SAN_DNS)
                 .setNonce(nonce)
                 .setAudience(SYMBOLIC_AUD)
-                .setClientMetadata(clientMetadata);
+                .setClientMetadata(clientMetadata)
+                .setVerifierInfo(verifierInfo);
     }
 
-    private String buildAuthorizationRequestLink(String requestId) {
+    private String buildAuthorizationRequestLink(String scheme, String requestId) {
         var clientId = clientMetadata.getClientId();
         var requestUri = openID4VPRootUrl + "%s/%s".formatted(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH, requestId);
 
         return String.format(
-                "openid4vp://authorize?client_id=%s&request_uri=%s",
+                "%sauthorize?client_id=%s&request_uri=%s",
+                scheme,
                 URLEncoder.encode(clientId, StandardCharsets.UTF_8),
                 URLEncoder.encode(requestUri, StandardCharsets.UTF_8));
     }
 
-    private String signRequestObject(RequestObject requestObject) {
+    private String signRequestObject(RequestObject requestObject, X509Certificate certificate) {
         logger.debug("Signing request object");
         Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
         requestObject.issuedNow().exp(expiration);
 
         return new SpacephobicJwsBuilder()
                 .type(AUTH_REQ_JWT)
-                .x5c(List.of(getSelfSignedCertificate()))
+                .x5c(List.of(certificate))
                 .jsonContent(requestObject)
                 .sign(signer);
     }
