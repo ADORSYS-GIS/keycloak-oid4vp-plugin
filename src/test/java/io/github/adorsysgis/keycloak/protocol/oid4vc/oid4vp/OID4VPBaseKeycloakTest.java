@@ -67,8 +67,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     protected ApiFlowData startApiAuthorizationRequest() {
         try {
             String codeVerifier = PkceUtils.generateCodeVerifier();
-            String codeChallenge =
-                    PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+            String codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
             URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
                     .addParameter("client_id", TEST_CLIENT_ID)
                     .addParameter(OAuth2Constants.CODE_CHALLENGE, codeChallenge)

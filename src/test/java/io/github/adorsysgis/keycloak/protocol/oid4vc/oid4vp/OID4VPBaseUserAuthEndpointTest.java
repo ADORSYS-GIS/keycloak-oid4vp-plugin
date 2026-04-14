@@ -53,8 +53,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         ApiFlowData apiFlow = opts.getAuthContext() == null ? startApiAuthorizationRequest() : null;
         AuthorizationContext authContext =
                 Optional.ofNullable(opts.getAuthContext()).orElseGet(() -> apiFlow.authContext());
-        String codeVerifier =
-                Optional.ofNullable(opts.getCodeVerifier()).orElseGet(() -> apiFlow == null ? null : apiFlow.codeVerifier());
+        String codeVerifier = Optional.ofNullable(opts.getCodeVerifier())
+                .orElseGet(() -> apiFlow == null ? null : apiFlow.codeVerifier());
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
         // Prepare and send the OpenID4VP response to Keycloak

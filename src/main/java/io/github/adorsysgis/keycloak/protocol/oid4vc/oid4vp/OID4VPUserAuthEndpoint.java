@@ -97,11 +97,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             authContext = startAuthentication(clientId, null, codeChallenge, codeChallengeMethod);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
-                    errorResponse(
-                            Response.Status.BAD_REQUEST,
-                            OAuthErrorException.INVALID_REQUEST,
-                            e.getMessage()),
-                    e);
+                    errorResponse(Response.Status.BAD_REQUEST, OAuthErrorException.INVALID_REQUEST, e.getMessage()), e);
         }
 
         AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
@@ -252,28 +248,25 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         if (!AuthorizationContextStatus.SUCCESS.equals(authorizationContext.getStatus())) {
-            throw new BadRequestException(
-                    errorResponse(
-                            Response.Status.BAD_REQUEST,
-                            OAuthErrorException.INVALID_REQUEST,
-                            "Authorization has not completed successfully"));
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Authorization has not completed successfully"));
         }
 
         if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
-            throw new BadRequestException(
-                    errorResponse(
-                            Response.Status.BAD_REQUEST,
-                            OAuthErrorException.INVALID_REQUEST,
-                            "Authorization code must be completed through the bound OIDC session"));
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Authorization code must be completed through the bound OIDC session"));
         }
 
         if (StringUtil.isBlank(authorizationContext.getCodeChallenge())
                 || StringUtil.isBlank(authorizationContext.getCodeChallengeMethod())) {
-            throw new BadRequestException(
-                    errorResponse(
-                            Response.Status.BAD_REQUEST,
-                            OAuthErrorException.INVALID_REQUEST,
-                            "Authorization code redemption is not configured for this flow"));
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Authorization code redemption is not configured for this flow"));
         }
 
         if (StringUtil.isBlank(codeVerifier)
@@ -281,11 +274,10 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                         codeVerifier,
                         authorizationContext.getCodeChallenge(),
                         authorizationContext.getCodeChallengeMethod())) {
-            throw new BadRequestException(
-                    errorResponse(
-                            Response.Status.BAD_REQUEST,
-                            OAuthErrorException.INVALID_GRANT,
-                            "Authorization code verifier not valid"));
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_GRANT,
+                    "Authorization code verifier not valid"));
         }
 
         AuthorizationContext responseContext =
@@ -383,8 +375,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         if (!hasCodeChallenge || !hasCodeChallengeMethod) {
-            throw new IllegalArgumentException(
-                    "Both code_challenge and code_challenge_method are required");
+            throw new IllegalArgumentException("Both code_challenge and code_challenge_method are required");
         }
 
         if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeMethod)) {
