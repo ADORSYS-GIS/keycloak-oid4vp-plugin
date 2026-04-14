@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.ClaimFormat;
 import java.util.Optional;
+import org.keycloak.jose.jwk.JSONWebKeySet;
 
 /**
  * Model for Client Metadata.
@@ -21,6 +22,9 @@ public class ClientMetadata {
 
     @JsonProperty("vp_formats")
     private VpFormat vpFormat;
+
+    @JsonProperty("jwks")
+    private JSONWebKeySet jwks;
 
     public String getClientId() {
         return clientId;
@@ -44,6 +48,15 @@ public class ClientMetadata {
 
     public ClientMetadata setVpFormat(VpFormat vpFormat) {
         this.vpFormat = vpFormat;
+        return this;
+    }
+
+    public JSONWebKeySet getJwks() {
+        return jwks;
+    }
+
+    public ClientMetadata setJwks(JSONWebKeySet jwks) {
+        this.jwks = jwks;
         return this;
     }
 

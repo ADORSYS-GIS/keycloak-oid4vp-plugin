@@ -62,6 +62,11 @@ public class AuthorizationContext {
     private String requestObjectJwt;
 
     /**
+     * An optional ephemeral key for encrypting responses.
+     */
+    private String ephemeralKey;
+
+    /**
      * An authorization code upon successful authorization.
      */
     @JsonProperty("authorization_code")
@@ -139,6 +144,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setRequestObjectJwt(String requestObjectJwt) {
         this.requestObjectJwt = requestObjectJwt;
+        return this;
+    }
+
+    public String getEphemeralKey() {
+        return ephemeralKey;
+    }
+
+    public AuthorizationContext setEphemeralKey(String ephemeralKey) {
+        this.ephemeralKey = ephemeralKey;
         return this;
     }
 

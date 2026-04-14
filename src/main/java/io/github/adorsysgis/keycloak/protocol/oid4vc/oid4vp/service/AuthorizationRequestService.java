@@ -1,5 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
+
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
@@ -9,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -33,6 +37,8 @@ import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureSignerContext;
 import org.keycloak.jose.jwe.JWEUtils;
+import org.keycloak.jose.jwk.JSONWebKeySet;
+import org.keycloak.jose.jwk.JWK;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.utils.SessionExpiration;
@@ -96,6 +102,10 @@ public class AuthorizationRequestService {
         String requestId = generateRequestOrTransactionId(authSession);
         String transactionId = generateRequestOrTransactionId(authSession);
 
+        // Generate ephemeral encryption keys if direct_post.jwt. Must be done before creating
+        // the request object, so updated client metadata are picked up as intended.
+        EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(config.getResponseMode());
+
         // Load query map for SD-JWT authentication
         SdJwtAuthRequirements authReqs = config.getAuthRequirements();
         var queryMap = authReqs.getSdJwtQueryMap();
@@ -127,6 +137,12 @@ public class AuthorizationRequestService {
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink);
 
+        // Attach ephemeral key if generated
+        if (encryptionKey != null) {
+            String privKey = EphemeralKeyUtils.toBase64String(encryptionKey.privateKey());
+            authorizationContext.setAuthorizationCode(privKey);
+        }
+
         // Store authorization context in the authentication session
         AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
         store.storeAuthorizationContext(authorizationContext);
@@ -153,6 +169,24 @@ public class AuthorizationRequestService {
 
         // Convert the random number to a Base64 string
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    /**
+     * Generates ephemeral key for response encryption.
+     */
+    private EphemeralKey generateEncryptionKeyIfNeeded(ResponseMode responseMode) {
+        if (!ResponseMode.DIRECT_POST_JWT.equals(responseMode)) {
+            return null;
+        }
+
+        EphemeralKey key = EphemeralKeyUtils.generateEphemeralECDHKey();
+
+        // Update client metadata to advertise the encryption key
+        JSONWebKeySet jwks = new JSONWebKeySet();
+        jwks.setKeys(new JWK[] {key.publicKey()});
+        clientMetadata.setJwks(jwks);
+
+        return key;
     }
 
     /**
