@@ -17,9 +17,11 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.InputDesc
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.interfaces.ECPublicKey;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -34,6 +36,7 @@ import org.apache.http.message.BasicNameValuePair;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
 import org.keycloak.jose.jwk.JWK;
+import org.keycloak.jose.jwk.JWKParser;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
@@ -214,7 +217,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws Exception {
         // Wrap the SD-JWT VP in an OpenID4VP response
         List<BasicNameValuePair> oid4vpResponse;
-        if (opts.shouldPrepareLegacyResponse()) {
+        if (!opts.shouldForceUnencryptedResponse()
+                && requestObject.getClientMetadata().getJwks() != null) {
+            oid4vpResponse = prepareEncryptedOpenID4VPResponse(sdJwtVpToken, requestObject);
+        } else if (opts.shouldPrepareLegacyResponse()) {
             oid4vpResponse = prepareLegacyOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
         } else {
             oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject);
@@ -236,14 +242,46 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
         // Build presentation submission
-        DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
-        Credential credentialQuery = dcqlQuery.getCredentials().getFirst();
-        var vpTokenMap = Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
+        var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
 
         // Compose the response object as form-urlencoded parameters
         return new ArrayList<>(List.of(
                 new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, JsonSerialization.writeValueAsString(vpTokenMap)),
                 new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
+    }
+
+    /**
+     * Prepare an encrypted OpenID4VP response object to be sent to Keycloak.
+     *
+     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
+     * @param requestObject the request object containing the presentation definition
+     */
+    private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
+            throws IOException {
+        // Build presentation submission
+        var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
+        var respMap = Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap);
+        String resp = JsonSerialization.writeValueAsString(respMap);
+        System.out.println(resp);
+
+        // Read encryption key from request object
+        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
+        ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+
+        // Encrypt the vpTokenMap
+        String encResp = ECTestUtils.encryptMessage(resp, encKey);
+
+        // Compose the response object as form-urlencoded parameters
+        return new ArrayList<>(List.of(new BasicNameValuePair("response", encResp)));
+    }
+
+    /**
+     * Maps VP token to credential query ID.
+     */
+    private Map<String, List<String>> prepareVpTokenMap(String sdJwtVpToken, RequestObject requestObject) {
+        DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
+        Credential credentialQuery = dcqlQuery.getCredentials().getFirst();
+        return Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
     }
 
     /**
@@ -298,6 +336,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         private boolean shouldRetrieveAccessToken = true;
         private boolean shouldPrepareLegacyResponse = true;
         private boolean shouldEnforceRedirectUri = false;
+        private boolean shouldForceUnencryptedResponse = false;
         private String overridePresentationDefinitionId;
         private String overridePresentationAud;
         private Descriptor.Format overrideDescriptorFormat;
@@ -358,6 +397,15 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         public TestOpts setShouldEnforceRedirectUri(boolean shouldEnforceRedirectUri) {
             this.shouldEnforceRedirectUri = shouldEnforceRedirectUri;
+            return this;
+        }
+
+        public boolean shouldForceUnencryptedResponse() {
+            return shouldForceUnencryptedResponse;
+        }
+
+        public TestOpts setShouldForceUnencryptedResponse(boolean shouldForceUnencryptedResponse) {
+            this.shouldForceUnencryptedResponse = shouldForceUnencryptedResponse;
             return this;
         }
 

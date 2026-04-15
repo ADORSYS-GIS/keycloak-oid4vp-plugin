@@ -64,6 +64,7 @@ public class AuthorizationContext {
     /**
      * An optional ephemeral key for encrypting responses.
      */
+    @JsonProperty("ephemeral_key")
     private String ephemeralKey;
 
     /**

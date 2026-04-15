@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
 import java.io.IOException;
@@ -42,6 +43,8 @@ public class ResponseObject {
 
     @JsonProperty(STATE_KEY)
     private String state;
+
+    ResponseObject() {}
 
     public ResponseObject(String vpToken, String presentationSubmission, String state) throws JsonProcessingException {
         this.vpToken = parseVpToken(vpToken);
@@ -101,7 +104,7 @@ public class ResponseObject {
 
         @Override
         public Object deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-            String raw = p.getValueAsString();
+            String raw = getValueAsString(p);
             return parseVpToken(raw);
         }
     }
@@ -110,8 +113,13 @@ public class ResponseObject {
 
         @Override
         public Object deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-            String raw = p.getValueAsString();
+            String raw = getValueAsString(p);
             return parsePresentationSubmission(raw);
         }
+    }
+
+    private static String getValueAsString(JsonParser p) throws IOException {
+        JsonNode node = p.readValueAsTree();
+        return node.isTextual() ? node.asText() : JsonSerialization.writeValueAsString(node);
     }
 }

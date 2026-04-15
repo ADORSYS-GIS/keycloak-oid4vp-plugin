@@ -149,7 +149,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     ? new ResponseObject(vpToken, presentationSubmission, state)
                     : decryptResponse(encryptedResponse, ephemeralKey);
 
-            if (!requestId.equals(responseObject.getState())) {
+            String parsedState = responseObject.getState();
+            if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
                 throw new IllegalArgumentException(String.format(
                         "State param must match requestId. requestId: %s, state: %s",
                         requestId, responseObject.getState()));
@@ -284,7 +285,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
             return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
         } catch (JWEException | IOException e) {
-            throw new IllegalArgumentException("Failed to decrypt response", e);
+            logger.error("Failed to decrypt response", e);
+            throw new IllegalArgumentException("Failed to decrypt and parse response", e);
         }
     }
 

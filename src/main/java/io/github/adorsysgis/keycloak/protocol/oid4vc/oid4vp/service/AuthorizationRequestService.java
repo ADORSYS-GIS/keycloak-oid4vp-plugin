@@ -139,7 +139,7 @@ public class AuthorizationRequestService {
         // Attach ephemeral key if generated
         if (encryptionKey != null) {
             String privKey = EphemeralKeyUtils.toBase64String(encryptionKey.privateKey());
-            authorizationContext.setAuthorizationCode(privKey);
+            authorizationContext.setEphemeralKey(privKey);
         }
 
         // Store authorization context in the authentication session
