@@ -221,7 +221,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         }
 
         // Send the OpenID4VP response to Keycloak
-        String url = getOid4vpEndpoint("/response");
+        String url = requestObject.getResponseUri();
         HttpPost httpPost = new HttpPost(url);
         httpPost.setEntity(new UrlEncodedFormEntity(oid4vpResponse));
         return httpClient.execute(httpPost);

@@ -1,6 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
+import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -21,18 +23,22 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.io.IOException;
+import java.security.interfaces.ECPrivateKey;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.jose.jwe.JWEException;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * Endpoint class for user authentication over
@@ -99,21 +105,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     @Produces(MediaType.TEXT_PLAIN)
     public Response getSignedRequestObject(@PathParam("requestId") String requestId) {
         logger.debug("Resolving request URI to signed request object...");
-        AuthorizationContext authorizationContext;
-
-        try {
-            var authSession = this.recoverAuthenticationSession(requestId);
-            authorizationContext =
-                    new AuthenticationSessionStore(authSession).getAuthorizationContextByRequestId(requestId);
-        } catch (IllegalArgumentException e) {
-            throw new NotFoundException(
-                    errorResponse(
-                            Response.Status.NOT_FOUND,
-                            OAuthErrorException.INVALID_REQUEST,
-                            "Authorization context not found for request ID: " + requestId),
-                    e);
-        }
-
+        AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
         return CorsService.open().add(Response.ok(requestObjectJwt));
     }
@@ -122,41 +114,52 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * Processes authentication responses from the wallet toward user authentication.
      */
     @POST
-    @Path(RESPONSE_URI_PATH)
+    @Path(RESPONSE_URI_PATH + "/{requestId}")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
     public Response processAuthorizationResponse(
+            @PathParam("requestId") String requestId,
+            @FormParam("response") String encryptedResponse,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
             @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
             @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
 
+        // Recover the auth session and context given the request ID param
+        AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
+        AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
+
+        // Validate that response is encrypted if required
+        String ephemeralKey = authorizationContext.getEphemeralKey();
+        boolean expectsEncrypted = StringUtils.isNotBlank(ephemeralKey);
+        boolean hasEncrypted = StringUtils.isNotBlank(encryptedResponse);
+        if (expectsEncrypted != hasEncrypted) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    String.format(
+                            "Authorization context expects %s response",
+                            StringUtils.isBlank(encryptedResponse) ? "encrypted" : "unencrypted")));
+        }
+
         // Parse a response object from the request parameters
         ResponseObject responseObject;
         try {
-            responseObject = new ResponseObject(vpToken, presentationSubmission, state);
+            responseObject = StringUtils.isBlank(encryptedResponse)
+                    ? new ResponseObject(vpToken, presentationSubmission, state)
+                    : decryptResponse(encryptedResponse, ephemeralKey);
+
+            if (!requestId.equals(responseObject.getState())) {
+                throw new IllegalArgumentException(String.format(
+                        "State param must match requestId. requestId: %s, state: %s",
+                        requestId, responseObject.getState()));
+            }
         } catch (IllegalArgumentException | JsonProcessingException e) {
             throw new BadRequestException(
                     errorResponse(
                             Response.Status.BAD_REQUEST,
                             OAuthErrorException.INVALID_REQUEST,
                             String.format("Unparseable response params (%s)", e.getMessage())),
-                    e);
-        }
-
-        // Recover the auth session and context given the state field
-        AuthenticationSessionModel authSession;
-        AuthorizationContext authorizationContext;
-        try {
-            authSession = this.recoverAuthenticationSession(state);
-            authorizationContext =
-                    new AuthenticationSessionStore(authSession).getAuthorizationContextByRequestId(state);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(
-                    errorResponse(
-                            Response.Status.BAD_REQUEST,
-                            OAuthErrorException.INVALID_REQUEST,
-                            "Authorization context not found for state (request ID): " + state),
                     e);
         }
 
@@ -241,6 +244,23 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     /**
+     * Recovers the authorization context linked to a request ID.
+     */
+    private AuthorizationContext recoverAuthorizationContextByRequestId(String requestId) throws NotFoundException {
+        try {
+            var authSession = this.recoverAuthenticationSession(requestId);
+            return new AuthenticationSessionStore(authSession).getAuthorizationContextByRequestId(requestId);
+        } catch (IllegalArgumentException e) {
+            throw new NotFoundException(
+                    errorResponse(
+                            Response.Status.NOT_FOUND,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Authorization context not found for request ID: " + requestId),
+                    e);
+        }
+    }
+
+    /**
      * Recovers the authentication session linked to a possibly extended ID.
      */
     private AuthenticationSessionModel recoverAuthenticationSession(String extAuthSessionId) {
@@ -251,6 +271,21 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         session.getContext().setAuthenticationSession(authSession);
         return authSession;
+    }
+
+    /**
+     * Decrypt response to authorization request.
+     * @param encryptedResponse the assumed JWE encrypted response string
+     * @param ephemeralKey the ephemeral key generated for the authentication session
+     */
+    private ResponseObject decryptResponse(String encryptedResponse, String ephemeralKey) {
+        try {
+            ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
+            String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
+            return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
+        } catch (JWEException | IOException e) {
+            throw new IllegalArgumentException("Failed to decrypt response", e);
+        }
     }
 
     /**

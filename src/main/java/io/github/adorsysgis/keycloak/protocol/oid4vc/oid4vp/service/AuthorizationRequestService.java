@@ -33,6 +33,7 @@ import java.util.stream.Stream;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
 import org.jboss.logging.Logger;
+import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureSignerContext;
@@ -66,6 +67,7 @@ public class AuthorizationRequestService {
     // without SIOPv2.
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
+    private final SdJwtCredentialConstrainer constrainer;
     private final ClientMetadata clientMetadata;
     private final String openID4VPRootUrl;
     private final KeyWrapper signingKey;
@@ -73,6 +75,8 @@ public class AuthorizationRequestService {
     private final int authSessionLifespanSecs;
 
     public AuthorizationRequestService(KeycloakSession session) {
+        this.constrainer = new SdJwtCredentialConstrainer();
+
         // Discover client metadata and signing key
         VerifierDiscoveryService verifierDiscoveryService = new VerifierDiscoveryService(session);
         this.clientMetadata = verifierDiscoveryService.getClientMetadata();
@@ -111,12 +115,7 @@ public class AuthorizationRequestService {
         var queryMap = authReqs.getSdJwtQueryMap();
 
         // Build request object
-        var constrainer = new SdJwtCredentialConstrainer();
-        RequestObject requestObject = bootstrapRequestObject(config)
-                .setState(requestId)
-                .setDcqlQuery(constrainer.generateDcqlQuery(queryMap))
-                // Kept for backward compatibility with Draft 20 wallets
-                .setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
+        RequestObject requestObject = buildRequestObject(config, queryMap, requestId);
 
         // Sign request object
         X509Certificate certificate =
@@ -192,10 +191,16 @@ public class AuthorizationRequestService {
     /**
      * Returns a starter for building request objects.
      */
-    private RequestObject bootstrapRequestObject(VerifierConfig config) {
+    private RequestObject buildRequestObject(
+            VerifierConfig config, SdJwtCredentialConstrainer.QueryMap queryMap, String requestId) {
         String clientId = clientMetadata.getClientId();
-        String responseUri = openID4VPRootUrl + OID4VPUserAuthEndpoint.RESPONSE_URI_PATH;
+        String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
+                .path(requestId)
+                .build()
+                .toString();
 
+        // Generate nonce
         String nonce = Stream.generate(AuthorizationRequestService::generateRandomString)
                 .limit(2)
                 .collect(Collectors.joining("."));
@@ -216,14 +221,22 @@ public class AuthorizationRequestService {
                 .setClientId(clientId)
                 .setClientIdScheme(ClientIdScheme.X509_SAN_DNS)
                 .setNonce(nonce)
+                .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
                 .setClientMetadata(clientMetadata)
-                .setVerifierInfo(verifierInfo);
+                .setVerifierInfo(verifierInfo)
+                .setDcqlQuery(constrainer.generateDcqlQuery(queryMap))
+                // Kept for backward compatibility with Draft 20 wallets
+                .setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
     }
 
     private String buildAuthorizationRequestLink(String scheme, String requestId) {
         var clientId = clientMetadata.getClientId();
-        var requestUri = openID4VPRootUrl + "%s/%s".formatted(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH, requestId);
+        var requestUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                .path(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH)
+                .path(requestId)
+                .build()
+                .toString();
 
         return String.format(
                 "%sauthorize?client_id=%s&request_uri=%s",
