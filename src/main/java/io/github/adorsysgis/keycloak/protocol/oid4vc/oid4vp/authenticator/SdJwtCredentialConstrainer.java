@@ -13,7 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Presentat
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.keycloak.protocol.oid4vc.model.Format;
+import org.keycloak.VCFormat;
 
 /**
  * Constructs a presentation definition for requesting an SD-JWT credential.
@@ -43,7 +43,7 @@ public class SdJwtCredentialConstrainer {
 
         Credential credential = new Credential();
         credential.setId(UUID.randomUUID().toString());
-        credential.setFormat(Format.SD_JWT_VC);
+        credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
 

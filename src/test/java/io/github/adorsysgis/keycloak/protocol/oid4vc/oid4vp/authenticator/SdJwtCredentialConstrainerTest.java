@@ -11,7 +11,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Filter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.keycloak.protocol.oid4vc.model.Format;
+import org.keycloak.VCFormat;
 import org.keycloak.util.JsonSerialization;
 
 public class SdJwtCredentialConstrainerTest {
@@ -41,7 +41,7 @@ public class SdJwtCredentialConstrainerTest {
         assertEquals(1, query.getCredentials().size());
         Credential credential = query.getCredentials().getFirst();
 
-        assertEquals(Format.SD_JWT_VC, credential.getFormat());
+        assertEquals(VCFormat.SD_JWT_VC, credential.getFormat());
         assertEquals(map.expectedVcts(), credential.getMeta().getVctValues());
         assertEquals(map.requiredClaims().size(), credential.getClaims().size());
 

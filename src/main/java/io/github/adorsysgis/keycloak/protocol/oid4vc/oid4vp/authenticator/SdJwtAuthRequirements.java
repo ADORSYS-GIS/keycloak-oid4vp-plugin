@@ -10,7 +10,8 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakContext;
-import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBuilder;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
@@ -108,10 +109,10 @@ public class SdJwtAuthRequirements {
         var definition = SimplePresentationDefinition.builder();
         getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
 
-        definition.addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern);
+        definition.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
         if (verifyIssuerClaim) {
             definition.addClaimRequirement(
-                    SdJwtCredentialBuilder.ISSUER_CLAIM, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+                    CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
         }
         return definition.build();
     }
