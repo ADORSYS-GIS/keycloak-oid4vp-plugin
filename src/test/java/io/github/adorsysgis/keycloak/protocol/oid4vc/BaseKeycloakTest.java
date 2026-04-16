@@ -3,8 +3,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +43,9 @@ public abstract class BaseKeycloakTest {
     public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.5.6";
 
     public static final String TEST_REALM_NAME = "test";
+    public static final String TEST_REALM_HAIP_NAME = "test-haip";
     public static final String TEST_REALM_V2_NAME = "test-v2";
+
     public static final String TEST_USER = "test-user";
     public static final String TEST_USER_ID = "test-user-id";
     public static final String TEST_USER_PASSWORD = "password";
@@ -61,6 +65,7 @@ public abstract class BaseKeycloakTest {
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci")
                 .withRealmImportFile("/realms/test-realm.json")
+                .withRealmImportFile("/realms/test-realm-haip.json")
                 .withRealmImportFile("/realms/test-realm-v2.json")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG");
@@ -103,6 +108,14 @@ public abstract class BaseKeycloakTest {
                 .path("/protocol/openid-connect/token")
                 .build()
                 .toString();
+    }
+
+    protected ObjectNode getTestResourceJson(String filename) {
+        try (InputStream stream = BaseKeycloakTest.class.getResourceAsStream(filename)) {
+            return (ObjectNode) JsonSerialization.mapper.readTree(stream);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     protected List<NameValuePair> getDefaultHttpParams() {

@@ -298,17 +298,17 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Associate with an unknown session ID
         requestObject.setState("unknown-session-id");
+        requestObject.setResponseUri(getOid4vpEndpoint("/response/unknown-session-id"));
 
         // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response =
                 sendAuthorizationResponseWithVPToken("sd-jwt-vptoken", requestObject, TestOpts.getDefault());
-        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+        assertEquals(HttpStatus.SC_NOT_FOUND, response.getStatusLine().getStatusCode());
 
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(
-                "Authorization context not found for state (request ID): unknown-session-id",
-                errorRep.getErrorDescription());
+                "Authorization context not found for request ID: unknown-session-id", errorRep.getErrorDescription());
     }
 
     @Test

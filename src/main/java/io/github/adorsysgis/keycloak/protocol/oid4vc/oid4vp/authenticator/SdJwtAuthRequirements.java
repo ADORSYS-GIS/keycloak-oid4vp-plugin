@@ -97,10 +97,6 @@ public class SdJwtAuthRequirements {
         return enforceRevocationStatus;
     }
 
-    public boolean shouldVerifyIssuerClaim() {
-        return verifyIssuerClaim;
-    }
-
     /**
      * Constructs presentation definition as supported by keycloak-core.
      */
