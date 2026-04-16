@@ -5,7 +5,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtA
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import java.io.ByteArrayInputStream;
-import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
@@ -67,7 +66,7 @@ public class VerifierConfig {
     }
 
     private static String validateCustomUrlScheme(String customUrlScheme) {
-        String defaultCustomUrlScheme = SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT;
+        String defaultCustomUrlScheme = SdJwtAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG_DEFAULT;
         if (StringUtils.isBlank(customUrlScheme)) {
             return defaultCustomUrlScheme;
         }
@@ -91,10 +90,12 @@ public class VerifierConfig {
             byte[] certBytes = Base64.getDecoder().decode(certificate);
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             return (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes));
-        } catch (CertificateException e) {
-            logger.warnf(e, "Invalid X5C certificate '%s'", certificate);
-            return null;
+        } catch (Exception e) {
+            throw new IllegalStateException(String.format("Invalid X5C certificate '%s'", certificate), e);
         }
+
+        // TODO: Validate that the configured certificate matches the current active
+        //  key that will be used for signing authorization requests.
     }
 
     public SdJwtAuthRequirements getAuthRequirements() {

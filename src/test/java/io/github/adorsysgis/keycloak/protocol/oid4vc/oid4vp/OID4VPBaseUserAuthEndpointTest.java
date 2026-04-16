@@ -262,7 +262,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
         var respMap = Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap);
         String resp = JsonSerialization.writeValueAsString(respMap);
-        System.out.println(resp);
 
         // Read encryption key from request object
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];

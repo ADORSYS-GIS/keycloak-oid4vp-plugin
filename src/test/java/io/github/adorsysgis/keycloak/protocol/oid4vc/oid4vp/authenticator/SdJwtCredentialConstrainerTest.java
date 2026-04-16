@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Constraints;
@@ -12,7 +11,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Presentat
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.keycloak.protocol.oid4vc.model.Format;
-import org.keycloak.util.JsonSerialization;
 
 public class SdJwtCredentialConstrainerTest {
 
@@ -28,12 +26,11 @@ public class SdJwtCredentialConstrainerTest {
     }
 
     @Test
-    void testGeneratePresentationDefinition() throws JsonProcessingException {
+    void testGeneratePresentationDefinition() {
         List<String> vcts = List.of("vct1", "vct2");
         List<String> claims = List.of("name", "email");
         QueryMap queryMap = new QueryMap(vcts, claims);
         PresentationDefinition def = constrainer.generatePresentationDefinition(queryMap);
-        System.out.println(JsonSerialization.mapper.writeValueAsString(def));
         assertPrexQuery(def, queryMap);
     }
 
