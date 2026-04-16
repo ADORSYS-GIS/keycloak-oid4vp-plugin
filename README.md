@@ -14,7 +14,7 @@ This plugin has been tested with:
 | **Requirement** | **Version** |
 |-----------------|-------------|
 | **Java**        | 21          |
-| **Keycloak**    | 26.5.4      |
+| **Keycloak**    | 26.6.1      |
 
 While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
 versions for best results.

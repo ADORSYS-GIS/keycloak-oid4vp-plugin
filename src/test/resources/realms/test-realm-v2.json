@@ -3,6 +3,7 @@
   "realm": "test-v2",
   "enabled": true,
   "sslRequired": "none",
+  "verifiableCredentialsEnabled": true,
   "attributes": {
     "oid4vci.display": "[{\"name\": \"Example Credential Issuer\", \"locale\": \"en-US\", \"logo\": {\"uri\": \"https://example.com/logo.png\", \"alt_text\": \"Issuer Logo\"}}, {\"name\": \"Beispiel-Aussteller für Berechtigungsnachweise\", \"locale\": \"de\", \"logo\": {\"uri\": \"https://example.com/logo-de.png\", \"alt_text\": \"Ausstellerlogo\"}}]"
   },
