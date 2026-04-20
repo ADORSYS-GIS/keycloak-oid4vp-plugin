@@ -5,6 +5,7 @@
   "sslRequired": "none",
   "eventsEnabled": true,
   "enabledEventTypes": ["LOGIN", "LOGIN_ERROR"],
+  "verifiableCredentialsEnabled": true,
   "users": [
     {
       "id": "test-user-id",
