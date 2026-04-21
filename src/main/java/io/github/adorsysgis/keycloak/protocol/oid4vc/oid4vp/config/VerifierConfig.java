@@ -93,9 +93,6 @@ public class VerifierConfig {
         } catch (Exception e) {
             throw new IllegalStateException(String.format("Invalid X5C certificate '%s'", certificate), e);
         }
-
-        // TODO: Validate that the configured certificate matches the current active
-        //  key that will be used for signing authorization requests.
     }
 
     public SdJwtAuthRequirements getAuthRequirements() {
