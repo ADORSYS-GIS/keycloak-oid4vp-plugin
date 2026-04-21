@@ -55,7 +55,9 @@ class ConfiguredAccessCertificateValidatorTest {
         KeyPair certificateKeyPair = generateRSAKeyPair();
         KeyPair signingKeyPair = generateRSAKeyPair();
         X509Certificate certificate = createSelfSignedCertificate(
-                certificateKeyPair, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+                certificateKeyPair,
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(3600));
         KeyWrapper signingKey = toSigningKey(signingKeyPair, "rsa-signing-kid");
 
         IllegalStateException ex = assertThrows(
@@ -102,12 +104,7 @@ class ConfiguredAccessCertificateValidatorTest {
             throws Exception {
         X500Name subject = new X500Name("CN=ConfiguredAccessCertificateValidatorTest");
         JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
-                subject,
-                BigInteger.ONE,
-                Date.from(notBefore),
-                Date.from(notAfter),
-                subject,
-                keyPair.getPublic());
+                subject, BigInteger.ONE, Date.from(notBefore), Date.from(notAfter), subject, keyPair.getPublic());
 
         ContentSigner signer = new JcaContentSignerBuilder(
                         ExtendedBCCertificateUtilsProvider.getJcaContentSignerAlg(keyPair.getPublic()))
