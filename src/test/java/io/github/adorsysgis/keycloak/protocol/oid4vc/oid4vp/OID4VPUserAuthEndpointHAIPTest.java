@@ -62,7 +62,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         // Signed request object must embed access certificate in X5C header
         ObjectNode authConfig = getAuthConfig();
         String accessCertificate = authConfig.get(ACCESS_CERTIFICATE_CONFIG).asText();
-        assertTrue(accessCertificate.startsWith("MIIB2DCCAX6gAwIBAgIVAJ/cbtVmxliKj42QvoeUp"));
+        assertTrue(accessCertificate.startsWith("MIIDHzCCAgegAwIBAgIUYR5AnUgQpDmf59C+ymtxfMECoMMw"));
         assertEquals(List.of(accessCertificate), jwsInput.getHeader().getX5c());
 
         // Request object must advertise registration certificate
