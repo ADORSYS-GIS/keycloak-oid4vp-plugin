@@ -16,12 +16,16 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.net.URI;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuthErrorException;
+import org.keycloak.common.util.PemUtils;
 import org.keycloak.crypto.KeyType;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.jose.jwk.JSONWebKeySet;
@@ -54,14 +58,25 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         RequestObject requestObject = jwsInput.readJsonContent(RequestObject.class);
 
         // Must use configured custom URL scheme
-        assertEquals(CUSTOM_URL_SCHEME, new URI(authRequest).getScheme());
+        URI authRequestUri = new URI(authRequest);
+        assertEquals(CUSTOM_URL_SCHEME, authRequestUri.getScheme());
+
+        // Parse query parameters
+        ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequestUri);
+        String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
+        assertNotNull(clientIdParam, "client_id parameter should be present");
+
+        // Assert client ID uses x509_hash appropriately
+        ObjectNode authConfig = getAuthConfig();
+        String accessCertificate = authConfig.get(ACCESS_CERTIFICATE_CONFIG).asText();
+        X509Certificate cert = PemUtils.decodeCertificate(accessCertificate);
+        String expectedClientId = "x509_hash:" + X509HashUtils.computeX509Hash(cert);
+        assertEquals(expectedClientId, clientIdParam, "Client ID should use x509_hash scheme");
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
 
         // Signed request object must embed access certificate in X5C header
-        ObjectNode authConfig = getAuthConfig();
-        String accessCertificate = authConfig.get(ACCESS_CERTIFICATE_CONFIG).asText();
         assertTrue(accessCertificate.startsWith("MIIDITCCAgmgAwIBAgIUcQyt0bvRf7/e4/Gtfw0OHRIBJfU"));
         assertEquals(List.of(accessCertificate), jwsInput.getHeader().getX5c());
 

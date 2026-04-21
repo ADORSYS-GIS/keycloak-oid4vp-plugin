@@ -30,7 +30,6 @@ public class SdJwtAuthRequirements {
 
     private static final Logger logger = Logger.getLogger(SdJwtAuthRequirements.class);
 
-    private final ClaimCheck kbJwtAudCheck;
     private final List<String> expectedVcts;
     private final String expectedVctsPattern;
     private final String keycloakIssuerURI;
@@ -43,11 +42,6 @@ public class SdJwtAuthRequirements {
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting authentication requirements");
-
-        // We need to enforce that only credentials produced for this audience pass through.
-        // The audience is the client ID of the verifier, but some wallets prepend a scheme.
-        String kbJwtAud = context.getUri().getBaseUri().getHost();
-        this.kbJwtAudCheck = buildAudClaimCheck(kbJwtAud);
 
         // Reading authenticator configs
         Map<String, String> config =
@@ -124,7 +118,8 @@ public class SdJwtAuthRequirements {
                 .build();
     }
 
-    public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce) {
+    public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce, String aud) {
+        ClaimCheck kbJwtAudCheck = buildAudClaimCheck(aud);
         return KeyBindingJwtVerificationOpts.builder()
                 .withKeyBindingRequired(true)
                 .withIatCheck(kbJwtMaxAllowedAge)

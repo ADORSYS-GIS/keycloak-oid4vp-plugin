@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
@@ -24,6 +25,7 @@ public class VerifierConfig {
 
     private final SdJwtAuthRequirements authRequirements;
 
+    private final ClientIdScheme clientIdScheme;
     private final ResponseMode responseMode;
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
@@ -37,6 +39,10 @@ public class VerifierConfig {
 
         // TODO: Relocate these non-SD-JWT-specific configurations.
         //  They should normally not be exposed through SdJwtAuthenticatorFactory.
+
+        this.clientIdScheme = validateClientIdScheme(config.getOrDefault(
+                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG,
+                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT));
 
         this.responseMode = validateResponseMode(config.getOrDefault(
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
@@ -53,6 +59,16 @@ public class VerifierConfig {
 
         // Collect authentication requirements
         this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
+    }
+
+    private static ClientIdScheme validateClientIdScheme(String clientIdScheme) {
+        try {
+            return ClientIdScheme.fromValue(clientIdScheme);
+        } catch (IllegalArgumentException e) {
+            String defaultClientIdScheme = SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT;
+            logger.warnf("Invalid client ID scheme: %s. Defaulting to %s", clientIdScheme, defaultClientIdScheme);
+            return ClientIdScheme.fromValue(defaultClientIdScheme);
+        }
     }
 
     private static ResponseMode validateResponseMode(String responseMode) {
@@ -97,6 +113,10 @@ public class VerifierConfig {
 
     public SdJwtAuthRequirements getAuthRequirements() {
         return authRequirements;
+    }
+
+    public ClientIdScheme getClientIdScheme() {
+        return clientIdScheme;
     }
 
     public ResponseMode getResponseMode() {

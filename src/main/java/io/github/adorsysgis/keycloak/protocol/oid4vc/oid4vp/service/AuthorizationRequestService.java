@@ -26,7 +26,6 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -38,8 +37,6 @@ import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureSignerContext;
 import org.keycloak.jose.jwe.JWEUtils;
-import org.keycloak.jose.jwk.JSONWebKeySet;
-import org.keycloak.jose.jwk.JWK;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.utils.SessionExpiration;
@@ -67,27 +64,20 @@ public class AuthorizationRequestService {
     // without SIOPv2.
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
+    private final KeycloakSession session;
     private final SdJwtCredentialConstrainer constrainer;
-    private final ClientMetadata clientMetadata;
+    private final VerifierDiscoveryService discoveryService;
+
     private final String openID4VPRootUrl;
-    private final KeyWrapper signingKey;
-    private final SignatureSignerContext signer;
     private final int authSessionLifespanSecs;
 
     public AuthorizationRequestService(KeycloakSession session) {
+        this.session = session;
         this.constrainer = new SdJwtCredentialConstrainer();
 
-        // Discover client metadata and signing key
-        VerifierDiscoveryService verifierDiscoveryService = new VerifierDiscoveryService(session);
-        this.clientMetadata = verifierDiscoveryService.getClientMetadata();
-        this.openID4VPRootUrl = verifierDiscoveryService.getOpenID4VPRootUrl();
-        this.signingKey = verifierDiscoveryService.getSigningKey();
-
-        // Derive signer context
-        Objects.requireNonNull(signingKey);
-        String algorithm = signingKey.getAlgorithmOrDefault();
-        SignatureProvider signatureProvider = session.getProvider(SignatureProvider.class, algorithm);
-        this.signer = signatureProvider.signer(signingKey);
+        // Initialize discovery service
+        this.discoveryService = new VerifierDiscoveryService(session);
+        this.openID4VPRootUrl = discoveryService.getOpenID4VPRootUrl();
 
         // Read the authentication session lifespan from the realm configuration
         RealmModel realm = session.getContext().getRealm();
@@ -113,19 +103,27 @@ public class AuthorizationRequestService {
         // the request object, so updated client metadata are picked up as intended.
         EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(config.getResponseMode());
 
+        // Discover signing key and client metadata
+        KeyWrapper signingKey = discoverSigningKey(config);
+        X509Certificate certificate = Optional.ofNullable(config.getAccessCertificate())
+                .orElseGet(() -> getSelfSignedCertificate(signingKey));
+        ClientMetadata clientMetadata =
+                discoveryService.getClientMetadata(config.getClientIdScheme(), certificate, encryptionKey);
+
         // Load query map for SD-JWT authentication
         SdJwtAuthRequirements authReqs = config.getAuthRequirements();
         var queryMap = authReqs.getSdJwtQueryMap();
 
         // Build request object
-        RequestObject requestObject = buildRequestObject(config, queryMap, requestId);
+        RequestObject requestObject = buildRequestObject(clientMetadata, config, queryMap, requestId);
 
         // Sign request object
-        String requestObjectJwt = signRequestObject(requestObject, certificate);
+        String requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
 
         // Build authorization request link
-        String scheme = config.getAuthReqUrlScheme();
-        String authorizationRequestLink = buildAuthorizationRequestLink(scheme, requestId);
+        String urlScheme = config.getAuthReqUrlScheme();
+        String authorizationRequestLink =
+                buildAuthorizationRequestLink(urlScheme, clientMetadata.getClientId(), requestId);
 
         // Gather authorization context
         AuthorizationContext authorizationContext = new AuthorizationContext()
@@ -182,6 +180,15 @@ public class AuthorizationRequestService {
     }
 
     /**
+     * Discovers signing key.
+     */
+    private KeyWrapper discoverSigningKey(VerifierConfig config) {
+        X509Certificate accessCertificate = config.getAccessCertificate();
+        boolean requireSelfSignedCert = accessCertificate == null;
+        return discoveryService.getSigningKey(requireSelfSignedCert);
+    }
+
+    /**
      * Generates ephemeral key for response encryption.
      */
     private EphemeralKey generateEncryptionKeyIfNeeded(ResponseMode responseMode) {
@@ -189,21 +196,17 @@ public class AuthorizationRequestService {
             return null;
         }
 
-        EphemeralKey key = EphemeralKeyUtils.generateEphemeralECDHKey();
-
-        // Update client metadata to advertise the encryption key
-        JSONWebKeySet jwks = new JSONWebKeySet();
-        jwks.setKeys(new JWK[] {key.publicKey()});
-        clientMetadata.setJwks(jwks);
-
-        return key;
+        return EphemeralKeyUtils.generateEphemeralECDHKey();
     }
 
     /**
      * Returns a starter for building request objects.
      */
     private RequestObject buildRequestObject(
-            VerifierConfig config, SdJwtCredentialConstrainer.QueryMap queryMap, String requestId) {
+            ClientMetadata clientMetadata,
+            VerifierConfig config,
+            SdJwtCredentialConstrainer.QueryMap queryMap,
+            String requestId) {
         String clientId = clientMetadata.getClientId();
         String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
@@ -241,8 +244,7 @@ public class AuthorizationRequestService {
                 .setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
     }
 
-    private String buildAuthorizationRequestLink(String scheme, String requestId) {
-        var clientId = clientMetadata.getClientId();
+    private String buildAuthorizationRequestLink(String urlScheme, String clientId, String requestId) {
         var requestUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH)
                 .path(requestId)
@@ -251,15 +253,20 @@ public class AuthorizationRequestService {
 
         return String.format(
                 "%sauthorize?client_id=%s&request_uri=%s",
-                scheme,
+                urlScheme,
                 URLEncoder.encode(clientId, StandardCharsets.UTF_8),
                 URLEncoder.encode(requestUri, StandardCharsets.UTF_8));
     }
 
-    private String signRequestObject(RequestObject requestObject, X509Certificate certificate) {
+    private String signRequestObject(RequestObject requestObject, KeyWrapper signingKey, X509Certificate certificate) {
         logger.debug("Signing request object");
         Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
         requestObject.issuedNow().exp(expiration);
+
+        // Derive signer context
+        String algorithm = signingKey.getAlgorithmOrDefault();
+        SignatureProvider signatureProvider = session.getProvider(SignatureProvider.class, algorithm);
+        SignatureSignerContext signer = signatureProvider.signer(signingKey);
 
         return new SpacephobicJwsBuilder()
                 .type(AUTH_REQ_JWT)
@@ -268,13 +275,13 @@ public class AuthorizationRequestService {
                 .sign(signer);
     }
 
-    private X509Certificate getSelfSignedCertificate() {
+    private X509Certificate getSelfSignedCertificate(KeyWrapper signingKey) {
         X509Certificate cert = signingKey.getCertificate();
         if (cert == null) {
             throw new IllegalStateException("Signing key has no certificate");
         }
 
-        String clientId = clientMetadata.getSchemelessClientId();
+        String clientId = discoveryService.getDnsNameClientId();
         PublicKey publicKey = (PublicKey) signingKey.getPublicKey();
         PrivateKey privateKey = (PrivateKey) signingKey.getPrivateKey();
 
