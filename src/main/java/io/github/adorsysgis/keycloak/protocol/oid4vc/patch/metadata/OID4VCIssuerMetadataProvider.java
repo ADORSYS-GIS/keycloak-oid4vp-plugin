@@ -35,6 +35,10 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         // Add root display metadata
         metadata.setDisplay(parseDisplay());
 
+        // Always omit encryption parameters from metadata
+        metadata.setCredentialResponseEncryption(null);
+        metadata.setCredentialRequestEncryption(null);
+
         return metadata;
     }
 
