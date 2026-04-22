@@ -10,6 +10,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtA
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
@@ -105,24 +106,23 @@ public class AuthorizationRequestService {
         // Resolve and validate the certificate that will be advertised under x5c.
         X509Certificate certificate = resolveAccessCertificate(config, signingKey);
 
-        // Discover client metadata
-        ClientMetadata clientMetadata =
-                discoveryService.getClientMetadata(config.getClientIdScheme(), certificate, encryptionKey);
+        // Resolve client ID and discover client metadata
+        String clientId = discoveryService.getClientId(config.getClientIdScheme(), certificate);
+        ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
         // Load query map for SD-JWT authentication
         SdJwtAuthRequirements authReqs = config.getAuthRequirements();
         var queryMap = authReqs.getSdJwtQueryMap();
 
         // Build request object
-        RequestObject requestObject = buildRequestObject(clientMetadata, config, queryMap, requestId);
+        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);
 
         // Sign request object
         String requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
 
         // Build authorization request link
         String urlScheme = config.getAuthReqUrlScheme();
-        String authorizationRequestLink =
-                buildAuthorizationRequestLink(urlScheme, clientMetadata.getClientId(), requestId);
+        String authorizationRequestLink = buildAuthorizationRequestLink(urlScheme, clientId, requestId);
 
         // Gather authorization context
         AuthorizationContext authorizationContext = new AuthorizationContext()
@@ -202,11 +202,11 @@ public class AuthorizationRequestService {
      * Returns a starter for building request objects.
      */
     private RequestObject buildRequestObject(
+            String clientId,
             ClientMetadata clientMetadata,
             VerifierConfig config,
             SdJwtCredentialConstrainer.QueryMap queryMap,
             String requestId) {
-        String clientId = clientMetadata.getClientId();
         String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
                 .path(requestId)
@@ -226,7 +226,8 @@ public class AuthorizationRequestService {
                 .map(List::of)
                 .orElse(null);
 
-        return new RequestObject()
+        // Aggregate properties
+        RequestObject requestObject = new RequestObject()
                 .setIssuer(clientId)
                 .setResponseMode(config.getResponseMode())
                 .setResponseUri(responseUri)
@@ -237,10 +238,17 @@ public class AuthorizationRequestService {
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
                 .setClientMetadata(clientMetadata)
-                .setVerifierInfo(verifierInfo)
-                .setDcqlQuery(constrainer.generateDcqlQuery(queryMap))
-                // Kept for backward compatibility with Draft 20 wallets
-                .setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
+                .setVerifierInfo(verifierInfo);
+
+        // Append presentation request
+        if (config.getQueryLanguage().equals(QueryLanguage.DIF_PRESENTATION_EXCHANGE)) {
+            // Kept for backward compatibility with Draft 20 wallets
+            requestObject.setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
+        } else {
+            requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
+        }
+
+        return requestObject;
     }
 
     private String buildAuthorizationRequestLink(String urlScheme, String clientId, String requestId) {

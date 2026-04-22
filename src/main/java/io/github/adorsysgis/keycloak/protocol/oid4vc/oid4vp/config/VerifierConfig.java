@@ -4,6 +4,7 @@ import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
@@ -26,6 +27,7 @@ public class VerifierConfig {
     private final SdJwtAuthRequirements authRequirements;
 
     private final ClientIdScheme clientIdScheme;
+    private final QueryLanguage queryLanguage;
     private final ResponseMode responseMode;
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
@@ -43,6 +45,10 @@ public class VerifierConfig {
         this.clientIdScheme = validateClientIdScheme(config.getOrDefault(
                 SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG,
                 SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT));
+
+        this.queryLanguage = validateQueryLanguage(config.getOrDefault(
+                SdJwtAuthenticatorFactory.QUERY_LANGUAGE_CONFIG,
+                SdJwtAuthenticatorFactory.QUERY_LANGUAGE_CONFIG_DEFAULT));
 
         this.responseMode = validateResponseMode(config.getOrDefault(
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
@@ -68,6 +74,16 @@ public class VerifierConfig {
             String defaultClientIdScheme = SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT;
             logger.warnf("Invalid client ID scheme: %s. Defaulting to %s", clientIdScheme, defaultClientIdScheme);
             return ClientIdScheme.fromValue(defaultClientIdScheme);
+        }
+    }
+
+    private static QueryLanguage validateQueryLanguage(String queryLanguage) {
+        try {
+            return QueryLanguage.fromValue(queryLanguage);
+        } catch (IllegalArgumentException e) {
+            String defaultQueryLanguage = SdJwtAuthenticatorFactory.QUERY_LANGUAGE_CONFIG_DEFAULT;
+            logger.warnf("Invalid query language: %s. Defaulting to %s", queryLanguage, defaultQueryLanguage);
+            return QueryLanguage.fromValue(defaultQueryLanguage);
         }
     }
 
@@ -117,6 +133,10 @@ public class VerifierConfig {
 
     public ClientIdScheme getClientIdScheme() {
         return clientIdScheme;
+    }
+
+    public QueryLanguage getQueryLanguage() {
+        return queryLanguage;
     }
 
     public ResponseMode getResponseMode() {

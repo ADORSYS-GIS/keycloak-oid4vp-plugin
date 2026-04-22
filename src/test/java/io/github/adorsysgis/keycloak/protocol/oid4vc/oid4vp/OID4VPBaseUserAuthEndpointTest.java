@@ -220,7 +220,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         if (!opts.shouldForceUnencryptedResponse()
                 && requestObject.getClientMetadata().getJwks() != null) {
             oid4vpResponse = prepareEncryptedOpenID4VPResponse(sdJwtVpToken, requestObject);
-        } else if (opts.shouldPrepareLegacyResponse()) {
+        } else if (requestObject.getPresentationDefinition() != null) {
             oid4vpResponse = prepareLegacyOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
         } else {
             oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject);
@@ -333,7 +333,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         private AuthorizationContext authContext;
         private boolean shouldBase64EncodeVpToken;
         private boolean shouldRetrieveAccessToken = true;
-        private boolean shouldPrepareLegacyResponse = true;
         private boolean shouldEnforceRedirectUri = false;
         private boolean shouldForceUnencryptedResponse = false;
         private String overridePresentationDefinitionId;
@@ -378,15 +377,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         public TestOpts setShouldRetrieveAccessToken(boolean retrieveAccessToken) {
             this.shouldRetrieveAccessToken = retrieveAccessToken;
-            return this;
-        }
-
-        public boolean shouldPrepareLegacyResponse() {
-            return shouldPrepareLegacyResponse;
-        }
-
-        public TestOpts setShouldPrepareLegacyResponse(boolean shouldPrepareLegacyResponse) {
-            this.shouldPrepareLegacyResponse = shouldPrepareLegacyResponse;
             return this;
         }
 

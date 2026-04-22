@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
@@ -45,6 +46,9 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
 
     public static final String CLIENT_ID_SCHEME_CONFIG = "clientIdScheme";
     public static final String CLIENT_ID_SCHEME_CONFIG_DEFAULT = ClientIdScheme.X509_SAN_DNS.getValue();
+
+    public static final String QUERY_LANGUAGE_CONFIG = "queryLanguage";
+    public static final String QUERY_LANGUAGE_CONFIG_DEFAULT = QueryLanguage.DCQL_QUERY.getValue();
 
     public static final String RESPONSE_MODE_CONFIG = "responseMode";
     public static final String RESPONSE_MODE_CONFIG_DEFAULT = ResponseMode.DIRECT_POST.getValue();
@@ -110,6 +114,16 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setDefaultValue(CLIENT_ID_SCHEME_CONFIG_DEFAULT);
         property.setOptions(List.of(ClientIdScheme.X509_SAN_DNS.getValue(), ClientIdScheme.X509_HASH.getValue()));
         property.setHelpText("Client Identifier Prefix to conform to as per OpenID4VP spec.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(QUERY_LANGUAGE_CONFIG);
+        property.setLabel("Query language");
+        property.setType(ProviderConfigProperty.LIST_TYPE);
+        property.setDefaultValue(QUERY_LANGUAGE_CONFIG_DEFAULT);
+        property.setOptions(
+                List.of(QueryLanguage.DCQL_QUERY.getValue(), QueryLanguage.DIF_PRESENTATION_EXCHANGE.getValue()));
+        property.setHelpText("Query language specification for encoding presentation requests.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
