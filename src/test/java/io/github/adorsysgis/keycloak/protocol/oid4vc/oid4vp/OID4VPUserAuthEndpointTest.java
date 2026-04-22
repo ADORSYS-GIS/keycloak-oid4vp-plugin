@@ -82,10 +82,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
 
-        // Assert: Ensure the request object contains a DCQL query and a legacy presentation definition
+        // Assert: Ensure the request object contains a legacy presentation definition
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
-        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
         SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
 
         // Request object must use expected default client ID scheme
@@ -95,7 +94,12 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
-        assertEquals(schemedClientId, requestObject.getClientMetadata().getClientId());
+
+        // Assert: Request object must not advertise symmetric signing algs
+        var dcSdJwt = requestObject.getClientMetadata().getVpFormat().getDcSdJwt();
+        for (var algs : List.of(dcSdJwt.getSdJwtAlgValues(), dcSdJwt.getKbJwtAlgValues())) {
+            assertFalse(algs.stream().anyMatch(alg -> alg.startsWith("HS")));
+        }
     }
 
     @Test
@@ -223,16 +227,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Proceed to authentication (Use 'dc-sd+jwt' in presentation submission descriptor)
         TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.DC_SD_JWT);
-        testSuccessfulAuthentication(sdJwt, opts);
-    }
-
-    @Test
-    public void shouldAuthenticateSuccessfully_VpTokenMapToDCQL() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Proceed to authentication
-        TestOpts opts = TestOpts.getDefault().setShouldPrepareLegacyResponse(false);
         testSuccessfulAuthentication(sdJwt, opts);
     }
 

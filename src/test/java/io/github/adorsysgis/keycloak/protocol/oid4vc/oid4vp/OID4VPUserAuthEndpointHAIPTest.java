@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -11,7 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
@@ -25,6 +29,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.PemUtils;
 import org.keycloak.crypto.KeyType;
@@ -32,6 +37,7 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 
 /**
@@ -80,6 +86,11 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
 
+        // Assert: Ensure the request object contains a DCQL query
+        var queryMap = new SdJwtCredentialConstrainer.QueryMap(
+                List.of(VCT_CONFIG_DEFAULT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
+        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
+
         // Signed request object must embed access certificate in X5C header
         assertTrue(accessCertificate.startsWith("MIIDITCCAgmgAwIBAgIUcQyt0bvRf7/e4/Gtfw0OHRIBJfU"));
         assertEquals(List.of(accessCertificate), jwsInput.getHeader().getX5c());
@@ -93,13 +104,17 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
                 verifierInfo.getFirst().getData());
 
         // Request object must advertise an ephemeral key for response encryption
-        JSONWebKeySet jwks = requestObject.getClientMetadata().getJwks();
+        ClientMetadata clientMetadata = requestObject.getClientMetadata();
+        JSONWebKeySet jwks = clientMetadata.getJwks();
         assertEquals(1, jwks.getKeys().length);
         JWK jwk = jwks.getKeys()[0];
         assertNotNull(jwk.getKeyId(), "A key ID is mandatory");
         assertEquals(KeyType.EC, jwk.getKeyType());
         assertEquals(KeyUse.ENC.getSpecName(), jwk.getPublicKeyUse());
         assertNull(jwk.getOtherClaims().get(ECTestUtils.JWK_SECRET_D_FIELD));
+
+        // Request object must explicitly advertise support encryption algs
+        assertEquals(SUPPORTED_ENC_ALGS, clientMetadata.getEncryptedResponseEncValuesSupported());
     }
 
     @Test

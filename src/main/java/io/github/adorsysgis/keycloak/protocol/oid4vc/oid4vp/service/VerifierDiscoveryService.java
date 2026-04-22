@@ -11,15 +11,15 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.CryptoUtils;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
-import org.keycloak.crypto.SignatureProvider;
+import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.provider.ProviderFactory;
 import org.keycloak.services.Urls;
 import org.keycloak.urls.UrlType;
 
@@ -34,6 +34,9 @@ public class VerifierDiscoveryService {
 
     private static final Logger logger = Logger.getLogger(VerifierDiscoveryService.class);
 
+    public static final List<String> SUPPORTED_ENC_ALGS =
+            List.of(JWEConstants.A128GCM, JWEConstants.A192GCM, JWEConstants.A256GCM);
+
     private final KeycloakSession session;
 
     public VerifierDiscoveryService(KeycloakSession session) {
@@ -43,14 +46,9 @@ public class VerifierDiscoveryService {
     /**
      * Discovers and return client metadata as Keycloak acts as an OpenID4VP client.
      */
-    public ClientMetadata getClientMetadata(
-            ClientIdScheme clientIdScheme, X509Certificate clientCertificate, EphemeralKey ephemeralKey) {
+    public ClientMetadata getClientMetadata(EphemeralKey ephemeralKey) {
         logger.debug("Discovering Keycloak's metadata as an OpenID4VP client");
         ClientMetadata metadata = new ClientMetadata();
-
-        // Compute client ID as per client ID scheme rules
-        String clientId = getClientId(clientIdScheme, clientCertificate);
-        metadata.setClientId(clientId);
 
         // Only SD-JWT presentations are supported for now.
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
@@ -61,7 +59,7 @@ public class VerifierDiscoveryService {
         if (ephemeralKey != null) {
             JSONWebKeySet jwks = new JSONWebKeySet();
             jwks.setKeys(new JWK[] {ephemeralKey.publicKey()});
-            metadata.setJwks(jwks);
+            metadata.setJwks(jwks).setEncryptedResponseEncValuesSupported(SUPPORTED_ENC_ALGS);
         }
 
         // Return aggregated metadata
@@ -111,7 +109,7 @@ public class VerifierDiscoveryService {
         return session.getContext().getUri().getBaseUri().getHost();
     }
 
-    private String getClientId(ClientIdScheme clientIdScheme, X509Certificate clientCertificate) {
+    public String getClientId(ClientIdScheme clientIdScheme, X509Certificate clientCertificate) {
         // Compute client ID as per client ID scheme rules
         String clientId =
                 switch (clientIdScheme) {
@@ -138,9 +136,6 @@ public class VerifierDiscoveryService {
     }
 
     private List<String> getSupportedSignatureAlgorithms() {
-        return session.getKeycloakSessionFactory()
-                .getProviderFactoriesStream(SignatureProvider.class)
-                .map(ProviderFactory::getId)
-                .toList();
+        return CryptoUtils.getSupportedAsymmetricSignatureAlgorithms(session);
     }
 }

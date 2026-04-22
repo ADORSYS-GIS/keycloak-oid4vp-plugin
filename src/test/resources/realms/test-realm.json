@@ -81,7 +81,8 @@
       "config": {
         "vct": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",
         "requireExpClaim": "true",
-        "enforceRevocationStatus": "true"
+        "enforceRevocationStatus": "true",
+        "queryLanguage": "dif_presentation_exchange"
       }
     }
   ],
