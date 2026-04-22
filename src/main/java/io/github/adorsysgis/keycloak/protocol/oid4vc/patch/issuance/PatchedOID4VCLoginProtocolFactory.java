@@ -17,6 +17,6 @@ public class PatchedOID4VCLoginProtocolFactory extends OID4VCLoginProtocolFactor
 
     @Override
     public int order() {
-        return super.order() + 10; // Higher than default -> this factory wins
+        return super.order() + 9; // Higher than default -> this factory wins
     }
 }
