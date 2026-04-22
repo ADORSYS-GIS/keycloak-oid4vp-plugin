@@ -16,7 +16,8 @@ public enum ClientIdScheme {
     DID("did"),
     VERIFIER_ATTESTATION("verifier_attestation"),
     X509_SAN_DNS("x509_san_dns"),
-    X509_SAN_URI("x509_san_uri");
+    X509_SAN_URI("x509_san_uri"),
+    X509_HASH("x509_hash");
 
     private final String value;
 
@@ -27,5 +28,15 @@ public enum ClientIdScheme {
     @JsonValue
     public String getValue() {
         return value;
+    }
+
+    public static ClientIdScheme fromValue(String value) {
+        for (ClientIdScheme scheme : ClientIdScheme.values()) {
+            if (scheme.value.equalsIgnoreCase(value)) {
+                return scheme;
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown client ID scheme: " + value);
     }
 }

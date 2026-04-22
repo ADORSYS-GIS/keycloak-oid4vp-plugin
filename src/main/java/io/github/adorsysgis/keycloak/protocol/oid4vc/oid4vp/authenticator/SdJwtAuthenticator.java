@@ -46,6 +46,11 @@ public class SdJwtAuthenticator implements Authenticator {
     public static final String CHALLENGE_NONCE_KEY = "nonce";
 
     /**
+     * The authenticating party is challenged to produce a presentation with an audience.
+     */
+    public static final String CHALLENGE_AUD_KEY = "aud";
+
+    /**
      * The authenticating party presents a non-replayable SD-JWT token for authentication.
      */
     public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
@@ -62,6 +67,7 @@ public class SdJwtAuthenticator implements Authenticator {
 
         SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context);
         String nonce = authSession.getAuthNote(CHALLENGE_NONCE_KEY);
+        String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
         SdJwtVP sdJwt = SdJwtVP.of(authSession.getAuthNote(SDJWT_TOKEN_KEY));
 
         try {
@@ -70,7 +76,7 @@ public class SdJwtAuthenticator implements Authenticator {
                     authReqs.getPresentationDefinition(),
                     List.of(new SelfTrustedSdJwtIssuer(context)),
                     authReqs.getIssuerSignedJwtVerificationOpts(),
-                    authReqs.getKeyBindingJwtVerificationOpts(nonce));
+                    authReqs.getKeyBindingJwtVerificationOpts(nonce, aud));
         } catch (VerificationException e) {
             logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
             failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
