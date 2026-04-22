@@ -31,12 +31,49 @@
       "secret": "password"
     }
   ],
+  "authenticationFlows": [
+    {
+      "id": "3efc7352-6b89-4ee4-8377-4f0d2ecf1ad8",
+      "alias": "oid4vp auth",
+      "description": "Authenticate via OpenID4VP presentations of self-issued identity credentials",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "sd-jwt-authenticator",
+          "authenticatorConfig": "sd-jwt-auth-config-v2",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "b188eb09-1daa-4cb2-98f3-d55722535de5",
+      "alias": "sd-jwt-auth-config-v2",
+      "config": {
+        "vct": "https://credentials.example.com/identity_credential",
+        "accessCertificate": "MIIDHTCCAgWgAwIBAgIUbH8E5tBipf0UFOZcDj+m7wEqBdswDQYJKoZIhvcNAQELBQAwEjEQMA4GA1UEAwwHdGVzdC12MjAgFw0yNjA0MjIwODQ5MDdaGA8yMTI2MDQyMzA4NDkwN1owEjEQMA4GA1UEAwwHdGVzdC12MjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAIOzm8INjEAn/aiyQj6F3Zjy4GgHPA8dCWT+X44bkULGJ6RqjmDVJ7dwi8Ohq46IvbugsAby8kPXWXWxCNJwvGAxAC4UR11miOYsapc9CxXdnzTbkeEF+2/ggMMEI7fa57jRIVAmV0M9CwHAXOEKEUuNTzf23l0flDvR1TXwHtE6IoQ1/kity7nny7WYjP5TV5zhpkv50bfOmo0OtWAC/Cu3+bU6/YfsSBYAGyIHBUlG3yYwUlOQ+CxYgkp81zfovo/UUBKpDcfXI8Qg31s8HXBYJESQjgHSnEVhR0Qowirgm5dyljycuGRLvMhn/+BYlHrUHSTBXGuluN+YHxR8FvcCAwEAAaNpMGcwHQYDVR0OBBYEFK1q0NGH6yRTnc4UzlXc/aD8Rak3MB8GA1UdIwQYMBaAFK1q0NGH6yRTnc4UzlXc/aD8Rak3MA8GA1UdEwEB/wQFMAMBAf8wFAYDVR0RBA0wC4IJbG9jYWxob3N0MA0GCSqGSIb3DQEBCwUAA4IBAQAMs6JIWK6Ryy12yhUv9zjOF+CJCfnsdkV8Kjct8NNOOddRol9zpV4EvIglnXkg5aWDCVGgh1WCVdhzvJ4GjXAZFgYoOu7ecg7ZqZcsePugMeAoPSBbRi621e1kICaDXWaZocAh+7MW7oZ1WBP/ThMn9XT5vUYut5MU1Vrt5G0AhFu/3CiTnTBrkbeWKhTqYqN3IjdKSmiWEqNnGqfBVU3tBy84jbWfY9yAz+eH7j9LdhNzYTsNolaRMt38RUkmuPnCvyMKMZXqU2cth2/DFOte/92WobfOYiVQCYNloVZvDmFFzu6ImdB3FnNCrpmFPcLjFx7aDTgm8wEBZoSjtVw1"
+      }
+    }
+  ],
   "components": {
     "org.keycloak.keys.KeyProvider": [
       {
         "name": "custom-rsa",
-        "providerId": "rsa-generated",
-        "config": {}
+        "providerId": "rsa",
+        "config": {
+          "algorithm": [
+            "RS256"
+          ],
+          "privateKey": [
+            "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCDs5vCDYxAJ/2o\nskI+hd2Y8uBoBzwPHQlk/l+OG5FCxiekao5g1Se3cIvDoauOiL27oLAG8vJD11l1\nsQjScLxgMQAuFEddZojmLGqXPQsV3Z8025HhBftv4IDDBCO32ue40SFQJldDPQsB\nwFzhChFLjU839t5dH5Q70dU18B7ROiKENf5Ircu558u1mIz+U1ec4aZL+dG3zpqN\nDrVgAvwrt/m1Ov2H7EgWABsiBwVJRt8mMFJTkPgsWIJKfNc36L6P1FASqQ3H1yPE\nIN9bPB1wWCREkI4B0pxFYUdEKMIq4JuXcpY8nLhkS7zIZ//gWJR61B0kwVxrpbjf\nmB8UfBb3AgMBAAECggEAevpf2xfjepTdG4U4rkE55vQD75+xyTsH5rJQb9X2EjAO\nHE0Tnf/sEjKZj5eLJpEw+d7V/+cjqY2RD4C8CCUVAY0/6cctzF1OQAABmC98BnLn\nkufklAaN/q3YDkHzSF60ObOuM7VZjoOVn5EMKWbJN49ABbYTdUljlWgeezs4y4zy\nLpFNC2lD9kRcmGOZkF8c5NdfxCSQfwKCJF7tpoJYZpaTYusRcuDxy68X3k51pDEO\nGcxKjkhn4+Vh4yxn85dDl/KbaMGOMzPxtGhIs3CgXtUmn4MPtRAuwufHaX6SKcNL\nIfYf+ZVCPApbkPyGH9swfr3Ckh07zqHsfaYm+cQfAQKBgQC/du1wXFN0A4FhRhqT\ndPCq2oSS+KdDjTjLx7RyQ+FmZAwU1kpG0IHvKv2rxBI+C/eMyymTq/pmPKgBdyiR\nlxKWLU5hAP03e/BSOSL/FvkxJw6jcprNLlGbKd689LHB5KNc+TnIOJ223Q3xDfEJ\nWryje1BxGY+gcVNkk6IBGTZV1wKBgQCwF9xko8FFSpILNEXTtATDZjrajVFuecD1\nJQcww64QbglS0WSWzFrzNiMzSgz9x0NdWqGokqjM0aGnSulEcLLasj9OWZ6fTuve\nPe1n8J+s65NGAB6eZ9fvAYvVjc3dN5MuofcAhHN8aS+suYKyVTYiuIos/VtXbdb+\nPXWe8avj4QKBgFJVO+lzalebIknIMalzQgLWkOf6kULVObU3nXr9gbHcF+3l8G7f\nPuCwJgF1ATs5PiyHOMvNypGoR77JlOJ2ioGV3fyMxlbTrxZMh6YWJPZkC0FyCOtu\nnZ0RtjyfJMlyHmXermBRKFD4YgRksGALas8KOh9IlKCz2t6HNcUvKFRlAoGBAKqj\nhKNVeA0AVQNcdSnP8Sm0X+W3OajXfR9Q8WXUyVEMgCZr2JC0mJHD7VpfMLWfKW1G\nTQ8Ah2hq374wPlle6EI6plPzTl3L6Y7j7bFiICk94unbZdBUipAFrI6Vql7q4so2\nkxdCQnLVryguYDMVla8RqnwsSx4uxz55KgiK4emhAoGBAIx5c1FP+6+q1vJM+SgE\nOZZXUy8X78WnKEw9imM4Tkk4r6jM10PyHopuZr0+yXZ4A3Gw/bIplMVpGScqBr/I\nvk8aFXw8Fat+CWlNOs4JlyRVGlfzPQjst3KiiSBNyrOrEOf8/kDmKCuP7rvdp7pz\nuID6EdUn4in0E2RYnLVD7HcR\n-----END PRIVATE KEY-----\n"
+          ]
+        }
       },
       {
         "name": "custom-ecdsa",

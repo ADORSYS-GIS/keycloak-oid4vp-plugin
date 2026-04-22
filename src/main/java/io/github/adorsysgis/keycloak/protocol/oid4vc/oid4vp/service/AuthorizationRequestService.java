@@ -101,6 +101,9 @@ public class AuthorizationRequestService {
             VerifierConfig config, AuthenticationSessionModel authSession, String parentAuthSessionId) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
+        // Resolve and validate the certificate that will be advertised under x5c.
+        X509Certificate certificate = resolveAccessCertificate(config);
+
         // Generate random request and transaction IDs.
         // Different IDs are used to prevent unintended access to the status of this request.
         String requestId = generateRequestOrTransactionId(authSession);
@@ -118,8 +121,6 @@ public class AuthorizationRequestService {
         RequestObject requestObject = buildRequestObject(config, queryMap, requestId);
 
         // Sign request object
-        X509Certificate certificate =
-                Optional.ofNullable(config.getAccessCertificate()).orElse(getSelfSignedCertificate());
         String requestObjectJwt = signRequestObject(requestObject, certificate);
 
         // Build authorization request link
@@ -148,6 +149,16 @@ public class AuthorizationRequestService {
 
         // Pursue creation process
         return authorizationContext;
+    }
+
+    private X509Certificate resolveAccessCertificate(VerifierConfig config) {
+        X509Certificate configuredCertificate = config.getAccessCertificate();
+        if (configuredCertificate == null) {
+            return getSelfSignedCertificate();
+        }
+
+        ConfiguredAccessCertificateValidator.validate(configuredCertificate, signingKey);
+        return configuredCertificate;
     }
 
     /**
