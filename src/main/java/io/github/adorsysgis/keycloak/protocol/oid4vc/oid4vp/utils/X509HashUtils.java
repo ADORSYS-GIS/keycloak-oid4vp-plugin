@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
 import org.keycloak.common.util.Base64Url;
@@ -7,6 +8,9 @@ import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.jose.jws.crypto.HashUtils;
 
 public class X509HashUtils {
+
+    // Private constructor to prevent instantiation
+    private X509HashUtils() {}
 
     /**
      * Compute the x509_hash for the provided X.509 certificate.
@@ -20,8 +24,8 @@ public class X509HashUtils {
             byte[] encoded = Objects.requireNonNull(cert).getEncoded();
             byte[] hashedOutput = HashUtils.hash(JavaAlgorithm.SHA256, encoded);
             return Base64Url.encode(hashedOutput);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (CertificateEncodingException e) {
+            throw new RuntimeException("Error computing X509 hash of argument certificate", e);
         }
     }
 }

@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
@@ -72,6 +73,9 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         X509Certificate cert = PemUtils.decodeCertificate(accessCertificate);
         String expectedClientId = "x509_hash:" + X509HashUtils.computeX509Hash(cert);
         assertEquals(expectedClientId, clientIdParam, "Client ID should use x509_hash scheme");
+
+        // Request object must use configured client ID scheme
+        assertEquals(ClientIdScheme.X509_HASH, requestObject.getClientIdScheme());
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());

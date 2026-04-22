@@ -9,7 +9,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
@@ -233,7 +232,7 @@ public class AuthorizationRequestService {
                 .setResponseUri(responseUri)
                 .setResponseType(ResponseType.VP_TOKEN)
                 .setClientId(clientId)
-                .setClientIdScheme(ClientIdScheme.X509_SAN_DNS)
+                .setClientIdScheme(config.getClientIdScheme())
                 .setNonce(nonce)
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
