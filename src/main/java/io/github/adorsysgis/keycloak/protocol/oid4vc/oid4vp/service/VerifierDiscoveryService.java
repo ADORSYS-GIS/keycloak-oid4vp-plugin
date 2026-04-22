@@ -16,7 +16,6 @@ import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
-import org.keycloak.models.KeyManager;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -89,25 +88,22 @@ public class VerifierDiscoveryService {
      */
     public KeyWrapper getSigningKey(boolean requireSelfSignedCert) {
         logger.debug("Retrieving active key for signing OpenID4VP authorization requests");
-        KeyManager keyManager = session.keys();
         RealmModel realm = session.getContext().getRealm();
 
         // EC cryptography is widely preferred in the OpenID4VC ecosystem.
-        KeyWrapper key = keyManager.getActiveKey(realm, KeyUse.SIG, Algorithm.ES256);
-
-        // Fall back to available key if ES256 is not available or its certificate missing.
-        if (key == null || (requireSelfSignedCert && key.getCertificate() == null)) {
-            key = session.keys()
-                    .getKeysStream(realm)
-                    .filter(k -> k.getStatus().isActive()
-                            && k.getUse() == KeyUse.SIG
-                            && (!requireSelfSignedCert || k.getCertificate() != null))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException(String.format(
-                            "No active signing key found (requireSelfSignedCert = %s)", requireSelfSignedCert)));
-        }
-
-        return key;
+        // Favor ES256 keys but fall back to any active signing key if no such key is available.
+        return session.keys()
+                .getKeysStream(realm)
+                .filter(k -> k.getStatus().isActive()
+                        && k.getUse() == KeyUse.SIG
+                        && (!requireSelfSignedCert || k.getCertificate() != null))
+                .min((k1, k2) -> {
+                    boolean isK1ES256 = Algorithm.ES256.equals(k1.getAlgorithm());
+                    boolean isK2ES256 = Algorithm.ES256.equals(k2.getAlgorithm());
+                    return Boolean.compare(isK2ES256, isK1ES256);
+                })
+                .orElseThrow(() -> new IllegalStateException(String.format(
+                        "No active signing key found (requireSelfSignedCert = %s)", requireSelfSignedCert)));
     }
 
     public String getDnsNameClientId() {

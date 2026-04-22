@@ -90,9 +90,6 @@ public class AuthorizationRequestService {
             VerifierConfig config, AuthenticationSessionModel authSession, String parentAuthSessionId) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
-        // Resolve and validate the certificate that will be advertised under x5c.
-        X509Certificate certificate = resolveAccessCertificate(config);
-
         // Generate random request and transaction IDs.
         // Different IDs are used to prevent unintended access to the status of this request.
         String requestId = generateRequestOrTransactionId(authSession);
@@ -102,10 +99,13 @@ public class AuthorizationRequestService {
         // the request object, so updated client metadata are picked up as intended.
         EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(config.getResponseMode());
 
-        // Discover signing key and client metadata
+        // Discover signing key
         KeyWrapper signingKey = discoverSigningKey(config);
-        X509Certificate certificate = Optional.ofNullable(config.getAccessCertificate())
-                .orElseGet(() -> getSelfSignedCertificate(signingKey));
+
+        // Resolve and validate the certificate that will be advertised under x5c.
+        X509Certificate certificate = resolveAccessCertificate(config, signingKey);
+
+        // Discover client metadata
         ClientMetadata clientMetadata =
                 discoveryService.getClientMetadata(config.getClientIdScheme(), certificate, encryptionKey);
 
@@ -148,10 +148,10 @@ public class AuthorizationRequestService {
         return authorizationContext;
     }
 
-    private X509Certificate resolveAccessCertificate(VerifierConfig config) {
+    private X509Certificate resolveAccessCertificate(VerifierConfig config, KeyWrapper signingKey) {
         X509Certificate configuredCertificate = config.getAccessCertificate();
         if (configuredCertificate == null) {
-            return getSelfSignedCertificate();
+            return getSelfSignedCertificate(signingKey);
         }
 
         ConfiguredAccessCertificateValidator.validate(configuredCertificate, signingKey);
