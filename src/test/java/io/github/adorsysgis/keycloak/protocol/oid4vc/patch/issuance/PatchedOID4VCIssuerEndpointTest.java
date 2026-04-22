@@ -32,5 +32,13 @@ public class PatchedOID4VCIssuerEndpointTest {
         // Case 4: null/empty
         assertNull(PatchedOID4VCIssuerEndpoint.patchWalletRequest(null));
         assertEquals("", PatchedOID4VCIssuerEndpoint.patchWalletRequest(""));
+
+        // Case 5: invalid JSON (should be forwarded as-is)
+        String invalidJson = "{\"invalid\": ";
+        assertEquals(invalidJson, PatchedOID4VCIssuerEndpoint.patchWalletRequest(invalidJson));
+
+        // Case 6: whitespace-only payload (should be returned unchanged)
+        String whitespace = "   ";
+        assertEquals(whitespace, PatchedOID4VCIssuerEndpoint.patchWalletRequest(whitespace));
     }
 }
