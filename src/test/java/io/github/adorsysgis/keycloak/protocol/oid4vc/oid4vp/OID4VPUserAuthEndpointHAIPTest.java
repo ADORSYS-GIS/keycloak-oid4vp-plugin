@@ -34,6 +34,7 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.PemUtils;
 import org.keycloak.crypto.KeyType;
 import org.keycloak.crypto.KeyUse;
+import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
@@ -111,6 +112,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         assertNotNull(jwk.getKeyId(), "A key ID is mandatory");
         assertEquals(KeyType.EC, jwk.getKeyType());
         assertEquals(KeyUse.ENC.getSpecName(), jwk.getPublicKeyUse());
+        assertEquals(JWEConstants.ECDH_ES, jwk.getAlgorithm());
         assertNull(jwk.getOtherClaims().get(ECTestUtils.JWK_SECRET_D_FIELD));
 
         // Request object must explicitly advertise support encryption algs

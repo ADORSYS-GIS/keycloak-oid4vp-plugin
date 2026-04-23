@@ -11,7 +11,6 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.crypto.Algorithm;
-import org.keycloak.crypto.CryptoUtils;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.jose.jwe.JWEConstants;
@@ -34,8 +33,7 @@ public class VerifierDiscoveryService {
 
     private static final Logger logger = Logger.getLogger(VerifierDiscoveryService.class);
 
-    public static final List<String> SUPPORTED_ENC_ALGS =
-            List.of(JWEConstants.A128GCM, JWEConstants.A192GCM, JWEConstants.A256GCM);
+    public static final List<String> SUPPORTED_ENC_ALGS = List.of(JWEConstants.A256GCM);
 
     private final KeycloakSession session;
 
@@ -136,6 +134,7 @@ public class VerifierDiscoveryService {
     }
 
     private List<String> getSupportedSignatureAlgorithms() {
-        return CryptoUtils.getSupportedAsymmetricSignatureAlgorithms(session);
+        // TODO: CryptoUtils.getSupportedAsymmetricSignatureAlgorithms(session);
+        return List.of(Algorithm.ES256);
     }
 }

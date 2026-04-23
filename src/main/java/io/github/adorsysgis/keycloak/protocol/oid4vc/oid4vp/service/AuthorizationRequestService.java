@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.naming.ldap.LdapName;
@@ -241,10 +242,12 @@ public class AuthorizationRequestService {
                 .setVerifierInfo(verifierInfo);
 
         // Append presentation request
-        if (config.getQueryLanguage().equals(QueryLanguage.DIF_PRESENTATION_EXCHANGE)) {
+        QueryLanguage ql = config.getQueryLanguage();
+        if (ql.equals(QueryLanguage.ALL) || ql.equals(QueryLanguage.DIF_PRESENTATION_EXCHANGE)) {
             // Kept for backward compatibility with Draft 20 wallets
             requestObject.setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
-        } else {
+        }
+        if (ql.equals(QueryLanguage.ALL) || ql.equals(QueryLanguage.DCQL_QUERY)) {
             requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
         }
 
@@ -268,7 +271,7 @@ public class AuthorizationRequestService {
     private String signRequestObject(RequestObject requestObject, KeyWrapper signingKey, X509Certificate certificate) {
         logger.debug("Signing request object");
         Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
-        requestObject.issuedNow().exp(expiration);
+        requestObject.issuedNow().exp(expiration).id(UUID.randomUUID().toString());
 
         // Derive signer context
         String algorithm = signingKey.getAlgorithmOrDefault();
