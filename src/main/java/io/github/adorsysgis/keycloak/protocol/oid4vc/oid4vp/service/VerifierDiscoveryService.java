@@ -33,7 +33,7 @@ public class VerifierDiscoveryService {
 
     private static final Logger logger = Logger.getLogger(VerifierDiscoveryService.class);
 
-    public static final List<String> SUPPORTED_ENC_ALGS = List.of(JWEConstants.A128GCM);
+    public static final List<String> SUPPORTED_ENC_ALGS = List.of(JWEConstants.A256GCM);
 
     private final KeycloakSession session;
 

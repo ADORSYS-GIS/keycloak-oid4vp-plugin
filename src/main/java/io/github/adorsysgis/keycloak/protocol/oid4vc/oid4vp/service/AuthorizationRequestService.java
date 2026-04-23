@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.naming.ldap.LdapName;
@@ -270,7 +271,7 @@ public class AuthorizationRequestService {
     private String signRequestObject(RequestObject requestObject, KeyWrapper signingKey, X509Certificate certificate) {
         logger.debug("Signing request object");
         Long expiration = Instant.now().plusSeconds(authSessionLifespanSecs).getEpochSecond();
-        requestObject.issuedNow().exp(expiration);
+        requestObject.issuedNow().exp(expiration).id(UUID.randomUUID().toString());
 
         // Derive signer context
         String algorithm = signingKey.getAlgorithmOrDefault();
