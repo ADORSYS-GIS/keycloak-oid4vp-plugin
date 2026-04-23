@@ -15,6 +15,7 @@ import org.keycloak.common.crypto.CryptoConstants;
 import org.keycloak.crypto.KeyType;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.jose.jwe.JWE;
+import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwe.JWEException;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jwk.JWKBuilder;
@@ -41,6 +42,7 @@ public class EphemeralKeyUtils {
 
             KeyPair kp = kpg.generateKeyPair();
             JWK pubJwk = JWKBuilder.create().ec(kp.getPublic(), KeyUse.ENC);
+            pubJwk.setAlgorithm(JWEConstants.ECDH_ES);
 
             return new EphemeralKey((ECPrivateKey) kp.getPrivate(), pubJwk);
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {

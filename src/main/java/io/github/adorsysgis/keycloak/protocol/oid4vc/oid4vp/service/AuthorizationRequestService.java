@@ -241,10 +241,12 @@ public class AuthorizationRequestService {
                 .setVerifierInfo(verifierInfo);
 
         // Append presentation request
-        if (config.getQueryLanguage().equals(QueryLanguage.DIF_PRESENTATION_EXCHANGE)) {
+        QueryLanguage ql = config.getQueryLanguage();
+        if (ql.equals(QueryLanguage.ALL) || ql.equals(QueryLanguage.DIF_PRESENTATION_EXCHANGE)) {
             // Kept for backward compatibility with Draft 20 wallets
             requestObject.setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
-        } else {
+        }
+        if (ql.equals(QueryLanguage.ALL) || ql.equals(QueryLanguage.DCQL_QUERY)) {
             requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
         }
 

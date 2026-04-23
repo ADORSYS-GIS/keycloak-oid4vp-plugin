@@ -8,6 +8,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusList
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -122,7 +123,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setType(ProviderConfigProperty.LIST_TYPE);
         property.setDefaultValue(QUERY_LANGUAGE_CONFIG_DEFAULT);
         property.setOptions(
-                List.of(QueryLanguage.DCQL_QUERY.getValue(), QueryLanguage.DIF_PRESENTATION_EXCHANGE.getValue()));
+                Stream.of(QueryLanguage.values()).map(QueryLanguage::getValue).toList());
         property.setHelpText("Query language specification for encoding presentation requests.");
         configProperties.add(property);
 

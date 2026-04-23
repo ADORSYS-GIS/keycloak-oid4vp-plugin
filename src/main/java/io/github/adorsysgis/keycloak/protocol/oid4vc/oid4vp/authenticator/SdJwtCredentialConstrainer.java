@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Constraints;
@@ -47,8 +48,12 @@ public class SdJwtCredentialConstrainer {
         credential.setMeta(meta);
         credential.setClaims(claims);
 
+        CredentialSet credentialSet = new CredentialSet();
+        credentialSet.setOptions(List.of(List.of(credential.getId())));
+
         DcqlQuery query = new DcqlQuery();
         query.setCredentials(List.of(credential));
+        query.setCredentialSets(List.of(credentialSet));
         return query;
     }
 

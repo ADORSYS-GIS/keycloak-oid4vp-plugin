@@ -46,6 +46,12 @@ public class SdJwtCredentialConstrainerTest {
                 .map(claim -> claim.getPath().getFirst())
                 .toList();
         assertEquals(map.requiredClaims(), paths);
+
+        // Assert credential sets
+        assertEquals(1, query.getCredentialSets().size());
+        var credentialSet = query.getCredentialSets().getFirst();
+        assertEquals(1, credentialSet.getOptions().size());
+        assertEquals(List.of(credential.getId()), credentialSet.getOptions().getFirst());
     }
 
     public static void assertPrexQuery(PresentationDefinition def, QueryMap map) {

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum QueryLanguage {
     DCQL_QUERY("dcql_query"),
     DIF_PRESENTATION_EXCHANGE("dif_presentation_exchange"),
-    ;
+    ALL("all");
 
     private final String value;
 

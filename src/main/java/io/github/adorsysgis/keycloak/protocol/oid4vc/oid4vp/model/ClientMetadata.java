@@ -16,7 +16,7 @@ import org.keycloak.jose.jwk.JSONWebKeySet;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ClientMetadata {
 
-    @JsonProperty("vp_formats")
+    @JsonProperty("vp_formats_supported")
     private VpFormat vpFormat;
 
     @JsonProperty("jwks")
