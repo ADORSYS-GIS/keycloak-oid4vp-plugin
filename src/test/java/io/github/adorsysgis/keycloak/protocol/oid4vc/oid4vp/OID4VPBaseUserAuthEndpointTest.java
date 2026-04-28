@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -26,7 +27,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -52,28 +52,20 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Helper for successful flows.
      */
     protected String testSuccessfulAuthentication(String sdJwt, TestOpts opts) throws Exception {
-        // Retrieve an authorization request
-        ApiFlowData apiFlow = opts.getAuthContext() == null ? startApiAuthorizationRequest() : null;
-        AuthorizationContext authContext =
-                Optional.ofNullable(opts.getAuthContext()).orElseGet(() -> apiFlow.authContext());
-        String codeVerifier = Optional.ofNullable(opts.getCodeVerifier())
-                .orElseGet(() -> apiFlow == null ? null : apiFlow.codeVerifier());
-        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        ApiFlowData apiFlow = resolveApiFlow(opts);
+        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
 
         // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        // Check auth status
-        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
-        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
-        assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
+        AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
 
         // Redeem authorization code when it is not disclosed in the status response
         String authCode = statusPayload.getAuthorizationCode();
         if (authCode == null) {
-            assertNotNull(codeVerifier, "Code verifier should not be null for API flows");
-            authCode = redeemAuthorizationCode(authContext.getTransactionId(), codeVerifier);
+            assertNotNull(apiFlow.codeVerifier(), "Code verifier should not be null for API flows");
+            authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
         }
 
         assertNotNull(authCode, "Authorization code should not be null");
@@ -83,6 +75,28 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         // Bubble up authorization code
         return authCode;
+    }
+
+    /**
+     * Helper for flows that should fail at authorization code redemption.
+     */
+    protected void testFailingCodeRedemption(
+            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
+            throws Exception {
+        ApiFlowData apiFlow = resolveApiFlow(opts);
+        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        assertSuccessfulAuthorizationStatus(apiFlow);
+
+        HttpResponse redemptionResponse =
+                redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
+        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
+        assertEquals(expectedError, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
     }
 
     /**
@@ -108,7 +122,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             throws Exception {
         // Retrieve an authorization request
         AuthorizationContext authContext =
-                Optional.ofNullable(opts.getAuthContext()).orElseGet(this::requestAuthorizationRequest);
+                opts.getAuthContext() == null ? requestAuthorizationRequest() : opts.getAuthContext();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
         if (opts.getOverridePresentationDefinitionId() != null) {
             requestObject.getPresentationDefinition().setId(opts.getOverridePresentationDefinitionId());
@@ -161,6 +175,31 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         assertEquals(AuthorizationContextStatus.ERROR, statusPayload.getStatus());
         assertEquals(expectedError, statusPayload.getError().getErrorString());
         assertTrue(statusPayload.getErrorDescription().contains(expectedErrorDescription));
+    }
+
+    private ApiFlowData resolveApiFlow(TestOpts opts) {
+        if (opts.getAuthContext() != null) {
+            return new ApiFlowData(opts.getAuthContext(), opts.getCodeVerifier());
+        }
+
+        ApiFlowData apiFlow = startApiAuthorizationRequest();
+        if (opts.getCodeVerifier() != null) {
+            return new ApiFlowData(apiFlow.authContext(), opts.getCodeVerifier());
+        }
+        return apiFlow;
+    }
+
+    private AuthorizationContext assertSuccessfulAuthorizationStatus(ApiFlowData apiFlow) throws Exception {
+        HttpResponse statusResponse =
+                fetchAuthenticationStatus(apiFlow.authContext().getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
+
+        if (apiFlow.codeVerifier() != null) {
+            assertNull(statusPayload.getAuthorizationCode(), "authorization_code must stay hidden for API flows");
+        }
+
+        return statusPayload;
     }
 
     /**

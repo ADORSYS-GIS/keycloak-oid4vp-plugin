@@ -91,8 +91,7 @@ public class AuthorizationRequestService {
             AuthenticationSessionModel authSession,
             String parentAuthSessionId,
             VerifierConfig config,
-            String codeChallenge,
-            String codeChallengeMethod) {
+            CodeChallengeDetails codeChallengeParams) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
         // Generate random request and transaction IDs.
@@ -134,8 +133,8 @@ public class AuthorizationRequestService {
                 .setRequestId(requestId)
                 .setTransactionId(transactionId)
                 .setParentAuthSessionId(parentAuthSessionId)
-                .setCodeChallenge(codeChallenge)
-                .setCodeChallengeMethod(codeChallengeMethod)
+                .setCodeChallenge(codeChallengeParams.codeChallenge())
+                .setCodeChallengeMethod(codeChallengeParams.codeChallengeMethod())
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink);
@@ -153,6 +152,11 @@ public class AuthorizationRequestService {
         // Pursue creation process
         return authorizationContext;
     }
+
+    /**
+     * Record to hold PKCE parameters for passing around concisely.
+     */
+    public record CodeChallengeDetails(String codeChallenge, String codeChallengeMethod) {}
 
     private X509Certificate resolveAccessCertificate(VerifierConfig config, KeyWrapper signingKey) {
         X509Certificate configuredCertificate = config.getAccessCertificate();

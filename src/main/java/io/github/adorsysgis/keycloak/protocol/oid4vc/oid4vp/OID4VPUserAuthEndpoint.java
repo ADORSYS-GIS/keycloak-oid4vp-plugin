@@ -258,13 +258,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     "Authorization has not completed successfully"));
         }
 
-        if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
-            throw new BadRequestException(errorResponse(
-                    Response.Status.BAD_REQUEST,
-                    OAuthErrorException.INVALID_REQUEST,
-                    "Authorization code must be completed through the bound OIDC session"));
-        }
-
         if (StringUtil.isBlank(authorizationContext.getCodeChallenge())
                 || StringUtil.isBlank(authorizationContext.getCodeChallengeMethod())) {
             throw new BadRequestException(errorResponse(
@@ -311,9 +304,13 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
         VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
 
+        // Wrap the PKCE parameters into the new CodeChallengeDetails record
+        var codeChallengeParams =
+                new AuthorizationRequestService.CodeChallengeDetails(codeChallenge, resolvedCodeChallengeMethod);
+
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                authSession, parentAuthSessionId, config, codeChallenge, resolvedCodeChallengeMethod);
+                authSession, parentAuthSessionId, config, codeChallengeParams);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -406,13 +403,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             return null;
         }
 
-        if (!hasCodeChallenge && !hasCodeChallengeMethod) {
-            throw new IllegalArgumentException(
-                    "Public API requests must provide a code challenge for authorization code redemption");
-        }
-
         if (!hasCodeChallenge || !hasCodeChallengeMethod) {
-            throw new IllegalArgumentException("Both code_challenge and code_challenge_method are required");
+            throw new IllegalArgumentException(
+                    "Public API requests must include both code_challenge and code_challenge_method");
         }
 
         if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeMethod)) {

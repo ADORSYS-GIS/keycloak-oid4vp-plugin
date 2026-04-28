@@ -13,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -128,16 +129,28 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Redeems an authorization code from a completed API authentication flow.
      */
     protected String redeemAuthorizationCode(String transactionId, String codeVerifier) throws IOException {
-        String url = getOid4vpEndpoint(OID4VPUserAuthEndpoint.AUTH_CODE_PATH);
-        HttpPost httpPost = new HttpPost(url);
-        httpPost.setEntity(new UrlEncodedFormEntity(List.of(
-                new BasicNameValuePair("transaction_id", transactionId),
-                new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, codeVerifier))));
-
-        HttpResponse response = httpClient.execute(httpPost);
+        HttpResponse response = redeemAuthorizationCodeResponse(transactionId, codeVerifier);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
         AuthorizationContext payload = parseAuthorizationContext(response);
         return payload.getAuthorizationCode();
+    }
+
+    /**
+     * Calls the authorization code redemption endpoint for API authentication flows.
+     */
+    protected HttpResponse redeemAuthorizationCodeResponse(String transactionId, String codeVerifier)
+            throws IOException {
+        String url = getOid4vpEndpoint(OID4VPUserAuthEndpoint.AUTH_CODE_PATH);
+        HttpPost httpPost = new HttpPost(url);
+
+        List<BasicNameValuePair> formParams = new ArrayList<>();
+        formParams.add(new BasicNameValuePair("transaction_id", transactionId));
+        if (codeVerifier != null) {
+            formParams.add(new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, codeVerifier));
+        }
+
+        httpPost.setEntity(new UrlEncodedFormEntity(formParams));
+        return httpClient.execute(httpPost);
     }
 
     /**

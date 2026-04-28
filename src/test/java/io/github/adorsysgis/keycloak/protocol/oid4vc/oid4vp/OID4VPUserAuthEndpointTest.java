@@ -7,7 +7,6 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
@@ -27,11 +26,8 @@ import java.util.Collection;
 import java.util.List;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -197,44 +193,18 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
-    public void shouldNotDiscloseAuthorizationCodeInStatus_ForApiFlows() throws Exception {
+    public void shouldRejectAuthorizationCodeRedemptionWithMissingVerifier() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
-        // Retrieve an authorization request with verifier binding
         ApiFlowData apiFlow = startApiAuthorizationRequest();
-        AuthorizationContext authContext = apiFlow.authContext();
-        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-
-        // Complete the OID4VP exchange
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        // Polling should reveal status, but not the redeemable authorization code
-        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
-        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
-        assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
-        assertNull(statusPayload.getAuthorizationCode(), "authorization_code must stay hidden for API flows");
-    }
-
-    @Test
-    public void shouldRedeemAuthorizationCodeWithValidVerifier_ForApiFlows() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Retrieve an authorization request with verifier binding
-        ApiFlowData apiFlow = startApiAuthorizationRequest();
-        AuthorizationContext authContext = apiFlow.authContext();
-        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-
-        // Complete the OID4VP exchange
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        // Redeem the code explicitly with the matching verifier
-        String authCode = redeemAuthorizationCode(authContext.getTransactionId(), apiFlow.codeVerifier());
-        assertNotNull(authCode);
-        assertAuthenticatingUser(TestOpts.getDefault(), authCode);
+        TestOpts opts = TestOpts.getDefault().setAuthorizationContext(apiFlow.authContext());
+        testFailingCodeRedemption(
+                sdJwt,
+                opts,
+                HttpStatus.SC_BAD_REQUEST,
+                OAuthErrorException.INVALID_GRANT,
+                "Authorization code verifier not valid");
     }
 
     @Test
@@ -242,27 +212,16 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
-        // Retrieve an authorization request with verifier binding
         ApiFlowData apiFlow = startApiAuthorizationRequest();
-        AuthorizationContext authContext = apiFlow.authContext();
-        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-
-        // Complete the OID4VP exchange
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        // Attempt to redeem with a wrong verifier
-        HttpPost httpPost = new HttpPost(getOid4vpEndpoint(OID4VPUserAuthEndpoint.AUTH_CODE_PATH));
-        httpPost.setEntity(new UrlEncodedFormEntity(List.of(
-                new BasicNameValuePair("transaction_id", authContext.getTransactionId()),
-                new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, "invalid-code-verifier"))));
-
-        HttpResponse codeResponse = httpClient.execute(httpPost);
-        assertEquals(HttpStatus.SC_BAD_REQUEST, codeResponse.getStatusLine().getStatusCode());
-
-        OAuth2ErrorRepresentation errorRep = parseErrorResponse(codeResponse);
-        assertEquals(OAuthErrorException.INVALID_GRANT, errorRep.getError());
-        assertEquals("Authorization code verifier not valid", errorRep.getErrorDescription());
+        TestOpts opts = TestOpts.getDefault()
+                .setAuthorizationContext(apiFlow.authContext())
+                .setCodeVerifier("invalid-code-verifier");
+        testFailingCodeRedemption(
+                sdJwt,
+                opts,
+                HttpStatus.SC_BAD_REQUEST,
+                OAuthErrorException.INVALID_GRANT,
+                "Authorization code verifier not valid");
     }
 
     @Test
