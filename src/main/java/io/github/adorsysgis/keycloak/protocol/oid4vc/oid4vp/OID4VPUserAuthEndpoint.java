@@ -40,8 +40,8 @@ import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
-import org.keycloak.utils.StringUtil;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Endpoint class for user authentication over
@@ -313,7 +313,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-              authSession, parentAuthSessionId, config, codeChallenge, resolvedCodeChallengeMethod);
+                authSession, parentAuthSessionId, config, codeChallenge, resolvedCodeChallengeMethod);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
