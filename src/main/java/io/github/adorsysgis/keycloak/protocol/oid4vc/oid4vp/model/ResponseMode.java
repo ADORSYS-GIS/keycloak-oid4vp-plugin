@@ -26,4 +26,14 @@ public enum ResponseMode {
     public String getValue() {
         return value;
     }
+
+    public static ResponseMode fromValue(String value) {
+        for (ResponseMode mode : ResponseMode.values()) {
+            if (mode.value.equalsIgnoreCase(value)) {
+                return mode;
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown response mode: " + value);
+    }
 }

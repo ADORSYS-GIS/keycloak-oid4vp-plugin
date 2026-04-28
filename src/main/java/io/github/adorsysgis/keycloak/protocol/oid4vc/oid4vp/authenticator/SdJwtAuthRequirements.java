@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
 import java.util.List;
@@ -10,7 +12,6 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakContext;
-import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.SdJwtCredentialBuilder;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
@@ -29,7 +30,6 @@ public class SdJwtAuthRequirements {
 
     private static final Logger logger = Logger.getLogger(SdJwtAuthRequirements.class);
 
-    private final ClaimCheck kbJwtAudCheck;
     private final List<String> expectedVcts;
     private final String expectedVctsPattern;
     private final String keycloakIssuerURI;
@@ -42,11 +42,6 @@ public class SdJwtAuthRequirements {
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting authentication requirements");
-
-        // We need to enforce that only credentials produced for this audience pass through.
-        // The audience is the client ID of the verifier, but some wallets prepend a scheme.
-        String kbJwtAud = context.getUri().getBaseUri().getHost();
-        this.kbJwtAudCheck = buildAudClaimCheck(kbJwtAud);
 
         // Reading authenticator configs
         Map<String, String> config =
@@ -97,10 +92,6 @@ public class SdJwtAuthRequirements {
         return enforceRevocationStatus;
     }
 
-    public boolean shouldVerifyIssuerClaim() {
-        return verifyIssuerClaim;
-    }
-
     /**
      * Constructs presentation definition as supported by keycloak-core.
      */
@@ -108,10 +99,9 @@ public class SdJwtAuthRequirements {
         var definition = SimplePresentationDefinition.builder();
         getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
 
-        definition.addClaimRequirement(SdJwtCredentialBuilder.VERIFIABLE_CREDENTIAL_TYPE_CLAIM, expectedVctsPattern);
+        definition.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
         if (verifyIssuerClaim) {
-            definition.addClaimRequirement(
-                    SdJwtCredentialBuilder.ISSUER_CLAIM, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+            definition.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
         }
         return definition.build();
     }
@@ -128,7 +118,8 @@ public class SdJwtAuthRequirements {
                 .build();
     }
 
-    public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce) {
+    public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce, String aud) {
+        ClaimCheck kbJwtAudCheck = buildAudClaimCheck(aud);
         return KeyBindingJwtVerificationOpts.builder()
                 .withKeyBindingRequired(true)
                 .withIatCheck(kbJwtMaxAllowedAge)

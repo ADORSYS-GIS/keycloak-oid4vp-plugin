@@ -46,6 +46,9 @@ public class OID4VCIssuerMetadataProviderTest {
             assertEquals("Example Credential Issuer", displayEn.getName());
             assertEquals("https://example.com/logo.png", displayEn.getLogo().getUri());
             assertEquals("Issuer Logo", displayEn.getLogo().getAltText());
+
+            assertNull(metadata.getCredentialResponseEncryption(), "credential_response_encryption should be omitted");
+            assertNull(metadata.getCredentialRequestEncryption(), "credential_request_encryption should be omitted");
         }
     }
 
@@ -57,6 +60,8 @@ public class OID4VCIssuerMetadataProviderTest {
             CredentialIssuer metadata = assertDoesNotThrow(() ->
                     retrieveCredentialIssuerMetadata(httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
             assertNull(metadata.getDisplay());
+            assertNull(metadata.getCredentialResponseEncryption(), "credential_response_encryption should be omitted");
+            assertNull(metadata.getCredentialRequestEncryption(), "credential_request_encryption should be omitted");
         }
     }
 

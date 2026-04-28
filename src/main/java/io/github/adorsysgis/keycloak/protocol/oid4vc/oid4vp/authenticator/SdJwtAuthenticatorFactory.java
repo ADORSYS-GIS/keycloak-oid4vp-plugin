@@ -1,10 +1,14 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -40,6 +44,22 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
 
     public static final String ENFORCE_REVOCATION_STATUS_CONFIG = "enforceRevocationStatus";
     public static final boolean ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT = false;
+
+    public static final String CLIENT_ID_SCHEME_CONFIG = "clientIdScheme";
+    public static final String CLIENT_ID_SCHEME_CONFIG_DEFAULT = ClientIdScheme.X509_SAN_DNS.getValue();
+
+    public static final String QUERY_LANGUAGE_CONFIG = "queryLanguage";
+    public static final String QUERY_LANGUAGE_CONFIG_DEFAULT = QueryLanguage.DCQL_QUERY.getValue();
+
+    public static final String RESPONSE_MODE_CONFIG = "responseMode";
+    public static final String RESPONSE_MODE_CONFIG_DEFAULT = ResponseMode.DIRECT_POST.getValue();
+
+    public static final String CUSTOM_URL_SCHEME_CONFIG = "customUrlScheme";
+    public static final String CUSTOM_URL_SCHEME_CONFIG_DEFAULT = "openid4vp://";
+
+    public static final String ACCESS_CERTIFICATE_CONFIG = "accessCertificate";
+
+    public static final String REGISTRATION_CERTIFICATE_CONFIG = "registrationCertificate";
 
     static {
         ProviderConfigProperty property;
@@ -86,6 +106,57 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setDefaultValue(KBJWT_MAX_AGE_CONFIG_DEFAULT);
         property.setHelpText(
                 "Define a maximum age of accepted key-binding JWTs as part of measures to protect against replay.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(CLIENT_ID_SCHEME_CONFIG);
+        property.setLabel("Client ID scheme");
+        property.setType(ProviderConfigProperty.LIST_TYPE);
+        property.setDefaultValue(CLIENT_ID_SCHEME_CONFIG_DEFAULT);
+        property.setOptions(List.of(ClientIdScheme.X509_SAN_DNS.getValue(), ClientIdScheme.X509_HASH.getValue()));
+        property.setHelpText("Client Identifier Prefix to conform to as per OpenID4VP spec.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(QUERY_LANGUAGE_CONFIG);
+        property.setLabel("Query language");
+        property.setType(ProviderConfigProperty.LIST_TYPE);
+        property.setDefaultValue(QUERY_LANGUAGE_CONFIG_DEFAULT);
+        property.setOptions(
+                Stream.of(QueryLanguage.values()).map(QueryLanguage::getValue).toList());
+        property.setHelpText("Query language specification for encoding presentation requests.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(RESPONSE_MODE_CONFIG);
+        property.setLabel("Response mode");
+        property.setType(ProviderConfigProperty.LIST_TYPE);
+        property.setDefaultValue(RESPONSE_MODE_CONFIG_DEFAULT);
+        property.setOptions(List.of(ResponseMode.DIRECT_POST.getValue(), ResponseMode.DIRECT_POST_JWT.getValue()));
+        property.setHelpText("How wallets should respond to authorization requests.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(CUSTOM_URL_SCHEME_CONFIG);
+        property.setLabel("Custom URL scheme");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setDefaultValue(CUSTOM_URL_SCHEME_CONFIG_DEFAULT);
+        property.setHelpText("Custom URL scheme for authorization requests.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(ACCESS_CERTIFICATE_CONFIG);
+        property.setLabel("Access certificate");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setHelpText(
+                "PEM-encoded certificate to include in the X5C header of request objects. Do not include PEM delimiters.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(REGISTRATION_CERTIFICATE_CONFIG);
+        property.setLabel("Registration certificate");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setHelpText("Opaque string to advertise under the verifier_info claim of request objects.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();

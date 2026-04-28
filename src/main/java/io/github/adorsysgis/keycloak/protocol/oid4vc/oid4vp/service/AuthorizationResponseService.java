@@ -24,7 +24,6 @@ import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.protocol.oid4vc.model.Format;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
@@ -83,8 +82,10 @@ public class AuthorizationResponseService {
         logger.debugf("Initializing authentication with extracted SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();
         String nonce = authContext.getRequestObject().getNonce();
+        String aud = authContext.getRequestObject().getClientId();
         processorSession.setAuthNote(SdJwtAuthenticator.SDJWT_TOKEN_KEY, sdJwtVp);
         processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
+        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
 
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");
@@ -226,10 +227,9 @@ public class AuthorizationResponseService {
 
         // Check that the submission's descriptor is of SD-JWT VP format
         var descriptor = submission.getDescriptorMap().getFirst();
-        if (!List.of(Format.SD_JWT_VC, Descriptor.Format.VC_SD_JWT.value())
+        if (!List.of(Descriptor.Format.VC_SD_JWT.value(), Descriptor.Format.DC_SD_JWT.value())
                 .contains(descriptor.getFormat().value())) {
-            String detailed = "SD-JWT VP token expected, but received: "
-                    + descriptor.getFormat().value();
+            String detailed = "SD-JWT VP token expected, but received: " + descriptor.getFormat();
             throw failWithHttpException(
                     ProcessingError.INVALID_PRESENTATION_SUBMISSION,
                     "Invalid presentation_submission",
@@ -301,10 +301,6 @@ public class AuthorizationResponseService {
                 expiration,
                 nonce,
                 OAuth2Constants.SCOPE_OPENID,
-                null,
-                null,
-                null,
-                null,
                 clientSession.getUserSession().getId());
 
         return OAuth2CodeParser.persistCode(session, clientSession, codeData);

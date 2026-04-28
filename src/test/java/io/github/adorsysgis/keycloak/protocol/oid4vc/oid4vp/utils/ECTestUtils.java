@@ -1,18 +1,28 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.AlgorithmParameters;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPrivateKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Objects;
+import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.crypto.KeyType;
 import org.keycloak.crypto.KeyWrapper;
+import org.keycloak.jose.jwe.JWE;
+import org.keycloak.jose.jwe.JWEConstants;
+import org.keycloak.jose.jwe.JWEException;
+import org.keycloak.jose.jwe.JWEHeader;
+import org.keycloak.jose.jwe.alg.JWEAlgorithmProvider;
+import org.keycloak.jose.jwe.enc.AesGcmJWEEncryptionProvider;
+import org.keycloak.jose.jwe.enc.JWEEncryptionProvider;
 import org.keycloak.jose.jwk.ECPublicJWK;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.util.JWKSUtils;
@@ -22,7 +32,7 @@ import org.keycloak.util.JWKSUtils;
  */
 public class ECTestUtils {
 
-    private static final String JWK_SECRET_D_FIELD = "d";
+    public static final String JWK_SECRET_D_FIELD = "d";
 
     public static JWK getECPublicJwk(JWK jwk) {
         jwk.setOtherClaims(ECTestUtils.JWK_SECRET_D_FIELD, null);
@@ -69,6 +79,28 @@ public class ECTestUtils {
             params.init(new ECGenParameterSpec(crvStdName));
             return params.getParameterSpec(ECParameterSpec.class);
         } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static String encryptMessage(String payload, ECPublicKey publicKey) {
+        return encryptMessage(payload, publicKey, JWEConstants.ECDH_ES, JWEConstants.A128GCM);
+    }
+
+    public static String encryptMessage(
+            String payload, ECPublicKey publicKey, String jweAlgorithmName, String jweEncryptionName) {
+        JWEAlgorithmProvider jweAlgorithmProvider =
+                CryptoIntegration.getProvider().getAlgorithmProvider(JWEAlgorithmProvider.class, jweAlgorithmName);
+        JWEEncryptionProvider jweEncryptionProvider = new AesGcmJWEEncryptionProvider(jweEncryptionName);
+
+        JWEHeader jweHeader = new JWEHeader(jweAlgorithmName, jweEncryptionName, null);
+        JWE jwe = new JWE().header(jweHeader).content(payload.getBytes(StandardCharsets.UTF_8));
+
+        jwe.getKeyStorage().setEncryptionKey(publicKey);
+
+        try {
+            return jwe.encodeJwe(jweAlgorithmProvider, jweEncryptionProvider);
+        } catch (JWEException e) {
             throw new RuntimeException(e);
         }
     }

@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Constraints;
@@ -13,7 +14,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Presentat
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.keycloak.protocol.oid4vc.model.Format;
+import org.keycloak.VCFormat;
 
 /**
  * Constructs a presentation definition for requesting an SD-JWT credential.
@@ -43,12 +44,16 @@ public class SdJwtCredentialConstrainer {
 
         Credential credential = new Credential();
         credential.setId(UUID.randomUUID().toString());
-        credential.setFormat(Format.SD_JWT_VC);
+        credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
 
+        CredentialSet credentialSet = new CredentialSet();
+        credentialSet.setOptions(List.of(List.of(credential.getId())));
+
         DcqlQuery query = new DcqlQuery();
         query.setCredentials(List.of(credential));
+        query.setCredentialSets(List.of(credentialSet));
         return query;
     }
 

@@ -39,7 +39,9 @@ public class VerifierDiscoveryServiceTest {
 
         @Override
         public String getActiveTestRealm() {
-            // The EC provider in this realm has no certificate
+            // The EC provider in this realm has no certificate,
+            // and no access certificate is configured,
+            // so self-signed certificates are required.
             return TEST_REALM_V2_NAME;
         }
 

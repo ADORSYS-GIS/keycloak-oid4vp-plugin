@@ -1,10 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.ClaimFormat;
-import java.util.Optional;
+import java.util.List;
+import org.keycloak.jose.jwk.JSONWebKeySet;
 
 /**
  * Model for Client Metadata.
@@ -16,27 +16,14 @@ import java.util.Optional;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ClientMetadata {
 
-    @JsonProperty("client_id")
-    private String clientId;
-
-    @JsonProperty("vp_formats")
+    @JsonProperty("vp_formats_supported")
     private VpFormat vpFormat;
 
-    public String getClientId() {
-        return clientId;
-    }
+    @JsonProperty("jwks")
+    private JSONWebKeySet jwks;
 
-    public ClientMetadata setClientId(String clientId) {
-        this.clientId = clientId;
-        return this;
-    }
-
-    @JsonIgnore
-    public String getSchemelessClientId() {
-        return Optional.ofNullable(clientId)
-                .map(id -> id.substring(id.indexOf(':') + 1))
-                .orElse(null);
-    }
+    @JsonProperty("encrypted_response_enc_values_supported")
+    private List<String> encryptedResponseEncValuesSupported;
 
     public VpFormat getVpFormat() {
         return vpFormat;
@@ -44,6 +31,24 @@ public class ClientMetadata {
 
     public ClientMetadata setVpFormat(VpFormat vpFormat) {
         this.vpFormat = vpFormat;
+        return this;
+    }
+
+    public JSONWebKeySet getJwks() {
+        return jwks;
+    }
+
+    public ClientMetadata setJwks(JSONWebKeySet jwks) {
+        this.jwks = jwks;
+        return this;
+    }
+
+    public List<String> getEncryptedResponseEncValuesSupported() {
+        return encryptedResponseEncValuesSupported;
+    }
+
+    public ClientMetadata setEncryptedResponseEncValuesSupported(List<String> encryptedResponseEncValuesSupported) {
+        this.encryptedResponseEncValuesSupported = encryptedResponseEncValuesSupported;
         return this;
     }
 

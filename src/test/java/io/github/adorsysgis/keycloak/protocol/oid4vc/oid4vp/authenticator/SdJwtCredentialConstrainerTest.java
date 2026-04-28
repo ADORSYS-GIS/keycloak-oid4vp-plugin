@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Constraints;
@@ -11,8 +10,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Filter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.keycloak.protocol.oid4vc.model.Format;
-import org.keycloak.util.JsonSerialization;
+import org.keycloak.VCFormat;
 
 public class SdJwtCredentialConstrainerTest {
 
@@ -28,12 +26,11 @@ public class SdJwtCredentialConstrainerTest {
     }
 
     @Test
-    void testGeneratePresentationDefinition() throws JsonProcessingException {
+    void testGeneratePresentationDefinition() {
         List<String> vcts = List.of("vct1", "vct2");
         List<String> claims = List.of("name", "email");
         QueryMap queryMap = new QueryMap(vcts, claims);
         PresentationDefinition def = constrainer.generatePresentationDefinition(queryMap);
-        System.out.println(JsonSerialization.mapper.writeValueAsString(def));
         assertPrexQuery(def, queryMap);
     }
 
@@ -41,7 +38,7 @@ public class SdJwtCredentialConstrainerTest {
         assertEquals(1, query.getCredentials().size());
         Credential credential = query.getCredentials().getFirst();
 
-        assertEquals(Format.SD_JWT_VC, credential.getFormat());
+        assertEquals(VCFormat.SD_JWT_VC, credential.getFormat());
         assertEquals(map.expectedVcts(), credential.getMeta().getVctValues());
         assertEquals(map.requiredClaims().size(), credential.getClaims().size());
 
@@ -49,6 +46,12 @@ public class SdJwtCredentialConstrainerTest {
                 .map(claim -> claim.getPath().getFirst())
                 .toList();
         assertEquals(map.requiredClaims(), paths);
+
+        // Assert credential sets
+        assertEquals(1, query.getCredentialSets().size());
+        var credentialSet = query.getCredentialSets().getFirst();
+        assertEquals(1, credentialSet.getOptions().size());
+        assertEquals(List.of(credential.getId()), credentialSet.getOptions().getFirst());
     }
 
     public static void assertPrexQuery(PresentationDefinition def, QueryMap map) {

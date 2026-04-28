@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -85,17 +86,24 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
 
-        // Assert: Ensure the request object contains a DCQL query and a legacy presentation definition
+        // Assert: Ensure the request object contains a legacy presentation definition
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
-        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
         SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
+
+        // Request object must use expected default client ID scheme
+        assertEquals(ClientIdScheme.X509_SAN_DNS, requestObject.getClientIdScheme());
 
         // Assert: client IDs are schemed across the request object
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
-        assertEquals(schemedClientId, requestObject.getClientMetadata().getClientId());
+
+        // Assert: Request object must not advertise symmetric signing algs
+        var dcSdJwt = requestObject.getClientMetadata().getVpFormat().getDcSdJwt();
+        for (var algs : List.of(dcSdJwt.getSdJwtAlgValues(), dcSdJwt.getKbJwtAlgValues())) {
+            assertFalse(algs.stream().anyMatch(alg -> alg.startsWith("HS")));
+        }
     }
 
     @Test
@@ -296,16 +304,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
-    public void shouldAuthenticateSuccessfully_VpTokenMapToDCQL() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Proceed to authentication
-        TestOpts opts = TestOpts.getDefault().setShouldPrepareLegacyResponse(false);
-        testSuccessfulAuthentication(sdJwt, opts);
-    }
-
-    @Test
     public void shouldAuthenticateSuccessfully_SchemedAud() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
@@ -371,17 +369,17 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Associate with an unknown session ID
         requestObject.setState("unknown-session-id");
+        requestObject.setResponseUri(getOid4vpEndpoint("/response/unknown-session-id"));
 
         // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response =
                 sendAuthorizationResponseWithVPToken("sd-jwt-vptoken", requestObject, TestOpts.getDefault());
-        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+        assertEquals(HttpStatus.SC_NOT_FOUND, response.getStatusLine().getStatusCode());
 
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(
-                "Authorization context not found for state (request ID): unknown-session-id",
-                errorRep.getErrorDescription());
+                "Authorization context not found for request ID: unknown-session-id", errorRep.getErrorDescription());
     }
 
     @Test
