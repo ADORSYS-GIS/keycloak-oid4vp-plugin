@@ -153,11 +153,6 @@ public class AuthorizationRequestService {
         return authorizationContext;
     }
 
-    /**
-     * Record to hold PKCE parameters for passing around concisely.
-     */
-    public record CodeChallengeDetails(String codeChallenge, String codeChallengeMethod) {}
-
     private X509Certificate resolveAccessCertificate(VerifierConfig config, KeyWrapper signingKey) {
         X509Certificate configuredCertificate = config.getAccessCertificate();
         if (configuredCertificate == null) {
@@ -327,4 +322,8 @@ public class AuthorizationRequestService {
             throw new RuntimeException("Failed to extract issuer CN from certificate", e);
         }
     }
+    /**
+     * Record to hold PKCE parameters for passing around concisely.
+     */
+    public record CodeChallengeDetails(String codeChallenge, String codeChallengeMethod) {}
 }

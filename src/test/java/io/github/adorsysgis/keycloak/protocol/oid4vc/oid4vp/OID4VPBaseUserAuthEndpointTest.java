@@ -79,6 +79,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
     /**
      * Helper for flows that should fail at authorization code redemption.
+     * Note: To test missing verifier scenarios, pass a TestOpts instance (e.g., TestOpts.getDefault())
+     * that has not been initialized with a codeVerifier. The default state of TestOpts is null.
      */
     protected void testFailingCodeRedemption(
             String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
@@ -121,11 +123,16 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
             throws Exception {
         // Retrieve an authorization request
+        // Refactored: Extracting opts.getAuthContext() to avoid repetitive calls and improve readability.
         AuthorizationContext authContext =
-                opts.getAuthContext() == null ? requestAuthorizationRequest() : opts.getAuthContext();
+                opts.getAuthContext() != null ? opts.getAuthContext() : requestAuthorizationRequest();
+
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-        if (opts.getOverridePresentationDefinitionId() != null) {
-            requestObject.getPresentationDefinition().setId(opts.getOverridePresentationDefinitionId());
+
+        // Refactored: Extracting override ID to avoid repetitive opts access.
+        String overrideId = opts.getOverridePresentationDefinitionId();
+        if (overrideId != null) {
+            requestObject.getPresentationDefinition().setId(overrideId);
         }
 
         // Prepare and send the OpenID4VP response to Keycloak

@@ -103,7 +103,11 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             authContext = startAuthentication(clientId, null, codeChallenge, codeChallengeMethod);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
-                    errorResponse(Response.Status.BAD_REQUEST, OAuthErrorException.INVALID_REQUEST, e.getMessage()), e);
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            "Invalid request parameters"),
+                    e);
         }
 
         AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
@@ -392,24 +396,23 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     private String validateOwnershipBinding(
             String parentAuthSessionId, String codeChallenge, String codeChallengeMethod) {
         boolean hasParentAuthSession = !StringUtil.isBlank(parentAuthSessionId);
-        boolean hasCodeChallenge = !StringUtil.isBlank(codeChallenge);
-        boolean hasCodeChallengeMethod = !StringUtil.isBlank(codeChallengeMethod);
 
-        if (hasParentAuthSession) {
-            if (hasCodeChallenge || hasCodeChallengeMethod) {
+        // Enforce PKCE requirements only for public API flows (flows without a parent OIDC session).
+        // OIDC-bound flows rely on the parent session state and do not require PKCE enforcement here.
+        if (!hasParentAuthSession) {
+            boolean hasCodeChallenge = !StringUtil.isBlank(codeChallenge);
+            boolean hasCodeChallengeMethod = !StringUtil.isBlank(codeChallengeMethod);
+
+            if (!hasCodeChallenge || !hasCodeChallengeMethod) {
                 throw new IllegalArgumentException(
-                        "OIDC-bound OpenID4VP flows do not accept code challenge parameters");
+                        "Authorization requests must include both code_challenge and code_challenge_method");
             }
-            return null;
-        }
 
-        if (!hasCodeChallenge || !hasCodeChallengeMethod) {
-            throw new IllegalArgumentException(
-                    "Public API requests must include both code_challenge and code_challenge_method");
-        }
+            if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeMethod)) {
+                throw new IllegalArgumentException("Only S256 code challenge method is supported");
+            }
 
-        if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeMethod)) {
-            throw new IllegalArgumentException("Only S256 code challenge method is supported");
+            return codeChallengeMethod;
         }
 
         return codeChallengeMethod;
