@@ -13,8 +13,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.util.JsonSerialization;
 
@@ -23,6 +25,7 @@ public final class Oid4vpClient {
 
     private final HttpClient http;
     private final DemoConfig cfg;
+    private final Map<String, String> codeVerifiersByTransactionId = new ConcurrentHashMap<>();
 
     public Oid4vpClient(HttpClient http, DemoConfig cfg) {
         this.http = http;
@@ -30,9 +33,18 @@ public final class Oid4vpClient {
     }
 
     public AuthorizationContext startAuthentication() throws Exception {
+        String codeVerifier = PkceUtils.generateCodeVerifier();
+        String codeChallenge =
+                PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
         String requestUrl = cfg.baseUrl() + "/realms/" + cfg.realm() + "/oid4vp-auth/request?client_id="
-                + urlEncode(cfg.clientId());
-        return getJson(requestUrl, AuthorizationContext.class);
+                + urlEncode(cfg.clientId())
+                + "&" + urlEncode(OAuth2Constants.CODE_CHALLENGE) + "=" + urlEncode(codeChallenge)
+                + "&" + urlEncode(OAuth2Constants.CODE_CHALLENGE_METHOD) + "="
+                + urlEncode(OAuth2Constants.PKCE_METHOD_S256);
+
+        AuthorizationContext authContext = getJson(requestUrl, AuthorizationContext.class);
+        codeVerifiersByTransactionId.put(authContext.getTransactionId(), codeVerifier);
+        return authContext;
     }
 
     public RequestObject resolveRequestObject(AuthorizationContext authContext) throws Exception {
@@ -61,6 +73,22 @@ public final class Oid4vpClient {
             Thread.sleep(sleep.toMillis());
         }
         throw new IllegalStateException("Timed out waiting for authentication status");
+    }
+
+    public String redeemAuthorizationCode(String transactionId) throws Exception {
+        String codeVerifier = codeVerifiersByTransactionId.get(transactionId);
+        if (codeVerifier == null) {
+            throw new IllegalStateException("No code verifier recorded for transaction: " + transactionId);
+        }
+
+        String codeUrl = cfg.baseUrl() + "/realms/" + cfg.realm() + "/oid4vp-auth/code";
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("transaction_id", transactionId);
+        form.put(OAuth2Constants.CODE_VERIFIER, codeVerifier);
+
+        AuthorizationContext response = postFormObject(codeUrl, form, AuthorizationContext.class);
+        codeVerifiersByTransactionId.remove(transactionId);
+        return response.getAuthorizationCode();
     }
 
     public void submitPresentation(RequestObject requestObject, String vpToken) throws Exception {
@@ -105,6 +133,13 @@ public final class Oid4vpClient {
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         ensureSuccess("POST", url, response);
         return JsonSerialization.readValue(response.body(), JsonNode.class);
+    }
+
+    private <T> T postFormObject(String url, Map<String, String> form, Class<T> clazz) throws Exception {
+        HttpRequest request = buildFormPost(url, form);
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        ensureSuccess("POST", url, response);
+        return JsonSerialization.readValue(response.body(), clazz);
     }
 
     private void postForm(String url, Map<String, String> form) throws Exception {

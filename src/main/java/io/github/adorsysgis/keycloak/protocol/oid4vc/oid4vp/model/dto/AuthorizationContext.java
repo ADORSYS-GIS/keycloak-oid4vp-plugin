@@ -50,6 +50,18 @@ public class AuthorizationContext {
     private String parentAuthSessionId;
 
     /**
+     * Code challenge bound to API-driven authorization code redemption.
+     */
+    @JsonProperty("code_challenge")
+    private String codeChallenge;
+
+    /**
+     * Code challenge method bound to API-driven authorization code redemption.
+     */
+    @JsonProperty("code_challenge_method")
+    private String codeChallengeMethod;
+
+    /**
      * The request object.
      */
     @JsonProperty("request_object")
@@ -127,6 +139,24 @@ public class AuthorizationContext {
 
     public AuthorizationContext setParentAuthSessionId(String parentAuthSessionId) {
         this.parentAuthSessionId = parentAuthSessionId;
+        return this;
+    }
+
+    public String getCodeChallenge() {
+        return codeChallenge;
+    }
+
+    public AuthorizationContext setCodeChallenge(String codeChallenge) {
+        this.codeChallenge = codeChallenge;
+        return this;
+    }
+
+    public String getCodeChallengeMethod() {
+        return codeChallengeMethod;
+    }
+
+    public AuthorizationContext setCodeChallengeMethod(String codeChallengeMethod) {
+        this.codeChallengeMethod = codeChallengeMethod;
         return this;
     }
 

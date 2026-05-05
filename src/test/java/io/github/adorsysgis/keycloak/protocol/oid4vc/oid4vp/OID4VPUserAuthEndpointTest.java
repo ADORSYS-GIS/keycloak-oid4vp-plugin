@@ -193,6 +193,43 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldRejectAuthorizationCodeRedemptionWithMissingVerifier() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Start a valid API authorization flow which generates a code_challenge.
+        ApiFlowData apiFlow = startApiAuthorizationRequest();
+
+        // This test will fail because the server enforces
+        // that a code_verifier must be provided when a code_challenge was present.
+        TestOpts opts = TestOpts.getDefault().setAuthorizationContext(apiFlow.authContext());
+
+        testFailingCodeRedemption(
+                sdJwt,
+                opts,
+                HttpStatus.SC_BAD_REQUEST,
+                OAuthErrorException.INVALID_GRANT,
+                "Authorization code verifier not valid");
+    }
+
+    @Test
+    public void shouldRejectAuthorizationCodeRedemptionWithInvalidVerifier() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        ApiFlowData apiFlow = startApiAuthorizationRequest();
+        TestOpts opts = TestOpts.getDefault()
+                .setAuthorizationContext(apiFlow.authContext())
+                .setCodeVerifier("invalid-code-verifier");
+        testFailingCodeRedemption(
+                sdJwt,
+                opts,
+                HttpStatus.SC_BAD_REQUEST,
+                OAuthErrorException.INVALID_GRANT,
+                "Authorization code verifier not valid");
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_SdJwtWithKid() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);

@@ -13,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
+import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -57,16 +59,27 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * A request is sent to the endpoint for this purpose.
      */
     protected AuthorizationContext requestAuthorizationRequest() {
+        return startApiAuthorizationRequest().authContext();
+    }
+
+    /**
+     * Request a fresh OpenID4VP authorization request from Keycloak together with a client-side verifier.
+     */
+    protected ApiFlowData startApiAuthorizationRequest() {
         try {
+            String codeVerifier = PkceUtils.generateCodeVerifier();
+            String codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
             URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
                     .addParameter("client_id", TEST_CLIENT_ID)
+                    .addParameter(OAuth2Constants.CODE_CHALLENGE, codeChallenge)
+                    .addParameter(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)
                     .build();
 
             HttpGet httpGet = new HttpGet(uri);
             HttpResponse response = httpClient.execute(httpGet);
             assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-            return parseAuthorizationContext(response);
+            return new ApiFlowData(parseAuthorizationContext(response), codeVerifier);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -110,6 +123,34 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         String url = getOid4vpEndpoint(String.format("/status/%s", transactionId));
         HttpGet httpGet = new HttpGet(url);
         return httpClient.execute(httpGet);
+    }
+
+    /**
+     * Redeems an authorization code from a completed API authentication flow.
+     */
+    protected String redeemAuthorizationCode(String transactionId, String codeVerifier) throws IOException {
+        HttpResponse response = redeemAuthorizationCodeResponse(transactionId, codeVerifier);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        AuthorizationContext payload = parseAuthorizationContext(response);
+        return payload.getAuthorizationCode();
+    }
+
+    /**
+     * Calls the authorization code redemption endpoint for API authentication flows.
+     */
+    protected HttpResponse redeemAuthorizationCodeResponse(String transactionId, String codeVerifier)
+            throws IOException {
+        String url = getOid4vpEndpoint(OID4VPUserAuthEndpoint.AUTH_CODE_PATH);
+        HttpPost httpPost = new HttpPost(url);
+
+        List<BasicNameValuePair> formParams = new ArrayList<>();
+        formParams.add(new BasicNameValuePair("transaction_id", transactionId));
+        if (codeVerifier != null) {
+            formParams.add(new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, codeVerifier));
+        }
+
+        httpPost.setEntity(new UrlEncodedFormEntity(formParams));
+        return httpClient.execute(httpPost);
     }
 
     /**
@@ -262,4 +303,6 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     protected record FormData(AuthorizationContext authContext, String actionUrl, BasicCookieStore cookieStore) {}
+
+    protected record ApiFlowData(AuthorizationContext authContext, String codeVerifier) {}
 }

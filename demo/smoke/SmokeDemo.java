@@ -43,9 +43,10 @@ public final class SmokeDemo {
         if (status.getStatus() != AuthorizationContextStatus.SUCCESS) {
             throw new IllegalStateException("Authentication failed: " + status.getErrorDescription());
         }
-        log("Authentication succeeded. Received authorization_code");
+        String authorizationCode = oid4vpClient.redeemAuthorizationCode(authContext.getTransactionId());
+        log("Authentication succeeded. Redeemed authorization_code");
 
-        JsonNode tokenResponse = oid4vpClient.exchangeAuthorizationCode(status.getAuthorizationCode());
+        JsonNode tokenResponse = oid4vpClient.exchangeAuthorizationCode(authorizationCode);
         String accessTokenStr = tokenResponse.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
         AccessToken accessToken = oid4vpClient.readAccessToken(accessTokenStr);
 

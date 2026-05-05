@@ -81,8 +81,8 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     @Test
     public void shouldFailAuthentication_IfOid4vpCodeNotBoundToOIDCSession() throws Exception {
         // This OpenID4VP authorization context is not tied to any browser OIDC session
-        AuthorizationContext authContext = requestAuthorizationRequest();
-        String authCode = completeOid4vpAuth(authContext);
+        ApiFlowData apiFlow = startApiAuthorizationRequest();
+        String authCode = completeOid4vpAuth(apiFlow);
         shouldFailAuthenticationWithAltAuthCode(authCode, "Authorization code was not issued for this OIDC session");
     }
 
@@ -112,6 +112,17 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         // Complete authentication with alternate context
         TestOpts opts =
                 TestOpts.getDefault().setAuthorizationContext(authContext).setShouldRetrieveAccessToken(false);
+        return testSuccessfulAuthentication(sdJwt, opts);
+    }
+
+    private String completeOid4vpAuth(ApiFlowData apiFlow) throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        TestOpts opts = TestOpts.getDefault()
+                .setAuthorizationContext(apiFlow.authContext())
+                .setCodeVerifier(apiFlow.codeVerifier())
+                .setShouldRetrieveAccessToken(false);
         return testSuccessfulAuthentication(sdJwt, opts);
     }
 

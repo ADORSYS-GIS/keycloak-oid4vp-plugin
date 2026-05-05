@@ -1,8 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
-
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
@@ -89,7 +88,10 @@ public class AuthorizationRequestService {
      * Creates a fresh authorization request for user authentication.
      */
     public AuthorizationContext createAuthorizationRequest(
-            VerifierConfig config, AuthenticationSessionModel authSession, String parentAuthSessionId) {
+            AuthenticationSessionModel authSession,
+            String parentAuthSessionId,
+            VerifierConfig config,
+            CodeChallengeDetails codeChallengeParams) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
         // Generate random request and transaction IDs.
@@ -131,6 +133,8 @@ public class AuthorizationRequestService {
                 .setRequestId(requestId)
                 .setTransactionId(transactionId)
                 .setParentAuthSessionId(parentAuthSessionId)
+                .setCodeChallenge(codeChallengeParams.codeChallenge())
+                .setCodeChallengeMethod(codeChallengeParams.codeChallengeMethod())
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink);
@@ -318,4 +322,8 @@ public class AuthorizationRequestService {
             throw new RuntimeException("Failed to extract issuer CN from certificate", e);
         }
     }
+    /**
+     * Record to hold PKCE parameters for passing around concisely.
+     */
+    public record CodeChallengeDetails(String codeChallenge, String codeChallengeMethod) {}
 }
