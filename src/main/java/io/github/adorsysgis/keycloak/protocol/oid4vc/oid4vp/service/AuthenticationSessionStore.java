@@ -67,6 +67,19 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
     }
 
     /**
+     * Retrieves authorization context by response code from the authentication session.
+     */
+    public AuthorizationContext getAuthorizationContextByResponseCode(String responseCode) {
+        AuthorizationContext authContext = getAuthorizationContext();
+        if (!Objects.equals(authContext.getResponseCode(), responseCode)) {
+            throw new IllegalArgumentException(
+                    "Authorization context does not match the provided response code: " + responseCode);
+        }
+
+        return authContext;
+    }
+
+    /**
      * Retrieves authorization context from the authentication session.
      */
     private AuthorizationContext getAuthorizationContext() {

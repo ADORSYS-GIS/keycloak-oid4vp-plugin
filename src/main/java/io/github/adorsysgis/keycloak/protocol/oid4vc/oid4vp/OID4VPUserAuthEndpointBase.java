@@ -1,9 +1,14 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
@@ -12,13 +17,16 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
+import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.AuthorizationEndpointBase;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.services.Urls;
 import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
+import org.keycloak.urls.UrlType;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -34,9 +42,25 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
     public static final String AUTH_SESSION_EOL_MARKER = "::";
 
     public static final String OID4VP_AUTH_FLOW = "oid4vp auth";
+    protected final String openID4VPRootUrl;
+    private final AuthenticationSessionManager authSessionManager;
 
     public OID4VPUserAuthEndpointBase(KeycloakSession session, EventBuilder event) {
         super(session, event);
+        this.openID4VPRootUrl = getOpenID4VPRootUrl(session);
+        this.authSessionManager = new AuthenticationSessionManager(session);
+    }
+
+    /**
+     * Returns the root URL path common to OpenID4VP routes.
+     */
+    public static String getOpenID4VPRootUrl(KeycloakSession session) {
+        KeycloakContext context = session.getContext();
+        String baseRealmUrl = Urls.realmIssuer(
+                context.getUri(UrlType.FRONTEND).getBaseUri(),
+                context.getRealm().getName());
+
+        return baseRealmUrl + "/" + OID4VPUserAuthEndpointFactory.PROVIDER_ID;
     }
 
     /**
@@ -139,6 +163,40 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
         authSession.setAction(AuthenticatedClientSessionModel.Action.AUTHENTICATE.name());
 
         return authSession;
+    }
+
+    /**
+     * Checks if session parameters match current cookie-tracked authentication session.
+     */
+    protected boolean matchesCookieTrackedAuthSession(String authSessionId, String loginActionUrl) {
+        String query = URI.create(loginActionUrl).getQuery();
+        List<NameValuePair> params = URLEncodedUtils.parse(query, StandardCharsets.UTF_8);
+
+        String clientId = getQueryParam(params, Constants.CLIENT_ID);
+        String tabId = getQueryParam(params, Constants.TAB_ID);
+        ClientModel client = realm.getClientByClientId(clientId);
+
+        AuthenticationSessionModel authSessionCookie =
+                authSessionManager.getCurrentAuthenticationSession(realm, client, tabId);
+        AuthenticationSessionModel authSession = getAuthSession(authSessionId).orElse(null);
+
+        return authSessionCookie != null
+                && authSession != null
+                && authSessionCookie
+                        .getParentSession()
+                        .getId()
+                        .equals(authSession.getParentSession().getId());
+    }
+
+    /**
+     * Retrieves query parameter value from a list of name-value pairs.
+     */
+    private static String getQueryParam(List<NameValuePair> params, String paramName) {
+        return params.stream()
+                .filter(p -> p.getName().equals(paramName))
+                .map(NameValuePair::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     /**

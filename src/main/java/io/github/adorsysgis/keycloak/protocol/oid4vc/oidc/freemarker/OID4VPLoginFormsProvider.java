@@ -4,8 +4,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import jakarta.ws.rs.core.UriBuilder;
-import java.net.URI;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Properties;
 import org.jboss.logging.Logger;
 import org.keycloak.forms.login.LoginFormsPages;
@@ -29,11 +29,14 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
     protected void createCommonAttributes(
             Theme theme, Locale locale, Properties messagesBundle, UriBuilder baseUriBuilder, LoginFormsPages page) {
         super.createCommonAttributes(theme, locale, messagesBundle, baseUriBuilder, page);
-        URI baseUri = baseUriBuilder.build();
+
+        // Retrieve the authentication session ID from the current context, if available
+        String authSessionId = Optional.ofNullable(authenticationSession)
+                .map(OID4VPUserAuthEndpointBase::getAuthSessionId)
+                .orElse(null);
 
         // Inject OID4VP specific attributes
-        String authSessionId = OID4VPUserAuthEndpointBase.getAuthSessionId(authenticationSession);
-        this.attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, oid4vp, baseUri, authSessionId));
+        this.attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, oid4vp, this.actionUri, authSessionId));
         logger.debugf("Injected OID4VPUserAuthBean into login form attributes for realm %s", realm.getName());
     }
 }
