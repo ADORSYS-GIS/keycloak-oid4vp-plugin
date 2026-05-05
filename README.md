@@ -22,16 +22,18 @@ versions for best results.
 Additionally, the following features of [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
 are supported:
 
-- **1.0-Draft20** ✅
-    - Client Identifier Scheme: `x509_san_dns`
-    - Response Mode: `direct_post`
+- **Draft20-compatible request/response behavior** ✅
+    - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
+    - Response Mode: `direct_post` and `direct_post.jwt`
     - Response Type: `vp_token`
-    - DIF Presentation Exchange
+    - Query Languages: DIF Presentation Exchange and DCQL
+    - Signed request object (`request_uri` dereferencing)
+    - Request object `x5c` support for verifier access certificate
 
-- **1.0-Final** ⚠️
-    - DCQL Query Language
-
-Confirmed support for 1.0-Final is pending further updates, review, and testing.
+- **1.0-Final alignment (ongoing)** ⚠️
+    - DCQL request/response model is supported
+    - `verifier_info` support for registration certificate injection
+    - Compatibility and interoperability hardening are still evolving
 
 ## Build the Plugin
 
@@ -95,9 +97,39 @@ you are encouraged to create a `docker-compose.override.yml` based on the provid
 This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to clients.
 By default, verbose errors are disabled (safe-by-default).
 
-For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see the
-documentation site sources in `docs/`, especially
-[`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc).
+For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see:
+
+- [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
+- [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
+
+### SdJwt authenticator configuration (deployment-focused)
+
+When configuring the `sd-jwt-authenticator` execution in a realm authentication flow, the most relevant options for
+production/interoperable deployments are:
+
+- `clientIdScheme`: use `x509_hash` (or `x509_san_dns`)
+- `queryLanguage`: use `dcql_query` (or `presentation_definition`)
+- `responseMode`: use `direct_post.jwt` when encrypted wallet responses are required
+- `customUrlScheme`: wallet invocation URL scheme, e.g. `openid4vp://` or `haip-vp://`
+- `accessCertificate`: base64 DER X.509 certificate content (PEM body without delimiters) advertised in request-object `x5c`
+- `registrationCertificate`: opaque registration certificate/JWT advertised via `verifier_info`
+
+Example (realm authenticator config JSON shape):
+
+```json
+{
+  "clientIdScheme": "x509_hash",
+  "queryLanguage": "dcql_query",
+  "responseMode": "direct_post.jwt",
+  "customUrlScheme": "openid4vp://",
+  "accessCertificate": "<base64-der-x509-cert>",
+  "registrationCertificate": "<registration-certificate-jwt-or-token>"
+}
+```
+
+This maps directly to common infrastructure variables such as:
+`sdjwt_client_id_scheme`, `sdjwt_query_language`, `sdjwt_response_mode`, `sdjwt_custom_url_scheme`,
+`sdjwt_access_certificate`, and `sdjwt_registration_certificate`.
 
 ## Documentation site (Antora)
 

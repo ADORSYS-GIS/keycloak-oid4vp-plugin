@@ -106,6 +106,66 @@ The integration of OpenID4VP authentication into the OIDC login flow is readily 
 Find the authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
 The single SdJwt authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs, including: the accepted credential types, the maximum age of VP tokens presented, and other parameters governing the verifier policy.
 
+=== Deployment configuration (x509_hash, direct_post.jwt, certificates)
+
+For production-like deployments (including wallet sandbox integrations), the following `sd-jwt-authenticator`
+settings are typically required:
+
+[cols="1,1,2"]
+|===
+|Setting |Example |Purpose
+
+|`clientIdScheme`
+|`x509_hash`
+|How `client_id` is built in authorization requests. `x509_hash` computes the hash from the configured access certificate.
+
+|`queryLanguage`
+|`dcql_query`
+|Request format for requested credential data (`dcql_query` or `presentation_definition`).
+
+|`responseMode`
+|`direct_post.jwt`
+|Enables encrypted authorization responses (`response` form field carrying JWE).
+
+|`customUrlScheme`
+|`openid4vp://`
+|Wallet invocation URL scheme embedded in authorization request links.
+
+|`accessCertificate`
+|`MIIC...`
+|Base64 DER X.509 certificate injected into request object `x5c` header.
+
+|`registrationCertificate`
+|`eyJ...`
+|Opaque registration certificate value exposed via `verifier_info`.
+|===
+
+Practical note:
+
+- With `responseMode=direct_post.jwt`, wallets must return the encrypted `response` parameter.
+- The plugin advertises an ephemeral ECDH encryption key via `client_metadata.jwks`.
+- If `accessCertificate` is omitted, the plugin falls back to a self-signed certificate strategy.
+
+Example authenticator configuration (realm JSON import format):
+
+[source,json]
+----
+{
+  "config": {
+    "clientIdScheme": "x509_hash",
+    "queryLanguage": "dcql_query",
+    "responseMode": "direct_post.jwt",
+    "customUrlScheme": "openid4vp://",
+    "accessCertificate": "<base64-der-x509-cert>",
+    "registrationCertificate": "<registration-certificate-jwt-or-token>"
+  }
+}
+----
+
+If you provision Keycloak using Terraform or similar tooling, this typically maps to variables like:
+`sdjwt_client_id_scheme`, `sdjwt_query_language`, `sdjwt_response_mode`,
+`sdjwt_custom_url_scheme`, `sdjwt_access_certificate`, `sdjwt_registration_certificate`.
+
 === Technical Configuration (Performance & Security)
 
 For details on certificate caching, lifespan, and other performance/security configurations, see link:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].
