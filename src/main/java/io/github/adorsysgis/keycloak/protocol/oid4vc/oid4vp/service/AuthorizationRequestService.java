@@ -143,6 +143,8 @@ public class AuthorizationRequestService {
         if (encryptionKey != null) {
             String privKey = EphemeralKeyUtils.toBase64String(encryptionKey.privateKey());
             authorizationContext.setEphemeralKey(privKey);
+            authorizationContext.setExpectedEncryptionKid(
+                    encryptionKey.publicKey().getKeyId());
         }
 
         // Store authorization context in the authentication session

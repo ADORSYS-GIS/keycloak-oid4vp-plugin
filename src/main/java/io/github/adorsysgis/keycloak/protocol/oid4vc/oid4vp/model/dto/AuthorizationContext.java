@@ -80,6 +80,12 @@ public class AuthorizationContext {
     private String ephemeralKey;
 
     /**
+     * Expected key identifier of the ephemeral response-encryption key.
+     */
+    @JsonProperty("expected_encryption_kid")
+    private String expectedEncryptionKid;
+
+    /**
      * An authorization code upon successful authorization.
      */
     @JsonProperty("authorization_code")
@@ -184,6 +190,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setEphemeralKey(String ephemeralKey) {
         this.ephemeralKey = ephemeralKey;
+        return this;
+    }
+
+    public String getExpectedEncryptionKid() {
+        return expectedEncryptionKid;
+    }
+
+    public AuthorizationContext setExpectedEncryptionKid(String expectedEncryptionKid) {
+        this.expectedEncryptionKid = expectedEncryptionKid;
         return this;
     }
 

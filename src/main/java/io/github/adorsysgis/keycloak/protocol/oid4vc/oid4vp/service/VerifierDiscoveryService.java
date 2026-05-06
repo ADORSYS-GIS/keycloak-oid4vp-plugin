@@ -33,7 +33,8 @@ public class VerifierDiscoveryService {
 
     private static final Logger logger = Logger.getLogger(VerifierDiscoveryService.class);
 
-    public static final List<String> SUPPORTED_ENC_ALGS = List.of(JWEConstants.A256GCM);
+    public static final List<String> SUPPORTED_ENC_ALGS = List.of(JWEConstants.A128GCM, JWEConstants.A256GCM);
+    public static final List<String> SUPPORTED_JWE_ALGS = List.of(JWEConstants.ECDH_ES);
 
     private final KeycloakSession session;
 
@@ -57,7 +58,9 @@ public class VerifierDiscoveryService {
         if (ephemeralKey != null) {
             JSONWebKeySet jwks = new JSONWebKeySet();
             jwks.setKeys(new JWK[] {ephemeralKey.publicKey()});
-            metadata.setJwks(jwks).setEncryptedResponseEncValuesSupported(SUPPORTED_ENC_ALGS);
+            metadata.setJwks(jwks)
+                    .setEncryptedResponseAlgValuesSupported(SUPPORTED_JWE_ALGS)
+                    .setEncryptedResponseEncValuesSupported(SUPPORTED_ENC_ALGS);
         }
 
         // Return aggregated metadata

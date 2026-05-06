@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_JWE_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -18,6 +19,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
@@ -25,8 +27,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.net.URI;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -37,9 +43,11 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
+import org.keycloak.jose.jwk.JWKParser;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * Testing compliance of the flow with requirements from the German wallet.
@@ -117,6 +125,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Request object must explicitly advertise support encryption algs
         assertEquals(SUPPORTED_ENC_ALGS, clientMetadata.getEncryptedResponseEncValuesSupported());
+        assertEquals(SUPPORTED_JWE_ALGS, clientMetadata.getEncryptedResponseAlgValuesSupported());
     }
 
     @Test
@@ -145,6 +154,67 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
         assertTrue(errorRep.getErrorDescription().contains("Authorization context expects encrypted response"));
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_WithUnsupportedAlg() throws Exception {
+        assertEncryptedJweRejected(JWEConstants.ECDH_ES_A128KW, JWEConstants.A128GCM, null, "jwe_alg_unsupported");
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_WithUnsupportedEnc() throws Exception {
+        assertEncryptedJweRejected(JWEConstants.ECDH_ES, JWEConstants.A192GCM, null, "jwe_enc_unsupported");
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_WithInvalidKid() throws Exception {
+        assertEncryptedJweRejected(JWEConstants.ECDH_ES, JWEConstants.A128GCM, "invalid-kid", "jwe_kid_mismatch");
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_MalformedJwe() throws Exception {
+        // Retrieve an authorization request
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("response", "malformed"))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Encrypted response is not a compact JWE"));
+    }
+
+    private void assertEncryptedJweRejected(String alg, String enc, String overrideKid, String expectedMessage)
+            throws Exception {
+        // Retrieve an authorization request
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        // Build minimal encrypted response payload
+        var dcql = requestObject.getDcqlQuery();
+        String credentialId = dcql.getCredentials().getFirst().getId();
+        var vpTokenMap = Map.of(credentialId, List.of("sd-jwt-vp-token"));
+        String payload = JsonSerialization.writeValueAsString(Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap));
+
+        // Encrypt with requested variations
+        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
+        var encKey =
+                (java.security.interfaces.ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        String kid = overrideKid == null ? encJwk.getKeyId() : overrideKid;
+        String encrypted = ECTestUtils.encryptMessage(payload, encKey, alg, enc, kid);
+
+        // Send OpenID4VP response
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("response", encrypted))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains(expectedMessage));
     }
 
     private ObjectNode getAuthConfig() {

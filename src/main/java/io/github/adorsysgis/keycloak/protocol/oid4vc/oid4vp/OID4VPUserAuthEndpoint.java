@@ -26,13 +26,17 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.security.interfaces.ECPrivateKey;
+import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwe.JWEException;
+import org.keycloak.jose.jwk.JWK;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -165,7 +169,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
                     ? new ResponseObject(vpToken, presentationSubmission, state)
-                    : decryptResponse(encryptedResponse, ephemeralKey);
+                    : decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
 
             String parsedState = responseObject.getState();
             if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
@@ -373,14 +377,95 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * @param encryptedResponse the assumed JWE encrypted response string
      * @param ephemeralKey the ephemeral key generated for the authentication session
      */
-    private ResponseObject decryptResponse(String encryptedResponse, String ephemeralKey) {
+    private ResponseObject decryptResponse(
+            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
         try {
+            validateJweProtectedHeader(encryptedResponse, authorizationContext);
             ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
             String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
             return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
         } catch (JWEException | IOException e) {
             logger.error("Failed to decrypt response", e);
             throw new IllegalArgumentException("Failed to decrypt and parse response", e);
+        }
+    }
+
+    /**
+     * Validate JWE protected header according to verifier metadata policy.
+     */
+    private static void validateJweProtectedHeader(String encryptedResponse, AuthorizationContext authorizationContext)
+            throws IOException {
+        String[] parts = encryptedResponse.split("\\.");
+        if (parts.length != 5) {
+            throw new IllegalArgumentException("Encrypted response is not a compact JWE");
+        }
+
+        byte[] decodedHeader = Base64.getUrlDecoder().decode(parts[0]);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> jweHeader = JsonSerialization.mapper.readValue(decodedHeader, Map.class);
+
+        String alg = (String) jweHeader.get("alg");
+        String enc = (String) jweHeader.get("enc");
+        String kid = (String) jweHeader.get("kid");
+
+        if (alg == null || enc == null) {
+            throw new IllegalArgumentException("jwe_header_invalid: missing alg or enc");
+        }
+
+        var clientMetadata = authorizationContext.getRequestObject().getClientMetadata();
+        List<String> allowedAlgs =
+                clientMetadata != null ? clientMetadata.getEncryptedResponseAlgValuesSupported() : null;
+        if (allowedAlgs == null || allowedAlgs.isEmpty()) {
+            allowedAlgs = List.of(JWEConstants.ECDH_ES);
+        }
+        if (!allowedAlgs.contains(alg)) {
+            throw new IllegalArgumentException("jwe_alg_unsupported: " + alg);
+        }
+
+        List<String> allowedEnc =
+                clientMetadata != null ? clientMetadata.getEncryptedResponseEncValuesSupported() : null;
+        // Final 1.0 default if verifier did not explicitly advertise supported enc values.
+        if (allowedEnc == null || allowedEnc.isEmpty()) {
+            allowedEnc = List.of(JWEConstants.A128GCM);
+        }
+        if (!allowedEnc.contains(enc)) {
+            throw new IllegalArgumentException("jwe_enc_unsupported: " + enc);
+        }
+
+        JWK[] keys = clientMetadata != null && clientMetadata.getJwks() != null
+                ? clientMetadata.getJwks().getKeys()
+                : null;
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("jwe_key_unavailable");
+        }
+        String expectedKid = authorizationContext.getExpectedEncryptionKid();
+        if (expectedKid == null) {
+            expectedKid = keys[0].getKeyId();
+        }
+        if (expectedKid != null && (kid == null || !expectedKid.equals(kid))) {
+            throw new IllegalArgumentException("jwe_kid_mismatch");
+        }
+
+        // Resolve selected key (prefer expected KID binding, fallback to first key)
+        JWK selectedKey = null;
+        if (expectedKid != null) {
+            for (JWK key : keys) {
+                if (expectedKid.equals(key.getKeyId())) {
+                    selectedKey = key;
+                    break;
+                }
+            }
+            if (selectedKey == null) {
+                throw new IllegalArgumentException("jwe_key_unavailable");
+            }
+        } else {
+            selectedKey = keys[0];
+        }
+
+        // Final 1.0 envelope consistency: if selected JWK declares alg, it must match JWE header alg
+        String keyAlg = selectedKey.getAlgorithm();
+        if (keyAlg != null && !keyAlg.equals(alg)) {
+            throw new IllegalArgumentException("jwe_alg_key_mismatch");
         }
     }
 
