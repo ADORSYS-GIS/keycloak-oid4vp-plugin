@@ -2,8 +2,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -58,7 +60,6 @@ import org.keycloak.utils.StringUtil;
 public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implements RealmResourceProvider {
 
     private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpoint.class);
-
     public static final String REQUEST_JWT_PATH = "/request.jwt";
     public static final String RESPONSE_URI_PATH = "/response";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
@@ -401,72 +402,80 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         byte[] decodedHeader = Base64.getUrlDecoder().decode(parts[0]);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> jweHeader = JsonSerialization.mapper.readValue(decodedHeader, Map.class);
-
-        String alg = (String) jweHeader.get("alg");
-        String enc = (String) jweHeader.get("enc");
-        String kid = (String) jweHeader.get("kid");
+        JsonNode jweHeader = JsonSerialization.mapper.readTree(decodedHeader);
+        String alg = getTextClaim(jweHeader, "alg");
+        String enc = getTextClaim(jweHeader, "enc");
+        String kid = getTextClaim(jweHeader, "kid");
 
         if (alg == null || enc == null) {
             throw new IllegalArgumentException("jwe_header_invalid: missing alg or enc");
         }
 
         var clientMetadata = authorizationContext.getRequestObject().getClientMetadata();
-        List<String> allowedAlgs =
-                clientMetadata != null ? clientMetadata.getEncryptedResponseAlgValuesSupported() : null;
-        if (allowedAlgs == null || allowedAlgs.isEmpty()) {
-            allowedAlgs = List.of(JWEConstants.ECDH_ES);
-        }
+        List<String> allowedAlgs = resolveAllowedAlgs(clientMetadata);
         if (!allowedAlgs.contains(alg)) {
             throw new IllegalArgumentException("jwe_alg_unsupported: " + alg);
         }
 
-        List<String> allowedEnc =
-                clientMetadata != null ? clientMetadata.getEncryptedResponseEncValuesSupported() : null;
-        // Final 1.0 default if verifier did not explicitly advertise supported enc values.
-        if (allowedEnc == null || allowedEnc.isEmpty()) {
-            allowedEnc = List.of(JWEConstants.A128GCM);
-        }
+        List<String> allowedEnc = resolveAllowedEnc(clientMetadata);
         if (!allowedEnc.contains(enc)) {
             throw new IllegalArgumentException("jwe_enc_unsupported: " + enc);
         }
 
-        JWK[] keys = clientMetadata != null && clientMetadata.getJwks() != null
-                ? clientMetadata.getJwks().getKeys()
-                : null;
+        JWK[] keys = resolveEncryptionKeys(clientMetadata);
         if (keys == null || keys.length == 0) {
             throw new IllegalArgumentException("jwe_key_unavailable");
         }
         String expectedKid = authorizationContext.getExpectedEncryptionKid();
-        if (expectedKid == null) {
-            expectedKid = keys[0].getKeyId();
+        if (kid == null) {
+            throw new IllegalArgumentException("jwe_kid_missing");
         }
-        if (expectedKid != null && (kid == null || !expectedKid.equals(kid))) {
+        if (expectedKid != null && !expectedKid.equals(kid)) {
             throw new IllegalArgumentException("jwe_kid_mismatch");
         }
 
-        // Resolve selected key (prefer expected KID binding, fallback to first key)
-        JWK selectedKey = null;
-        if (expectedKid != null) {
-            for (JWK key : keys) {
-                if (expectedKid.equals(key.getKeyId())) {
-                    selectedKey = key;
-                    break;
-                }
-            }
-            if (selectedKey == null) {
-                throw new IllegalArgumentException("jwe_key_unavailable");
-            }
-        } else {
-            selectedKey = keys[0];
-        }
+        // Resolve selected key by KID only.
+        JWK selectedKey = resolveSelectedKey(keys, kid);
 
         // Final 1.0 envelope consistency: if selected JWK declares alg, it must match JWE header alg
         String keyAlg = selectedKey.getAlgorithm();
         if (keyAlg != null && !keyAlg.equals(alg)) {
             throw new IllegalArgumentException("jwe_alg_key_mismatch");
         }
+    }
+
+    private static List<String> resolveAllowedAlgs(ClientMetadata clientMetadata) {
+        List<String> allowedAlgs =
+                clientMetadata != null ? clientMetadata.getEncryptedResponseAlgValuesSupported() : null;
+        return (allowedAlgs == null || allowedAlgs.isEmpty()) ? List.of(JWEConstants.ECDH_ES) : allowedAlgs;
+    }
+
+    private static List<String> resolveAllowedEnc(ClientMetadata clientMetadata) {
+        List<String> allowedEnc =
+                clientMetadata != null ? clientMetadata.getEncryptedResponseEncValuesSupported() : null;
+        // Final 1.0 default if verifier did not explicitly advertise supported enc values.
+        return (allowedEnc == null || allowedEnc.isEmpty()) ? List.of(JWEConstants.A128GCM) : allowedEnc;
+    }
+
+    private static JWK[] resolveEncryptionKeys(ClientMetadata clientMetadata) {
+        if (clientMetadata == null || clientMetadata.getJwks() == null) {
+            return null;
+        }
+        return clientMetadata.getJwks().getKeys();
+    }
+
+    private static JWK resolveSelectedKey(JWK[] keys, String expectedKid) {
+        for (JWK key : keys) {
+            if (expectedKid.equals(key.getKeyId())) {
+                return key;
+            }
+        }
+        throw new IllegalArgumentException("jwe_key_unavailable");
+    }
+
+    private static String getTextClaim(JsonNode node, String claimName) {
+        JsonNode claim = node.get(claimName);
+        return claim != null && claim.isTextual() ? claim.asText() : null;
     }
 
     /**
