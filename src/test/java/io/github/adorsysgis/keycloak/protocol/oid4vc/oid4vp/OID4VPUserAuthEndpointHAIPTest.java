@@ -86,6 +86,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
+        assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
 
         // Assert: Ensure the request object contains a DCQL query
         var queryMap = new SdJwtCredentialConstrainer.QueryMap(

@@ -94,6 +94,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
+        assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
 
         // Assert: Request object must not advertise symmetric signing algs
         var dcSdJwt = requestObject.getClientMetadata().getVpFormat().getDcSdJwt();

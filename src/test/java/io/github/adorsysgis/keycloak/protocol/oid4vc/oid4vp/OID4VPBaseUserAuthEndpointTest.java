@@ -58,6 +58,9 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        assertTrue(
+                response.getEntity().getContentType().getValue().startsWith("application/json"),
+                "response_uri endpoint should reply with application/json");
 
         AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
 
