@@ -59,6 +59,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public static final String RESPONSE_URI_PATH = "/response";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
     public static final String AUTH_CODE_PATH = "/code";
+    public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
 
     private final AuthorizationRequestService authorizationRequestService;
     private final AuthorizationResponseService authorizationResponseService;
@@ -120,12 +121,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      */
     @GET
     @Path(REQUEST_JWT_PATH + "/{requestId}")
-    @Produces(MediaType.TEXT_PLAIN)
+    @Produces(AUTH_REQ_JWT_MEDIA_TYPE)
     public Response getSignedRequestObject(@PathParam("requestId") String requestId) {
         logger.debug("Resolving request URI to signed request object...");
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
-        return CorsService.open().add(Response.ok(requestObjectJwt));
+        return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
     }
 
     /**

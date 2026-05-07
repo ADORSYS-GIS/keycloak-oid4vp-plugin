@@ -100,6 +100,13 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * A request is sent to the request_uri dereferencing endpoint to retrieve the request object.     *
      */
     protected String resolveSignedRequestObject(String authRequest) throws IOException {
+        HttpResponse response = resolveSignedRequestObjectResponse(authRequest);
+
+        // Parse and return the expected JWT response
+        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+    }
+
+    protected HttpResponse resolveSignedRequestObjectResponse(String authRequest) throws IOException {
         // Extract the request_uri parameter
         String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
                 .filter(p -> p.getName().equals("request_uri"))
@@ -111,9 +118,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         HttpGet httpGet = new HttpGet(requestUri);
         HttpResponse response = httpClient.execute(httpGet);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        // Parse and return the expected JWT response
-        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        return response;
     }
 
     /**
