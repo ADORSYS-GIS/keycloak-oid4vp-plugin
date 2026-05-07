@@ -30,6 +30,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
 import java.security.interfaces.ECPrivateKey;
+import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
@@ -218,12 +219,13 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         logger.debug("Handling redirect callback for same-device authentication...");
 
         AuthenticationSessionModel authSession = null;
+        AuthenticationSessionStore authStore;
         AuthorizationContext authContext;
 
         try {
             authSession = this.recoverAuthenticationSession(responseCode);
-            authContext =
-                    new AuthenticationSessionStore(authSession).getAuthorizationContextByResponseCode(responseCode);
+            authStore = new AuthenticationSessionStore(authSession);
+            authContext = authStore.getAuthorizationContextByResponseCode(responseCode);
         } catch (IllegalArgumentException e) {
             String msg = "Authorization context not found for response code: " + responseCode;
             logger.error(msg, e);
@@ -231,11 +233,18 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         // Check cookie-tracked session is consistent with this redirection attempt
-        if (!matchesCookieTrackedAuthSession(authContext.getParentAuthSessionId(), authContext.getLoginActionUrl())) {
+        if (!matchesCookieTrackedAuthSession(
+                authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
             String msg = "Authentication session does not match cookie-tracked session";
             logger.error(msg);
             return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
         }
+
+        // Invalidate current response code to prevent reuse.
+        // The field is not voided for it is used as a marker of same-device flows.
+        String newRandomResponseCode = AuthorizationRequestService.generateSessionBoundId(authSession);
+        authContext.setResponseCode(newRandomResponseCode);
+        authStore.storeAuthorizationContext(authContext);
 
         // Build redirect URI
         URI redirectUri = KeycloakUriBuilder.fromUri(authContext.getLoginActionUrl())

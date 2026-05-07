@@ -179,7 +179,7 @@ public class AuthorizationRequestService {
     /**
      * Generates a session-bound ID, e.g., a request ID or transaction ID.
      */
-    private static String generateSessionBoundId(AuthenticationSessionModel authSession) {
+    public static String generateSessionBoundId(AuthenticationSessionModel authSession) {
         return OID4VPUserAuthEndpointBase.getAuthSessionId(authSession)
                 + OID4VPUserAuthEndpointBase.AUTH_SESSION_EOL_MARKER
                 + generateRandomString();

@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.jboss.logging.Logger;
+import org.jspecify.annotations.NonNull;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatedClientSessionModel;
@@ -168,7 +169,7 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
     /**
      * Checks if session parameters match current cookie-tracked authentication session.
      */
-    protected boolean matchesCookieTrackedAuthSession(String authSessionId, String loginActionUrl) {
+    protected boolean matchesCookieTrackedAuthSession(String authSessionId, @NonNull String loginActionUrl) {
         String query = URI.create(loginActionUrl).getQuery();
         List<NameValuePair> params = URLEncodedUtils.parse(query, StandardCharsets.UTF_8);
 

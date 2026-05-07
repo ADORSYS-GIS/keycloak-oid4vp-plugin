@@ -113,6 +113,15 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
             TestOpts opts = TestOpts.getDefault().setShouldEnforceRedirectUri(true);
             assertAuthenticatingUser(opts, freshAuthCode);
             assertNotEquals("New code must be issued", authCode, freshAuthCode);
+
+            // Assert that callback URI can no longer be used at this point
+            ResteasyUriInfo uri = new ResteasyUriInfo(URI.create(redirectUri));
+            String responseCode = uri.getPathSegments().getLast().getPath();
+            shouldFailSameDeviceRedirection(
+                    httpClient,
+                    redirectUri,
+                    HttpStatus.SC_NOT_FOUND,
+                    "Authorization context not found for response code: " + responseCode);
         }
     }
 
