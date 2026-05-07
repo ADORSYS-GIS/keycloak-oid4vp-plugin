@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,6 @@ import org.keycloak.utils.StringUtil;
 public class ResponseObject {
 
     public static final String VP_TOKEN_KEY = "vp_token";
-    public static final String PRESENTATION_SUBMISSION_KEY = "presentation_submission";
     public static final String STATE_KEY = "state";
 
     // This field is a String in Draft 20, and a Map<String, List<String>> in 1.0 final.
@@ -36,19 +34,13 @@ public class ResponseObject {
     @JsonDeserialize(using = VpTokenDeserializer.class)
     private Object vpToken;
 
-    @JsonProperty(PRESENTATION_SUBMISSION_KEY)
-    @JsonDeserialize(using = PresentationSubmissionDeserializer.class)
-    @Deprecated
-    private PresentationSubmission presentationSubmission;
-
     @JsonProperty(STATE_KEY)
     private String state;
 
     ResponseObject() {}
 
-    public ResponseObject(String vpToken, String presentationSubmission, String state) throws JsonProcessingException {
+    public ResponseObject(String vpToken, String state) throws JsonProcessingException {
         this.vpToken = parseVpToken(vpToken);
-        this.presentationSubmission = parsePresentationSubmission(presentationSubmission);
         this.state = state;
     }
 
@@ -64,30 +56,12 @@ public class ResponseObject {
         }
     }
 
-    public static PresentationSubmission parsePresentationSubmission(String presentationSubmission)
-            throws JsonProcessingException {
-        if (StringUtil.isBlank(presentationSubmission)) {
-            return null;
-        }
-
-        return JsonSerialization.mapper.readValue(presentationSubmission, PresentationSubmission.class);
-    }
-
     public Object getVpToken() {
         return vpToken;
     }
 
     public ResponseObject setVpToken(Object vpToken) {
         this.vpToken = vpToken;
-        return this;
-    }
-
-    public PresentationSubmission getPresentationSubmission() {
-        return presentationSubmission;
-    }
-
-    public ResponseObject setPresentationSubmission(PresentationSubmission presentationSubmission) {
-        this.presentationSubmission = presentationSubmission;
         return this;
     }
 
@@ -106,15 +80,6 @@ public class ResponseObject {
         public Object deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
             String raw = getValueAsString(p);
             return parseVpToken(raw);
-        }
-    }
-
-    private static class PresentationSubmissionDeserializer extends JsonDeserializer<Object> {
-
-        @Override
-        public Object deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-            String raw = getValueAsString(p);
-            return parsePresentationSubmission(raw);
         }
     }
 

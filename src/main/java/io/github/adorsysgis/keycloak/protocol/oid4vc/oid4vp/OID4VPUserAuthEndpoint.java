@@ -139,7 +139,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
-            @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
             @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
 
@@ -164,7 +163,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         ResponseObject responseObject;
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
-                    ? new ResponseObject(vpToken, presentationSubmission, state)
+                    ? new ResponseObject(vpToken, state)
                     : decryptResponse(encryptedResponse, ephemeralKey);
 
             String parsedState = responseObject.getState();
