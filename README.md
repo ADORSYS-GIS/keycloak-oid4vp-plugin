@@ -99,8 +99,10 @@ By default, verbose errors are disabled (safe-by-default).
 
 For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see:
 
-- [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
-- [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
+- Authentication flow and provider configuration:
+  [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
+- Technical performance/security tuning:
+  [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
 
 ### SdJwt authenticator configuration (deployment-focused)
 
@@ -127,9 +129,10 @@ Example (realm authenticator config JSON shape):
 }
 ```
 
-This maps directly to common infrastructure variables such as:
-`sdjwt_client_id_scheme`, `sdjwt_query_language`, `sdjwt_response_mode`, `sdjwt_custom_url_scheme`,
-`sdjwt_access_certificate`, and `sdjwt_registration_certificate`.
+If you provision realms via Terraform, map these values to your own deployment variables.
+Variable names are deployment-specific and are not provided by Keycloak out of the box.
+For a fuller configuration reference, see
+[`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 
 ## Documentation site (Antora)
 
