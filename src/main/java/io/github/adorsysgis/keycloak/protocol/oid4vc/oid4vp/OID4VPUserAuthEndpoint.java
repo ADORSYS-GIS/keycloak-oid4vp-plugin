@@ -9,6 +9,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
@@ -143,6 +144,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public Response processAuthorizationResponse(
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
+            @FormParam(OAuth2Constants.ERROR) String error,
+            @FormParam(OAuth2Constants.ERROR_DESCRIPTION) String errorDescription,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
             @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
             @FormParam(ResponseObject.STATE_KEY) String state) {
@@ -156,6 +159,27 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         String ephemeralKey = authorizationContext.getEphemeralKey();
         boolean expectsEncrypted = StringUtils.isNotBlank(ephemeralKey);
         boolean hasEncrypted = StringUtils.isNotBlank(encryptedResponse);
+        boolean hasWalletError = StringUtils.isNotBlank(error);
+
+        if (expectsEncrypted && !hasEncrypted && hasWalletError) {
+            if (StringUtils.isNotBlank(state) && !requestId.equals(state)) {
+                throw new BadRequestException(errorResponse(
+                        Response.Status.BAD_REQUEST,
+                        OAuthErrorException.INVALID_REQUEST,
+                        String.format("State param must match requestId. requestId: %s, state: %s", requestId, state)));
+            }
+
+            String walletErrorDescription =
+                    StringUtils.isBlank(errorDescription) ? error : String.format("%s: %s", error, errorDescription);
+
+            authorizationContext
+                    .setStatus(AuthorizationContextStatus.ERROR)
+                    .setError(ProcessingError.VP_TOKEN_AUTH_ERROR)
+                    .setErrorDescription("Wallet returned error: " + walletErrorDescription);
+            new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
+            return CorsService.open().add(Response.ok(Map.of()));
+        }
+
         if (expectsEncrypted != hasEncrypted) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -412,7 +436,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         var clientMetadata = authorizationContext.getRequestObject().getClientMetadata();
-        List<String> allowedAlgs = resolveAllowedAlgs(clientMetadata);
+        List<String> allowedAlgs = resolveAllowedAlgs();
         if (!allowedAlgs.contains(alg)) {
             throw new IllegalArgumentException("jwe_alg_unsupported: " + alg);
         }
@@ -437,23 +461,23 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         // Resolve selected key by KID only.
         JWK selectedKey = resolveSelectedKey(keys, kid);
 
-        // Final 1.0 envelope consistency: if selected JWK declares alg, it must match JWE header alg
+        // Envelope consistency: if selected JWK declares alg, it must match JWE header alg
         String keyAlg = selectedKey.getAlgorithm();
         if (keyAlg != null && !keyAlg.equals(alg)) {
             throw new IllegalArgumentException("jwe_alg_key_mismatch");
         }
     }
 
-    private static List<String> resolveAllowedAlgs(ClientMetadata clientMetadata) {
-        List<String> allowedAlgs =
-                clientMetadata != null ? clientMetadata.getEncryptedResponseAlgValuesSupported() : null;
-        return (allowedAlgs == null || allowedAlgs.isEmpty()) ? List.of(JWEConstants.ECDH_ES) : allowedAlgs;
+    private static List<String> resolveAllowedAlgs() {
+        // The OID4VP spec defines encrypted_response_enc_values_supported in client_metadata, but not
+        // encrypted_response_alg_values_supported. We enforce our supported key management algs server-side.
+        return List.of(JWEConstants.ECDH_ES);
     }
 
     private static List<String> resolveAllowedEnc(ClientMetadata clientMetadata) {
         List<String> allowedEnc =
                 clientMetadata != null ? clientMetadata.getEncryptedResponseEncValuesSupported() : null;
-        // Final 1.0 default if verifier did not explicitly advertise supported enc values.
+        // Use the spec default when verifier did not explicitly advertise supported enc values.
         return (allowedEnc == null || allowedEnc.isEmpty()) ? List.of(JWEConstants.A128GCM) : allowedEnc;
     }
 

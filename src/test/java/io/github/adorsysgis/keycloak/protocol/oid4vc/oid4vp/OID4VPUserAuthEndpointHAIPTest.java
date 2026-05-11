@@ -5,7 +5,6 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_JWE_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -22,6 +21,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.net.URI;
@@ -125,7 +126,6 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Request object must explicitly advertise support encryption algs
         assertEquals(SUPPORTED_ENC_ALGS, clientMetadata.getEncryptedResponseEncValuesSupported());
-        assertEquals(SUPPORTED_JWE_ALGS, clientMetadata.getEncryptedResponseAlgValuesSupported());
     }
 
     @Test
@@ -154,6 +154,29 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
         assertTrue(errorRep.getErrorDescription().contains("Authorization context expects encrypted response"));
+    }
+
+    @Test
+    public void shouldAcceptUnencryptedWalletError_WhenEncryptedResponseIsExpected() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(
+                new BasicNameValuePair(OAuth2Constants.ERROR, OAuthErrorException.ACCESS_DENIED),
+                new BasicNameValuePair(OAuth2Constants.ERROR_DESCRIPTION, "wallet canceled presentation"),
+                new BasicNameValuePair(ResponseObject.STATE_KEY, authContext.getRequestId()))));
+
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        assertEquals(HttpStatus.SC_OK, statusResponse.getStatusLine().getStatusCode());
+        AuthorizationContext status = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
+        assertEquals(ProcessingError.VP_TOKEN_AUTH_ERROR, status.getError());
+        assertTrue(status.getErrorDescription().contains("Wallet returned error: access_denied"));
+        assertTrue(status.getErrorDescription().contains("wallet canceled presentation"));
     }
 
     @Test

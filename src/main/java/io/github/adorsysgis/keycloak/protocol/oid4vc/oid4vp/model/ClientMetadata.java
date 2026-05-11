@@ -25,9 +25,6 @@ public class ClientMetadata {
     @JsonProperty("encrypted_response_enc_values_supported")
     private List<String> encryptedResponseEncValuesSupported;
 
-    @JsonProperty("encrypted_response_alg_values_supported")
-    private List<String> encryptedResponseAlgValuesSupported;
-
     public VpFormat getVpFormat() {
         return vpFormat;
     }
@@ -52,15 +49,6 @@ public class ClientMetadata {
 
     public ClientMetadata setEncryptedResponseEncValuesSupported(List<String> encryptedResponseEncValuesSupported) {
         this.encryptedResponseEncValuesSupported = encryptedResponseEncValuesSupported;
-        return this;
-    }
-
-    public List<String> getEncryptedResponseAlgValuesSupported() {
-        return encryptedResponseAlgValuesSupported;
-    }
-
-    public ClientMetadata setEncryptedResponseAlgValuesSupported(List<String> encryptedResponseAlgValuesSupported) {
-        this.encryptedResponseAlgValuesSupported = encryptedResponseAlgValuesSupported;
         return this;
     }
 
