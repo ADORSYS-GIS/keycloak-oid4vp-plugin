@@ -145,6 +145,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Assert SAN in X5C if of type DNS (2)
         List<?> sanEntry = (List<?>) sans.stream().toList().getFirst();
+        assertNotNull(sanEntry, "SAN entry should not be null");
         assertEquals(2, sanEntry.get(0), "Must be of SAN type DNS");
 
         // Assert SAN in X5C matches client ID
@@ -203,7 +204,10 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // This test will fail because the server enforces
         // that a code_verifier must be provided when a code_challenge was present.
-        TestOpts opts = TestOpts.getDefault().setAuthorizationContext(apiFlow.authContext());
+        //
+        // By overriding the auth context and not the code verifier, the latter
+        // will be missing during code redemption, causing the expected failure.
+        TestOpts opts = TestOpts.getDefault().setAuthContext(apiFlow.authContext());
 
         testFailingCodeRedemption(
                 sdJwt,
@@ -219,9 +223,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
         ApiFlowData apiFlow = startApiAuthorizationRequest();
-        TestOpts opts = TestOpts.getDefault()
-                .setAuthorizationContext(apiFlow.authContext())
-                .setCodeVerifier("invalid-code-verifier");
+        TestOpts opts =
+                TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier("invalid-code-verifier");
+
         testFailingCodeRedemption(
                 sdJwt,
                 opts,

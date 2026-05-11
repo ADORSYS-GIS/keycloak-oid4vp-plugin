@@ -42,12 +42,27 @@ public class AuthorizationContext {
     private String requestId;
 
     /**
+     * Yet another unguessable code associated with the authorization request.
+     * In same-device flows, prompt the wallet to redirect to a URI embedding
+     * this code upon successful OpenID4VP authentication.
+     */
+    @JsonProperty("response_code")
+    private String responseCode;
+
+    /**
      * Reference parent authentication session if any. This is used to link the
      * authorization context to an existing authentication session, for example
      * in the case of an OIDC login.
      */
     @JsonProperty("parent_auth_session_id")
     private String parentAuthSessionId;
+
+    /**
+     * Form action URL connecting back to parent authentication session.
+     * Handy for completing redirection in same-device flows.
+     */
+    @JsonProperty("login_action_url")
+    private String loginActionUrl;
 
     /**
      * Code challenge bound to API-driven authorization code redemption.
@@ -133,12 +148,30 @@ public class AuthorizationContext {
         return this;
     }
 
+    public String getResponseCode() {
+        return responseCode;
+    }
+
+    public AuthorizationContext setResponseCode(String responseCode) {
+        this.responseCode = responseCode;
+        return this;
+    }
+
     public String getParentAuthSessionId() {
         return parentAuthSessionId;
     }
 
     public AuthorizationContext setParentAuthSessionId(String parentAuthSessionId) {
         this.parentAuthSessionId = parentAuthSessionId;
+        return this;
+    }
+
+    public String getLoginActionUrl() {
+        return loginActionUrl;
+    }
+
+    public AuthorizationContext setLoginActionUrl(String loginActionUrl) {
+        this.loginActionUrl = loginActionUrl;
         return this;
     }
 

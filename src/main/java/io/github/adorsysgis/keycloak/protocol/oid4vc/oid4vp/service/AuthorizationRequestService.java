@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
+
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
@@ -79,7 +81,7 @@ public class AuthorizationRequestService {
 
         // Initialize discovery service
         this.discoveryService = new VerifierDiscoveryService(session);
-        this.openID4VPRootUrl = discoveryService.getOpenID4VPRootUrl();
+        this.openID4VPRootUrl = OID4VPUserAuthEndpointBase.getOpenID4VPRootUrl(session);
 
         // Read the authentication session lifespan from the realm configuration
         RealmModel realm = session.getContext().getRealm();
@@ -90,16 +92,20 @@ public class AuthorizationRequestService {
      * Creates a fresh authorization request for user authentication.
      */
     public AuthorizationContext createAuthorizationRequest(
-            AuthenticationSessionModel authSession,
-            String parentAuthSessionId,
             VerifierConfig config,
+            AuthenticationSessionModel authSession,
+            OIDCAuthSession oidcAuthSession,
             CodeChallengeDetails codeChallengeParams) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
         // Generate random request and transaction IDs.
         // Different IDs are used to prevent unintended access to the status of this request.
-        String requestId = generateRequestOrTransactionId(authSession);
-        String transactionId = generateRequestOrTransactionId(authSession);
+        String requestId = generateSessionBoundId(authSession);
+        String transactionId = generateSessionBoundId(authSession);
+
+        // Generate response code to attach to context for same-device responses
+        oidcAuthSession = Optional.ofNullable(oidcAuthSession).orElse(new OIDCAuthSession(null, null, false));
+        String responseCode = oidcAuthSession.enableSameDeviceResponse() ? generateSessionBoundId(authSession) : null;
 
         // Generate ephemeral encryption keys if direct_post.jwt. Must be done before creating
         // the request object, so updated client metadata are picked up as intended.
@@ -134,12 +140,19 @@ public class AuthorizationRequestService {
                 .setStatus(AuthorizationContextStatus.PENDING)
                 .setRequestId(requestId)
                 .setTransactionId(transactionId)
-                .setParentAuthSessionId(parentAuthSessionId)
-                .setCodeChallenge(codeChallengeParams.codeChallenge())
-                .setCodeChallengeMethod(codeChallengeParams.codeChallengeMethod())
+                .setParentAuthSessionId(oidcAuthSession.authSessionId())
+                .setLoginActionUrl(oidcAuthSession.loginActionUrl())
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
-                .setAuthorizationRequest(authorizationRequestLink);
+                .setAuthorizationRequest(authorizationRequestLink)
+                .setResponseCode(responseCode);
+
+        // Attach code challenge details for ownership binding if present
+        if (codeChallengeParams != null) {
+            authorizationContext
+                    .setCodeChallenge(codeChallengeParams.codeChallenge())
+                    .setCodeChallengeMethod(codeChallengeParams.codeChallengeMethod());
+        }
 
         // Attach ephemeral key if generated
         if (encryptionKey != null) {
@@ -166,9 +179,9 @@ public class AuthorizationRequestService {
     }
 
     /**
-     * Generates a request or transaction ID.
+     * Generates a session-bound ID, e.g., a request ID or transaction ID.
      */
-    private static String generateRequestOrTransactionId(AuthenticationSessionModel authSession) {
+    public static String generateSessionBoundId(AuthenticationSessionModel authSession) {
         return OID4VPUserAuthEndpointBase.getAuthSessionId(authSession)
                 + OID4VPUserAuthEndpointBase.AUTH_SESSION_EOL_MARKER
                 + generateRandomString();
