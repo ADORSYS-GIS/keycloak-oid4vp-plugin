@@ -39,7 +39,7 @@ public class OID4VPUserAuthBean {
 
     private final KeycloakSession session;
     private final RealmModel realm;
-    private final URI baseUri;
+    private final URI actionUri;
     private final String authSessionId;
 
     private final OID4VPUserAuthEndpoint oid4vp;
@@ -49,12 +49,12 @@ public class OID4VPUserAuthBean {
             KeycloakSession session,
             RealmModel realm,
             OID4VPUserAuthEndpoint oid4vp,
-            URI baseUri,
+            URI actionUri,
             String authSessionId) {
         this.session = session;
         this.realm = realm;
         this.oid4vp = oid4vp;
-        this.baseUri = baseUri;
+        this.actionUri = actionUri;
         this.authSessionId = authSessionId;
     }
 
@@ -87,7 +87,9 @@ public class OID4VPUserAuthBean {
      * URL to continue OIDC flow upon successful OID4VP authentication
      */
     public String getLoginActionUrl() {
-        return UriBuilder.fromUri(baseUri)
+        // Overwrite path to point to OID4VPLoginActionsService
+        return UriBuilder.fromUri(actionUri)
+                .replacePath(null)
                 .path(ServiceUrlConstants.REALM_INFO_PATH)
                 .path(OID4VPLoginActionsServiceFactory.PROVIDER_ID)
                 .path(OID4VPLoginActionsService.OID4VP_AUTH_LOGIN_PATH)
@@ -115,27 +117,34 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        AuthorizationContext authContext = oid4vp.startAuthentication(clientId, authSessionId);
+        AuthorizationContext authContext = startOpenID4VPAuthentication(clientId, false);
+        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, true);
 
-        // Convert authorization request to QR code
+        // Convert authorization request to QR code (cross-device)
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
 
-        // Build URL for polling status
+        // Build URL for polling status (cross-device)
         String authStatusUrl = buildAuthStatusUrl(authContext.getTransactionId());
 
         // Gather context
         authContextBean = new AuthContextBean()
-                .setAuthReqLink(authContext.getAuthorizationRequest())
                 .setAuthReqQrCode(authReqQrCode)
-                .setAuthStatusUrl(authStatusUrl);
+                .setAuthStatusUrl(authStatusUrl)
+                .setAuthReqLink(authContextSameDevice.getAuthorizationRequest());
 
         return authContextBean;
+    }
+
+    private AuthorizationContext startOpenID4VPAuthentication(String clientId, boolean enableSameDeviceResponse) {
+        // TODO: Generate and pass code challenge details for ownership binding and enhanced security in started subflow
+        return oid4vp.startAuthentication(
+                clientId, new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse), null);
     }
 
     private String buildAuthStatusUrl(String transactionId) {
         URI currentUri = session.getContext().getUri().getBaseUri();
         return UriBuilder.fromUri(currentUri)
-                .path("/realms/{realm}")
+                .path(ServiceUrlConstants.REALM_INFO_PATH)
                 .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
                 .path(OID4VPUserAuthEndpoint.AUTH_STATUS_PATH)
                 .build(realm.getName(), transactionId)
@@ -164,6 +173,11 @@ public class OID4VPUserAuthBean {
             throw new RuntimeException("QR code creating failed", e);
         }
     }
+
+    /**
+     * Track session data of OIDC authentication
+     */
+    public record OIDCAuthSession(String authSessionId, String loginActionUrl, boolean enableSameDeviceResponse) {}
 
     /**
      * Parameters for OpenID4VP authentication
