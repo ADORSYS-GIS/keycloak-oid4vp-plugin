@@ -8,6 +8,7 @@
         <div class="pf-v5-u-p-md pf-v5-u-text-align-center">
             <img src="${oid4vp.authContext.authReqQrCode}" 
                  style="max-width: 300px;"
+                 id="kc-oid4vp-qrcode"
                  alt="QR Code" />
         </div>
 
@@ -15,7 +16,7 @@
             <p>${msg('oid4vpSameDevicePrompt')}</p>
             <p>
                 <a href="${oid4vp.authContext.authReqLink}"
-                   id="kc-oid4vp-link" target="_blank">
+                   id="kc-oid4vp-link">
                     ${msg('oid4vpSameDeviceLinkLbl')}
                 </a>
             </p>

@@ -14,6 +14,8 @@ import static org.mockito.ArgumentMatchers.nullable;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.UUID;
@@ -74,7 +76,8 @@ public class OID4VPUserAuthBeanTest {
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
         Mockito.lenient()
-                .when(oid4vp.startAuthentication(eq(TEST_CLIENT_ID), nullable(String.class)))
+                .when(oid4vp.startAuthentication(
+                        eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), nullable(CodeChallengeDetails.class)))
                 .thenReturn(authContext);
     }
 
