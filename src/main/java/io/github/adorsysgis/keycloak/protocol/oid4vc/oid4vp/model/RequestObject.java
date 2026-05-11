@@ -32,6 +32,9 @@ public class RequestObject extends JsonWebToken {
     @JsonProperty("response_uri")
     private String responseUri;
 
+    @JsonProperty("wallet_nonce")
+    private String walletNonce;
+
     @JsonProperty("client_id")
     private String clientId;
 
@@ -99,6 +102,15 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setResponseUri(String responseUri) {
         this.responseUri = responseUri;
+        return this;
+    }
+
+    public String getWalletNonce() {
+        return walletNonce;
+    }
+
+    public RequestObject setWalletNonce(String walletNonce) {
+        this.walletNonce = walletNonce;
         return this;
     }
 

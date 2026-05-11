@@ -103,16 +103,63 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * A request is sent to the request_uri dereferencing endpoint to retrieve the request object.     *
      */
     protected String resolveSignedRequestObject(String authRequest) throws IOException {
-        // Extract the request_uri parameter
+        return resolveSignedRequestObject(authRequest, null, null, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+    }
+
+    protected String resolveSignedRequestObject(String authRequest, String walletNonce, String walletMetadata)
+            throws IOException {
+        return resolveSignedRequestObject(
+                authRequest, walletNonce, walletMetadata, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+    }
+
+    protected String resolveSignedRequestObjectWithGet(String authRequest) throws IOException {
         String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
                 .filter(p -> p.getName().equals("request_uri"))
                 .map(NameValuePair::getValue)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Missing query param: request_uri"));
 
-        // Send resolution request
-        HttpGet httpGet = new HttpGet(requestUri);
-        HttpResponse response = httpClient.execute(httpGet);
+        HttpResponse response = httpClient.execute(new HttpGet(requestUri));
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+    }
+
+    protected String resolveSignedRequestObject(
+            String authRequest, String walletNonce, String walletMetadata, String acceptHeader) throws IOException {
+        // Extract the request_uri parameter
+        List<NameValuePair> params = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8);
+        String requestUri = params.stream()
+                .filter(p -> p.getName().equals("request_uri"))
+                .map(NameValuePair::getValue)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing query param: request_uri"));
+        String requestUriMethod = params.stream()
+                .filter(p -> p.getName().equals("request_uri_method"))
+                .map(NameValuePair::getValue)
+                .findFirst()
+                .orElse("get");
+
+        HttpResponse response;
+        if ("post".equals(requestUriMethod)) {
+            HttpPost httpPost = new HttpPost(requestUri);
+            if (acceptHeader != null) {
+                httpPost.setHeader(HttpHeaders.ACCEPT, acceptHeader);
+            }
+            List<BasicNameValuePair> postParams = new ArrayList<>();
+            if (walletNonce != null) {
+                postParams.add(new BasicNameValuePair("wallet_nonce", walletNonce));
+            }
+            if (walletMetadata != null) {
+                postParams.add(new BasicNameValuePair("wallet_metadata", walletMetadata));
+            }
+            if (!postParams.isEmpty()) {
+                httpPost.setEntity(new UrlEncodedFormEntity(postParams));
+            }
+            response = httpClient.execute(httpPost);
+        } else {
+            HttpGet httpGet = new HttpGet(requestUri);
+            response = httpClient.execute(httpGet);
+        }
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
         // Parse and return the expected JWT response

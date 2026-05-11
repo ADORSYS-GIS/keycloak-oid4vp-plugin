@@ -2,8 +2,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -25,6 +28,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
@@ -60,6 +64,7 @@ import org.keycloak.utils.StringUtil;
 public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implements RealmResourceProvider {
 
     private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpoint.class);
+    public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
 
     public static final String REQUEST_JWT_PATH = "/request.jwt";
     public static final String RESPONSE_URI_PATH = "/response";
@@ -127,12 +132,102 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      */
     @GET
     @Path(REQUEST_JWT_PATH + "/{requestId}")
-    @Produces(MediaType.TEXT_PLAIN)
+    @Produces(AUTH_REQ_JWT_MEDIA_TYPE)
     public Response getSignedRequestObject(@PathParam("requestId") String requestId) {
         logger.debug("Resolving request URI to signed request object...");
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
-        return CorsService.open().add(Response.ok(requestObjectJwt));
+        return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
+    }
+
+    /**
+     * Dereferences request URIs into signed request objects using request_uri_method=post.
+     */
+    @POST
+    @Path(REQUEST_JWT_PATH + "/{requestId}")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(AUTH_REQ_JWT_MEDIA_TYPE)
+    public Response postSignedRequestObject(
+            @PathParam("requestId") String requestId,
+            @FormParam("wallet_nonce") String walletNonce,
+            @FormParam("wallet_metadata") String walletMetadata) {
+        logger.debug("Resolving request URI to signed request object via POST...");
+        validateRequestUriPostHeaders();
+        validateRequestUriPostScheme();
+        AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
+        if (!RequestUriMethod.POST.equals(authorizationContext.getRequestUriMethod())) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    "invalid_request_uri_method",
+                    "This request_uri does not accept HTTP POST"));
+        }
+
+        JsonNode parsedWalletMetadata = null;
+        if (StringUtil.isNotBlank(walletMetadata)) {
+            try {
+                parsedWalletMetadata = JsonSerialization.mapper.readTree(walletMetadata);
+                if (!parsedWalletMetadata.isObject()) {
+                    throw new IllegalArgumentException("wallet_metadata must be a JSON object");
+                }
+            } catch (IOException e) {
+                throw new BadRequestException(
+                        errorResponse(
+                                Response.Status.BAD_REQUEST,
+                                OAuthErrorException.INVALID_REQUEST,
+                                "wallet_metadata is invalid"),
+                        e);
+            } catch (IllegalArgumentException e) {
+                throw new BadRequestException(
+                        errorResponse(Response.Status.BAD_REQUEST, OAuthErrorException.INVALID_REQUEST, e.getMessage()),
+                        e);
+            }
+        }
+
+        String requestObjectJwt = authorizationContext.getRequestObjectJwt();
+        boolean contextChanged = false;
+        if (parsedWalletMetadata != null) {
+            authorizationContext.setWalletMetadata(parsedWalletMetadata);
+            contextChanged = true;
+        }
+        if (StringUtil.isNotBlank(walletNonce)) {
+            RequestObject requestObject = authorizationContext.getRequestObject();
+            requestObject.setWalletNonce(walletNonce);
+            authorizationContext.setRequestObject(requestObject);
+
+            AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
+            VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+            requestObjectJwt = authorizationRequestService.signRequestObject(requestObject, config);
+            authorizationContext.setRequestObjectJwt(requestObjectJwt);
+            contextChanged = true;
+        }
+        if (contextChanged) {
+            AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
+            new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
+        }
+        return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
+    }
+
+    private void validateRequestUriPostHeaders() {
+        String accept = session.getContext().getRequestHeaders().getHeaderString(HttpHeaders.ACCEPT);
+        if (StringUtil.isBlank(accept) || !accept.contains(AUTH_REQ_JWT_MEDIA_TYPE)) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Request URI POST must include Accept: " + AUTH_REQ_JWT_MEDIA_TYPE));
+        }
+    }
+
+    private void validateRequestUriPostScheme() {
+        URI requestUri = session.getContext().getUri().getRequestUri();
+        String scheme = requestUri.getScheme();
+        String host = requestUri.getHost();
+        boolean loopback = "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host);
+        if (!"https".equalsIgnoreCase(scheme) && !(loopback && "http".equalsIgnoreCase(scheme))) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Request URI POST must use https"));
+        }
     }
 
     /**

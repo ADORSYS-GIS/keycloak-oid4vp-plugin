@@ -26,8 +26,13 @@ import java.util.Collection;
 import java.util.List;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.client.utils.URLEncodedUtils;
+import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -62,6 +67,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
+        assertTrue(uriInfo.getQueryParameters().getFirst("request_uri_method") == null);
 
         // Assert full expected format
         String expectedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -161,6 +167,26 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(
                 "Authorization context not found for request ID: unknown-request-uri", errorRep.getErrorDescription());
+    }
+
+    @Test
+    public void shouldRejectRequestUriPost_WhenMethodIsNotPost() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+        String requestUri = URLEncodedUtils.parse(authRequest, java.nio.charset.StandardCharsets.UTF_8).stream()
+                .filter(p -> p.getName().equals("request_uri"))
+                .map(NameValuePair::getValue)
+                .findFirst()
+                .orElseThrow();
+
+        HttpPost httpPost = new HttpPost(requestUri);
+        httpPost.setHeader(org.apache.http.HttpHeaders.ACCEPT, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("wallet_nonce", "nonce"))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals("invalid_request_uri_method", errorRep.getError());
     }
 
     @Test

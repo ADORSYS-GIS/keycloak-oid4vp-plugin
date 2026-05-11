@@ -5,6 +5,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtA
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
@@ -29,6 +30,7 @@ public class VerifierConfig {
     private final ClientIdScheme clientIdScheme;
     private final QueryLanguage queryLanguage;
     private final ResponseMode responseMode;
+    private final RequestUriMethod requestUriMethod;
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
     private final String registrationCertificate;
@@ -53,6 +55,10 @@ public class VerifierConfig {
         this.responseMode = validateResponseMode(config.getOrDefault(
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT));
+
+        this.requestUriMethod = validateRequestUriMethod(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG,
+                SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT));
 
         this.authReqUrlScheme = validateCustomUrlScheme(config.getOrDefault(
                 SdJwtAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG,
@@ -113,6 +119,16 @@ public class VerifierConfig {
         return customUrlScheme;
     }
 
+    private static RequestUriMethod validateRequestUriMethod(String requestUriMethod) {
+        try {
+            return RequestUriMethod.fromValue(requestUriMethod);
+        } catch (IllegalArgumentException e) {
+            String fallback = SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT;
+            logger.warnf("Invalid request URI method: %s. Defaulting to %s", requestUriMethod, fallback);
+            return RequestUriMethod.fromValue(fallback);
+        }
+    }
+
     private static X509Certificate validateX5CCertificate(String certificate) {
         if (StringUtils.isBlank(certificate)) {
             return null;
@@ -145,6 +161,10 @@ public class VerifierConfig {
 
     public String getAuthReqUrlScheme() {
         return authReqUrlScheme;
+    }
+
+    public RequestUriMethod getRequestUriMethod() {
+        return requestUriMethod;
     }
 
     public X509Certificate getAccessCertificate() {
