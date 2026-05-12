@@ -82,7 +82,7 @@
         "vct": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",
         "requireExpClaim": "true",
         "enforceRevocationStatus": "true",
-        "queryLanguage": "all"
+        "queryLanguage": "dcql_query"
       }
     }
   ],

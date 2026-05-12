@@ -81,11 +81,10 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
 
-        // Assert: Ensure the request object contains a legacy presentation definition
+        // Assert: Ensure the request object contains a final-spec DCQL query.
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
-        SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
-
+        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
         // Request object must use expected default client ID scheme
         assertEquals(ClientIdScheme.X509_SAN_DNS, requestObject.getClientIdScheme());
 
