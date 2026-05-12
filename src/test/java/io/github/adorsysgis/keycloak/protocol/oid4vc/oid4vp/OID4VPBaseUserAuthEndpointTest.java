@@ -13,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.IOException;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -46,22 +48,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Helper for successful flows.
      */
     protected String testSuccessfulAuthentication(String sdJwt, TestOpts opts) throws Exception {
-        ApiFlowData apiFlow = resolveApiFlow(opts);
-        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+        TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
 
-        // Prepare and send the OpenID4VP response to Keycloak
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
-
-        // Redeem authorization code when it is not disclosed in the status response
-        String authCode = statusPayload.getAuthorizationCode();
-        if (authCode == null) {
-            assertNotNull(apiFlow.codeVerifier(), "Code verifier should not be null for API flows");
-            authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        }
-
+        // Exchange authorization code for access token
+        String authCode = testFlowData.authCode();
         assertNotNull(authCode, "Authorization code should not be null");
         if (opts.shouldRetrieveAccessToken()) {
             assertAuthenticatingUser(opts, authCode);
@@ -72,27 +62,43 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
-     * Helper for flows that should fail at authorization code redemption.
-     * Note: To test missing verifier scenarios, pass a TestOpts instance (e.g., TestOpts.getDefault())
-     * that has not been initialized with a codeVerifier. The default state of TestOpts is null.
+     * Helper for successful flows (verbose)
+     * @return contextual data for further assertions
      */
-    protected void testFailingCodeRedemption(
-            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
-            throws Exception {
+    protected TestFlowData testSuccessfulAuthenticationVerbose(String sdJwt, TestOpts opts) throws Exception {
+        // Retrieve an authorization request
         ApiFlowData apiFlow = resolveApiFlow(opts);
-        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+        AuthorizationContext authContext = apiFlow.authContext();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
+        // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        assertSuccessfulAuthorizationStatus(apiFlow);
 
-        HttpResponse redemptionResponse =
-                redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+        // If auth context acquired in place, then cross-device flow assumed.
+        // Assert that response to wallet does not contain a redirect URI.
+        if (opts.getAuthContext() == null) {
+            assertNull(
+                    responseToWallet.getRedirectUri(),
+                    "Response to wallet should not contain a redirect URI in cross-device flow");
+        }
 
-        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
-        assertEquals(expectedError, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
+        // Check auth status
+        String authCode = null;
+        if (authContext.getTransactionId() != null) {
+            AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
+
+            // Redeem authorization code when it is not disclosed in the status response
+            authCode = statusPayload.getAuthorizationCode();
+            if (authCode == null) {
+                assertNotNull(apiFlow.codeVerifier(), "Code verifier should not be null for API flows");
+                authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
+            }
+        }
+
+        // Bubble up test flow data
+        return new TestFlowData(authContext, requestObject, responseToWallet, authCode);
     }
 
     /**
@@ -117,9 +123,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
             throws Exception {
         // Retrieve an authorization request
-        // Refactored: Extracting opts.getAuthContext() to avoid repetitive calls and improve readability.
         AuthorizationContext authContext =
-                opts.getAuthContext() != null ? opts.getAuthContext() : requestAuthorizationRequest();
+                Optional.ofNullable(opts.getAuthContext()).orElseGet(this::requestAuthorizationRequest);
 
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
@@ -147,6 +152,28 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         // Run assertions
         assertFailingAuthentication(response, transactionId, httpStatus, expectedError, expectedErrorDescription);
+    }
+
+    /**
+     * Helper for flows that should fail at authorization code redemption.
+     */
+    protected void testFailingCodeRedemption(
+            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
+            throws Exception {
+        ApiFlowData apiFlow = resolveApiFlow(opts);
+        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        assertSuccessfulAuthorizationStatus(apiFlow);
+
+        HttpResponse redemptionResponse =
+                redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
+        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
+        assertEquals(expectedError, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
     }
 
     /**
@@ -323,6 +350,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
     }
 
+    public record TestFlowData(
+            AuthorizationContext authContext,
+            RequestObject requestObject,
+            ResponseToWallet responseToWallet,
+            String authCode) {}
+
     /**
      * POJO for test options.
      */
@@ -354,7 +387,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             return authContext;
         }
 
-        public TestOpts setAuthorizationContext(AuthorizationContext authContext) {
+        public TestOpts setAuthContext(AuthorizationContext authContext) {
             this.authContext = authContext;
             return this;
         }

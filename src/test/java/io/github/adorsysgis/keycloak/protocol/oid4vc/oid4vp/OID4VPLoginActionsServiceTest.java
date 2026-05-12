@@ -3,20 +3,29 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import jakarta.ws.rs.core.MediaType;
+import java.net.URI;
 import java.util.List;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
+import org.jboss.resteasy.specimpl.ResteasyUriInfo;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -48,8 +57,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         BasicCookieStore cookieStore = formData.cookieStore();
 
         // Proceed to authentication
-        TestOpts opts =
-                TestOpts.getDefault().setAuthorizationContext(authContext).setShouldRetrieveAccessToken(false);
+        TestOpts opts = TestOpts.getDefault().setAuthContext(authContext).setShouldRetrieveAccessToken(false);
         String authCode = testSuccessfulAuthentication(sdJwt, opts);
         BasicNameValuePair codeParam = new BasicNameValuePair(OAuth2Constants.CODE, authCode);
 
@@ -65,6 +73,55 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
             // Assert the validity of the fresh auth code
             assertAuthenticatingUser(opts.setShouldEnforceRedirectUri(true), freshAuthCode);
             assertNotEquals("New code must be issued", authCode, freshAuthCode);
+        }
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_InOIDCFlow_SameDeviceFlow() throws Exception {
+        // Start same-device OpenID4VP authentication flow to obtain a valid callback URI
+        TestFlowDataV2 data = startOid4vpAuthSameDevice();
+        BasicCookieStore cookieStore = data.formData().cookieStore();
+        ResponseToWallet responseToWallet = data.responseToWallet();
+
+        // Assert that response to wallet contains a redirect URI
+        String redirectUri = responseToWallet.getRedirectUri();
+        assertNotNull(redirectUri, "Response to wallet should contain a redirect URI");
+        assertTrue(
+                redirectUri.contains(OID4VPUserAuthEndpoint.CALLBACK_URI_PATH),
+                "Redirect URI should be on callback path");
+
+        // Continue OIDC flow by redirecting to callback URI
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+                .setDefaultCookieStore(cookieStore)
+                .disableRedirectHandling()
+                .build()) {
+            // Follow redirect to callback URI and capture next redirect for form submission
+            HttpGet httpGet = new HttpGet(redirectUri);
+            HttpResponse response = httpClient.execute(httpGet);
+            String redirectActionUri = captureNextRedirect(response);
+
+            // Extract the authorization code from the redirect action URI
+            ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(redirectActionUri));
+            String authCode = uriInfo.getQueryParameters().getFirst(OAuth2Constants.CODE);
+
+            // Continue OIDC flow with auth code in redirect URI
+            HttpGet httpGetAction = new HttpGet(redirectActionUri);
+            HttpResponse httpResponse = httpClient.execute(httpGetAction);
+            String freshAuthCode = extractAuthCodeInRedirect(httpResponse);
+
+            // Assert the validity of the fresh auth code
+            TestOpts opts = TestOpts.getDefault().setShouldEnforceRedirectUri(true);
+            assertAuthenticatingUser(opts, freshAuthCode);
+            assertNotEquals("New code must be issued", authCode, freshAuthCode);
+
+            // Assert that callback URI can no longer be used at this point
+            ResteasyUriInfo uri = new ResteasyUriInfo(URI.create(redirectUri));
+            String responseCode = uri.getPathSegments().getLast().getPath();
+            shouldFailSameDeviceRedirection(
+                    httpClient,
+                    redirectUri,
+                    HttpStatus.SC_NOT_FOUND,
+                    "Authorization context not found for response code: " + responseCode);
         }
     }
 
@@ -102,28 +159,79 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         shouldFailAuthenticationWithAuthCode(formData, authCode, "Authorization code validation failed");
     }
 
+    @Test
+    public void shouldFailRedirection_IfInvalidResponseCode() throws Exception {
+        // The callback URI embeds an invalid response code
+        String callback = getOid4vpEndpoint(
+                String.format("/%s/%s", OID4VPUserAuthEndpoint.CALLBACK_URI_PATH, "invalid-response-code"));
+
+        // Follow callback and expect failure due to invalid response code
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            shouldFailSameDeviceRedirection(
+                    httpClient,
+                    callback,
+                    HttpStatus.SC_NOT_FOUND,
+                    "Authorization context not found for response code: invalid-response-code");
+        }
+    }
+
+    @Test
+    public void shouldFailRedirection_IfInvalidSessionCookie() throws Exception {
+        // Start same-device OpenID4VP authentication flow to obtain a valid callback URI
+        TestFlowDataV2 data = startOid4vpAuthSameDevice();
+        String redirectUri = data.responseToWallet().getRedirectUri();
+
+        // Continue OIDC flow by redirecting to callback URI
+        // Notice that we are not providing the session cookie, which is expected to cause the redirection to fail due
+        // to session mismatch
+        try (CloseableHttpClient httpClient =
+                HttpClientBuilder.create().disableRedirectHandling().build()) {
+            shouldFailSameDeviceRedirection(
+                    httpClient,
+                    redirectUri,
+                    HttpStatus.SC_BAD_REQUEST,
+                    "Authentication session does not match cookie-tracked session");
+        }
+    }
+
     /**
      * Complete API authentication and return auth code.
      */
     private String completeOid4vpAuth(AuthorizationContext authContext) throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Complete authentication with alternate context
-        TestOpts opts =
-                TestOpts.getDefault().setAuthorizationContext(authContext).setShouldRetrieveAccessToken(false);
-        return testSuccessfulAuthentication(sdJwt, opts);
+        return completeOid4vpAuth(new ApiFlowData(authContext, null));
     }
 
+    /**
+     * Complete API authentication and return auth code.
+     */
     private String completeOid4vpAuth(ApiFlowData apiFlow) throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
         TestOpts opts = TestOpts.getDefault()
-                .setAuthorizationContext(apiFlow.authContext())
+                .setAuthContext(apiFlow.authContext())
                 .setCodeVerifier(apiFlow.codeVerifier())
                 .setShouldRetrieveAccessToken(false);
         return testSuccessfulAuthentication(sdJwt, opts);
+    }
+
+    /**
+     * Starts an OpenID4VP authentication flow with same-device context.
+     */
+    private TestFlowDataV2 startOid4vpAuthSameDevice() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Collect OIDC session data (same device flow)
+        FormData formData = getFreshOid4vpFormActionUrl();
+        AuthorizationContext authContext = formData.authContextSameDevice();
+
+        // Proceed to authentication
+        TestOpts opts = TestOpts.getDefault().setAuthContext(authContext);
+        TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
+        ResponseToWallet responseToWallet = testFlowData.responseToWallet();
+
+        return new TestFlowDataV2(formData, responseToWallet);
     }
 
     private void shouldFailAuthenticationWithAltAuthCode(String authCode, String reason) throws Exception {
@@ -160,4 +268,21 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
             assertEquals(reason, events.getFirst().getDetails().get(Details.REASON));
         }
     }
+
+    private void shouldFailSameDeviceRedirection(
+            CloseableHttpClient httpClient, String redirectUri, int expectedHttpStatus, String expectedErrorMessage)
+            throws Exception {
+        HttpGet httpGet = new HttpGet(redirectUri);
+        HttpResponse response = httpClient.execute(httpGet);
+        assertEquals(expectedHttpStatus, response.getStatusLine().getStatusCode());
+
+        // Parse the error response and assert the error message
+        String html = EntityUtils.toString(response.getEntity());
+        assertNotNull(html, "Response body should not be null");
+        Element error = Jsoup.parse(html).selectFirst("#kc-error-message p");
+        assertNotNull(error, "Error message element should be present in response");
+        assertEquals(expectedErrorMessage, error.text());
+    }
+
+    public record TestFlowDataV2(FormData formData, ResponseToWallet responseToWallet) {}
 }

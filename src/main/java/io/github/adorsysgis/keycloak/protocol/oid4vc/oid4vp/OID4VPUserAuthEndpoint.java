@@ -7,10 +7,13 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -25,12 +28,14 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
+import java.net.URI;
 import java.security.interfaces.ECPrivateKey;
-import java.util.Map;
+import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
+import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.jose.jwe.JWEException;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -38,6 +43,7 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.services.ErrorPage;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
@@ -57,6 +63,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     public static final String REQUEST_JWT_PATH = "/request.jwt";
     public static final String RESPONSE_URI_PATH = "/response";
+    public static final String CALLBACK_URI_PATH = "/callback";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
     public static final String AUTH_CODE_PATH = "/code";
 
@@ -100,7 +107,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         AuthorizationContext authContext;
         try {
-            authContext = startAuthentication(clientId, null, codeChallenge, codeChallengeMethod);
+            authContext =
+                    startAuthentication(clientId, null, new CodeChallengeDetails(codeChallenge, codeChallengeMethod));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -111,7 +119,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
-
         return CorsService.forWebOrigins(authSession).add(Response.ok(authContext));
     }
 
@@ -186,8 +193,65 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         authorizationResponseService.processAuthorizationResponse(
                 responseObject, authorizationContext, authSession, authProcessor);
 
-        // Successful. Return empty object
-        return CorsService.open().add(Response.ok(Map.of()));
+        // Successful. Build redirect URI if response code attached to context, meaning same device.
+        String responseCode = authorizationContext.getResponseCode();
+        String redirectUri = StringUtil.isNotBlank(responseCode)
+                ? KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                        .path(CALLBACK_URI_PATH)
+                        .path(responseCode)
+                        .build()
+                        .toString()
+                : null;
+
+        // Prompts wallet to redirect if same device, or returns empty object.
+        ResponseToWallet response = new ResponseToWallet(redirectUri);
+        return CorsService.open().add(Response.ok(response));
+    }
+
+    /**
+     * Redirect callback to complete same-device, form authentication.
+     */
+    @GET
+    @Path(CALLBACK_URI_PATH + "/{responseCode}")
+    @Produces(MediaType.TEXT_HTML)
+    public Response redirectCallback(@PathParam("responseCode") String responseCode) {
+        logger.debug("Handling redirect callback for same-device authentication...");
+
+        AuthenticationSessionModel authSession = null;
+        AuthenticationSessionStore authStore;
+        AuthorizationContext authContext;
+
+        try {
+            authSession = this.recoverAuthenticationSession(responseCode);
+            authStore = new AuthenticationSessionStore(authSession);
+            authContext = authStore.getAuthorizationContextByResponseCode(responseCode);
+        } catch (IllegalArgumentException e) {
+            String msg = "Authorization context not found for response code: " + responseCode;
+            logger.error(msg, e);
+            return ErrorPage.error(session, authSession, Response.Status.NOT_FOUND, msg);
+        }
+
+        // Check cookie-tracked session is consistent with this redirection attempt
+        if (!matchesCookieTrackedAuthSession(
+                authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
+            String msg = "Authentication session does not match cookie-tracked session";
+            logger.error(msg);
+            return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
+        }
+
+        // Invalidate current response code to prevent reuse.
+        // The field is not voided for it is used as a marker of same-device flows.
+        String newRandomResponseCode = AuthorizationRequestService.generateSessionBoundId(authSession);
+        authContext.setResponseCode(newRandomResponseCode);
+        authStore.storeAuthorizationContext(authContext);
+
+        // Build redirect URI
+        URI redirectUri = KeycloakUriBuilder.fromUri(authContext.getLoginActionUrl())
+                .queryParam(OAuth2Constants.CODE, authContext.getAuthorizationCode())
+                .build();
+
+        // Return redirect response
+        return Response.status(Response.Status.FOUND).location(redirectUri).build();
     }
 
     /**
@@ -288,32 +352,23 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     /**
      * Initializes OpenID4VP authentication and return authorization context
      */
-    public AuthorizationContext startAuthentication(String clientId, String parentAuthSessionId) {
-        return startAuthentication(clientId, parentAuthSessionId, null, null);
-    }
-
-    /**
-     * Initializes OpenID4VP authentication and return authorization context
-     */
     public AuthorizationContext startAuthentication(
-            String clientId, String parentAuthSessionId, String codeChallenge, String codeChallengeMethod) {
+            String clientId, OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
-        String resolvedCodeChallengeMethod =
-                validateOwnershipBinding(parentAuthSessionId, codeChallenge, codeChallengeMethod);
+        if (oidcAuthSession == null) {
+            // Require code challenge details for API-initiated authentication sessions
+            validateOwnershipBinding(codeChallengeDetails);
+        }
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
         AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
         VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
 
-        // Wrap the PKCE parameters into the new CodeChallengeDetails record
-        var codeChallengeParams =
-                new AuthorizationRequestService.CodeChallengeDetails(codeChallenge, resolvedCodeChallengeMethod);
-
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                authSession, parentAuthSessionId, config, codeChallengeParams);
+                config, authSession, oidcAuthSession, codeChallengeDetails);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -392,29 +447,20 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 .add(Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON));
     }
 
-    private String validateOwnershipBinding(
-            String parentAuthSessionId, String codeChallenge, String codeChallengeMethod) {
-        boolean hasParentAuthSession = !StringUtil.isBlank(parentAuthSessionId);
-
-        // Enforce PKCE requirements only for public API flows (flows without a parent OIDC session).
-        // OIDC-bound flows rely on the parent session state and do not require PKCE enforcement here.
-        if (!hasParentAuthSession) {
-            boolean hasCodeChallenge = !StringUtil.isBlank(codeChallenge);
-            boolean hasCodeChallengeMethod = !StringUtil.isBlank(codeChallengeMethod);
-
-            if (!hasCodeChallenge || !hasCodeChallengeMethod) {
-                throw new IllegalArgumentException(
-                        "Authorization requests must include both code_challenge and code_challenge_method");
-            }
-
-            if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeMethod)) {
-                throw new IllegalArgumentException("Only S256 code challenge method is supported");
-            }
-
-            return codeChallengeMethod;
+    /**
+     * Validates ownership binding by requiring code challenge parameters.
+     */
+    private void validateOwnershipBinding(CodeChallengeDetails codeChallengeDetails) {
+        if (codeChallengeDetails == null
+                || StringUtil.isBlank(codeChallengeDetails.codeChallenge())
+                || StringUtil.isBlank(codeChallengeDetails.codeChallengeMethod())) {
+            throw new IllegalArgumentException(
+                    "Authorization requests must include both code_challenge and code_challenge_method");
         }
 
-        return codeChallengeMethod;
+        if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeDetails.codeChallengeMethod())) {
+            throw new IllegalArgumentException("Only S256 code challenge method is supported");
+        }
     }
 
     @Override
