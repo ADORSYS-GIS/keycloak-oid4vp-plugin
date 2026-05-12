@@ -233,9 +233,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         authorizationContext
                 .setStatus(AuthorizationContextStatus.ERROR)
                 .setError(ProcessingError.fromErrorString(error))
-                .setErrorDescription(StringUtil.isNotBlank(errorDescription)
-                        ? errorDescription
-                        : "Wallet returned error: " + error);
+                .setErrorDescription(
+                        StringUtil.isNotBlank(errorDescription) ? errorDescription : "Wallet returned error: " + error);
         new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
     }
 
