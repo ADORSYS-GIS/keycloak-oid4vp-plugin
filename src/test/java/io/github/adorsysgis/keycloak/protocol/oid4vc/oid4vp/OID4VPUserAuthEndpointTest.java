@@ -371,6 +371,47 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldPersistWalletErrorResponse() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        String errorDescription = "End-User denied consent";
+
+        HttpResponse response = sendAuthorizationErrorResponse(
+                requestObject,
+                ProcessingError.ACCESS_DENIED.getErrorString(),
+                errorDescription,
+                requestObject.getState());
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, statusPayload.getStatus());
+        assertEquals(ProcessingError.ACCESS_DENIED, statusPayload.getError());
+        assertEquals(errorDescription, statusPayload.getErrorDescription());
+    }
+
+    @Test
+    public void shouldRejectWalletErrorResponseWithMismatchingState() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationErrorResponse(
+                requestObject,
+                ProcessingError.ACCESS_DENIED.getErrorString(),
+                "End-User denied consent",
+                "wrong-state");
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("State param must match requestId"));
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.PENDING, statusPayload.getStatus());
+    }
+
+    @Test
     public void shouldFailAuthentication_NonMatchingPresentationDefinitionId() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);

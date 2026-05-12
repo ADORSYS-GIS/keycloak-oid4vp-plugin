@@ -20,6 +20,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.net.URI;
@@ -145,6 +147,26 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
         assertTrue(errorRep.getErrorDescription().contains("Authorization context expects encrypted response"));
+    }
+
+    @Test
+    public void shouldAcceptUnencryptedWalletErrorResponse() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        String errorDescription = "Wallet could not encrypt the response";
+
+        HttpResponse response = sendAuthorizationErrorResponse(
+                requestObject,
+                ProcessingError.INVALID_REQUEST.getErrorString(),
+                errorDescription,
+                requestObject.getState());
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, statusPayload.getStatus());
+        assertEquals(ProcessingError.INVALID_REQUEST, statusPayload.getError());
+        assertEquals(errorDescription, statusPayload.getErrorDescription());
     }
 
     private ObjectNode getAuthConfig() {
