@@ -13,6 +13,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -42,9 +43,11 @@ public class AuthorizationResponseService {
     public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
 
     private final KeycloakSession session;
+    private final VpTokenCandidateExtractor vpTokenCandidateExtractor;
 
     public AuthorizationResponseService(KeycloakSession session) {
         this.session = session;
+        this.vpTokenCandidateExtractor = new VpTokenCandidateExtractor();
     }
 
     /**
@@ -130,12 +133,35 @@ public class AuthorizationResponseService {
      */
     private String extractSdJwtVpToken(
             ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
-        String parsedVpToken;
         logger.debug("Extracting SD-JWT VP token from response object with DCQL matching");
-        parsedVpToken = extractSdJwtVpTokenWithDCQL(responseObject, authContext, store);
+        List<String> candidates;
+        try {
+            candidates = vpTokenCandidateExtractor.extractSdJwtCandidates(
+                    authContext.getRequestObject().getDcqlQuery(), responseObject.getVpToken());
+        } catch (VpTokenCandidateExtractor.InvalidVpTokenException e) {
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN,
+                    "Invalid vp_token",
+                    e.getMessage(),
+                    Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
+        }
+
+        if (candidates.size() != 1) {
+            String detailed =
+                    "Authorization response must contain exactly one SD-JWT VP candidate. Found: " + candidates.size();
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN,
+                    "Invalid vp_token",
+                    detailed,
+                    Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
+        }
 
         try {
-            String vpToken = decodeIfBase64Url(parsedVpToken);
+            String vpToken = decodeIfBase64Url(candidates.getFirst());
             SdJwtVP.of(vpToken);
             return vpToken;
         } catch (IllegalArgumentException e) {
@@ -149,50 +175,6 @@ public class AuthorizationResponseService {
                     authContext,
                     store);
         }
-    }
-
-    /**
-     * Extract SD-JWT VP token from response object (DCQL era)
-     */
-    private String extractSdJwtVpTokenWithDCQL(
-            ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
-        var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
-        if (dcqlQuery == null || dcqlQuery.getCredentials().size() != 1) {
-            throw new IllegalStateException(
-                    "Invalid DCQL query in authorization context. Expected exactly one credential query.");
-        }
-
-        // Ensure that VP token map matches the DCQL credential query
-        var credentialQuery = dcqlQuery.getCredentials().getFirst();
-        var vpTokenMap = responseObject.getVpToken();
-        if (vpTokenMap == null || !vpTokenMap.containsKey(credentialQuery.getId())) {
-            String detailed = "Presented vp_token map does not match DCQL credential query";
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Invalid vp_token",
-                    detailed,
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
-
-        // Check that the VP token map provides a VP token, and only one
-        var tokens = vpTokenMap.get(credentialQuery.getId());
-        if (tokens == null || tokens.size() != 1) {
-            String errorMsg = String.format(
-                    "Presented vp_token map must contain exactly one token as requested. Found: %d",
-                    tokens == null ? 0 : tokens.size());
-
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Invalid vp_token",
-                    errorMsg,
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
-
-        return (String) tokens.getFirst();
     }
 
     /**
