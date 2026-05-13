@@ -13,8 +13,6 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -74,9 +72,8 @@ public class AuthorizationResponseService {
         // Extract SD-JWT VP token from the response object
         String sdJwtVp = extractSdJwtVpToken(responseObject, authContext, store);
 
-        // Formally, we should then check that the VP token satisfies the constraints of
-        // the OpenID4VP presentation definition. Equivalently, we offload this task to
-        // the SD-JWT authenticator in the authentication flow.
+        // Formally, we should then check that the VP token satisfies the DCQL constraints.
+        // Equivalently, we offload this task to the SD-JWT authenticator in the authentication flow.
         logger.debugf("Initializing authentication with extracted SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();
         String nonce = authContext.getRequestObject().getNonce();
@@ -143,7 +140,7 @@ public class AuthorizationResponseService {
             return vpToken;
         } catch (IllegalArgumentException e) {
             logger.errorf(e, "Failed to parse SD-JWT VP token");
-            String detailed = "Could not parse `vp_token` as an SD-JWT VP token";
+            String detailed = "Could not parse SD-JWT VP token contained in `vp_token`";
             throw failWithHttpException(
                     ProcessingError.INVALID_VP_TOKEN,
                     "Invalid vp_token",
@@ -167,8 +164,8 @@ public class AuthorizationResponseService {
 
         // Ensure that VP token map matches the DCQL credential query
         var credentialQuery = dcqlQuery.getCredentials().getFirst();
-        var vpToken = responseObject.getVpToken();
-        if (!(vpToken instanceof Map<?, ?> vpTokenMap) || !(vpTokenMap.containsKey(credentialQuery.getId()))) {
+        var vpTokenMap = responseObject.getVpToken();
+        if (vpTokenMap == null || !vpTokenMap.containsKey(credentialQuery.getId())) {
             String detailed = "Presented vp_token map does not match DCQL credential query";
             throw failWithHttpException(
                     ProcessingError.INVALID_VP_TOKEN,
@@ -180,10 +177,11 @@ public class AuthorizationResponseService {
         }
 
         // Check that the VP token map provides a VP token, and only one
-        var tokens = (List<?>) vpTokenMap.get(credentialQuery.getId());
-        if (tokens.size() != 1) {
+        var tokens = vpTokenMap.get(credentialQuery.getId());
+        if (tokens == null || tokens.size() != 1) {
             String errorMsg = String.format(
-                    "Presented vp_token map must contain exactly one token as requested. Found: %d", tokens.size());
+                    "Presented vp_token map must contain exactly one token as requested. Found: %d",
+                    tokens == null ? 0 : tokens.size());
 
             throw failWithHttpException(
                     ProcessingError.INVALID_VP_TOKEN,

@@ -51,7 +51,7 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Endpoint class for user authentication over
- * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html">
+ * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html">
  * OpenID4VP
  * </a>.
  *

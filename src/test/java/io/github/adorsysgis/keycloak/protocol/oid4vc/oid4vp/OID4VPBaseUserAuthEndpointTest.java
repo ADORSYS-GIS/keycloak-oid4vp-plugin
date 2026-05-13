@@ -179,7 +179,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     /**
      * Helper for asserting failing flows.
      */
-    private void assertFailingAuthentication(
+    protected void assertFailingAuthentication(
             HttpResponse postAuthResponse,
             String transactionId,
             int httpStatus,
@@ -304,11 +304,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Prepare the OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
+     * @param requestObject the request object containing the DCQL query
      */
     private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
-        // Build presentation submission
+        // Build final-spec vp_token map keyed by DCQL credential query ID
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
 
         // Compose the response object as form-urlencoded parameters
@@ -321,11 +321,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Prepare an encrypted OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
+     * @param requestObject the request object containing the DCQL query
      */
     private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
-        // Build presentation submission
+        // Build final-spec vp_token map keyed by DCQL credential query ID
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
         var respMap = Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap);
         String resp = JsonSerialization.writeValueAsString(respMap);
@@ -334,7 +334,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
 
-        // Encrypt the vpTokenMap
+        // Encrypt the response object
         String encResp = ECTestUtils.encryptMessage(resp, encKey);
 
         // Compose the response object as form-urlencoded parameters

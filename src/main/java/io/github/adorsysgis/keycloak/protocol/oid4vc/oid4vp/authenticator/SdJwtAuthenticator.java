@@ -73,7 +73,7 @@ public class SdJwtAuthenticator implements Authenticator {
         try {
             consumer.verifySdJwtPresentation(
                     sdJwt,
-                    authReqs.getPresentationDefinition(),
+                    authReqs.getPresentationRequirements(),
                     List.of(new SelfTrustedSdJwtIssuer(context)),
                     authReqs.getIssuerSignedJwtVerificationOpts(),
                     authReqs.getKeyBindingJwtVerificationOpts(nonce, aud));

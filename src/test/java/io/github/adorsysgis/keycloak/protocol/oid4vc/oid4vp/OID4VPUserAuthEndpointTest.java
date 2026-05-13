@@ -250,6 +250,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_NewDcSdJwtFormat() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Proceed to authentication and assert final-spec DCQL format usage.
+        TestOpts opts = TestOpts.getDefault();
+        TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
+        var credentialQuery =
+                testFlowData.requestObject().getDcqlQuery().getCredentials().getFirst();
+        assertEquals("dc+sd-jwt", credentialQuery.getFormat());
+        assertNotNull(
+                testFlowData.requestObject().getClientMetadata().getVpFormat().getDcSdJwt());
+        assertAuthenticatingUser(opts, testFlowData.authCode());
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_Base64EncodedVpToken() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
@@ -354,7 +370,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(ProcessingError.INVALID_VP_TOKEN.getErrorString(), errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains("Could not parse `vp_token` as an SD-JWT VP token"));
+        assertTrue(errorRep.getErrorDescription().contains("Could not parse SD-JWT VP token contained in `vp_token`"));
     }
 
     @Test
@@ -369,7 +385,26 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Could not parse `vp_token` as an SD-JWT VP token");
+                "Could not parse SD-JWT VP token contained in `vp_token`");
+    }
+
+    @Test
+    public void shouldFailAuthentication_NonMatchingDcqlCredentialId() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Retrieve an authorization request and deliberately respond under a non-matching DCQL credential query ID.
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        requestObject.getDcqlQuery().getCredentials().getFirst().setId("non-matching-dcql-credential-id");
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
+        assertFailingAuthentication(
+                response,
+                authContext.getTransactionId(),
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presented vp_token map does not match DCQL credential query");
     }
 
     @Test
