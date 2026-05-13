@@ -104,34 +104,10 @@ For provider configuration (including examples for `keycloak.conf`, `KC_*` envir
 - Technical performance/security tuning:
   [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
 
-### SdJwt authenticator configuration (deployment-focused)
+### SdJwt authenticator configuration
 
-When configuring the `sd-jwt-authenticator` execution in a realm authentication flow, the most relevant options for
-production/interoperable deployments are:
-
-- `clientIdScheme`: use `x509_hash` (or `x509_san_dns`)
-- `queryLanguage`: use `dcql_query` (or `presentation_definition`)
-- `responseMode`: use `direct_post.jwt` when encrypted wallet responses are required
-- `customUrlScheme`: wallet invocation URL scheme, e.g. `openid4vp://` or `haip-vp://`
-- `accessCertificate`: base64 DER X.509 certificate content (PEM body without delimiters) advertised in request-object `x5c`
-- `registrationCertificate`: opaque registration certificate/JWT advertised via `verifier_info`
-
-Example (realm authenticator config JSON shape):
-
-```json
-{
-  "clientIdScheme": "x509_hash",
-  "queryLanguage": "dcql_query",
-  "responseMode": "direct_post.jwt",
-  "customUrlScheme": "openid4vp://",
-  "accessCertificate": "<base64-der-x509-cert>",
-  "registrationCertificate": "<registration-certificate-jwt-or-token>"
-}
-```
-
-If you provision realms via Terraform, map these values to your own deployment variables.
-Variable names are deployment-specific and are not provided by Keycloak out of the box.
-For a fuller configuration reference, see
+Deployment-facing `sd-jwt-authenticator` options (for example `clientIdScheme`, `queryLanguage`,
+`responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 
 ## Documentation site (Antora)

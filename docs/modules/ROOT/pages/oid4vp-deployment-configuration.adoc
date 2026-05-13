@@ -10,15 +10,23 @@ OpenID4VP authorization requests and validates responses.
 
 |`clientIdScheme`
 |`x509_hash`
-|How `client_id` is built in authorization requests. `x509_hash` computes the hash from the configured access certificate.
+a|How `client_id` is built in authorization requests.
+The OpenID4VP client identifier prefixes recognized in this plugin's model are:
+`pre-registered`, `redirect_uri`, `entity_id`, `did`, `verifier_attestation`, `x509_san_dns`, `x509_san_uri`, and `x509_hash`.
+Only `x509_san_dns` (default in the authenticator UI) and `x509_hash` are implemented for building `client_id` here:
+`x509_san_dns` uses the Keycloak frontend hostname; `x509_hash` uses a hash derived from the configured `accessCertificate`.
 
 |`queryLanguage`
 |`dcql_query`
-|Request format for requested credential data (`dcql_query` or `presentation_definition`).
+|Which credential query shape is placed in the signed request object: `dcql_query`, `dif_presentation_exchange`, or `all` (both).
 
 |`responseMode`
 |`direct_post.jwt`
-|Enables encrypted authorization responses (`response` form field carrying JWE).
+a|How the wallet delivers the authorization response to the verifier `response_uri`.
+The plugin's `ResponseMode` model includes `fragment`, `form_post`, `direct_post`, `direct_post.jwt`, and `query`.
+The `sd-jwt-authenticator` configuration UI only offers `direct_post` (default) and `direct_post.jwt`.
+Use `direct_post` for a conventional form post (`vp_token`, `state`, and related fields).
+Use `direct_post.jwt` when the wallet must post a single encrypted JWE in the `response` form field; the verifier then advertises an ephemeral encryption key via `client_metadata.jwks`.
 
 |`customUrlScheme`
 |`openid4vp://`
@@ -26,7 +34,7 @@ OpenID4VP authorization requests and validates responses.
 
 |`accessCertificate`
 |`MIIC...`
-|Base64 DER X.509 certificate injected into request object `x5c` header.
+|Base64 DER X.509 certificate (or PEM body without `-----BEGIN/END CERTIFICATE-----` delimiters) injected into request object `x5c` header.
 
 |`registrationCertificate`
 |`eyJ...`
@@ -55,9 +63,8 @@ Generic example authenticator configuration (realm JSON import format):
 }
 ----
 
-If you provision Keycloak using Terraform or similar tooling, this typically maps to variables like:
-`sdjwt_client_id_scheme`, `sdjwt_query_language`, `sdjwt_response_mode`,
-`sdjwt_custom_url_scheme`, `sdjwt_access_certificate`, `sdjwt_registration_certificate`.
+If you provision Keycloak using Terraform or similar tooling, map these settings to your own
+module/input variable names according to your deployment conventions.
 
 === SPRIN-D wallet sandbox profile (example)
 
@@ -71,4 +78,22 @@ In that profile, it is typical to use:
 
 - `responseMode=direct_post.jwt`
 - request-object signature and certificate material (`accessCertificate`, `registrationCertificate`)
-- a custom wallet invocation URL scheme
+- a custom wallet invocation URL scheme (`haip-vp://`)
+
+==== Access certificate guidance for sandbox onboarding
+
+To register a verifier in the SPRIN-D sandbox, it is recommended to bind `accessCertificate`
+to an ES256 signing key in the realm and to a DNS name representing your deployment.
+
+- *Key algorithm*: use an EC P-256 (ES256) realm key for request-object signatures.
+- *DNS value*: use the public hostname of your deployment (for example
+  `keycloak-demo.solutions.adorsys.com`), and ensure it is the DNS value represented in the certificate.
+- *Public key sharing*: when sandbox onboarding asks for a public key, provide the PEM-encoded
+  public key corresponding to the same ES256 key/certificate pair.
+
+A typical workflow is:
+
+. Select or generate an ES256 key provider in the realm.
+. Issue/provide an X.509 certificate for that key, with SAN DNS matching your deployment hostname.
+. Set `accessCertificate` to that certificate content (base64 DER, or PEM body without delimiters).
+. If required by the sandbox portal, extract and submit the corresponding public key in PEM form.
