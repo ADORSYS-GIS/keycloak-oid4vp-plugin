@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 
 /**
@@ -89,16 +90,11 @@ public class AuthorizationContext {
     private String requestObjectJwt;
 
     /**
-     * An optional ephemeral key for encrypting responses.
+     * Ephemeral response-encryption key material for {@code direct_post.jwt}. Unwrapped in JSON so
+     * {@code ephemeral_key} and {@code expected_encryption_kid} remain at the same level as other context fields.
      */
-    @JsonProperty("ephemeral_key")
-    private String ephemeralKey;
-
-    /**
-     * Expected key identifier of the ephemeral response-encryption key.
-     */
-    @JsonProperty("expected_encryption_kid")
-    private String expectedEncryptionKid;
+    @JsonUnwrapped
+    private ResponseEncryptionContext responseEncryption;
 
     /**
      * An authorization code upon successful authorization.
@@ -218,21 +214,44 @@ public class AuthorizationContext {
     }
 
     public String getEphemeralKey() {
-        return ephemeralKey;
+        return responseEncryption == null ? null : responseEncryption.getEphemeralKey();
     }
 
     public AuthorizationContext setEphemeralKey(String ephemeralKey) {
-        this.ephemeralKey = ephemeralKey;
+        if (ephemeralKey == null && emptyEncryptionKid()) {
+            responseEncryption = null;
+        } else {
+            ensureResponseEncryption().setEphemeralKey(ephemeralKey);
+        }
         return this;
     }
 
     public String getExpectedEncryptionKid() {
-        return expectedEncryptionKid;
+        return responseEncryption == null ? null : responseEncryption.getExpectedEncryptionKid();
     }
 
     public AuthorizationContext setExpectedEncryptionKid(String expectedEncryptionKid) {
-        this.expectedEncryptionKid = expectedEncryptionKid;
+        if (expectedEncryptionKid == null && emptyEphemeralKey()) {
+            responseEncryption = null;
+        } else {
+            ensureResponseEncryption().setExpectedEncryptionKid(expectedEncryptionKid);
+        }
         return this;
+    }
+
+    private boolean emptyEphemeralKey() {
+        return responseEncryption == null || responseEncryption.getEphemeralKey() == null;
+    }
+
+    private boolean emptyEncryptionKid() {
+        return responseEncryption == null || responseEncryption.getExpectedEncryptionKid() == null;
+    }
+
+    private ResponseEncryptionContext ensureResponseEncryption() {
+        if (responseEncryption == null) {
+            responseEncryption = new ResponseEncryptionContext();
+        }
+        return responseEncryption;
     }
 
     public String getAuthorizationCode() {

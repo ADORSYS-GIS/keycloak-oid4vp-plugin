@@ -2,10 +2,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -16,6 +14,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -33,8 +32,6 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
 import java.security.interfaces.ECPrivateKey;
-import java.util.Base64;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jboss.logging.Logger;
@@ -43,9 +40,7 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.events.EventBuilder;
-import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwe.JWEException;
-import org.keycloak.jose.jwk.JWK;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -182,7 +177,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
             authorizationContext
                     .setStatus(AuthorizationContextStatus.ERROR)
-                    .setError(ProcessingError.VP_TOKEN_AUTH_ERROR)
+                    .setError(ProcessingError.WALLET_OAUTH_ERROR)
                     .setErrorDescription("Wallet returned error: " + walletErrorDescription);
             new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
             return CorsService.open().add(Response.ok(Map.of()));
@@ -461,7 +456,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     private ResponseObject decryptResponse(
             String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
         try {
-            validateJweProtectedHeader(encryptedResponse, authorizationContext);
+            AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
             ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
             String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
             return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
@@ -469,93 +464,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             logger.error("Failed to decrypt response", e);
             throw new IllegalArgumentException("Failed to decrypt and parse response", e);
         }
-    }
-
-    /**
-     * Validate JWE protected header according to verifier metadata policy.
-     */
-    private static void validateJweProtectedHeader(String encryptedResponse, AuthorizationContext authorizationContext)
-            throws IOException {
-        String[] parts = encryptedResponse.split("\\.");
-        if (parts.length != 5) {
-            throw new IllegalArgumentException("Encrypted response is not a compact JWE");
-        }
-
-        byte[] decodedHeader = Base64.getUrlDecoder().decode(parts[0]);
-        JsonNode jweHeader = JsonSerialization.mapper.readTree(decodedHeader);
-        String alg = getTextClaim(jweHeader, "alg");
-        String enc = getTextClaim(jweHeader, "enc");
-        String kid = getTextClaim(jweHeader, "kid");
-
-        if (alg == null || enc == null) {
-            throw new IllegalArgumentException("jwe_header_invalid: missing alg or enc");
-        }
-
-        var clientMetadata = authorizationContext.getRequestObject().getClientMetadata();
-        List<String> allowedAlgs = resolveAllowedAlgs();
-        if (!allowedAlgs.contains(alg)) {
-            throw new IllegalArgumentException("jwe_alg_unsupported: " + alg);
-        }
-
-        List<String> allowedEnc = resolveAllowedEnc(clientMetadata);
-        if (!allowedEnc.contains(enc)) {
-            throw new IllegalArgumentException("jwe_enc_unsupported: " + enc);
-        }
-
-        JWK[] keys = resolveEncryptionKeys(clientMetadata);
-        if (keys == null || keys.length == 0) {
-            throw new IllegalArgumentException("jwe_key_unavailable");
-        }
-        String expectedKid = authorizationContext.getExpectedEncryptionKid();
-        if (kid == null) {
-            throw new IllegalArgumentException("jwe_kid_missing");
-        }
-        if (expectedKid != null && !expectedKid.equals(kid)) {
-            throw new IllegalArgumentException("jwe_kid_mismatch");
-        }
-
-        // Resolve selected key by KID only.
-        JWK selectedKey = resolveSelectedKey(keys, kid);
-
-        // Envelope consistency: if selected JWK declares alg, it must match JWE header alg
-        String keyAlg = selectedKey.getAlgorithm();
-        if (keyAlg != null && !keyAlg.equals(alg)) {
-            throw new IllegalArgumentException("jwe_alg_key_mismatch");
-        }
-    }
-
-    private static List<String> resolveAllowedAlgs() {
-        // The OID4VP spec defines encrypted_response_enc_values_supported in client_metadata, but not
-        // encrypted_response_alg_values_supported. We enforce our supported key management algs server-side.
-        return List.of(JWEConstants.ECDH_ES);
-    }
-
-    private static List<String> resolveAllowedEnc(ClientMetadata clientMetadata) {
-        List<String> allowedEnc =
-                clientMetadata != null ? clientMetadata.getEncryptedResponseEncValuesSupported() : null;
-        // Use the spec default when verifier did not explicitly advertise supported enc values.
-        return (allowedEnc == null || allowedEnc.isEmpty()) ? List.of(JWEConstants.A128GCM) : allowedEnc;
-    }
-
-    private static JWK[] resolveEncryptionKeys(ClientMetadata clientMetadata) {
-        if (clientMetadata == null || clientMetadata.getJwks() == null) {
-            return null;
-        }
-        return clientMetadata.getJwks().getKeys();
-    }
-
-    private static JWK resolveSelectedKey(JWK[] keys, String expectedKid) {
-        for (JWK key : keys) {
-            if (expectedKid.equals(key.getKeyId())) {
-                return key;
-            }
-        }
-        throw new IllegalArgumentException("jwe_key_unavailable");
-    }
-
-    private static String getTextClaim(JsonNode node, String claimName) {
-        JsonNode claim = node.get(claimName);
-        return claim != null && claim.isTextual() ? claim.asText() : null;
     }
 
     /**

@@ -27,6 +27,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.net.URI;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPublicKey;
 import java.util.List;
 import java.util.Map;
 import org.apache.http.HttpResponse;
@@ -174,24 +175,33 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         assertEquals(HttpStatus.SC_OK, statusResponse.getStatusLine().getStatusCode());
         AuthorizationContext status = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
-        assertEquals(ProcessingError.VP_TOKEN_AUTH_ERROR, status.getError());
-        assertTrue(status.getErrorDescription().contains("Wallet returned error: access_denied"));
-        assertTrue(status.getErrorDescription().contains("wallet canceled presentation"));
+        assertEquals(ProcessingError.WALLET_OAUTH_ERROR, status.getError());
+        String description = status.getErrorDescription();
+        assertTrue(
+                description.contains("Wallet returned error: access_denied")
+                        && description.contains("wallet canceled presentation"),
+                description);
     }
 
     @Test
     public void shouldRejectEncryptedResponse_WithUnsupportedAlg() throws Exception {
-        assertEncryptedJweRejected(JWEConstants.ECDH_ES_A128KW, JWEConstants.A128GCM, null, "jwe_alg_unsupported");
+        assertEncryptedJweRejected(
+                JWEConstants.ECDH_ES_A128KW, JWEConstants.A128GCM, null, "Unsupported JWE key management algorithm");
     }
 
     @Test
     public void shouldRejectEncryptedResponse_WithUnsupportedEnc() throws Exception {
-        assertEncryptedJweRejected(JWEConstants.ECDH_ES, JWEConstants.A192GCM, null, "jwe_enc_unsupported");
+        assertEncryptedJweRejected(
+                JWEConstants.ECDH_ES, JWEConstants.A192GCM, null, "Unsupported JWE content encryption algorithm");
     }
 
     @Test
     public void shouldRejectEncryptedResponse_WithInvalidKid() throws Exception {
-        assertEncryptedJweRejected(JWEConstants.ECDH_ES, JWEConstants.A128GCM, "invalid-kid", "jwe_kid_mismatch");
+        assertEncryptedJweRejected(
+                JWEConstants.ECDH_ES,
+                JWEConstants.A128GCM,
+                "invalid-kid",
+                "does not match the encryption key advertised");
     }
 
     @Test
@@ -224,8 +234,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Encrypt with requested variations
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
-        var encKey =
-                (java.security.interfaces.ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        var encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
         String kid = overrideKid == null ? encJwk.getKeyId() : overrideKid;
         String encrypted = ECTestUtils.encryptMessage(payload, encKey, alg, enc, kid);
 
