@@ -11,7 +11,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtA
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
@@ -258,15 +257,7 @@ public class AuthorizationRequestService {
                 .setClientMetadata(clientMetadata)
                 .setVerifierInfo(verifierInfo);
 
-        // Append presentation request
-        QueryLanguage ql = config.getQueryLanguage();
-        if (ql.equals(QueryLanguage.ALL) || ql.equals(QueryLanguage.DIF_PRESENTATION_EXCHANGE)) {
-            // Kept for backward compatibility with Draft 20 wallets
-            requestObject.setPresentationDefinition(constrainer.generatePresentationDefinition(queryMap));
-        }
-        if (ql.equals(QueryLanguage.ALL) || ql.equals(QueryLanguage.DCQL_QUERY)) {
-            requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
-        }
+        requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
 
         return requestObject;
     }
