@@ -11,6 +11,9 @@ public class Credential {
     @JsonProperty("format")
     private String format;
 
+    @JsonProperty("multiple")
+    private Boolean multiple;
+
     @JsonProperty("meta")
     private Meta meta;
 
@@ -34,6 +37,14 @@ public class Credential {
 
     public void setFormat(String format) {
         this.format = format;
+    }
+
+    public Boolean getMultiple() {
+        return multiple;
+    }
+
+    public void setMultiple(Boolean multiple) {
+        this.multiple = multiple;
     }
 
     public Meta getMeta() {
