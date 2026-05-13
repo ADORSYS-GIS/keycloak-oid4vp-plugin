@@ -9,6 +9,7 @@ import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.ECDSAAlgorithm;
 import org.keycloak.crypto.KeyType;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
@@ -18,7 +19,6 @@ import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.truststore.TruststoreProvider;
-import org.keycloak.crypto.ECDSAAlgorithm;
 
 /**
  * Enhanced fetcher that enforces trust through Keycloak's global truststore.
@@ -54,6 +54,41 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         X509Certificate leaf = getLeafCertificateFromX5C(jws);
         SignatureVerifierContext verifier = getVerifierContext(jws, leaf);
         validateJwsSignature(jws, verifier, leaf.getPublicKey());
+    }
+
+    protected void validateJwsSignature(JWSInput jws, SignatureVerifierContext verifier, PublicKey publicKey)
+            throws ReferencedTokenValidationException {
+        try {
+            byte[] signature = jws.getSignature();
+            byte[] data = jws.getEncodedSignatureInput().getBytes(StandardCharsets.UTF_8);
+            String alg = jws.getHeader().getRawAlgorithm();
+
+            if (KeyType.EC.equals(algorithmToKeyType(alg))) {
+                // JWS concatenated R|S to ASN.1 DER conversion
+                int expectedSize = ECDSAAlgorithm.getSignatureLength(alg);
+                byte[] derSignature = ECDSAAlgorithm.concatenatedRSToASN1DER(signature, expectedSize);
+
+                String javaAlg = (Algorithm.ES384.equals(alg)) ? "SHA384withECDSA" : "SHA256withECDSA";
+                if (Algorithm.ES512.equals(alg)) {
+                    javaAlg = "SHA512withECDSA";
+                }
+
+                Signature sig = Signature.getInstance(javaAlg);
+                sig.initVerify(publicKey);
+                sig.update(data);
+                if (!sig.verify(derSignature)) {
+                    throw new ReferencedTokenValidationException("Invalid JWS signature");
+                }
+            } else {
+                if (!verifier.verify(data, signature)) {
+                    throw new ReferencedTokenValidationException("Invalid JWS signature");
+                }
+            }
+        } catch (ReferencedTokenValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ReferencedTokenValidationException("Signature verification failed: " + e.getMessage(), e);
+        }
     }
 
     protected JWSInput parseStatusListJwt(String statusListJwt) throws ReferencedTokenValidationException {
@@ -101,43 +136,6 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
             return signatureProvider.verifier(keyWrapper);
         } catch (Exception e) {
             throw new ReferencedTokenValidationException("Failed to create signature verifier for " + alg, e);
-        }
-    }
-
-    protected void validateJwsSignature(JWSInput jws, SignatureVerifierContext verifier, PublicKey publicKey)
-            throws ReferencedTokenValidationException {
-        try {
-            byte[] data = jws.getEncodedSignatureInput().getBytes(StandardCharsets.UTF_8);
-            byte[] signature = jws.getSignature();
-            String alg = jws.getHeader().getRawAlgorithm();
-
-            if (KeyType.EC.equals(algorithmToKeyType(alg))) {
-                // JWS concatenated R|S to ASN.1 DER conversion
-                int totalLength = ECDSAAlgorithm.getSignatureLength(alg);
-                byte[] derSignature = ECDSAAlgorithm.concatenatedRSToASN1DER(signature, totalLength);
-
-                String javaAlg = (Algorithm.ES384.equals(alg)) ? "SHA384withECDSA" : "SHA256withECDSA";
-                if (Algorithm.ES512.equals(alg)) {
-                    javaAlg = "SHA512withECDSA";
-                }
-
-                Signature sig = Signature.getInstance(javaAlg);
-                sig.initVerify(publicKey);
-                sig.update(data);
-                if (!sig.verify(derSignature)) {
-                    throw new ReferencedTokenValidationException("Invalid JWS signature");
-                }
-            } else {
-                // Standard Keycloak verification for non-EC algorithms
-                if (!verifier.verify(data, signature)) {
-                    throw new ReferencedTokenValidationException("Invalid JWS signature");
-                }
-            }
-        } catch (ReferencedTokenValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            Throwable cause = e instanceof VerificationException && e.getCause() != null ? e.getCause() : e;
-            throw new ReferencedTokenValidationException("Signature verification failed: " + cause.getMessage(), cause);
         }
     }
 
