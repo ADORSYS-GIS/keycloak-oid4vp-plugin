@@ -370,7 +370,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(ProcessingError.INVALID_VP_TOKEN.getErrorString(), errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains("Could not parse SD-JWT VP token contained in `vp_token`"));
+        assertTrue(errorRep.getErrorDescription().contains("must contain non-blank presentation strings"));
     }
 
     @Test
@@ -404,7 +404,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map does not match DCQL credential query");
+                "unknown DCQL credential query IDs");
     }
 
     @Test
