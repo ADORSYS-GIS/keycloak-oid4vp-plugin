@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.BaseKeycloakTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.QRCodeTestUtils;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.http.HttpHeaders;
@@ -46,6 +48,7 @@ import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Base Keycloak test class with common operations for OpenID4VC scenarios.
@@ -157,12 +160,12 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Scrapes the action URL of the OpenID4VP login form.
      */
     protected FormData getFreshOid4vpFormActionUrl() throws IOException {
-        String authEndpoint = new URIBuilder(getAuthEndpointURI())
+        String authEndpoint = Objects.requireNonNull(new URIBuilder(getAuthEndpointURI())
                 .addParameter(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
                 .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
                 .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
                 .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
-                .toString();
+                .toString());
 
         Connection.Response res =
                 Jsoup.connect(authEndpoint).method(Connection.Method.GET).execute();
@@ -180,40 +183,43 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         String actionUrl = form.attr("action");
         assertFalse(actionUrl.isBlank(), "Login form action URL should not be blank");
 
-        String[] actionUrlParts = actionUrl.split("\\?");
-        assertEquals(2, actionUrlParts.length);
+        // Collect authorization context details (QR code / cross-device)
 
-        String serverUrl = keycloak.getAuthServerUrl();
-        String absActionUrl = String.format(
-                "%s?%s",
-                KeycloakUriBuilder.fromUri(serverUrl).path(actionUrlParts[0]).build(), actionUrlParts[1]);
-
-        // Collect authorization context details
-
-        Element authLinkTag = html.selectFirst("a#kc-oid4vp-link");
-        assertNotNull(authLinkTag, "Authentication link should be present in the response");
-        String authReqLink = authLinkTag.attr("href");
+        Element qrCodeImg = html.selectFirst("img#kc-oid4vp-qrcode");
+        assertNotNull(qrCodeImg, "QR Code image should be present in the response");
+        String qrCodeDataUrl = qrCodeImg.attr("src");
+        assertTrue(StringUtil.isNotBlank(qrCodeDataUrl), "QR Code data URL should not be blank");
+        String qrCodeReqLink = QRCodeTestUtils.decodeQrCodeFromDataUrl(qrCodeDataUrl);
 
         Element script = html.selectFirst("script:containsData(checkAuthStatus)");
         assertNotNull(script, "A script should be present in the response");
         Matcher m = Pattern.compile("checkAuthStatus\\(.*/([^/]+)\",").matcher(script.data());
         String transactionId = m.find() ? m.group(1) : null;
 
-        AuthorizationContext authContext =
-                new AuthorizationContext().setAuthorizationRequest(authReqLink).setTransactionId(transactionId);
+        AuthorizationContext authContext = new AuthorizationContext()
+                .setAuthorizationRequest(qrCodeReqLink)
+                .setTransactionId(transactionId);
 
-        return new FormData(authContext, absActionUrl, cookies);
+        // Collect authorization context details (same-device)
+
+        Element authLinkTag = html.selectFirst("a#kc-oid4vp-link");
+        assertNotNull(authLinkTag, "Authentication link should be present in the response");
+        String authReqLink = authLinkTag.attr("href");
+
+        AuthorizationContext authContextSameDevice = new AuthorizationContext().setAuthorizationRequest(authReqLink);
+
+        return new FormData(authContext, authContextSameDevice, actionUrl, cookies);
     }
 
     /**
      * Gets an authorization code by logging in with username/password.
      */
     protected String getFreshAuthorizationCode() throws IOException {
-        String authEndpoint = new URIBuilder(getAuthEndpointURI())
+        String authEndpoint = Objects.requireNonNull(new URIBuilder(getAuthEndpointURI())
                 .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
                 .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
                 .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
-                .toString();
+                .toString());
 
         Connection.Response res =
                 Jsoup.connect(authEndpoint).method(Connection.Method.GET).execute();
@@ -262,27 +268,36 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     protected static AuthorizationContext parseAuthorizationContext(HttpResponse response) throws IOException {
-        return JsonSerialization.readValue(
-                EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), AuthorizationContext.class);
+        return parseHttpResponse(response, AuthorizationContext.class);
     }
 
     protected static OAuth2ErrorRepresentation parseErrorResponse(HttpResponse response) throws IOException {
+        return parseHttpResponse(response, OAuth2ErrorRepresentation.class);
+    }
+
+    protected static <T> T parseHttpResponse(HttpResponse response, Class<T> clazz) throws IOException {
         String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-        return JsonSerialization.readValue(payload, OAuth2ErrorRepresentation.class);
+        return JsonSerialization.readValue(payload, clazz);
     }
 
     /**
      * Extracts the authorization code from the redirection response after form submission.
      */
     protected static String extractAuthCodeInRedirect(HttpResponse response) throws IOException {
-        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusLine().getStatusCode());
-
-        String redirectUri = response.getFirstHeader(HttpHeaders.LOCATION).getValue();
+        String redirectUri = captureNextRedirect(response);
         assertTrue(redirectUri.startsWith(TEST_CLIENT_REDIRECT_URI));
 
         // Extract the authorization code from the redirect URI
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(redirectUri));
         return uriInfo.getQueryParameters().getFirst(OAuth2Constants.CODE);
+    }
+
+    /**
+     * Extracts the next redirect URI from the response.
+     */
+    protected static String captureNextRedirect(HttpResponse response) throws IOException {
+        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusLine().getStatusCode());
+        return response.getFirstHeader(HttpHeaders.LOCATION).getValue();
     }
 
     /**
@@ -302,7 +317,11 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         return cookieStore;
     }
 
-    protected record FormData(AuthorizationContext authContext, String actionUrl, BasicCookieStore cookieStore) {}
+    protected record FormData(
+            AuthorizationContext authContext,
+            AuthorizationContext authContextSameDevice,
+            String actionUrl,
+            BasicCookieStore cookieStore) {}
 
     protected record ApiFlowData(AuthorizationContext authContext, String codeVerifier) {}
 }

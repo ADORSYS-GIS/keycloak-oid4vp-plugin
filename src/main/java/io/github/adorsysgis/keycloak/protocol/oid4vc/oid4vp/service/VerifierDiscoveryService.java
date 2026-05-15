@@ -1,8 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
-
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
@@ -16,17 +14,14 @@ import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
-import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.Urls;
-import org.keycloak.urls.UrlType;
 
 /**
  * Discovers client metadata and other properties as Keycloak acts as an OpenID4VP client.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
- * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html#name-verifier-metadata-client-me">
+ * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-verifier-metadata-client-me">
  * Verifier Metadata (Client Metadata)</a>
  */
 public class VerifierDiscoveryService {
@@ -62,18 +57,6 @@ public class VerifierDiscoveryService {
 
         // Return aggregated metadata
         return metadata;
-    }
-
-    /**
-     * Returns the root URL path common to OpenID4VP routes.
-     */
-    public String getOpenID4VPRootUrl() {
-        KeycloakContext context = session.getContext();
-        String baseRealmUrl = Urls.realmIssuer(
-                context.getUri(UrlType.FRONTEND).getBaseUri(),
-                context.getRealm().getName());
-
-        return baseRealmUrl + "/" + OID4VPUserAuthEndpointFactory.PROVIDER_ID;
     }
 
     /**

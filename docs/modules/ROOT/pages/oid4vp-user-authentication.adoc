@@ -4,7 +4,7 @@
 == Authenticate users with verifiable credentials over OpenID4VP
 
 {project_name} implements experimental support for authenticating users as they present verifiable credentials issued to them by itself.
-This is done over https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html[OpenID for Verifiable Presentation (OpenID4VP)].
+This is done over https://openid.net/specs/openid-4-verifiable-presentations-1_0.html[OpenID for Verifiable Presentation (OpenID4VP)].
 This chapter describes how to interact with this feature.
 
 [IMPORTANT]

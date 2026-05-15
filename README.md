@@ -35,6 +35,8 @@ are supported:
     - `verifier_info` support for registration certificate injection
     - Compatibility and interoperability hardening are still evolving
 
+Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
+
 ## Build the Plugin
 
 To compile the plugin without running tests (recommended for a first-time build), run:

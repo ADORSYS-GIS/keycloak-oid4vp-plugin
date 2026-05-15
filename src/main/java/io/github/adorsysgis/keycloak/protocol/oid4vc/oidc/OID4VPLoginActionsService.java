@@ -7,6 +7,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
@@ -88,6 +89,20 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
 
         res.initialVerify();
         return res;
+    }
+
+    @Path(OID4VP_AUTH_LOGIN_PATH)
+    @GET
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public Response oid4vpAuthLoginRedirect(
+            @QueryParam(AUTH_SESSION_ID) String authSessionId,
+            @QueryParam(SESSION_CODE) String code,
+            @QueryParam(Constants.EXECUTION) String execution,
+            @QueryParam(Constants.CLIENT_ID) String clientId,
+            @QueryParam(Constants.CLIENT_DATA) String clientData,
+            @QueryParam(Constants.TAB_ID) String tabId,
+            @QueryParam(OAuth2Constants.CODE) String authorizationCode) {
+        return oid4vpAuthLogin(authSessionId, code, execution, clientId, clientData, tabId, authorizationCode);
     }
 
     @Path(OID4VP_AUTH_LOGIN_PATH)

@@ -13,11 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Descriptor;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.InputDescriptor;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.IOException;
@@ -27,7 +23,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Optional;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -52,22 +48,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Helper for successful flows.
      */
     protected String testSuccessfulAuthentication(String sdJwt, TestOpts opts) throws Exception {
-        ApiFlowData apiFlow = resolveApiFlow(opts);
-        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+        TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
 
-        // Prepare and send the OpenID4VP response to Keycloak
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
-
-        // Redeem authorization code when it is not disclosed in the status response
-        String authCode = statusPayload.getAuthorizationCode();
-        if (authCode == null) {
-            assertNotNull(apiFlow.codeVerifier(), "Code verifier should not be null for API flows");
-            authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        }
-
+        // Exchange authorization code for access token
+        String authCode = testFlowData.authCode();
         assertNotNull(authCode, "Authorization code should not be null");
         if (opts.shouldRetrieveAccessToken()) {
             assertAuthenticatingUser(opts, authCode);
@@ -78,27 +62,43 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
-     * Helper for flows that should fail at authorization code redemption.
-     * Note: To test missing verifier scenarios, pass a TestOpts instance (e.g., TestOpts.getDefault())
-     * that has not been initialized with a codeVerifier. The default state of TestOpts is null.
+     * Helper for successful flows (verbose)
+     * @return contextual data for further assertions
      */
-    protected void testFailingCodeRedemption(
-            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
-            throws Exception {
+    protected TestFlowData testSuccessfulAuthenticationVerbose(String sdJwt, TestOpts opts) throws Exception {
+        // Retrieve an authorization request
         ApiFlowData apiFlow = resolveApiFlow(opts);
-        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+        AuthorizationContext authContext = apiFlow.authContext();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
+        // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        assertSuccessfulAuthorizationStatus(apiFlow);
 
-        HttpResponse redemptionResponse =
-                redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+        // If auth context acquired in place, then cross-device flow assumed.
+        // Assert that response to wallet does not contain a redirect URI.
+        if (opts.getAuthContext() == null) {
+            assertNull(
+                    responseToWallet.getRedirectUri(),
+                    "Response to wallet should not contain a redirect URI in cross-device flow");
+        }
 
-        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
-        assertEquals(expectedError, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
+        // Check auth status
+        String authCode = null;
+        if (authContext.getTransactionId() != null) {
+            AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
+
+            // Redeem authorization code when it is not disclosed in the status response
+            authCode = statusPayload.getAuthorizationCode();
+            if (authCode == null) {
+                assertNotNull(apiFlow.codeVerifier(), "Code verifier should not be null for API flows");
+                authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
+            }
+        }
+
+        // Bubble up test flow data
+        return new TestFlowData(authContext, requestObject, responseToWallet, authCode);
     }
 
     /**
@@ -123,17 +123,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
             throws Exception {
         // Retrieve an authorization request
-        // Refactored: Extracting opts.getAuthContext() to avoid repetitive calls and improve readability.
         AuthorizationContext authContext =
-                opts.getAuthContext() != null ? opts.getAuthContext() : requestAuthorizationRequest();
+                Optional.ofNullable(opts.getAuthContext()).orElseGet(this::requestAuthorizationRequest);
 
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-
-        // Refactored: Extracting override ID to avoid repetitive opts access.
-        String overrideId = opts.getOverridePresentationDefinitionId();
-        if (overrideId != null) {
-            requestObject.getPresentationDefinition().setId(overrideId);
-        }
 
         // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
@@ -162,9 +155,31 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
+     * Helper for flows that should fail at authorization code redemption.
+     */
+    protected void testFailingCodeRedemption(
+            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
+            throws Exception {
+        ApiFlowData apiFlow = resolveApiFlow(opts);
+        RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        assertSuccessfulAuthorizationStatus(apiFlow);
+
+        HttpResponse redemptionResponse =
+                redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
+        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
+        assertEquals(expectedError, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
+    }
+
+    /**
      * Helper for asserting failing flows.
      */
-    private void assertFailingAuthentication(
+    protected void assertFailingAuthentication(
             HttpResponse postAuthResponse,
             String transactionId,
             int httpStatus,
@@ -274,8 +289,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         if (!opts.shouldForceUnencryptedResponse()
                 && requestObject.getClientMetadata().getJwks() != null) {
             oid4vpResponse = prepareEncryptedOpenID4VPResponse(sdJwtVpToken, requestObject);
-        } else if (requestObject.getPresentationDefinition() != null) {
-            oid4vpResponse = prepareLegacyOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
         } else {
             oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject);
         }
@@ -291,11 +304,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Prepare the OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
+     * @param requestObject the request object containing the DCQL query
      */
     private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
-        // Build presentation submission
+        // Build final-spec vp_token map keyed by DCQL credential query ID
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
 
         // Compose the response object as form-urlencoded parameters
@@ -308,11 +321,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Prepare an encrypted OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
+     * @param requestObject the request object containing the DCQL query
      */
     private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
-        // Build presentation submission
+        // Build final-spec vp_token map keyed by DCQL credential query ID
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
         var respMap = Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap);
         String resp = JsonSerialization.writeValueAsString(respMap);
@@ -321,7 +334,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
 
-        // Encrypt the vpTokenMap
+        // Encrypt the response object
         String encResp = ECTestUtils.encryptMessage(resp, encKey);
 
         // Compose the response object as form-urlencoded parameters
@@ -337,46 +350,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
     }
 
-    /**
-     * Prepare the OpenID4VP response object to be sent to Keycloak (Legacy).
-     *
-     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
-     */
-    private List<BasicNameValuePair> prepareLegacyOpenID4VPResponse(
-            String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws IOException {
-        // Build presentation submission
-
-        PresentationDefinition definition = requestObject.getPresentationDefinition();
-        InputDescriptor inputDescriptor = definition.getInputDescriptors().getFirst();
-
-        PresentationSubmission submission = new PresentationSubmission();
-        submission.setId(UUID.randomUUID().toString());
-        submission.setDefinitionId(definition.getId());
-
-        // Build descriptor
-        // noinspection ExtractMethodRecommender
-
-        Descriptor descriptor = new Descriptor();
-        descriptor.setId(inputDescriptor.getId());
-        descriptor.setFormat(
-                opts.getOverrideDescriptorFormat() == null
-                        ? Descriptor.Format.VC_SD_JWT
-                        : opts.getOverrideDescriptorFormat());
-        descriptor.setPath(
-                opts.getOverrideDescriptorPath() == null
-                        ? AuthorizationResponseService.JSON_PATH_ROOT
-                        : opts.getOverrideDescriptorPath());
-        submission.setDescriptorMap(List.of(descriptor));
-
-        // Compose the response object as form-urlencoded parameters
-
-        return new ArrayList<>(List.of(
-                new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, sdJwtVpToken),
-                new BasicNameValuePair(
-                        ResponseObject.PRESENTATION_SUBMISSION_KEY, JsonSerialization.writeValueAsString(submission)),
-                new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
-    }
+    public record TestFlowData(
+            AuthorizationContext authContext,
+            RequestObject requestObject,
+            ResponseToWallet responseToWallet,
+            String authCode) {}
 
     /**
      * POJO for test options.
@@ -390,10 +368,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         private boolean shouldRetrieveAccessToken = true;
         private boolean shouldEnforceRedirectUri = false;
         private boolean shouldForceUnencryptedResponse = false;
-        private String overridePresentationDefinitionId;
         private String overridePresentationAud;
-        private Descriptor.Format overrideDescriptorFormat;
-        private String overrideDescriptorPath;
 
         public static TestOpts getDefault() {
             return new TestOpts();
@@ -412,7 +387,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             return authContext;
         }
 
-        public TestOpts setAuthorizationContext(AuthorizationContext authContext) {
+        public TestOpts setAuthContext(AuthorizationContext authContext) {
             this.authContext = authContext;
             return this;
         }
@@ -462,39 +437,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             return this;
         }
 
-        public String getOverridePresentationDefinitionId() {
-            return overridePresentationDefinitionId;
-        }
-
-        public TestOpts setOverridePresentationDefinitionId(String overridePresentationDefinitionId) {
-            this.overridePresentationDefinitionId = overridePresentationDefinitionId;
-            return this;
-        }
-
         public String getOverridePresentationAud() {
             return overridePresentationAud;
         }
 
         public TestOpts setOverridePresentationAud(String overridePresentationAud) {
             this.overridePresentationAud = overridePresentationAud;
-            return this;
-        }
-
-        public Descriptor.Format getOverrideDescriptorFormat() {
-            return overrideDescriptorFormat;
-        }
-
-        public TestOpts setOverrideDescriptorFormat(Descriptor.Format overrideDescriptorFormat) {
-            this.overrideDescriptorFormat = overrideDescriptorFormat;
-            return this;
-        }
-
-        public String getOverrideDescriptorPath() {
-            return overrideDescriptorPath;
-        }
-
-        public TestOpts setOverrideDescriptorPath(String overrideDescriptorPath) {
-            this.overrideDescriptorPath = overrideDescriptorPath;
             return this;
         }
     }
