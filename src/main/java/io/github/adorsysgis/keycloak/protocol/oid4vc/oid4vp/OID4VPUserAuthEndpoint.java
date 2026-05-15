@@ -55,7 +55,7 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Endpoint class for user authentication over
- * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html">
+ * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html">
  * OpenID4VP
  * </a>.
  *
@@ -241,7 +241,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
-            @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
             @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
 
@@ -266,7 +265,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         ResponseObject responseObject;
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
-                    ? new ResponseObject(vpToken, presentationSubmission, state)
+                    ? new ResponseObject(vpToken, state)
                     : decryptResponse(encryptedResponse, ephemeralKey);
 
             String parsedState = responseObject.getState();

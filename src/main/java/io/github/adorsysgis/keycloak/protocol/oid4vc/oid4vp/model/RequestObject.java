@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
 import java.util.List;
 import org.keycloak.representations.JsonWebToken;
 
@@ -11,7 +10,7 @@ import org.keycloak.representations.JsonWebToken;
  * Request object payload for OpenID4VP Authorization Request.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
- * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html#name-authorization-request">
+ * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-authorization-request">
  * Authorization Request</a>
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -46,10 +45,6 @@ public class RequestObject extends JsonWebToken {
 
     @JsonProperty("scope")
     private String scope;
-
-    @JsonProperty("presentation_definition")
-    @Deprecated
-    private PresentationDefinition presentationDefinition;
 
     @JsonProperty("dcql_query")
     private DcqlQuery dcqlQuery;
@@ -147,15 +142,6 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setScope(String scope) {
         this.scope = scope;
-        return this;
-    }
-
-    public PresentationDefinition getPresentationDefinition() {
-        return presentationDefinition;
-    }
-
-    public RequestObject setPresentationDefinition(PresentationDefinition presentationDefinition) {
-        this.presentationDefinition = presentationDefinition;
         return this;
     }
 
