@@ -52,7 +52,7 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Endpoint class for user authentication over
- * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html">
+ * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html">
  * OpenID4VP
  * </a>.
  *
@@ -147,7 +147,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
-            @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
             @FormParam(ResponseObject.STATE_KEY) String state,
             @FormParam(OAuth2Constants.ERROR) String error,
             @FormParam(OAuth2Constants.ERROR_DESCRIPTION) String errorDescription) {
@@ -158,9 +157,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
 
         if (StringUtil.isNotBlank(error)) {
-            if (StringUtil.isNotBlank(encryptedResponse)
-                    || StringUtil.isNotBlank(vpToken)
-                    || StringUtil.isNotBlank(presentationSubmission)) {
+            if (StringUtil.isNotBlank(encryptedResponse) || StringUtil.isNotBlank(vpToken)) {
                 throw new BadRequestException(errorResponse(
                         Response.Status.BAD_REQUEST,
                         OAuthErrorException.INVALID_REQUEST,
@@ -197,7 +194,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         ResponseObject responseObject;
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
-                    ? new ResponseObject(vpToken, presentationSubmission, state)
+                    ? new ResponseObject(vpToken, state)
                     : decryptResponse(encryptedResponse, ephemeralKey);
 
             validateResponseState(requestId, responseObject.getState());

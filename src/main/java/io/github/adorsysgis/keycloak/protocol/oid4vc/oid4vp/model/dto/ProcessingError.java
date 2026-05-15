@@ -11,7 +11,6 @@ import java.util.Arrays;
  */
 public enum ProcessingError {
     AUTH_CONTEXT_CLOSED("auth_context_closed"),
-    INVALID_PRESENTATION_SUBMISSION("invalid_presentation_submission"),
     INVALID_VP_TOKEN("invalid_vp_token"),
     VP_TOKEN_AUTH_ERROR("vp_token_auth_error"),
     INVALID_REQUEST("invalid_request"),

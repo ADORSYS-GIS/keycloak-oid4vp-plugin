@@ -22,16 +22,13 @@ versions for best results.
 Additionally, the following features of [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
 are supported:
 
-- **1.0-Draft20** ✅
+- **OpenID4VP 1.0** ⚠️
     - Client Identifier Scheme: `x509_san_dns`
     - Response Mode: `direct_post`
     - Response Type: `vp_token`
-    - DIF Presentation Exchange
-
-- **1.0-Final** ⚠️
     - DCQL Query Language
 
-Confirmed support for 1.0-Final is pending further updates, review, and testing.
+Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
 
 ## Build the Plugin
 
