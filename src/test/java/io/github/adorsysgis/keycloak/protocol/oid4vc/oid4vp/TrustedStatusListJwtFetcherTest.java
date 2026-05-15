@@ -114,7 +114,7 @@ public class TrustedStatusListJwtFetcherTest {
         String statusListJwt = MockTrustedStatusListJwtFetcher.exampleStatusListJwt(
                 "/tokenstatus/status-list-jwt+invalid-signature.txt");
         setupTrustForJwt(statusListJwt);
-
+        setupSignatureMock(Algorithm.ES256, false);
         var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
         assertEquals("Invalid JWS signature", e.getMessage());
     }
@@ -226,6 +226,10 @@ public class TrustedStatusListJwtFetcherTest {
     }
 
     private void setupSignatureMock(String alg) throws Exception {
+        setupSignatureMock(alg, true);
+    }
+
+    private void setupSignatureMock(String alg, boolean valid) throws Exception {
         SignatureProvider signatureProvider = Mockito.mock(SignatureProvider.class);
         Mockito.lenient()
                 .when(session.getProvider(SignatureProvider.class, alg))
@@ -237,7 +241,7 @@ public class TrustedStatusListJwtFetcherTest {
                     SignatureVerifierContext verifier = Mockito.mock(SignatureVerifierContext.class);
                     Mockito.lenient()
                             .when(verifier.verify(Mockito.any(), Mockito.any()))
-                            .thenReturn(true);
+                            .thenReturn(valid);
                     return verifier;
                 });
     }

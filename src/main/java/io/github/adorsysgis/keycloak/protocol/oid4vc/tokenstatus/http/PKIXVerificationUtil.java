@@ -4,12 +4,15 @@ import java.io.ByteArrayInputStream;
 import java.security.GeneralSecurityException;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
+import java.security.cert.CertStore;
 import java.security.cert.CertificateFactory;
+import java.security.cert.CollectionCertStoreParameters;
 import java.security.cert.PKIXParameters;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -43,7 +46,7 @@ public class PKIXVerificationUtil {
                 throw new VerificationException("No trusted root certificates available for validation");
             }
 
-            // Build PKIX parameters
+            // Build trust anchors from roots
             Set<TrustAnchor> trustAnchors = truststoreProvider.getRootCertificates().values().stream()
                     .flatMap(List::stream)
                     .map(cert -> new TrustAnchor(cert, null))
@@ -60,6 +63,16 @@ public class PKIXVerificationUtil {
             params.setRevocationEnabled(false);
             // Sync with Keycloak offset time for testing (and production time consistency)
             params.setDate(new Date(Time.currentTimeMillis()));
+
+            // Add intermediate certificates from the truststore and the presented chain
+            // as a CertStore so PKIX can bridge chains where the issuer CA is stored as
+            // an intermediate (not repeated in the JWT x5c array).
+            Collection<X509Certificate> allIntermediates = new ArrayList<>(certs);
+            truststoreProvider.getIntermediateCertificates().values().stream()
+                    .flatMap(List::stream)
+                    .forEach(allIntermediates::add);
+            params.addCertStore(
+                    CertStore.getInstance("Collection", new CollectionCertStoreParameters(allIntermediates)));
 
             // Validate the path. The CertPath should not include the trust anchor itself.
             List<X509Certificate> pathCerts = new ArrayList<>(certs);

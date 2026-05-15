@@ -2,14 +2,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import java.nio.charset.StandardCharsets;
-import java.security.PublicKey;
-import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.Algorithm;
-import org.keycloak.crypto.ECDSAAlgorithm;
 import org.keycloak.crypto.KeyType;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
@@ -53,36 +50,17 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
     protected void verifyStatusListJwt(JWSInput jws, String uri) throws ReferencedTokenValidationException {
         X509Certificate leaf = getLeafCertificateFromX5C(jws);
         SignatureVerifierContext verifier = getVerifierContext(jws, leaf);
-        validateJwsSignature(jws, verifier, leaf.getPublicKey());
+        validateJwsSignature(jws, verifier);
     }
 
-    protected void validateJwsSignature(JWSInput jws, SignatureVerifierContext verifier, PublicKey publicKey)
+    protected void validateJwsSignature(JWSInput jws, SignatureVerifierContext verifier)
             throws ReferencedTokenValidationException {
         try {
             byte[] signature = jws.getSignature();
             byte[] data = jws.getEncodedSignatureInput().getBytes(StandardCharsets.UTF_8);
-            String alg = jws.getHeader().getRawAlgorithm();
 
-            if (KeyType.EC.equals(algorithmToKeyType(alg))) {
-                // JWS concatenated R|S to ASN.1 DER conversion
-                int expectedSize = ECDSAAlgorithm.getSignatureLength(alg);
-                byte[] derSignature = ECDSAAlgorithm.concatenatedRSToASN1DER(signature, expectedSize);
-
-                String javaAlg = (Algorithm.ES384.equals(alg)) ? "SHA384withECDSA" : "SHA256withECDSA";
-                if (Algorithm.ES512.equals(alg)) {
-                    javaAlg = "SHA512withECDSA";
-                }
-
-                Signature sig = Signature.getInstance(javaAlg);
-                sig.initVerify(publicKey);
-                sig.update(data);
-                if (!sig.verify(derSignature)) {
-                    throw new ReferencedTokenValidationException("Invalid JWS signature");
-                }
-            } else {
-                if (!verifier.verify(data, signature)) {
-                    throw new ReferencedTokenValidationException("Invalid JWS signature");
-                }
+            if (!verifier.verify(data, signature)) {
+                throw new ReferencedTokenValidationException("Invalid JWS signature");
             }
         } catch (ReferencedTokenValidationException e) {
             throw e;
@@ -142,13 +120,13 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
     protected X509Certificate[] validateCertChain(List<String> x5c) throws ReferencedTokenValidationException {
         TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
         if (truststoreProvider == null || truststoreProvider.getTruststore() == null) {
-            logger.warn("No Keycloak global truststore configured. Falling back to default JVM truststore.");
+            logger.warn("No Keycloak global truststore configured. Certificate chain validation will fail.");
         }
 
         try {
             return PKIXVerificationUtil.validateChain(x5c, truststoreProvider);
         } catch (VerificationException e) {
-            throw new ReferencedTokenValidationException(e.getMessage(), e.getCause());
+            throw new ReferencedTokenValidationException(e.getMessage(), e);
         }
     }
 
@@ -162,10 +140,18 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         }
     }
 
-    private static String algorithmToKeyType(String alg) {
+    private static String algorithmToKeyType(String alg) throws ReferencedTokenValidationException {
         if (Algorithm.ES256.equals(alg) || Algorithm.ES384.equals(alg) || Algorithm.ES512.equals(alg)) {
             return KeyType.EC;
         }
-        return KeyType.RSA;
+        if (Algorithm.RS256.equals(alg)
+                || Algorithm.RS384.equals(alg)
+                || Algorithm.RS512.equals(alg)
+                || Algorithm.PS256.equals(alg)
+                || Algorithm.PS384.equals(alg)
+                || Algorithm.PS512.equals(alg)) {
+            return KeyType.RSA;
+        }
+        throw new ReferencedTokenValidationException("Unsupported signature algorithm: " + alg);
     }
 }
