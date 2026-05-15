@@ -9,7 +9,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
  */
 public enum ProcessingError {
     AUTH_CONTEXT_CLOSED("auth_context_closed"),
-    INVALID_PRESENTATION_SUBMISSION("invalid_presentation_submission"),
     INVALID_VP_TOKEN("invalid_vp_token"),
     WALLET_OAUTH_ERROR("wallet_oauth_error"),
     VP_TOKEN_AUTH_ERROR("vp_token_auth_error");

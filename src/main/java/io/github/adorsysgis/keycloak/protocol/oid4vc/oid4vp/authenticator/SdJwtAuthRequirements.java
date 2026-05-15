@@ -92,18 +92,15 @@ public class SdJwtAuthRequirements {
         return enforceRevocationStatus;
     }
 
-    /**
-     * Constructs presentation definition as supported by keycloak-core.
-     */
-    public PresentationRequirements getPresentationDefinition() {
-        var definition = SimplePresentationDefinition.builder();
-        getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
+    public PresentationRequirements getPresentationRequirements() {
+        var requirements = SimplePresentationDefinition.builder();
+        getRequiredClaims().forEach(claim -> requirements.addClaimRequirement(claim, ".*"));
 
-        definition.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
+        requirements.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
         if (verifyIssuerClaim) {
-            definition.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+            requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
         }
-        return definition.build();
+        return requirements.build();
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
