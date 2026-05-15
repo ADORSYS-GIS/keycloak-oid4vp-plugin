@@ -255,9 +255,8 @@ public class AuthorizationRequestService {
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
                 .setClientMetadata(clientMetadata)
-                .setVerifierInfo(verifierInfo);
-
-        requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
+                .setVerifierInfo(verifierInfo)
+                .setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
 
         return requestObject;
     }

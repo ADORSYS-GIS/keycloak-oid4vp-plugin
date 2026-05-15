@@ -14,9 +14,17 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Extracts SD-JWT VP presentation candidates from final-spec vp_token maps.
+ *
+ * @author <a href="mailto:Bertrand.Ogen@adorsys.com">Bertrand Ogen</a>
+ * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-response-parameters">
+ * Response</a>
  */
 public class VpTokenCandidateExtractor {
 
+    /**
+     * Validates the final-spec vp_token map against the stored DCQL query and returns the SD-JWT presentations
+     * that can be forwarded to the SD-JWT authenticator.
+     */
     public List<String> extractSdJwtCandidates(DcqlQuery dcqlQuery, Map<String, List<String>> vpToken) {
         Map<String, Credential> credentialsById = credentialsById(dcqlQuery);
         if (vpToken == null || vpToken.isEmpty()) {
@@ -30,6 +38,7 @@ public class VpTokenCandidateExtractor {
         List<String> candidates = new ArrayList<>();
         vpToken.forEach((queryId, presentations) -> {
             Credential credential = credentialsById.get(queryId);
+            // This authenticator currently handles SD-JWT VCs only; other formats are left out deliberately.
             if (VCFormat.SD_JWT_VC.equals(credential.getFormat())) {
                 candidates.addAll(presentations);
             }
@@ -75,11 +84,13 @@ public class VpTokenCandidateExtractor {
     private void validatePresentationArrays(
             Map<String, List<String>> vpToken, Map<String, Credential> credentialsById) {
         vpToken.forEach((queryId, presentations) -> {
+            // Each vp_token entry is an array of presentations for the matching DCQL credential query id.
             if (presentations == null || presentations.isEmpty()) {
                 throw invalid("vp_token entry `%s` must contain at least one presentation".formatted(queryId));
             }
 
             Credential credential = credentialsById.get(queryId);
+            // Per DCQL, omitted `multiple` means the verifier requested at most one presentation.
             if (!Boolean.TRUE.equals(credential.getMultiple()) && presentations.size() > 1) {
                 throw invalid("DCQL credential query `%s` does not allow multiple presentations".formatted(queryId));
             }
@@ -94,6 +105,7 @@ public class VpTokenCandidateExtractor {
             DcqlQuery dcqlQuery, Set<String> returnedQueryIds, Map<String, Credential> credentialsById) {
         List<CredentialSet> credentialSets = dcqlQuery.getCredentialSets();
         if (credentialSets == null || credentialSets.isEmpty()) {
+            // Without credential_sets, every credential query in the DCQL request is mandatory.
             Set<String> missingQueryIds = new LinkedHashSet<>(credentialsById.keySet());
             missingQueryIds.removeAll(returnedQueryIds);
             if (!missingQueryIds.isEmpty()) {
@@ -104,6 +116,7 @@ public class VpTokenCandidateExtractor {
         }
 
         for (CredentialSet credentialSet : credentialSets) {
+            // A credential set is required unless it explicitly declares required=false.
             if (!Boolean.FALSE.equals(credentialSet.getRequired())
                     && !isCredentialSetSatisfied(credentialSet, returnedQueryIds, credentialsById)) {
                 throw invalid("Presented vp_token map does not satisfy a required DCQL credential set");
@@ -119,6 +132,7 @@ public class VpTokenCandidateExtractor {
                     "Invalid DCQL query in authorization context. Credential set has no options.");
         }
 
+        // A credential set option is satisfied only when all credential query IDs in that option are present.
         return options.stream().anyMatch(option -> {
             validateOption(option, credentialsById);
             return returnedQueryIds.containsAll(option);

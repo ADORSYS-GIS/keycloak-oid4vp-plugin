@@ -12,6 +12,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.keycloak.VCFormat;
 
+/**
+ * Covers final-spec vp_token matching rules for DCQL query IDs, presentation arrays,
+ * credential-set satisfaction, and SD-JWT candidate extraction.
+ */
 class VpTokenCandidateExtractorTest {
 
     private static final String PID_QUERY_ID = "pid";
@@ -91,6 +95,7 @@ class VpTokenCandidateExtractorTest {
 
     @Test
     void shouldAcceptAlternativeRequiredCredentialSetOption() throws Exception {
+        // Required credential sets may be satisfied by any one complete option.
         DcqlQuery query = query(
                 List.of(
                         credential(PID_QUERY_ID, VCFormat.SD_JWT_VC, null),
@@ -107,6 +112,7 @@ class VpTokenCandidateExtractorTest {
 
     @Test
     void shouldAcceptMissingOptionalCredentialSet() throws Exception {
+        // Optional credential sets are allowed to be absent from the vp_token map.
         DcqlQuery query = query(
                 List.of(
                         credential(PID_QUERY_ID, VCFormat.SD_JWT_VC, null),
@@ -196,6 +202,7 @@ class VpTokenCandidateExtractorTest {
         Credential credential = new Credential();
         credential.setId(id);
         credential.setFormat(format);
+        // null keeps `multiple` omitted, which exercises the final-spec default of false.
         credential.setMultiple(multiple);
         return credential;
     }

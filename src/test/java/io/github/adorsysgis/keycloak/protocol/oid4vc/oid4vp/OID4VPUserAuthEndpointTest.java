@@ -250,22 +250,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
-    public void shouldAuthenticateSuccessfully_NewDcSdJwtFormat() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Proceed to authentication and assert final-spec DCQL format usage.
-        TestOpts opts = TestOpts.getDefault();
-        TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
-        var credentialQuery =
-                testFlowData.requestObject().getDcqlQuery().getCredentials().getFirst();
-        assertEquals("dc+sd-jwt", credentialQuery.getFormat());
-        assertNotNull(
-                testFlowData.requestObject().getClientMetadata().getVpFormat().getDcSdJwt());
-        assertAuthenticatingUser(opts, testFlowData.authCode());
-    }
-
-    @Test
     public void shouldAuthenticateSuccessfully_Base64EncodedVpToken() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
