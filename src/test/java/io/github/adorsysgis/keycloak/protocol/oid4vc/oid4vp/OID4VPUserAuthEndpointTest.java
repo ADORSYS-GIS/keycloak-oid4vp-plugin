@@ -545,6 +545,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldFailAuthentication_InvalidKbJwt_InvalidAud() throws Exception {
         var invalidAuds = List.of(
                 "invalid-aud",
+                getVerifierClientId(), // Missing required client_id prefix
                 ":" + getVerifierClientId(), // Missing scheme
                 "double:scheme:" + getVerifierClientId());
 
