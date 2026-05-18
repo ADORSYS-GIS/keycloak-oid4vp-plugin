@@ -13,7 +13,6 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.List;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -134,9 +133,9 @@ public class AuthorizationResponseService {
     private String extractSdJwtVpToken(
             ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
         logger.debug("Extracting SD-JWT VP token from response object with DCQL matching");
-        List<String> candidates;
+        String parsedVpToken;
         try {
-            candidates = vpTokenCandidateExtractor.extractSdJwtCandidates(
+            parsedVpToken = vpTokenCandidateExtractor.extractSingleSdJwtCandidate(
                     authContext.getRequestObject().getDcqlQuery(), responseObject.getVpToken());
         } catch (VpTokenCandidateExtractor.InvalidVpTokenException e) {
             throw failWithHttpException(
@@ -148,20 +147,8 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        if (candidates.size() != 1) {
-            String detailed =
-                    "Authorization response must contain exactly one SD-JWT VP candidate. Found: " + candidates.size();
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Invalid vp_token",
-                    detailed,
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
-
         try {
-            String vpToken = decodeIfBase64Url(candidates.getFirst());
+            String vpToken = decodeIfBase64Url(parsedVpToken);
             SdJwtVP.of(vpToken);
             return vpToken;
         } catch (IllegalArgumentException e) {

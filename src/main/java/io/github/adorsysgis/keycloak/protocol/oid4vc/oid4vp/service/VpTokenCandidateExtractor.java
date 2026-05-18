@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -25,7 +26,7 @@ public class VpTokenCandidateExtractor {
      * Validates the final-spec vp_token map against the stored DCQL query and returns the SD-JWT presentations
      * that can be forwarded to the SD-JWT authenticator.
      */
-    public List<String> extractSdJwtCandidates(DcqlQuery dcqlQuery, Map<String, List<String>> vpToken) {
+    public List<String> extractSdJwtCandidates(DcqlQuery dcqlQuery, Map<String, List<JsonNode>> vpToken) {
         Map<String, Credential> credentialsById = credentialsById(dcqlQuery);
         if (vpToken == null || vpToken.isEmpty()) {
             throw invalid("vp_token must be a non-empty JSON object keyed by DCQL credential query IDs");
@@ -40,7 +41,7 @@ public class VpTokenCandidateExtractor {
             Credential credential = credentialsById.get(queryId);
             // This authenticator currently handles SD-JWT VCs only; other formats are left out deliberately.
             if (VCFormat.SD_JWT_VC.equals(credential.getFormat())) {
-                candidates.addAll(presentations);
+                candidates.addAll(extractSdJwtStrings(queryId, presentations));
             }
         });
 
@@ -49,6 +50,19 @@ public class VpTokenCandidateExtractor {
         }
 
         return List.copyOf(candidates);
+    }
+
+    /**
+     * The current login authenticator stores one SD-JWT VP in one auth note, so this flow rejects multiple
+     * SD-JWT candidates instead of silently choosing one.
+     */
+    public String extractSingleSdJwtCandidate(DcqlQuery dcqlQuery, Map<String, List<JsonNode>> vpToken) {
+        List<String> candidates = extractSdJwtCandidates(dcqlQuery, vpToken);
+        if (candidates.size() != 1) {
+            throw invalid("OpenID4VP login supports exactly one SD-JWT VP candidate. Found: " + candidates.size());
+        }
+
+        return candidates.getFirst();
     }
 
     private Map<String, Credential> credentialsById(DcqlQuery dcqlQuery) {
@@ -82,7 +96,7 @@ public class VpTokenCandidateExtractor {
     }
 
     private void validatePresentationArrays(
-            Map<String, List<String>> vpToken, Map<String, Credential> credentialsById) {
+            Map<String, List<JsonNode>> vpToken, Map<String, Credential> credentialsById) {
         vpToken.forEach((queryId, presentations) -> {
             // Each vp_token entry is an array of presentations for the matching DCQL credential query id.
             if (presentations == null || presentations.isEmpty()) {
@@ -94,11 +108,24 @@ public class VpTokenCandidateExtractor {
             if (!Boolean.TRUE.equals(credential.getMultiple()) && presentations.size() > 1) {
                 throw invalid("DCQL credential query `%s` does not allow multiple presentations".formatted(queryId));
             }
-
-            if (presentations.stream().anyMatch(StringUtil::isBlank)) {
-                throw invalid("vp_token entry `%s` must contain non-blank presentation strings".formatted(queryId));
-            }
         });
+    }
+
+    private List<String> extractSdJwtStrings(String queryId, List<JsonNode> presentations) {
+        List<String> sdJwtPresentations = new ArrayList<>();
+        for (JsonNode presentation : presentations) {
+            if (!presentation.isTextual()) {
+                throw invalid("vp_token entry `%s` must contain string presentations for SD-JWT".formatted(queryId));
+            }
+
+            String presentationString = presentation.asText();
+            if (StringUtil.isBlank(presentationString)) {
+                throw invalid("vp_token entry `%s` must contain non-blank presentation strings for SD-JWT"
+                        .formatted(queryId));
+            }
+            sdJwtPresentations.add(presentationString);
+        }
+        return sdJwtPresentations;
     }
 
     private void validateRequiredCredentialSets(

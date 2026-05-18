@@ -48,6 +48,20 @@ class VpTokenCandidateExtractorTest {
     }
 
     @Test
+    void shouldRejectMultipleSdJwtPresentationsForSingleCredentialLogin() throws Exception {
+        DcqlQuery query = query(List.of(credential(PID_QUERY_ID, VCFormat.SD_JWT_VC, true)), null);
+        ResponseObject responseObject = responseObject("""
+                {"pid":["sd-jwt-vp-1","sd-jwt-vp-2"]}
+                """);
+
+        VpTokenCandidateExtractor.InvalidVpTokenException exception = assertThrows(
+                VpTokenCandidateExtractor.InvalidVpTokenException.class,
+                () -> extractor.extractSingleSdJwtCandidate(query, responseObject.getVpToken()));
+
+        assertTrue(exception.getMessage().contains("login supports exactly one SD-JWT VP candidate"));
+    }
+
+    @Test
     void shouldRejectMultiplePresentationsWhenQueryDoesNotAllowMultiple() throws Exception {
         DcqlQuery query = query(List.of(credential(PID_QUERY_ID, VCFormat.SD_JWT_VC, null)), null);
         ResponseObject responseObject = responseObject("""
@@ -170,12 +184,36 @@ class VpTokenCandidateExtractorTest {
     }
 
     @Test
-    void shouldRejectVpTokenEntriesWithNonStringPresentations() {
+    void shouldAcceptObjectPresentationsAtResponseParsingLayer() throws Exception {
+        ResponseObject responseObject = responseObject("""
+                {"pid":[{"vp":"ldp-vp"}]}
+                """);
+
+        assertTrue(responseObject.getVpToken().get(PID_QUERY_ID).getFirst().isObject());
+    }
+
+    @Test
+    void shouldRejectScalarPresentationsAtResponseParsingLayer() {
+        // The response-parameter parser stays format-neutral, but presentations are still strings or JSON objects.
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> responseObject("""
-                        {"pid":[{"vp":"sd-jwt-vp"}]}
+                        {"pid":[123]}
                         """));
 
-        assertTrue(exception.getMessage().contains("must contain string presentations"));
+        assertTrue(exception.getMessage().contains("must contain string or object presentations"));
+    }
+
+    @Test
+    void shouldRejectObjectPresentationForSdJwtCredential() throws Exception {
+        DcqlQuery query = query(List.of(credential(PID_QUERY_ID, VCFormat.SD_JWT_VC, null)), null);
+        ResponseObject responseObject = responseObject("""
+                {"pid":[{"vp":"sd-jwt-vp"}]}
+                """);
+
+        VpTokenCandidateExtractor.InvalidVpTokenException exception = assertThrows(
+                VpTokenCandidateExtractor.InvalidVpTokenException.class,
+                () -> extractor.extractSdJwtCandidates(query, responseObject.getVpToken()));
+
+        assertTrue(exception.getMessage().contains("must contain string presentations for SD-JWT"));
     }
 
     @Test
