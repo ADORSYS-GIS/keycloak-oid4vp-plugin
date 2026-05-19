@@ -36,7 +36,7 @@ class AuthorizationResponseJweValidatorTest {
         JSONWebKeySet jwks = new JSONWebKeySet();
         jwks.setKeys(new JWK[] {pubJwk});
 
-        AuthorizationContext ctx = contextWithJwks(jwks, kid);
+        AuthorizationContext ctx = contextWithJwks(jwks);
 
         String payload = JsonSerialization.writeValueAsString(Map.of("vp_token", Map.of()));
         ECPublicKey pub = (ECPublicKey) JWKParser.create(pubJwk).toPublicKey();
@@ -47,7 +47,7 @@ class AuthorizationResponseJweValidatorTest {
 
     @Test
     void validate_rejectsMalformedCompactJwe() {
-        AuthorizationContext ctx = contextWithJwks(emptyJwksFromEphemeral(), "any");
+        AuthorizationContext ctx = contextWithJwks(emptyJwksFromEphemeral());
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class, () -> AuthorizationResponseJweValidator.validate("not-a-jwe", ctx));
         assertTrue(ex.getMessage().contains("not a compact JWE"));
@@ -61,7 +61,7 @@ class AuthorizationResponseJweValidatorTest {
         JSONWebKeySet jwks = new JSONWebKeySet();
         jwks.setKeys(new JWK[] {pubJwk});
 
-        AuthorizationContext ctx = contextWithJwks(jwks, kid);
+        AuthorizationContext ctx = contextWithJwks(jwks);
 
         String payload = JsonSerialization.writeValueAsString(Map.of("vp_token", Map.of()));
         ECPublicKey pub = (ECPublicKey) JWKParser.create(pubJwk).toPublicKey();
@@ -79,9 +79,9 @@ class AuthorizationResponseJweValidatorTest {
         return jwks;
     }
 
-    private static AuthorizationContext contextWithJwks(JSONWebKeySet jwks, String expectedKid) {
+    private static AuthorizationContext contextWithJwks(JSONWebKeySet jwks) {
         ClientMetadata metadata = new ClientMetadata().setJwks(jwks);
         RequestObject ro = new RequestObject().setClientMetadata(metadata);
-        return new AuthorizationContext().setRequestObject(ro).setExpectedEncryptionKid(expectedKid);
+        return new AuthorizationContext().setRequestObject(ro).setEphemeralKey("test-ephemeral-key");
     }
 }

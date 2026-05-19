@@ -62,7 +62,9 @@ public final class AuthorizationResponseJweValidator {
                     enc, String.join(", ", VerifierDiscoveryService.SUPPORTED_ENC_ALGS)));
         }
 
-        String expectedKid = authorizationContext.getExpectedEncryptionKid();
+        // For direct_post.jwt the verifier advertises a single ephemeral key in the signed request object;
+        // kid binding is validated against that JWKS entry (OpenID4VP 1.0 §8.3).
+        String expectedKid = resolveAdvertisedEncryptionKid(authorizationContext);
         if (kid == null) {
             throw new IllegalArgumentException(
                     "The JWE protected header must include `kid` so the ciphertext can be matched to an advertised "
@@ -83,6 +85,30 @@ public final class AuthorizationResponseJweValidator {
                     "JWE `alg` (`%s`) does not match the `alg` parameter declared on the advertised JWK (`%s`).",
                     alg, keyAlg));
         }
+    }
+
+    /**
+     * When this session expects an encrypted response, returns the {@code kid} of the sole key published
+     * under {@code client_metadata.jwks} in the signed authorization request.
+     */
+    private static String resolveAdvertisedEncryptionKid(AuthorizationContext authorizationContext) {
+        String ephemeralKey = authorizationContext.getEphemeralKey();
+        if (ephemeralKey == null || ephemeralKey.isBlank()) {
+            return null;
+        }
+        var requestObject = authorizationContext.getRequestObject();
+        if (requestObject == null) {
+            return null;
+        }
+        ClientMetadata clientMetadata = requestObject.getClientMetadata();
+        if (clientMetadata == null || clientMetadata.getJwks() == null) {
+            return null;
+        }
+        JWK[] keys = clientMetadata.getJwks().getKeys();
+        if (keys == null || keys.length != 1) {
+            return null;
+        }
+        return keys[0].getKeyId();
     }
 
     private static List<String> resolveAllowedEnc(ClientMetadata clientMetadata) {
