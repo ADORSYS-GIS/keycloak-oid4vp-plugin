@@ -34,8 +34,8 @@ public class VpTokenValidationPipeline {
         DcqlQuery dcqlQuery = context.requestObject().getDcqlQuery();
         Map<String, List<String>> vpTokenMap = structureValidator.validate(responseObject.getVpToken(), dcqlQuery);
 
-        Map<String, Credential> credentialsById = dcqlQuery.getCredentials().stream()
-                .collect(Collectors.toMap(Credential::getId, Function.identity()));
+        Map<String, Credential> credentialsById =
+                dcqlQuery.getCredentials().stream().collect(Collectors.toMap(Credential::getId, Function.identity()));
 
         List<PresentedCredential> presentations = new ArrayList<>();
         for (Map.Entry<String, List<String>> entry : vpTokenMap.entrySet()) {

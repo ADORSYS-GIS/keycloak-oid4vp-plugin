@@ -18,7 +18,8 @@ public final class ClaimsPathProcessor {
      */
     public static List<JsonNode> process(JsonNode root, List<Object> path) throws VpTokenValidationException {
         if (root == null || path == null || path.isEmpty()) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL, "Claims path pointer must be a non-empty array");
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "Claims path pointer must be a non-empty array");
         }
 
         List<JsonNode> selected = List.of(root);
@@ -44,11 +45,13 @@ public final class ClaimsPathProcessor {
         }
         if (component instanceof Number number) {
             if (number.doubleValue() != Math.floor(number.doubleValue()) || number.longValue() < 0) {
-                throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL, "Claims path index must be a non-negative integer");
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL, "Claims path index must be a non-negative integer");
             }
             return selectArrayIndex(current, number.intValue());
         }
-        throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL, "Unsupported claims path pointer component: " + component);
+        throw new VpTokenValidationException(
+                VpTokenValidationException.Phase.DCQL, "Unsupported claims path pointer component: " + component);
     }
 
     private static List<JsonNode> selectObjectKey(List<JsonNode> current, String key) {
@@ -69,7 +72,9 @@ public final class ClaimsPathProcessor {
         List<JsonNode> next = new ArrayList<>();
         for (JsonNode node : current) {
             if (!node.isArray()) {
-                throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL, "Claims path pointer expected an array at the current selection");
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL,
+                        "Claims path pointer expected an array at the current selection");
             }
             ArrayNode arrayNode = (ArrayNode) node;
             arrayNode.forEach(next::add);
@@ -82,7 +87,9 @@ public final class ClaimsPathProcessor {
         List<JsonNode> next = new ArrayList<>();
         for (JsonNode node : current) {
             if (!node.isArray()) {
-                throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL, "Claims path pointer expected an array at the current selection");
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL,
+                        "Claims path pointer expected an array at the current selection");
             }
             ArrayNode arrayNode = (ArrayNode) node;
             if (index >= 0 && index < arrayNode.size()) {

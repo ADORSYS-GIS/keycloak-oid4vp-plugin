@@ -22,8 +22,7 @@ public class VpTokenStructureValidator {
                 || dcqlQuery.getCredentials() == null
                 || dcqlQuery.getCredentials().isEmpty()) {
             throw new VpTokenValidationException(
-                    VpTokenValidationException.Phase.STRUCTURE,
-                    "Issued authorization request is missing a DCQL query");
+                    VpTokenValidationException.Phase.STRUCTURE, "Issued authorization request is missing a DCQL query");
         }
 
         Set<String> expectedIds = new HashSet<>();
@@ -65,8 +64,7 @@ public class VpTokenStructureValidator {
     }
 
     private static void validatePresentationsForCredential(
-            String credentialId, List<String> presentations, DcqlQuery dcqlQuery)
-            throws VpTokenValidationException {
+            String credentialId, List<String> presentations, DcqlQuery dcqlQuery) throws VpTokenValidationException {
         if (presentations == null || presentations.isEmpty()) {
             throw new VpTokenValidationException(
                     VpTokenValidationException.Phase.STRUCTURE,

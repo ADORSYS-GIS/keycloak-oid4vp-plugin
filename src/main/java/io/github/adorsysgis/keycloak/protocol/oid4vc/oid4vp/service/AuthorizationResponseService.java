@@ -74,14 +74,12 @@ public class AuthorizationResponseService {
         VpTokenValidationResult validationResult;
         try {
             logger.debug("Running verifier-side vp_token validation pipeline");
-            validationResult = vpTokenValidationService.validate(
-                    responseObject, authContext.getRequestObject());
+            validationResult = vpTokenValidationService.validate(responseObject, authContext.getRequestObject());
         } catch (VpTokenValidationException e) {
             logger.errorf(e, "vp_token validation failed");
             boolean formatFailure = VpTokenValidationException.Phase.FORMAT.equals(e.getPhase());
-            String detailedMessage = formatFailure
-                    ? String.format("Invalid SD-JWT presentation (%s)", e.getMessage())
-                    : e.getMessage();
+            String detailedMessage =
+                    formatFailure ? String.format("Invalid SD-JWT presentation (%s)", e.getMessage()) : e.getMessage();
             throw failWithHttpException(
                     formatFailure ? ProcessingError.VP_TOKEN_AUTH_ERROR : ProcessingError.INVALID_VP_TOKEN,
                     formatFailure ? "Invalid SD-JWT presentation" : "Invalid vp_token",

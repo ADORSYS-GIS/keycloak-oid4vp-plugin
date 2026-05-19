@@ -31,7 +31,8 @@ class VpTokenValidationPipelineTest {
         DcqlQuery dcqlQuery = new DcqlQuery();
         dcqlQuery.setCredentials(List.of(credential));
 
-        RequestObject requestObject = new RequestObject().setDcqlQuery(dcqlQuery).setNonce("nonce").setClientId("client");
+        RequestObject requestObject =
+                new RequestObject().setDcqlQuery(dcqlQuery).setNonce("nonce").setClientId("client");
 
         ResponseObject responseObject = responseWithVpToken(Map.of("cred-1", List.of("not-a-real-vp")));
 
@@ -52,7 +53,8 @@ class VpTokenValidationPipelineTest {
         dcqlQuery.setCredentials(List.of(credA, credB));
         dcqlQuery.setCredentialSets(List.of(credentialSet(List.of(List.of("cred-a"), List.of("cred-b")))));
 
-        RequestObject requestObject = new RequestObject().setDcqlQuery(dcqlQuery).setNonce("nonce").setClientId("client");
+        RequestObject requestObject =
+                new RequestObject().setDcqlQuery(dcqlQuery).setNonce("nonce").setClientId("client");
 
         ResponseObject responseObject = responseWithVpToken(Map.of("cred-b", List.of("not-a-real-vp")));
 

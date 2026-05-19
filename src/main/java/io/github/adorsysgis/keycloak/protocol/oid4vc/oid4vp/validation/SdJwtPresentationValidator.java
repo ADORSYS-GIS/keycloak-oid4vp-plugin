@@ -2,8 +2,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SelfTrustedSdJwtIssuer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SelfTrustedSdJwtIssuer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
@@ -83,10 +83,7 @@ public class SdJwtPresentationValidator implements PresentationFormatValidator {
     }
 
     private static KeyBindingJwtVerificationOpts buildKeyBindingOptions(
-            Credential credentialQuery,
-            SdJwtAuthRequirements authRequirements,
-            String nonce,
-            String audience)
+            Credential credentialQuery, SdJwtAuthRequirements authRequirements, String nonce, String audience)
             throws VpTokenValidationException {
         if (!credentialQuery.requiresCryptographicHolderBinding()) {
             return KeyBindingJwtVerificationOpts.builder()

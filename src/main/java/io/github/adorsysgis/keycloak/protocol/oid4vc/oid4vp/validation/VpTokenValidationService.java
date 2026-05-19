@@ -41,8 +41,7 @@ public class VpTokenValidationService {
     public VpTokenValidationResult validate(ResponseObject responseObject, RequestObject requestObject)
             throws VpTokenValidationException {
         AuthenticatorConfigModel authConfig = OID4VPUserAuthEndpointBase.resolveSdJwtAuthenticatorConfig(session);
-        SdJwtAuthRequirements authRequirements =
-                new SdJwtAuthRequirements(session.getContext(), authConfig);
+        SdJwtAuthRequirements authRequirements = new SdJwtAuthRequirements(session.getContext(), authConfig);
 
         String audience = HolderBindingAudienceResolver.resolve(requestObject);
         validateReplayBindingInputs(requestObject, audience);
@@ -74,6 +73,7 @@ public class VpTokenValidationService {
         if (requestObject.getDcqlQuery() == null || requestObject.getDcqlQuery().getCredentials() == null) {
             return true;
         }
-        return requestObject.getDcqlQuery().getCredentials().stream().anyMatch(Credential::requiresCryptographicHolderBinding);
+        return requestObject.getDcqlQuery().getCredentials().stream()
+                .anyMatch(Credential::requiresCryptographicHolderBinding);
     }
 }

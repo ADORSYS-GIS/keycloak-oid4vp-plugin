@@ -52,10 +52,13 @@ public class DcqlSatisfactionValidator {
     private void validateFormat(Credential credentialQuery) throws VpTokenValidationException {
         String expectedFormat = credentialQuery.getFormat();
         if (expectedFormat == null || expectedFormat.isBlank()) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,"DCQL credential query is missing format");
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "DCQL credential query is missing format");
         }
         if (!VCFormat.SD_JWT_VC.equals(expectedFormat) && !"dc+sd-jwt".equals(expectedFormat)) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,"Unsupported credential format in DCQL query: " + expectedFormat);
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL,
+                    "Unsupported credential format in DCQL query: " + expectedFormat);
         }
     }
 
@@ -66,10 +69,12 @@ public class DcqlSatisfactionValidator {
 
         String presentedVct = readScalarClaim(presentation, CLAIM_NAME_VCT);
         if (presentedVct == null) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,"Presentation is missing required vct claim");
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "Presentation is missing required vct claim");
         }
         if (!meta.getVctValues().contains(presentedVct)) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL,
                     "Presentation vct does not match any value requested in DCQL meta.vct_values");
         }
     }
@@ -80,7 +85,8 @@ public class DcqlSatisfactionValidator {
             return;
         }
 
-        if (credentialQuery.getClaimSets() != null && !credentialQuery.getClaimSets().isEmpty()) {
+        if (credentialQuery.getClaimSets() != null
+                && !credentialQuery.getClaimSets().isEmpty()) {
             validateClaimSets(presentation, credentialQuery, claims);
             return;
         }
@@ -95,8 +101,8 @@ public class DcqlSatisfactionValidator {
         Map<String, Claim> claimsById = new HashMap<>();
         for (Claim claim : claims) {
             if (claim.getId() == null || claim.getId().isBlank()) {
-                throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,
-                        "DCQL claim id is required when claim_sets are present");
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL, "DCQL claim id is required when claim_sets are present");
             }
             claimsById.put(claim.getId(), claim);
         }
@@ -107,17 +113,19 @@ public class DcqlSatisfactionValidator {
             }
         }
 
-        throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,
+        throw new VpTokenValidationException(
+                VpTokenValidationException.Phase.DCQL,
                 "Presentation does not satisfy any requested DCQL claim_sets option");
     }
 
-    private boolean satisfiesClaimSetOption(
-            SdJwtVP presentation, Map<String, Claim> claimsById, List<String> option)
+    private boolean satisfiesClaimSetOption(SdJwtVP presentation, Map<String, Claim> claimsById, List<String> option)
             throws VpTokenValidationException {
         for (String claimId : option) {
             Claim claimQuery = claimsById.get(claimId);
             if (claimQuery == null) {
-                throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,"DCQL claim_sets references unknown claim id: " + claimId);
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL,
+                        "DCQL claim_sets references unknown claim id: " + claimId);
             }
             if (!hasClaimPath(presentation, claimQuery)) {
                 return false;
@@ -128,14 +136,16 @@ public class DcqlSatisfactionValidator {
 
     private void requireClaimPath(SdJwtVP presentation, Claim claimQuery) throws VpTokenValidationException {
         if (!hasClaimPath(presentation, claimQuery)) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL,
                     "Presentation does not contain claim required by DCQL path: " + claimQuery.getPath());
         }
     }
 
     private boolean hasClaimPath(SdJwtVP presentation, Claim claimQuery) throws VpTokenValidationException {
         if (claimQuery.getPath() == null || claimQuery.getPath().isEmpty()) {
-            throw new VpTokenValidationException(VpTokenValidationException.Phase.DCQL,"DCQL claim query is missing path");
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "DCQL claim query is missing path");
         }
         List<JsonNode> resolved = SdJwtClaimReader.resolveClaimPath(presentation, claimQuery.getPath());
         if (resolved.isEmpty()) {
@@ -152,5 +162,4 @@ public class DcqlSatisfactionValidator {
         JsonNode value = resolved.getFirst();
         return value.isValueNode() ? value.asText() : value.toString();
     }
-
 }

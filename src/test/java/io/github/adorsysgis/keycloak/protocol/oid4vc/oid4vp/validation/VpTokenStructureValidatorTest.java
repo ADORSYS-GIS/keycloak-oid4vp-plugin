@@ -46,8 +46,7 @@ class VpTokenStructureValidatorTest {
     @Test
     void rejectsUnexpectedCredentialId() {
         DcqlQuery query = singleCredentialQuery("cred-1", false);
-        Map<String, List<String>> vpToken =
-                Map.of("cred-1", List.of("vp"), "extra-id", List.of("vp2"));
+        Map<String, List<String>> vpToken = Map.of("cred-1", List.of("vp"), "extra-id", List.of("vp2"));
 
         VpTokenValidationException error =
                 assertThrows(VpTokenValidationException.class, () -> validator.validate(vpToken, query));

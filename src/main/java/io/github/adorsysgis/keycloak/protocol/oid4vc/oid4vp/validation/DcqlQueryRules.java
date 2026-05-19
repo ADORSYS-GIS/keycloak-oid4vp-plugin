@@ -16,7 +16,8 @@ final class DcqlQueryRules {
     private DcqlQueryRules() {}
 
     static boolean usesCredentialSets(DcqlQuery dcqlQuery) {
-        return dcqlQuery.getCredentialSets() != null && !dcqlQuery.getCredentialSets().isEmpty();
+        return dcqlQuery.getCredentialSets() != null
+                && !dcqlQuery.getCredentialSets().isEmpty();
     }
 
     static Set<String> credentialQueryIds(DcqlQuery dcqlQuery) {
@@ -53,8 +54,7 @@ final class DcqlQueryRules {
             }
             if (!satisfiesAnyCredentialSetOption(presentedById, credentialSet.getOptions())) {
                 throw new VpTokenValidationException(
-                        phase,
-                        "Returned presentations do not satisfy required DCQL credential_sets constraints");
+                        phase, "Returned presentations do not satisfy required DCQL credential_sets constraints");
             }
         }
     }
@@ -75,8 +75,7 @@ final class DcqlQueryRules {
             if (!permittedIds.contains(presentedId)) {
                 throw new VpTokenValidationException(
                         phase,
-                        "vp_token contains credential query id outside satisfied DCQL credential_sets: "
-                                + presentedId);
+                        "vp_token contains credential query id outside satisfied DCQL credential_sets: " + presentedId);
             }
         }
     }

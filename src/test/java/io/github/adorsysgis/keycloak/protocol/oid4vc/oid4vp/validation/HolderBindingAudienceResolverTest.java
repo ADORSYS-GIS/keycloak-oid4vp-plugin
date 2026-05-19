@@ -16,8 +16,7 @@ class HolderBindingAudienceResolverTest {
 
     @Test
     void preservesOriginPrefixedClientIdentifier() {
-        RequestObject request =
-                new RequestObject().setClientId("origin:https://verifier.example.org");
+        RequestObject request = new RequestObject().setClientId("origin:https://verifier.example.org");
 
         assertEquals("origin:https://verifier.example.org", HolderBindingAudienceResolver.resolve(request));
     }
