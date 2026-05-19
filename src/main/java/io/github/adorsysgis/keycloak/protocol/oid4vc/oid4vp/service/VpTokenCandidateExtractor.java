@@ -46,7 +46,7 @@ public class VpTokenCandidateExtractor {
         });
 
         if (candidates.isEmpty()) {
-            throw invalid("Presented vp_token map does not contain any SD-JWT VP presentations");
+            throw invalid("No supported format presentations found in vp_token");
         }
 
         return List.copyOf(candidates);
