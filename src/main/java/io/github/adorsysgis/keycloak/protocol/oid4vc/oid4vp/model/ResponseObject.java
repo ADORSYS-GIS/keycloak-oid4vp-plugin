@@ -25,7 +25,7 @@ public class ResponseObject {
     public static final String VP_TOKEN_KEY = "vp_token";
     public static final String STATE_KEY = "state";
 
-    private Map<String, List<JsonNode>> vpToken;
+    private Map<String, List<String>> vpToken;
 
     @JsonProperty(STATE_KEY)
     private String state;
@@ -37,7 +37,7 @@ public class ResponseObject {
         this.state = state;
     }
 
-    private static Map<String, List<JsonNode>> readVpToken(String vpToken) throws JsonProcessingException {
+    private static Map<String, List<String>> readVpToken(String vpToken) throws JsonProcessingException {
         if (StringUtil.isBlank(vpToken)) {
             throw new IllegalArgumentException("vp_token must not be null or blank");
         }
@@ -45,12 +45,12 @@ public class ResponseObject {
         return parseVpToken(JsonSerialization.mapper.readTree(vpToken));
     }
 
-    private static Map<String, List<JsonNode>> parseVpToken(JsonNode vpToken) {
+    private static Map<String, List<String>> parseVpToken(JsonNode vpToken) {
         if (vpToken == null || !vpToken.isObject()) {
             throw new IllegalArgumentException("vp_token must be a JSON object keyed by DCQL credential query IDs");
         }
 
-        Map<String, List<JsonNode>> result = new LinkedHashMap<>();
+        Map<String, List<String>> result = new LinkedHashMap<>();
         vpToken.properties().forEach(entry -> {
             JsonNode presentations = entry.getValue();
             if (!presentations.isArray()) {
@@ -58,13 +58,13 @@ public class ResponseObject {
                         "vp_token entry `%s` must be an array of presentations".formatted(entry.getKey()));
             }
 
-            List<JsonNode> presentationNodes = new ArrayList<>();
+            List<String> presentationNodes = new ArrayList<>();
             presentations.forEach(presentation -> {
                 if (!presentation.isTextual() && !presentation.isObject()) {
                     throw new IllegalArgumentException("vp_token entry `%s` must contain string or object presentations"
                             .formatted(entry.getKey()));
                 }
-                presentationNodes.add(presentation.deepCopy());
+                presentationNodes.add(presentation.isTextual() ? presentation.asText() : presentation.toString());
             });
             result.put(entry.getKey(), List.copyOf(presentationNodes));
         });
@@ -72,7 +72,7 @@ public class ResponseObject {
     }
 
     @JsonProperty(VP_TOKEN_KEY)
-    public Map<String, List<JsonNode>> getVpToken() {
+    public Map<String, List<String>> getVpToken() {
         return vpToken;
     }
 

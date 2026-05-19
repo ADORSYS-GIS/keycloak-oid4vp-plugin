@@ -189,7 +189,9 @@ class VpTokenCandidateExtractorTest {
                 {"pid":[{"vp":"ldp-vp"}]}
                 """);
 
-        assertTrue(responseObject.getVpToken().get(PID_QUERY_ID).getFirst().isObject());
+        assertEquals(
+                "{\"vp\":\"ldp-vp\"}",
+                responseObject.getVpToken().get(PID_QUERY_ID).getFirst());
     }
 
     @Test
@@ -203,17 +205,15 @@ class VpTokenCandidateExtractorTest {
     }
 
     @Test
-    void shouldRejectObjectPresentationForSdJwtCredential() throws Exception {
+    void shouldPassObjectPresentationAsJsonStringForSdJwtCredential() throws Exception {
         DcqlQuery query = query(List.of(credential(PID_QUERY_ID, VCFormat.SD_JWT_VC, null)), null);
         ResponseObject responseObject = responseObject("""
                 {"pid":[{"vp":"sd-jwt-vp"}]}
                 """);
 
-        VpTokenCandidateExtractor.InvalidVpTokenException exception = assertThrows(
-                VpTokenCandidateExtractor.InvalidVpTokenException.class,
-                () -> extractor.extractSdJwtCandidates(query, responseObject.getVpToken()));
+        List<String> candidates = extractor.extractSdJwtCandidates(query, responseObject.getVpToken());
 
-        assertTrue(exception.getMessage().contains("must contain string presentations for SD-JWT"));
+        assertEquals(List.of("{\"vp\":\"sd-jwt-vp\"}"), candidates);
     }
 
     @Test

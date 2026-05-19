@@ -1,6 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -26,7 +25,7 @@ public class VpTokenCandidateExtractor {
      * Validates the final-spec vp_token map against the stored DCQL query and returns the SD-JWT presentations
      * that can be forwarded to the SD-JWT authenticator.
      */
-    public List<String> extractSdJwtCandidates(DcqlQuery dcqlQuery, Map<String, List<JsonNode>> vpToken) {
+    public List<String> extractSdJwtCandidates(DcqlQuery dcqlQuery, Map<String, List<String>> vpToken) {
         Map<String, Credential> credentialsById = credentialsById(dcqlQuery);
         if (vpToken == null || vpToken.isEmpty()) {
             throw invalid("vp_token must be a non-empty JSON object keyed by DCQL credential query IDs");
@@ -56,7 +55,7 @@ public class VpTokenCandidateExtractor {
      * The current login authenticator stores one SD-JWT VP in one auth note, so this flow rejects multiple
      * SD-JWT candidates instead of silently choosing one.
      */
-    public String extractSingleSdJwtCandidate(DcqlQuery dcqlQuery, Map<String, List<JsonNode>> vpToken) {
+    public String extractSingleSdJwtCandidate(DcqlQuery dcqlQuery, Map<String, List<String>> vpToken) {
         List<String> candidates = extractSdJwtCandidates(dcqlQuery, vpToken);
         if (candidates.size() != 1) {
             throw invalid("OpenID4VP login supports exactly one SD-JWT VP candidate. Found: " + candidates.size());
@@ -96,7 +95,7 @@ public class VpTokenCandidateExtractor {
     }
 
     private void validatePresentationArrays(
-            Map<String, List<JsonNode>> vpToken, Map<String, Credential> credentialsById) {
+            Map<String, List<String>> vpToken, Map<String, Credential> credentialsById) {
         vpToken.forEach((queryId, presentations) -> {
             // Each vp_token entry is an array of presentations for the matching DCQL credential query id.
             if (presentations == null || presentations.isEmpty()) {
@@ -111,14 +110,9 @@ public class VpTokenCandidateExtractor {
         });
     }
 
-    private List<String> extractSdJwtStrings(String queryId, List<JsonNode> presentations) {
+    private List<String> extractSdJwtStrings(String queryId, List<String> presentations) {
         List<String> sdJwtPresentations = new ArrayList<>();
-        for (JsonNode presentation : presentations) {
-            if (!presentation.isTextual()) {
-                throw invalid("vp_token entry `%s` must contain string presentations for SD-JWT".formatted(queryId));
-            }
-
-            String presentationString = presentation.asText();
+        for (String presentationString : presentations) {
             if (StringUtil.isBlank(presentationString)) {
                 throw invalid("vp_token entry `%s` must contain non-blank presentation strings for SD-JWT"
                         .formatted(queryId));
