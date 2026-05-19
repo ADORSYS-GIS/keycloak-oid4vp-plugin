@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.keycloak.OAuth2Constants;
@@ -197,6 +198,21 @@ public class SdJwtVPTestUtils {
      */
     public String presentSdJwt(String sdjwt, String nonce, String aud, JWK holderKey, long kbJwtLifespan)
             throws Exception {
+        return presentSdJwt(sdjwt, nonce, aud, holderKey, kbJwtLifespan, null, null);
+    }
+
+    /**
+     * Creates an SD-JWT verifiable presentation, optionally including OpenID4VP transaction data hashes.
+     */
+    public String presentSdJwt(
+            String sdjwt,
+            String nonce,
+            String aud,
+            JWK holderKey,
+            long kbJwtLifespan,
+            List<String> transactionDataHashes,
+            String transactionDataHashesAlg)
+            throws Exception {
         JsonWebToken kbJwtClaims = new JsonWebToken();
 
         long currentTime = Time.currentTime();
@@ -205,6 +221,13 @@ public class SdJwtVPTestUtils {
 
         kbJwtClaims.getOtherClaims().put(IDToken.NONCE, nonce);
         kbJwtClaims.getOtherClaims().put(IDToken.AUD, aud);
+
+        if (transactionDataHashes != null && !transactionDataHashes.isEmpty()) {
+            kbJwtClaims.getOtherClaims().put("transaction_data_hashes", transactionDataHashes);
+        }
+        if (transactionDataHashesAlg != null) {
+            kbJwtClaims.getOtherClaims().put("transaction_data_hashes_alg", transactionDataHashesAlg);
+        }
 
         KeyWrapper keyWrapper = ECTestUtils.getEcKeyWrapper(holderKey);
         SignatureSignerContext signer = new ECDSASignatureSignerContext(keyWrapper);
