@@ -99,19 +99,26 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     /**
-     * Resolve the request object associated with the authorization request.
-     * A request is sent to the request_uri dereferencing endpoint to retrieve the request object.     *
+     * Dereference {@code request_uri} and return the signed request object JWT (GET by default, or POST when
+     * {@code request_uri_method=post} is present in the authorization request).
      */
     protected String resolveSignedRequestObject(String authRequest) throws IOException {
-        return resolveSignedRequestObject(authRequest, null, null, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+        return resolveSignedRequestObject(authRequest, null, null);
     }
 
+    /**
+     * Dereference via POST when the authorization request advertises {@code request_uri_method=post}, with
+     * optional {@code wallet_nonce} / {@code wallet_metadata} (OpenID4VP Final 1.0 §5.10).
+     */
     protected String resolveSignedRequestObject(String authRequest, String walletNonce, String walletMetadata)
             throws IOException {
-        return resolveSignedRequestObject(
+        HttpResponse response = resolveSignedRequestObjectResponse(
                 authRequest, walletNonce, walletMetadata, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
     }
 
+    /** GET fallback to the request URI endpoint (RFC 9101 / Final 1.0 compatibility). */
     protected String resolveSignedRequestObjectWithGet(String authRequest) throws IOException {
         String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
                 .filter(p -> p.getName().equals("request_uri"))
@@ -124,9 +131,13 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
     }
 
-    protected String resolveSignedRequestObject(
+    protected HttpResponse resolveSignedRequestObjectResponse(String authRequest) throws IOException {
+        return resolveSignedRequestObjectResponse(
+                authRequest, null, null, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+    }
+
+    protected HttpResponse resolveSignedRequestObjectResponse(
             String authRequest, String walletNonce, String walletMetadata, String acceptHeader) throws IOException {
-        // Extract the request_uri parameter
         List<NameValuePair> params = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8);
         String requestUri = params.stream()
                 .filter(p -> p.getName().equals("request_uri"))
@@ -139,7 +150,6 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
                 .findFirst()
                 .orElse("get");
 
-        HttpResponse response;
         if ("post".equals(requestUriMethod)) {
             HttpPost httpPost = new HttpPost(requestUri);
             if (acceptHeader != null) {
@@ -155,15 +165,10 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
             if (!postParams.isEmpty()) {
                 httpPost.setEntity(new UrlEncodedFormEntity(postParams));
             }
-            response = httpClient.execute(httpPost);
-        } else {
-            HttpGet httpGet = new HttpGet(requestUri);
-            response = httpClient.execute(httpGet);
+            return httpClient.execute(httpPost);
         }
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        // Parse and return the expected JWT response
-        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        return httpClient.execute(new HttpGet(requestUri));
     }
 
     /**

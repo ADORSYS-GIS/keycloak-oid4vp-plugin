@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,8 +28,6 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.methods.HttpPost;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -67,6 +66,11 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         String signedReqJwt = resolveSignedRequestObject(authRequest, "wallet-nonce-haip", null);
         JWSInput jwsInput = new JWSInput(signedReqJwt);
         RequestObject requestObject = jwsInput.readJsonContent(RequestObject.class);
+        HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
+        assertEquals(
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE,
+                requestUriResponse.getEntity().getContentType().getValue());
+        assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
 
         // Must use configured custom URL scheme
         URI authRequestUri = new URI(authRequest);
@@ -190,33 +194,6 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
         assertTrue(errorRep.getErrorDescription().contains("Request URI POST must include Accept"));
-    }
-
-    private HttpResponse resolveSignedRequestObjectResponse(
-            String authRequest, String walletNonce, String walletMetadata, String acceptHeader) throws Exception {
-        List<NameValuePair> params = org.apache.http.client.utils.URLEncodedUtils.parse(
-                authRequest, java.nio.charset.StandardCharsets.UTF_8);
-        String requestUri = params.stream()
-                .filter(p -> p.getName().equals("request_uri"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElseThrow();
-
-        HttpPost httpPost = new HttpPost(requestUri);
-        if (acceptHeader != null) {
-            httpPost.setHeader(org.apache.http.HttpHeaders.ACCEPT, acceptHeader);
-        }
-        List<org.apache.http.message.BasicNameValuePair> postParams = new java.util.ArrayList<>();
-        if (walletNonce != null) {
-            postParams.add(new org.apache.http.message.BasicNameValuePair("wallet_nonce", walletNonce));
-        }
-        if (walletMetadata != null) {
-            postParams.add(new org.apache.http.message.BasicNameValuePair("wallet_metadata", walletMetadata));
-        }
-        if (!postParams.isEmpty()) {
-            httpPost.setEntity(new org.apache.http.client.entity.UrlEncodedFormEntity(postParams));
-        }
-        return httpClient.execute(httpPost);
     }
 
     private ObjectNode getAuthConfig() {
