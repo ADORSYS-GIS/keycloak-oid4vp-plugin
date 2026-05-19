@@ -22,16 +22,20 @@ versions for best results.
 Additionally, the following features of [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
 are supported:
 
-- **1.0-Draft20** ✅
-    - Client Identifier Scheme: `x509_san_dns`
-    - Response Mode: `direct_post`
+- **Draft20-compatible request/response behavior** ✅
+    - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
+    - Response Mode: `direct_post` and `direct_post.jwt`
     - Response Type: `vp_token`
-    - DIF Presentation Exchange
+    - Query Languages: DIF Presentation Exchange and DCQL
+    - Signed request object (`request_uri` dereferencing)
+    - Request object `x5c` support for verifier access certificate
 
-- **1.0-Final** ⚠️
-    - DCQL Query Language
+- **1.0-Final alignment (ongoing)** ⚠️
+    - DCQL request/response model is supported
+    - `verifier_info` support for registration certificate injection
+    - Compatibility and interoperability hardening are still evolving
 
-Confirmed support for 1.0-Final is pending further updates, review, and testing.
+Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
 
 ## Build the Plugin
 
@@ -95,9 +99,18 @@ you are encouraged to create a `docker-compose.override.yml` based on the provid
 This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to clients.
 By default, verbose errors are disabled (safe-by-default).
 
-For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see the
-documentation site sources in `docs/`, especially
-[`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc).
+For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see:
+
+- Authentication flow and provider configuration:
+  [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
+- Technical performance/security tuning:
+  [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
+
+### SdJwt authenticator configuration
+
+Deployment-facing `sd-jwt-authenticator` options (for example `clientIdScheme`, `queryLanguage`,
+`responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
+[`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 
 ## Documentation site (Antora)
 

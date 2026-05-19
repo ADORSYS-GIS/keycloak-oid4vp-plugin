@@ -51,7 +51,7 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Endpoint class for user authentication over
- * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html">
+ * <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html">
  * OpenID4VP
  * </a>.
  *
@@ -66,6 +66,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public static final String CALLBACK_URI_PATH = "/callback";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
     public static final String AUTH_CODE_PATH = "/code";
+    public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
 
     private final AuthorizationRequestService authorizationRequestService;
     private final AuthorizationResponseService authorizationResponseService;
@@ -127,12 +128,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      */
     @GET
     @Path(REQUEST_JWT_PATH + "/{requestId}")
-    @Produces(MediaType.TEXT_PLAIN)
+    @Produces(AUTH_REQ_JWT_MEDIA_TYPE)
     public Response getSignedRequestObject(@PathParam("requestId") String requestId) {
         logger.debug("Resolving request URI to signed request object...");
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
-        return CorsService.open().add(Response.ok(requestObjectJwt));
+        return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
     }
 
     /**
@@ -146,7 +147,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
-            @FormParam(ResponseObject.PRESENTATION_SUBMISSION_KEY) String presentationSubmission,
             @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
 
@@ -171,7 +171,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         ResponseObject responseObject;
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
-                    ? new ResponseObject(vpToken, presentationSubmission, state)
+                    ? new ResponseObject(vpToken, state)
                     : decryptResponse(encryptedResponse, ephemeralKey);
 
             String parsedState = responseObject.getState();

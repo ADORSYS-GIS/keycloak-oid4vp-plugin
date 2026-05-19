@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAut
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -12,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Descriptor;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
@@ -76,17 +77,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Resolve the request_uri parameter from the authorization request
         RequestObject requestObject = resolveRequestObject(authRequest);
+        String signedReqJwt = resolveSignedRequestObject(authRequest);
+        JWSInput jwsInput = new JWSInput(signedReqJwt);
+        HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
+        assertEquals(
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE,
+                requestUriResponse.getEntity().getContentType().getValue());
 
         // Assert: Ensure authentication sessions match
         String expectedSessionId = pruneAuthSessionId(authContext.getTransactionId());
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
 
-        // Assert: Ensure the request object contains a legacy presentation definition
+        // Assert: Ensure the request object contains a final-spec DCQL query.
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
-        SdJwtCredentialConstrainerTest.assertPrexQuery(requestObject.getPresentationDefinition(), queryMap);
-
+        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
         // Request object must use expected default client ID scheme
         assertEquals(ClientIdScheme.X509_SAN_DNS, requestObject.getClientIdScheme());
 
@@ -95,6 +101,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
         assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
+        assertEquals(ResponseMode.DIRECT_POST, requestObject.getResponseMode());
+        assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
 
         // Assert: Request object must not advertise symmetric signing algs
         var dcSdJwt = requestObject.getClientMetadata().getVpFormat().getDcSdJwt();
@@ -253,22 +261,28 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_NewDcSdJwtFormat() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Proceed to authentication and assert final-spec DCQL format usage.
+        TestOpts opts = TestOpts.getDefault();
+        TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
+        var credentialQuery =
+                testFlowData.requestObject().getDcqlQuery().getCredentials().getFirst();
+        assertEquals("dc+sd-jwt", credentialQuery.getFormat());
+        assertNotNull(
+                testFlowData.requestObject().getClientMetadata().getVpFormat().getDcSdJwt());
+        assertAuthenticatingUser(opts, testFlowData.authCode());
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_Base64EncodedVpToken() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
         // Proceed to authentication (Base64-encoded VP token)
         TestOpts opts = TestOpts.getDefault().setShouldBase64EncodeVpToken(true);
-        testSuccessfulAuthentication(sdJwt, opts);
-    }
-
-    @Test
-    public void shouldAuthenticateSuccessfully_NewDcSdJwtFormat() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Proceed to authentication (Use 'dc-sd+jwt' in presentation submission descriptor)
-        TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.DC_SD_JWT);
         testSuccessfulAuthentication(sdJwt, opts);
     }
 
@@ -366,57 +380,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
-        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription()
-                .contains("Unparseable response params (vp_token must not be null or blank)"));
-    }
-
-    @Test
-    public void shouldFailAuthentication_NonMatchingPresentationDefinitionId() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Use a non-matching presentation definition ID
-        TestOpts opts = TestOpts.getDefault().setOverridePresentationDefinitionId("unknown-presentation-definition-id");
-
-        testFailingAuthentication(
-                sdJwt,
-                opts,
-                HttpStatus.SC_BAD_REQUEST,
-                ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Presentation submission does not match the expected presentation definition");
-    }
-
-    @Test
-    public void shouldFailAuthentication_UnsupportedSubmissionDescriptorPath() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Only the root ($) path is supported
-        TestOpts opts = TestOpts.getDefault().setOverrideDescriptorPath("$[0]");
-
-        testFailingAuthentication(
-                sdJwt,
-                opts,
-                HttpStatus.SC_BAD_REQUEST,
-                ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "Invalid path in presentation submission descriptor: $[0]");
-    }
-
-    @Test
-    public void shouldFailAuthentication_UnsupportedSubmissionFormat() throws Exception {
-        // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-
-        // Only VC_SD_JWT is supported
-        TestOpts opts = TestOpts.getDefault().setOverrideDescriptorFormat(Descriptor.Format.JWT_VP);
-
-        testFailingAuthentication(
-                sdJwt,
-                opts,
-                HttpStatus.SC_BAD_REQUEST,
-                ProcessingError.INVALID_PRESENTATION_SUBMISSION.getErrorString(),
-                "SD-JWT VP token expected, but received: jwt_vp");
+        assertEquals(ProcessingError.INVALID_VP_TOKEN.getErrorString(), errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Could not parse SD-JWT VP token contained in `vp_token`"));
     }
 
     @Test
@@ -431,7 +396,26 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Could not parse `vp_token` as an SD-JWT VP token");
+                "Could not parse SD-JWT VP token contained in `vp_token`");
+    }
+
+    @Test
+    public void shouldFailAuthentication_NonMatchingDcqlCredentialId() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Retrieve an authorization request and deliberately respond under a non-matching DCQL credential query ID.
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        requestObject.getDcqlQuery().getCredentials().getFirst().setId("non-matching-dcql-credential-id");
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
+        assertFailingAuthentication(
+                response,
+                authContext.getTransactionId(),
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presented vp_token map does not match DCQL credential query");
     }
 
     @Test
@@ -572,6 +556,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldFailAuthentication_InvalidKbJwt_InvalidAud() throws Exception {
         var invalidAuds = List.of(
                 "invalid-aud",
+                getVerifierClientId(), // Missing required client_id prefix
                 ":" + getVerifierClientId(), // Missing scheme
                 "double:scheme:" + getVerifierClientId());
 

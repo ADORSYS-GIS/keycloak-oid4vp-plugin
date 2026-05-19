@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,6 +65,11 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         String signedReqJwt = resolveSignedRequestObject(authRequest);
         JWSInput jwsInput = new JWSInput(signedReqJwt);
         RequestObject requestObject = jwsInput.readJsonContent(RequestObject.class);
+        HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
+        assertEquals(
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE,
+                requestUriResponse.getEntity().getContentType().getValue());
+        assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
 
         // Must use configured custom URL scheme
         URI authRequestUri = new URI(authRequest);

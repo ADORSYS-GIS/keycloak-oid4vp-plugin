@@ -14,11 +14,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.Descriptor;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.InputDescriptor;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationDefinition;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.PresentationSubmission;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.IOException;
@@ -29,7 +24,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -137,11 +131,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
-        String overrideId = opts.getOverridePresentationDefinitionId();
-        if (overrideId != null) {
-            requestObject.getPresentationDefinition().setId(overrideId);
-        }
-
         // Prepare and send the OpenID4VP response to Keycloak
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
 
@@ -193,7 +182,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     /**
      * Helper for asserting failing flows.
      */
-    private void assertFailingAuthentication(
+    protected void assertFailingAuthentication(
             HttpResponse postAuthResponse,
             String transactionId,
             int httpStatus,
@@ -303,8 +292,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         if (!opts.shouldForceUnencryptedResponse()
                 && requestObject.getClientMetadata().getJwks() != null) {
             oid4vpResponse = prepareEncryptedOpenID4VPResponse(sdJwtVpToken, requestObject);
-        } else if (requestObject.getPresentationDefinition() != null) {
-            oid4vpResponse = prepareLegacyOpenID4VPResponse(sdJwtVpToken, requestObject, opts);
         } else {
             oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject);
         }
@@ -320,11 +307,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Prepare the OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
+     * @param requestObject the request object containing the DCQL query
      */
     private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
-        // Build presentation submission
+        // Build final-spec vp_token map keyed by DCQL credential query ID
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
 
         // Compose the response object as form-urlencoded parameters
@@ -337,11 +324,11 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Prepare an encrypted OpenID4VP response object to be sent to Keycloak.
      *
      * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
+     * @param requestObject the request object containing the DCQL query
      */
     private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
             throws IOException {
-        // Build presentation submission
+        // Build final-spec vp_token map keyed by DCQL credential query ID
         var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
         var respMap = Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap);
         String resp = JsonSerialization.writeValueAsString(respMap);
@@ -350,7 +337,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
 
-        // Encrypt the vpTokenMap
+        // Encrypt the response object
         String encResp = ECTestUtils.encryptMessage(resp, encKey);
 
         // Compose the response object as form-urlencoded parameters
@@ -364,47 +351,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
         Credential credentialQuery = dcqlQuery.getCredentials().getFirst();
         return Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
-    }
-
-    /**
-     * Prepare the OpenID4VP response object to be sent to Keycloak (Legacy).
-     *
-     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the presentation definition
-     */
-    private List<BasicNameValuePair> prepareLegacyOpenID4VPResponse(
-            String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws IOException {
-        // Build presentation submission
-
-        PresentationDefinition definition = requestObject.getPresentationDefinition();
-        InputDescriptor inputDescriptor = definition.getInputDescriptors().getFirst();
-
-        PresentationSubmission submission = new PresentationSubmission();
-        submission.setId(UUID.randomUUID().toString());
-        submission.setDefinitionId(definition.getId());
-
-        // Build descriptor
-        // noinspection ExtractMethodRecommender
-
-        Descriptor descriptor = new Descriptor();
-        descriptor.setId(inputDescriptor.getId());
-        descriptor.setFormat(
-                opts.getOverrideDescriptorFormat() == null
-                        ? Descriptor.Format.VC_SD_JWT
-                        : opts.getOverrideDescriptorFormat());
-        descriptor.setPath(
-                opts.getOverrideDescriptorPath() == null
-                        ? AuthorizationResponseService.JSON_PATH_ROOT
-                        : opts.getOverrideDescriptorPath());
-        submission.setDescriptorMap(List.of(descriptor));
-
-        // Compose the response object as form-urlencoded parameters
-
-        return new ArrayList<>(List.of(
-                new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, sdJwtVpToken),
-                new BasicNameValuePair(
-                        ResponseObject.PRESENTATION_SUBMISSION_KEY, JsonSerialization.writeValueAsString(submission)),
-                new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
     }
 
     public record TestFlowData(
@@ -425,10 +371,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         private boolean shouldRetrieveAccessToken = true;
         private boolean shouldEnforceRedirectUri = false;
         private boolean shouldForceUnencryptedResponse = false;
-        private String overridePresentationDefinitionId;
         private String overridePresentationAud;
-        private Descriptor.Format overrideDescriptorFormat;
-        private String overrideDescriptorPath;
 
         public static TestOpts getDefault() {
             return new TestOpts();
@@ -497,39 +440,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             return this;
         }
 
-        public String getOverridePresentationDefinitionId() {
-            return overridePresentationDefinitionId;
-        }
-
-        public TestOpts setOverridePresentationDefinitionId(String overridePresentationDefinitionId) {
-            this.overridePresentationDefinitionId = overridePresentationDefinitionId;
-            return this;
-        }
-
         public String getOverridePresentationAud() {
             return overridePresentationAud;
         }
 
         public TestOpts setOverridePresentationAud(String overridePresentationAud) {
             this.overridePresentationAud = overridePresentationAud;
-            return this;
-        }
-
-        public Descriptor.Format getOverrideDescriptorFormat() {
-            return overrideDescriptorFormat;
-        }
-
-        public TestOpts setOverrideDescriptorFormat(Descriptor.Format overrideDescriptorFormat) {
-            this.overrideDescriptorFormat = overrideDescriptorFormat;
-            return this;
-        }
-
-        public String getOverrideDescriptorPath() {
-            return overrideDescriptorPath;
-        }
-
-        public TestOpts setOverrideDescriptorPath(String overrideDescriptorPath) {
-            this.overrideDescriptorPath = overrideDescriptorPath;
             return this;
         }
     }

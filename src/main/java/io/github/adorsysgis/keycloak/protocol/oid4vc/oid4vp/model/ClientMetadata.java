@@ -10,7 +10,7 @@ import org.keycloak.jose.jwk.JSONWebKeySet;
  * Model for Client Metadata.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
- * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0-20.html#name-verifier-metadata-client-me">
+ * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-verifier-metadata-client-me">
  * Verifier Metadata (Client Metadata)</a>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)

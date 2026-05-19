@@ -92,18 +92,15 @@ public class SdJwtAuthRequirements {
         return enforceRevocationStatus;
     }
 
-    /**
-     * Constructs presentation definition as supported by keycloak-core.
-     */
-    public PresentationRequirements getPresentationDefinition() {
-        var definition = SimplePresentationDefinition.builder();
-        getRequiredClaims().forEach(claim -> definition.addClaimRequirement(claim, ".*"));
+    public PresentationRequirements getPresentationRequirements() {
+        var requirements = SimplePresentationDefinition.builder();
+        getRequiredClaims().forEach(claim -> requirements.addClaimRequirement(claim, ".*"));
 
-        definition.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
+        requirements.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
         if (verifyIssuerClaim) {
-            definition.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+            requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
         }
-        return definition.build();
+        return requirements.build();
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
@@ -131,12 +128,8 @@ public class SdJwtAuthRequirements {
     }
 
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
-        // Some wallets prepend a scheme to the expected audience. We accept any such scheme.
-        String regex = String.format("([^:]+:)?%s", Pattern.quote(expectedKbJwtAud));
-        Pattern expectedPattern = Pattern.compile(regex);
-        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, (expectedAud, aud) -> expectedPattern
-                .matcher(aud)
-                .matches());
+        // Final 1.0 requires using the full Client Identifier, including prefix, in proof bindings.
+        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, String::equals);
     }
 
     private List<String> parseMultiStr(String str) {
