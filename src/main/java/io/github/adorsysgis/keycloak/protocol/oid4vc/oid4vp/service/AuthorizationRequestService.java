@@ -10,7 +10,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.QueryLanguage;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -20,7 +19,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
-import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -232,7 +230,6 @@ public class AuthorizationRequestService {
                 .path(requestId)
                 .build()
                 .toString();
-        validateResponseUri(responseUri, clientId, config.getClientIdScheme());
 
         // Generate nonce
         String nonce = Stream.generate(AuthorizationRequestService::generateRandomString)
@@ -272,45 +269,6 @@ public class AuthorizationRequestService {
         }
 
         return requestObject;
-    }
-
-    private static void validateResponseUri(String responseUri, String clientId, ClientIdScheme clientIdScheme) {
-        URI uri;
-        try {
-            uri = URI.create(responseUri);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid response_uri", e);
-        }
-
-        if (uri.getHost() == null || uri.getHost().isBlank()) {
-            throw new IllegalArgumentException("response_uri must include a host");
-        }
-        boolean isHttps = "https".equalsIgnoreCase(uri.getScheme());
-        boolean isLoopbackHttp = "http".equalsIgnoreCase(uri.getScheme()) && isLoopbackHost(uri.getHost());
-        if (!isHttps && !isLoopbackHttp) {
-            throw new IllegalArgumentException("response_uri must use https (or loopback http for local deployments)");
-        }
-
-        // Final 1.0: response_uri must satisfy prefix-specific constraints similarly to redirect_uri.
-        switch (clientIdScheme) {
-            case X509_SAN_DNS -> {
-                String expectedDns = clientId.substring(clientId.indexOf(':') + 1);
-                if (!expectedDns.equalsIgnoreCase(uri.getHost())) {
-                    throw new IllegalArgumentException("response_uri host must match x509_san_dns client_id");
-                }
-            }
-            case X509_HASH -> {
-                // For x509_hash, verifier identity is bound through the x5c leaf-certificate hash,
-                // so no additional host-to-client_id binding is defined here.
-            }
-            default ->
-                throw new IllegalArgumentException(
-                        "Unsupported client_id scheme for response_uri validation: " + clientIdScheme.getValue());
-        }
-    }
-
-    private static boolean isLoopbackHost(String host) {
-        return "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host);
     }
 
     private String buildAuthorizationRequestLink(String urlScheme, String clientId, String requestId) {
