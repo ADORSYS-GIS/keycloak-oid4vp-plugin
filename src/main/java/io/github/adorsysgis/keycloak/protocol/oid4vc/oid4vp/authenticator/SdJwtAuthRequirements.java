@@ -4,6 +4,9 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -101,6 +104,47 @@ public class SdJwtAuthRequirements {
             requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
         }
         return requirements.build();
+    }
+
+    /**
+     * Builds presentation requirements from the issued DCQL credential query (OpenID4VP §8.6).
+     */
+    public PresentationRequirements getPresentationRequirementsForCredential(Credential credentialQuery) {
+        var requirements = SimplePresentationDefinition.builder();
+
+        getRequiredClaims().forEach(claim -> requirements.addClaimRequirement(claim, ".*"));
+
+        if (credentialQuery.getClaims() != null) {
+            for (Claim claim : credentialQuery.getClaims()) {
+                if (claim.getPath() == null || claim.getPath().isEmpty()) {
+                    continue;
+                }
+                String claimName = claim.getPath().getLast();
+                requirements.addClaimRequirement(claimName, ".*");
+            }
+        }
+
+        String vctPattern = vctPatternFromMeta(credentialQuery.getMeta());
+        if (vctPattern != null) {
+            requirements.addClaimRequirement(CLAIM_NAME_VCT, vctPattern);
+        } else {
+            requirements.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
+        }
+
+        if (verifyIssuerClaim) {
+            requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+        }
+
+        return requirements.build();
+    }
+
+    private String vctPatternFromMeta(Meta meta) {
+        if (meta == null || meta.getVctValues() == null || meta.getVctValues().isEmpty()) {
+            return null;
+        }
+        return meta.getVctValues().stream()
+                .map(vct -> Pattern.quote("\"" + vct + "\""))
+                .collect(Collectors.joining("|", "(", ")"));
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {

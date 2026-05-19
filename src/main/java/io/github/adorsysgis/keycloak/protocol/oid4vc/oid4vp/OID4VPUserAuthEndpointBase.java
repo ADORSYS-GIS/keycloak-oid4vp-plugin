@@ -21,6 +21,7 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.AuthorizationEndpointBase;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.services.Urls;
@@ -81,7 +82,15 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
      * Returns the SD-JWT authenticator configuration as part of the OpenID4VP authentication flow.
      */
     protected AuthenticatorConfigModel getSdjwtAuthenticatorConfig() {
-        AuthenticationFlowModel flow = getOid4vpAuthFlow();
+        return resolveSdJwtAuthenticatorConfig(session);
+    }
+
+    public static AuthenticatorConfigModel resolveSdJwtAuthenticatorConfig(KeycloakSession session) {
+        RealmModel realm = session.getContext().getRealm();
+        AuthenticationFlowModel flow = realm.getFlowByAlias(OID4VP_AUTH_FLOW);
+        if (flow == null) {
+            return new AuthenticatorConfigModel();
+        }
         return realm.getAuthenticationExecutionsStream(flow.getId())
                 .filter(execution -> execution.getAuthenticator().equals(SdJwtAuthenticatorFactory.PROVIDER_ID))
                 .findFirst()

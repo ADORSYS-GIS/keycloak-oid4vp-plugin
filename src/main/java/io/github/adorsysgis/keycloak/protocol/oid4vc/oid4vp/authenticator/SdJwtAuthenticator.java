@@ -55,6 +55,12 @@ public class SdJwtAuthenticator implements Authenticator {
      */
     public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
 
+    /**
+     * Set when {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationPipeline}
+     * already validated the presentation.
+     */
+    public static final String VP_TOKEN_VALIDATED_KEY = "vp_token_validated";
+
     public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
@@ -65,33 +71,38 @@ public class SdJwtAuthenticator implements Authenticator {
         AuthenticationSessionModel authSession = context.getAuthenticationSession();
         logger.info("Authenticating with SdJwtAuthenticator");
 
-        SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context);
-        String nonce = authSession.getAuthNote(CHALLENGE_NONCE_KEY);
-        String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
         SdJwtVP sdJwt = SdJwtVP.of(authSession.getAuthNote(SDJWT_TOKEN_KEY));
+        boolean alreadyValidated = "true".equals(authSession.getAuthNote(VP_TOKEN_VALIDATED_KEY));
 
-        try {
-            consumer.verifySdJwtPresentation(
-                    sdJwt,
-                    authReqs.getPresentationRequirements(),
-                    List.of(new SelfTrustedSdJwtIssuer(context)),
-                    authReqs.getIssuerSignedJwtVerificationOpts(),
-                    authReqs.getKeyBindingJwtVerificationOpts(nonce, aud));
-        } catch (VerificationException e) {
-            logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
-            failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
-            return;
-        }
+        if (!alreadyValidated) {
+            SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context);
+            String nonce = authSession.getAuthNote(CHALLENGE_NONCE_KEY);
+            String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
 
-        // Validate token status if enforced
-        if (authReqs.shouldEnforceRevocationStatus()) {
             try {
-                tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
-            } catch (ReferencedTokenValidationException e) {
-                logger.errorf(e, "Token status verification failed (authSession = %s)", correlationId(context));
-                failRejectingPresentedSdJwtToken(context, "Token status verification failed", e);
+                consumer.verifySdJwtPresentation(
+                        sdJwt,
+                        authReqs.getPresentationRequirements(),
+                        List.of(new SelfTrustedSdJwtIssuer(context)),
+                        authReqs.getIssuerSignedJwtVerificationOpts(),
+                        authReqs.getKeyBindingJwtVerificationOpts(nonce, aud));
+            } catch (VerificationException e) {
+                logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
+                failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
                 return;
             }
+
+            if (authReqs.shouldEnforceRevocationStatus()) {
+                try {
+                    tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
+                } catch (ReferencedTokenValidationException e) {
+                    logger.errorf(e, "Token status verification failed (authSession = %s)", correlationId(context));
+                    failRejectingPresentedSdJwtToken(context, "Token status verification failed", e);
+                    return;
+                }
+            }
+        } else {
+            logger.debug("Skipping duplicate SD-JWT validation; vp_token pipeline already validated presentation");
         }
 
         UserModel user = recoverAuthenticatingUser(context, sdJwt);
