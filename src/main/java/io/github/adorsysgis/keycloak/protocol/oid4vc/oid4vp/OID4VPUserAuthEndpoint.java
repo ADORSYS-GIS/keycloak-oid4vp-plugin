@@ -227,11 +227,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             AuthenticationSessionModel authSession,
             String error,
             String errorDescription) {
+        String walletErrorDetails =
+                StringUtil.isNotBlank(errorDescription) ? String.format("%s: %s", error, errorDescription) : error;
         authorizationContext
                 .setStatus(AuthorizationContextStatus.ERROR)
-                .setError(ProcessingError.fromErrorString(error))
-                .setErrorDescription(
-                        StringUtil.isNotBlank(errorDescription) ? errorDescription : "Wallet returned error: " + error);
+                .setError(ProcessingError.WALLET_ERROR)
+                .setErrorDescription(walletErrorDetails);
         new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
     }
 

@@ -155,18 +155,16 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
         String errorDescription = "Wallet could not encrypt the response";
 
-        HttpResponse response = sendAuthorizationErrorResponse(
-                requestObject,
-                ProcessingError.INVALID_REQUEST.getErrorString(),
-                errorDescription,
-                requestObject.getState());
+        String walletError = OAuthErrorException.INVALID_REQUEST;
+        HttpResponse response =
+                sendAuthorizationErrorResponse(requestObject, walletError, errorDescription, requestObject.getState());
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
         HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
         AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.ERROR, statusPayload.getStatus());
-        assertEquals(ProcessingError.INVALID_REQUEST, statusPayload.getError());
-        assertEquals(errorDescription, statusPayload.getErrorDescription());
+        assertEquals(ProcessingError.WALLET_ERROR, statusPayload.getError());
+        assertEquals(walletError + ": " + errorDescription, statusPayload.getErrorDescription());
     }
 
     private ObjectNode getAuthConfig() {
