@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -37,6 +37,7 @@ import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * Testing OpenID4VP user authentication via presentation of SD-JWT identity credentials.
@@ -93,13 +94,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
         SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
-        // Request object must use expected default client ID scheme
-        assertEquals(ClientIdScheme.X509_SAN_DNS, requestObject.getClientIdScheme());
 
-        // Assert: client IDs are schemed across the request object
+        // client identifier prefix is conveyed only via client_id, not client_id_scheme
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
+        ObjectNode requestPayload = JsonSerialization.readValue(jwsInput.getContent(), ObjectNode.class);
+        assertFalse(
+                requestPayload.has("client_id_scheme"),
+                "Signed request object must not contain draft-era client_id_scheme");
         assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
         assertEquals(ResponseMode.DIRECT_POST, requestObject.getResponseMode());
         assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());

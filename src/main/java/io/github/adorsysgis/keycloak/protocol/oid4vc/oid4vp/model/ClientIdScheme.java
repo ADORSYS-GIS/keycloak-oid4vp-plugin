@@ -3,11 +3,12 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * OpenID4VP Client ID Schemes
+ * Client Identifier Prefix values used when building prefixed {@code client_id} strings.
+ * <p>
+ * This is a deployment/configuration concept for {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService};
+ * it is not serialized as a draft-era {@code client_id_scheme} authorization request parameter.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
- * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-authorization-request">
- * Authorization Request</a>
  */
 public enum ClientIdScheme {
     PRE_REGISTERED("pre-registered"),

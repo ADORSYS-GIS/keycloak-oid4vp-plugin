@@ -250,7 +250,6 @@ public class AuthorizationRequestService {
                 .setResponseUri(responseUri)
                 .setResponseType(ResponseType.VP_TOKEN)
                 .setClientId(clientId)
-                .setClientIdScheme(config.getClientIdScheme())
                 .setNonce(nonce)
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
