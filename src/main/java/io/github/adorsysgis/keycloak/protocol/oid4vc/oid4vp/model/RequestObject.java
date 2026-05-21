@@ -7,7 +7,11 @@ import java.util.List;
 import org.keycloak.representations.JsonWebToken;
 
 /**
- * Request object payload for OpenID4VP Authorization Request.
+ * Request object payload for OpenID4VP authorization requests (JAR).
+ * <p>
+ * Credential requirements are expressed via {@code dcql_query}. Client identification uses a
+ * {@code client_id} value with a Client Identifier Prefix, not the draft-era
+ * {@code client_id_scheme} parameter.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-authorization-request">
@@ -33,9 +37,6 @@ public class RequestObject extends JsonWebToken {
 
     @JsonProperty("client_id")
     private String clientId;
-
-    @JsonProperty("client_id_scheme")
-    private ClientIdScheme clientIdScheme;
 
     @JsonProperty("nonce")
     private String nonce;
@@ -103,15 +104,6 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setClientId(String clientId) {
         this.clientId = clientId;
-        return this;
-    }
-
-    public ClientIdScheme getClientIdScheme() {
-        return clientIdScheme;
-    }
-
-    public RequestObject setClientIdScheme(ClientIdScheme clientIdScheme) {
-        this.clientIdScheme = clientIdScheme;
         return this;
     }
 
