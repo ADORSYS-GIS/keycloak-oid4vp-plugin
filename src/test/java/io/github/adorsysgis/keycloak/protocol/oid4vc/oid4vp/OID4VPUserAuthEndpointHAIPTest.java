@@ -51,6 +51,7 @@ import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.MediaType;
 
 /**
  * Testing compliance of the flow with requirements from the German wallet.
@@ -72,7 +73,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     public void shouldProduceValidAuthorizationRequests() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         String authRequest = authContext.getAuthorizationRequest();
-        String signedReqJwt = resolveSignedRequestObject(authRequest);
+        String signedReqJwt = resolveSignedRequestObject(authRequest, "wallet-nonce-haip", null);
         JWSInput jwsInput = new JWSInput(signedReqJwt);
         RequestObject requestObject = jwsInput.readJsonContent(RequestObject.class);
         HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
@@ -89,6 +90,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequestUri);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
+        assertEquals("post", uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert client ID uses x509_hash appropriately
         ObjectNode authConfig = getAuthConfig();
@@ -102,6 +104,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
+        assertEquals("wallet-nonce-haip", requestObject.getWalletNonce());
         assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
 
         // Assert: Ensure the request object contains a DCQL query
@@ -165,6 +168,46 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     }
 
     @Test
+    public void shouldAllowGetFallbackForPostRequestUriMethod() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String signedReqJwt = resolveSignedRequestObjectWithGet(authContext.getAuthorizationRequest());
+        RequestObject requestObject = new JWSInput(signedReqJwt).readJsonContent(RequestObject.class);
+
+        assertNull(requestObject.getWalletNonce());
+    }
+
+    @Test
+    public void shouldRejectInvalidWalletMetadataFromRequestUriPost() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String walletMetadata = "[]";
+
+        HttpResponse response = resolveSignedRequestObjectResponse(
+                authContext.getAuthorizationRequest(),
+                "wallet-nonce",
+                walletMetadata,
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("wallet_metadata must be a JSON object"));
+    }
+
+    @Test
+    public void shouldRejectRequestUriPostWithoutRequiredAcceptHeader() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+
+        String invalidAccept = MediaType.APPLICATION_JSON;
+        HttpResponse response = resolveSignedRequestObjectResponse(authRequest, "nonce", null, invalidAccept);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Request URI POST must include Accept"));
+    }
+
+    @Test
     public void shouldAcceptUnencryptedWalletError_WhenEncryptedResponseIsExpected() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
@@ -213,7 +256,6 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
     @Test
     public void shouldRejectEncryptedResponse_MalformedJwe() throws Exception {
-        // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
@@ -229,23 +271,19 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
     private void assertEncryptedJweRejected(String alg, String enc, String overrideKid, String expectedMessage)
             throws Exception {
-        // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
-        // Build minimal encrypted response payload
         var dcql = requestObject.getDcqlQuery();
         String credentialId = dcql.getCredentials().getFirst().getId();
         var vpTokenMap = Map.of(credentialId, List.of("sd-jwt-vp-token"));
         String payload = JsonSerialization.writeValueAsString(Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap));
 
-        // Encrypt with requested variations
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         var encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
         String kid = overrideKid == null ? encJwk.getKeyId() : overrideKid;
         String encrypted = ECTestUtils.encryptMessage(payload, encKey, alg, enc, kid);
 
-        // Send OpenID4VP response
         HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
         httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("response", encrypted))));
         HttpResponse response = httpClient.execute(httpPost);

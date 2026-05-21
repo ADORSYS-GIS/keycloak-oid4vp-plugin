@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtC
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
@@ -130,7 +131,8 @@ public class AuthorizationRequestService {
 
         // Build authorization request link
         String urlScheme = config.getAuthReqUrlScheme();
-        String authorizationRequestLink = buildAuthorizationRequestLink(urlScheme, clientId, requestId);
+        String authorizationRequestLink =
+                buildAuthorizationRequestLink(urlScheme, clientId, requestId, config.getRequestUriMethod());
 
         // Gather authorization context
         AuthorizationContext authorizationContext = new AuthorizationContext()
@@ -142,6 +144,7 @@ public class AuthorizationRequestService {
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink)
+                .setRequestUriMethod(config.getRequestUriMethod())
                 .setResponseCode(responseCode);
 
         // Attach code challenge details for ownership binding if present
@@ -262,18 +265,27 @@ public class AuthorizationRequestService {
         return requestObject;
     }
 
-    private String buildAuthorizationRequestLink(String urlScheme, String clientId, String requestId) {
+    private String buildAuthorizationRequestLink(
+            String urlScheme, String clientId, String requestId, RequestUriMethod requestUriMethod) {
         var requestUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH)
                 .path(requestId)
                 .build()
                 .toString();
 
+        String requestUriMethodQuery = RequestUriMethod.POST.equals(requestUriMethod) ? "&request_uri_method=post" : "";
         return String.format(
-                "%sauthorize?client_id=%s&request_uri=%s",
+                "%sauthorize?client_id=%s&request_uri=%s%s",
                 urlScheme,
                 URLEncoder.encode(clientId, StandardCharsets.UTF_8),
-                URLEncoder.encode(requestUri, StandardCharsets.UTF_8));
+                URLEncoder.encode(requestUri, StandardCharsets.UTF_8),
+                requestUriMethodQuery);
+    }
+
+    public String signRequestObject(RequestObject requestObject, VerifierConfig config) {
+        KeyWrapper signingKey = discoverSigningKey(config);
+        X509Certificate certificate = resolveAccessCertificate(config, signingKey);
+        return signRequestObject(requestObject, signingKey, certificate);
     }
 
     private String signRequestObject(RequestObject requestObject, KeyWrapper signingKey, X509Certificate certificate) {

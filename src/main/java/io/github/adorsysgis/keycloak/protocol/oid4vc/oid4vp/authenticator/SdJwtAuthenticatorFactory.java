@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
@@ -55,6 +56,9 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     public static final String ACCESS_CERTIFICATE_CONFIG = "accessCertificate";
 
     public static final String REGISTRATION_CERTIFICATE_CONFIG = "registrationCertificate";
+
+    public static final String REQUEST_URI_METHOD_CONFIG = "requestUriMethod";
+    public static final String REQUEST_URI_METHOD_CONFIG_DEFAULT = RequestUriMethod.GET.getValue();
 
     static {
         ProviderConfigProperty property;
@@ -142,6 +146,15 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Registration certificate");
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setHelpText("Opaque string to advertise under the verifier_info claim of request objects.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(REQUEST_URI_METHOD_CONFIG);
+        property.setLabel("Request URI method");
+        property.setType(ProviderConfigProperty.LIST_TYPE);
+        property.setDefaultValue(REQUEST_URI_METHOD_CONFIG_DEFAULT);
+        property.setOptions(List.of(RequestUriMethod.GET.getValue(), RequestUriMethod.POST.getValue()));
+        property.setHelpText("How wallets should dereference request_uri (default get, optionally post).");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
