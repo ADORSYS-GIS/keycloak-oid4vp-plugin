@@ -87,13 +87,22 @@ public class ECTestUtils {
         return encryptMessage(payload, publicKey, JWEConstants.ECDH_ES, JWEConstants.A128GCM);
     }
 
+    public static String encryptMessage(String payload, ECPublicKey publicKey, String kid) {
+        return encryptMessage(payload, publicKey, JWEConstants.ECDH_ES, JWEConstants.A128GCM, kid);
+    }
+
     public static String encryptMessage(
             String payload, ECPublicKey publicKey, String jweAlgorithmName, String jweEncryptionName) {
+        return encryptMessage(payload, publicKey, jweAlgorithmName, jweEncryptionName, null);
+    }
+
+    public static String encryptMessage(
+            String payload, ECPublicKey publicKey, String jweAlgorithmName, String jweEncryptionName, String kid) {
         JWEAlgorithmProvider jweAlgorithmProvider =
                 CryptoIntegration.getProvider().getAlgorithmProvider(JWEAlgorithmProvider.class, jweAlgorithmName);
         JWEEncryptionProvider jweEncryptionProvider = new AesGcmJWEEncryptionProvider(jweEncryptionName);
 
-        JWEHeader jweHeader = new JWEHeader(jweAlgorithmName, jweEncryptionName, null);
+        JWEHeader jweHeader = new JWEHeader(jweAlgorithmName, jweEncryptionName, null, kid);
         JWE jwe = new JWE().header(jweHeader).content(payload.getBytes(StandardCharsets.UTF_8));
 
         jwe.getKeyStorage().setEncryptionKey(publicKey);

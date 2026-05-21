@@ -128,12 +128,8 @@ public class SdJwtAuthRequirements {
     }
 
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
-        // Some wallets prepend a scheme to the expected audience. We accept any such scheme.
-        String regex = String.format("([^:]+:)?%s", Pattern.quote(expectedKbJwtAud));
-        Pattern expectedPattern = Pattern.compile(regex);
-        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, (expectedAud, aud) -> expectedPattern
-                .matcher(aud)
-                .matches());
+        // Final 1.0 requires using the full Client Identifier, including prefix, in proof bindings.
+        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, String::equals);
     }
 
     private List<String> parseMultiStr(String str) {

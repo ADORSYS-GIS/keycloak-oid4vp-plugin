@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAut
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -12,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -75,6 +77,12 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Resolve the request_uri parameter from the authorization request
         RequestObject requestObject = resolveRequestObject(authRequest);
+        String signedReqJwt = resolveSignedRequestObject(authRequest);
+        JWSInput jwsInput = new JWSInput(signedReqJwt);
+        HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
+        assertEquals(
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE,
+                requestUriResponse.getEntity().getContentType().getValue());
 
         // Assert: Ensure authentication sessions match
         String expectedSessionId = pruneAuthSessionId(authContext.getTransactionId());
@@ -92,6 +100,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
+        assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
+        assertEquals(ResponseMode.DIRECT_POST, requestObject.getResponseMode());
+        assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
 
         // Assert: Request object must not advertise symmetric signing algs
         var dcSdJwt = requestObject.getClientMetadata().getVpFormat().getDcSdJwt();
@@ -563,6 +574,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldFailAuthentication_InvalidKbJwt_InvalidAud() throws Exception {
         var invalidAuds = List.of(
                 "invalid-aud",
+                getVerifierClientId(), // Missing required client_id prefix
                 ":" + getVerifierClientId(), // Missing scheme
                 "double:scheme:" + getVerifierClientId());
 
