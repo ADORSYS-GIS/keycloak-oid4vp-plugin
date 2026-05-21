@@ -9,10 +9,11 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationResult;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationService;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -25,7 +26,6 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.MediaType;
@@ -42,9 +42,11 @@ public class AuthorizationResponseService {
     public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
 
     private final KeycloakSession session;
+    private final VpTokenValidationService vpTokenValidationService;
 
     public AuthorizationResponseService(KeycloakSession session) {
         this.session = session;
+        this.vpTokenValidationService = new VpTokenValidationService(session);
     }
 
     /**
@@ -69,21 +71,33 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        // Extract SD-JWT VP token from the response object
-        String sdJwtVp = extractSdJwtVpToken(responseObject, authContext, store);
+        VpTokenValidationResult validationResult;
+        try {
+            logger.debug("Running verifier-side vp_token validation pipeline");
+            validationResult = vpTokenValidationService.validate(responseObject, authContext.getRequestObject());
+        } catch (VpTokenValidationException e) {
+            logger.errorf(e, "vp_token validation failed");
+            boolean formatFailure = VpTokenValidationException.Phase.FORMAT.equals(e.getPhase());
+            String detailedMessage =
+                    formatFailure ? String.format("Invalid SD-JWT presentation (%s)", e.getMessage()) : e.getMessage();
+            throw failWithHttpException(
+                    formatFailure ? ProcessingError.VP_TOKEN_AUTH_ERROR : ProcessingError.INVALID_VP_TOKEN,
+                    formatFailure ? "Invalid SD-JWT presentation" : "Invalid vp_token",
+                    detailedMessage,
+                    formatFailure ? Response.Status.UNAUTHORIZED : Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
+        }
 
-        // Formally, we should then check that the VP token satisfies the DCQL constraints.
-        // Equivalently, we offload this task to the SD-JWT authenticator in the authentication flow.
-        logger.debugf("Initializing authentication with extracted SD-JWT VP token");
+        String sdJwtVp = validationResult.requireSinglePresentation().encodedPresentation();
+
+        logger.debugf("Initializing authentication with validated SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();
-        String nonce = authContext.getRequestObject().getNonce();
-        String aud = authContext.getRequestObject().getClientId();
         processorSession.setAuthNote(SdJwtAuthenticator.SDJWT_TOKEN_KEY, sdJwtVp);
-        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
-        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
+        processorSession.setAuthNote(SdJwtAuthenticator.VP_TOKEN_VALIDATED_KEY, "true");
 
-        // Run authentication processor to validate the SD-JWT VP token
-        logger.debug("Running authentication processor to validate SD-JWT VP token...");
+        // Run authentication processor to resolve the presenting user
+        logger.debug("Running authentication processor after vp_token validation...");
         try (Response response = authProcessor.authenticateOnly()) {
             if (response != null) {
                 String detailed = getAuthenticatorErrorMessage(response);
@@ -123,76 +137,6 @@ public class AuthorizationResponseService {
         }
 
         return String.format("%s: %s", errorResponse.getError().toUpperCase(), errorResponse.getErrorDescription());
-    }
-
-    /**
-     * Extract SD-JWT VP token from response object
-     */
-    private String extractSdJwtVpToken(
-            ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
-        String parsedVpToken;
-        logger.debug("Extracting SD-JWT VP token from response object with DCQL matching");
-        parsedVpToken = extractSdJwtVpTokenWithDCQL(responseObject, authContext, store);
-
-        try {
-            String vpToken = decodeIfBase64Url(parsedVpToken);
-            SdJwtVP.of(vpToken);
-            return vpToken;
-        } catch (IllegalArgumentException e) {
-            logger.errorf(e, "Failed to parse SD-JWT VP token");
-            String detailed = "Could not parse SD-JWT VP token contained in `vp_token`";
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Invalid vp_token",
-                    detailed,
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
-    }
-
-    /**
-     * Extract SD-JWT VP token from response object (DCQL era)
-     */
-    private String extractSdJwtVpTokenWithDCQL(
-            ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
-        var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
-        if (dcqlQuery == null || dcqlQuery.getCredentials().size() != 1) {
-            throw new IllegalStateException(
-                    "Invalid DCQL query in authorization context. Expected exactly one credential query.");
-        }
-
-        // Ensure that VP token map matches the DCQL credential query
-        var credentialQuery = dcqlQuery.getCredentials().getFirst();
-        var vpTokenMap = responseObject.getVpToken();
-        if (vpTokenMap == null || !vpTokenMap.containsKey(credentialQuery.getId())) {
-            String detailed = "Presented vp_token map does not match DCQL credential query";
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Invalid vp_token",
-                    detailed,
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
-
-        // Check that the VP token map provides a VP token, and only one
-        var tokens = vpTokenMap.get(credentialQuery.getId());
-        if (tokens == null || tokens.size() != 1) {
-            String errorMsg = String.format(
-                    "Presented vp_token map must contain exactly one token as requested. Found: %d",
-                    tokens == null ? 0 : tokens.size());
-
-            throw failWithHttpException(
-                    ProcessingError.INVALID_VP_TOKEN,
-                    "Invalid vp_token",
-                    errorMsg,
-                    Response.Status.BAD_REQUEST,
-                    authContext,
-                    store);
-        }
-
-        return (String) tokens.getFirst();
     }
 
     /**
@@ -264,20 +208,5 @@ public class AuthorizationResponseService {
         }
 
         return exception;
-    }
-
-    /**
-     * Helper method to decode Base64URL encoded strings if applicable.
-     * If the input is not Base64URL encoded, it returns the input as is.
-     */
-    private static String decodeIfBase64Url(String input) {
-        try {
-            // Try to decode as Base64URL
-            byte[] decoded = Base64.getUrlDecoder().decode(input);
-            return new String(decoded, StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            // Not valid Base64URL, return as is
-            return input;
-        }
     }
 }

@@ -159,10 +159,16 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         return PROVIDER_ID;
     }
 
+    /**
+     * Creates the status list fetcher used for revocation checks during presentation validation.
+     */
+    public StatusListJwtFetcher createStatusListJwtFetcher(KeycloakSession session) {
+        return new TrustedStatusListJwtFetcher(session);
+    }
+
     @Override
     public Authenticator create(KeycloakSession session) {
-        StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);
-        return new SdJwtAuthenticator(httpFetcher);
+        return new SdJwtAuthenticator(createStatusListJwtFetcher(session));
     }
 
     @Override
