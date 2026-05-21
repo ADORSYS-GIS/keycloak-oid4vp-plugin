@@ -2,14 +2,18 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -24,8 +28,10 @@ import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
+import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -55,6 +61,10 @@ public class SdJwtAuthenticator implements Authenticator {
      */
     public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
 
+    public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY = "require_cryptographic_holder_binding";
+
+    public static final String TRANSACTION_DATA_WIRE_KEY = "transaction_data_wire";
+
     public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
@@ -68,6 +78,8 @@ public class SdJwtAuthenticator implements Authenticator {
         SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context);
         String nonce = authSession.getAuthNote(CHALLENGE_NONCE_KEY);
         String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
+        boolean requireCryptographicHolderBinding = parseRequireCryptographicHolderBinding(
+                authSession.getAuthNote(REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY));
         SdJwtVP sdJwt = SdJwtVP.of(authSession.getAuthNote(SDJWT_TOKEN_KEY));
 
         try {
@@ -76,9 +88,17 @@ public class SdJwtAuthenticator implements Authenticator {
                     authReqs.getPresentationRequirements(),
                     List.of(new SelfTrustedSdJwtIssuer(context)),
                     authReqs.getIssuerSignedJwtVerificationOpts(),
-                    authReqs.getKeyBindingJwtVerificationOpts(nonce, aud));
+                    authReqs.getKeyBindingJwtVerificationOpts(nonce, aud, requireCryptographicHolderBinding));
         } catch (VerificationException e) {
             logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
+            failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
+            return;
+        }
+
+        try {
+            validateTransactionData(authSession, sdJwt);
+        } catch (IllegalArgumentException e) {
+            logger.errorf(e, "Transaction data validation failed (authSession = %s)", correlationId(context));
             failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
             return;
         }
@@ -117,6 +137,35 @@ public class SdJwtAuthenticator implements Authenticator {
 
     private SdJwtAuthRequirements getAuthenticationRequirements(AuthenticationFlowContext context) {
         return new SdJwtAuthRequirements(context.getSession().getContext(), context.getAuthenticatorConfig());
+    }
+
+    private static boolean parseRequireCryptographicHolderBinding(String note) {
+        if (StringUtil.isBlank(note)) {
+            return true;
+        }
+        return Boolean.parseBoolean(note);
+    }
+
+    private void validateTransactionData(AuthenticationSessionModel authSession, SdJwtVP sdJwt) {
+        String wireJson = authSession.getAuthNote(TRANSACTION_DATA_WIRE_KEY);
+        if (StringUtil.isBlank(wireJson)) {
+            return;
+        }
+
+        List<String> transactionDataWire;
+        try {
+            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid transaction_data session state", e);
+        }
+
+        Optional<KeyBindingJWT> keyBindingJwt = sdJwt.getKeyBindingJWT();
+        if (keyBindingJwt.isEmpty()) {
+            throw new IllegalArgumentException("Key Binding JWT required when transaction_data is requested");
+        }
+
+        ObjectNode kbPayload = keyBindingJwt.get().getPayload();
+        TransactionDataValidator.validate(transactionDataWire, kbPayload);
     }
 
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {

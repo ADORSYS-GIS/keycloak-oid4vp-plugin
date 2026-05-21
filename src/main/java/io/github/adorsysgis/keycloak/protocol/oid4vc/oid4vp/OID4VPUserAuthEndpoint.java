@@ -199,12 +199,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     ? new ResponseObject(vpToken, state)
                     : decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
 
-            String parsedState = responseObject.getState();
-            if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
-                throw new IllegalArgumentException(String.format(
-                        "State param must match requestId. requestId: %s, state: %s",
-                        requestId, responseObject.getState()));
-            }
+            validateResponseState(responseObject, authorizationContext, requestId);
         } catch (IllegalArgumentException | JsonProcessingException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -473,6 +468,31 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         var errorResponse = new OAuth2ErrorRepresentation(error, errorDescription);
         return CorsService.open()
                 .add(Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON));
+    }
+
+    private void validateResponseState(
+            ResponseObject responseObject, AuthorizationContext authorizationContext, String requestId) {
+        var credential = authorizationContext
+                .getRequestObject()
+                .getDcqlQuery()
+                .getCredentials()
+                .getFirst();
+        Boolean holderBindingRequired = credential.getRequireCryptographicHolderBinding();
+        String parsedState = responseObject.getState();
+
+        if (Boolean.FALSE.equals(holderBindingRequired)) {
+            if (StringUtils.isBlank(parsedState) || !requestId.equals(parsedState)) {
+                throw new IllegalArgumentException(String.format(
+                        "State param is required and must match requestId when holder binding is not required. requestId: %s, state: %s",
+                        requestId, parsedState));
+            }
+            return;
+        }
+
+        if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
+            throw new IllegalArgumentException(String.format(
+                    "State param must match requestId. requestId: %s, state: %s", requestId, parsedState));
+        }
     }
 
     /**

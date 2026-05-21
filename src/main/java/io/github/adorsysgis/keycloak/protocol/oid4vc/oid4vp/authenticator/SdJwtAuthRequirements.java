@@ -39,6 +39,7 @@ public class SdJwtAuthRequirements {
     private final boolean requireExpirationClaim;
     private final boolean verifyIssuerClaim;
     private final boolean enforceRevocationStatus;
+    private final boolean requireCryptographicHolderBinding;
 
     public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting authentication requirements");
@@ -70,6 +71,10 @@ public class SdJwtAuthRequirements {
                 SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
                 String.valueOf(SdJwtAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)));
 
+        this.requireCryptographicHolderBinding = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
+
         this.keycloakIssuerURI = Urls.realmIssuer(
                 context.getUri().getBaseUri(), context.getRealm().getName());
 
@@ -92,6 +97,10 @@ public class SdJwtAuthRequirements {
         return enforceRevocationStatus;
     }
 
+    public boolean requireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding;
+    }
+
     public PresentationRequirements getPresentationRequirements() {
         var requirements = SimplePresentationDefinition.builder();
         getRequiredClaims().forEach(claim -> requirements.addClaimRequirement(claim, ".*"));
@@ -104,7 +113,8 @@ public class SdJwtAuthRequirements {
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
-        return new SdJwtCredentialConstrainer.QueryMap(getExpectedVcts(), getRequiredClaims());
+        return new SdJwtCredentialConstrainer.QueryMap(
+                getExpectedVcts(), getRequiredClaims(), requireCryptographicHolderBinding);
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
@@ -116,15 +126,29 @@ public class SdJwtAuthRequirements {
     }
 
     public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(String nonce, String aud) {
+        return buildKeyBindingJwtVerificationOpts(nonce, aud, requireCryptographicHolderBinding);
+    }
+
+    public KeyBindingJwtVerificationOpts getKeyBindingJwtVerificationOpts(
+            String nonce, String aud, boolean requireCryptographicHolderBinding) {
+        return buildKeyBindingJwtVerificationOpts(nonce, aud, requireCryptographicHolderBinding);
+    }
+
+    private KeyBindingJwtVerificationOpts buildKeyBindingJwtVerificationOpts(
+            String nonce, String aud, boolean requireKeyBinding) {
         ClaimCheck kbJwtAudCheck = buildAudClaimCheck(aud);
-        return KeyBindingJwtVerificationOpts.builder()
-                .withKeyBindingRequired(true)
+        var builder = KeyBindingJwtVerificationOpts.builder()
+                .withKeyBindingRequired(requireKeyBinding)
                 .withIatCheck(kbJwtMaxAllowedAge)
-                .withNonceCheck(nonce)
                 .withNbfCheck(!requireNotBeforeClaim)
                 .withExpCheck(!requireExpirationClaim)
-                .addContentVerifiers(List.of(kbJwtAudCheck))
-                .build();
+                .addContentVerifiers(List.of(kbJwtAudCheck));
+
+        if (requireKeyBinding) {
+            builder.withNonceCheck(nonce);
+        }
+
+        return builder.build();
     }
 
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
