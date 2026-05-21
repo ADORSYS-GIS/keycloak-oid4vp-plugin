@@ -40,7 +40,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
         }
 
         @Override
-        protected String _fetchStatusListJwt(String uri) {
+        protected String fetchStatusListFromUri(String uri) {
             String path;
 
             try {

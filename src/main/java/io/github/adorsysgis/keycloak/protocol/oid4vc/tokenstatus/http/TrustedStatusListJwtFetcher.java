@@ -32,13 +32,16 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
     @Override
     public String fetchStatusListJwt(String uri) throws ReferencedTokenValidationException {
+        // Enforce HTTPS
         if (!uri.startsWith("https://")) {
             throw new ReferencedTokenValidationException("Status list JWT URI must use HTTPS: " + uri);
         }
 
-        String statusListJwt = _fetchStatusListJwt(uri);
+        // Retrieve status list JWT
+        String statusListJwt = super.fetchStatusListJwt(uri);
         JWSInput jws = parseStatusListJwt(statusListJwt);
 
+        // Verify signature and certificate chain
         verifyStatusListJwt(jws, uri);
 
         return statusListJwt;
@@ -118,6 +121,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
     }
 
     protected X509Certificate[] validateCertChain(List<String> x5c) throws ReferencedTokenValidationException {
+        // Enforce trust in X5C chain
         TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
         if (truststoreProvider == null || truststoreProvider.getTruststore() == null) {
             logger.warn("No Keycloak global truststore configured. Certificate chain validation will fail.");

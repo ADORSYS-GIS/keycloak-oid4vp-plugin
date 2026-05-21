@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.TestCryptoUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -13,6 +14,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
@@ -23,12 +25,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.bouncycastle.asn1.x509.KeyUsage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.keycloak.common.VerificationException;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.Algorithm;
@@ -165,7 +167,7 @@ public class TrustedStatusListJwtFetcherTest {
 
         TrustedStatusListJwtFetcher customFetcher = new MockTrustedStatusListJwtFetcher(session) {
             @Override
-            protected String _fetchStatusListJwt(String u) {
+            protected String fetchStatusListFromUri(String u) {
                 return fakeJwt;
             }
         };
@@ -176,32 +178,73 @@ public class TrustedStatusListJwtFetcherTest {
 
     @Test
     public void shouldRejectLeafAsCA() throws Exception {
-        String uri = "https://example.com/status-list-jwt";
-        setupTrustForStatusListJwt();
+        String uri = "https://example.com/leaf-as-ca";
 
-        TrustedStatusListJwtFetcher spyFetcher = Mockito.spy(fetcher);
-        Mockito.doThrow(new VerificationException("Leaf certificate must not be a CA"))
-                .when(spyFetcher)
-                .validateLeafCertificate(Mockito.any());
+        // Create a leaf certificate that is also a CA (BasicConstraints: CA=true)
+        KeyPair caKp = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate caCert = TestCryptoUtils.createSelfSignedCaCert(caKp);
 
-        var e = assertThrows(ReferencedTokenValidationException.class, () -> spyFetcher.fetchStatusListJwt(uri));
+        KeyPair leafKp = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate leafCert = TestCryptoUtils.createLeafCert(
+                leafKp, caKp, caCert, "CN=LeafAsCA", true, KeyUsage.digitalSignature | KeyUsage.keyCertSign);
+
+        final String jwt = createJwtWithX5c(leafCert, caCert);
+        TrustedStatusListJwtFetcher customFetcher = new MockTrustedStatusListJwtFetcher(session) {
+            @Override
+            protected String fetchStatusListFromUri(String u) {
+                return jwt;
+            }
+        };
+
+        // Setup trust in the CA
+        TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
+        Mockito.when(truststoreProvider.getRootCertificates())
+                .thenReturn(Map.of(caCert.getSubjectX500Principal(), List.of(caCert)));
+
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> customFetcher.fetchStatusListJwt(uri));
         assertEquals("Leaf certificate must not be a CA", e.getCause().getMessage());
     }
 
     @Test
     public void shouldRejectMissingKeyUsage() throws Exception {
-        String uri = "https://example.com/status-list-jwt";
-        setupTrustForStatusListJwt();
+        String uri = "https://example.com/missing-key-usage";
 
-        TrustedStatusListJwtFetcher spyFetcher = Mockito.spy(fetcher);
-        Mockito.doThrow(new VerificationException("Leaf certificate missing Digital Signature KeyUsage"))
-                .when(spyFetcher)
-                .validateLeafCertificate(Mockito.any());
+        // Create a leaf certificate missing Digital Signature KeyUsage
+        KeyPair caKp = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate caCert = TestCryptoUtils.createSelfSignedCaCert(caKp);
 
-        var e = assertThrows(ReferencedTokenValidationException.class, () -> spyFetcher.fetchStatusListJwt(uri));
+        KeyPair leafKp = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        // Using only KeyAgreement, which is NOT DigitalSignature
+        X509Certificate leafCert =
+                TestCryptoUtils.createLeafCert(leafKp, caKp, caCert, "CN=NoUsage", false, KeyUsage.keyAgreement);
+
+        final String jwt = createJwtWithX5c(leafCert, caCert);
+        TrustedStatusListJwtFetcher customFetcher = new MockTrustedStatusListJwtFetcher(session) {
+            @Override
+            protected String fetchStatusListFromUri(String u) {
+                return jwt;
+            }
+        };
+
+        // Setup trust in the CA
+        TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
+        Mockito.when(truststoreProvider.getRootCertificates())
+                .thenReturn(Map.of(caCert.getSubjectX500Principal(), List.of(caCert)));
+
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> customFetcher.fetchStatusListJwt(uri));
         assertEquals(
                 "Leaf certificate missing Digital Signature KeyUsage",
                 e.getCause().getMessage());
+    }
+
+    private String createJwtWithX5c(X509Certificate leaf, X509Certificate ca) throws Exception {
+        String jsonHeader = String.format(
+                "{\"alg\":\"ES256\",\"x5c\":[\"%s\",\"%s\"]}",
+                Base64.getEncoder().encodeToString(leaf.getEncoded()),
+                Base64.getEncoder().encodeToString(ca.getEncoded()));
+        String header =
+                Base64.getUrlEncoder().withoutPadding().encodeToString(jsonHeader.getBytes(StandardCharsets.UTF_8));
+        return header + ".eyJlcnJvciI6Im5vdCBhIHJlYWwgcGF5bG9hZCJ9.c2lnbmF0dXJl";
     }
 
     /* ------------------ Helpers ------------------ */
@@ -253,7 +296,7 @@ public class TrustedStatusListJwtFetcherTest {
         }
 
         @Override
-        protected String _fetchStatusListJwt(String uri) {
+        protected String fetchStatusListFromUri(String uri) {
             String path;
             try {
                 path = new URI(uri).getPath();

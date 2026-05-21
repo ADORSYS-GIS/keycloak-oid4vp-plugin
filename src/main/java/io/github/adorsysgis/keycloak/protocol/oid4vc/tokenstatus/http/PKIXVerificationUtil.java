@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 
 import java.io.ByteArrayInputStream;
-import java.security.GeneralSecurityException;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
 import java.security.cert.CertStore;
@@ -22,6 +21,7 @@ import org.keycloak.common.util.Time;
 import org.keycloak.truststore.TruststoreProvider;
 
 public class PKIXVerificationUtil {
+    private static final int MAX_CHAIN_LENGTH = 5;
 
     public static X509Certificate[] validateChain(List<String> x5c, TruststoreProvider truststoreProvider)
             throws VerificationException {
@@ -30,8 +30,9 @@ public class PKIXVerificationUtil {
                 throw new VerificationException("Certificate chain is empty");
             }
 
-            if (x5c.size() > 5) {
-                throw new VerificationException("Certificate chain too long: " + x5c.size());
+            if (x5c.size() > MAX_CHAIN_LENGTH) {
+                throw new VerificationException(
+                        String.format("Certificate chain too long: %d (max %d)", x5c.size(), MAX_CHAIN_LENGTH));
             }
 
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -64,19 +65,31 @@ public class PKIXVerificationUtil {
             // Sync with Keycloak offset time for testing (and production time consistency)
             params.setDate(new Date(Time.currentTimeMillis()));
 
-            // Add intermediate certificates from the truststore and the presented chain
-            // as a CertStore so PKIX can bridge chains where the issuer CA is stored as
-            // an intermediate (not repeated in the JWT x5c array).
-            Collection<X509Certificate> allIntermediates = new ArrayList<>(certs);
+            // Add intermediate certificates from the truststore as a CertStore so PKIX
+            // can bridge chains where the issuer CA is stored as an intermediate.
+            Collection<X509Certificate> intermediates = new ArrayList<>();
             truststoreProvider.getIntermediateCertificates().values().stream()
                     .flatMap(List::stream)
-                    .forEach(allIntermediates::add);
-            params.addCertStore(
-                    CertStore.getInstance("Collection", new CollectionCertStoreParameters(allIntermediates)));
+                    .forEach(intermediates::add);
+            if (!intermediates.isEmpty()) {
+                params.addCertStore(
+                        CertStore.getInstance("Collection", new CollectionCertStoreParameters(intermediates)));
+            }
 
             // Validate the path. The CertPath should not include the trust anchor itself.
             List<X509Certificate> pathCerts = new ArrayList<>(certs);
+            X509Certificate leafCert = pathCerts.get(0);
             X509Certificate lastCert = pathCerts.get(pathCerts.size() - 1);
+
+            boolean leafIsTrusted = trustAnchors.stream()
+                    .anyMatch(anchor -> anchor.getTrustedCert().equals(leafCert));
+
+            // If the leaf is directly trusted (e.g. self-signed trusted cert), we are done.
+            if (leafIsTrusted) {
+                leafCert.checkValidity(params.getDate());
+                return certs.toArray(new X509Certificate[0]);
+            }
+
             boolean rootInPath = trustAnchors.stream()
                     .anyMatch(anchor -> anchor.getTrustedCert().equals(lastCert));
 
@@ -92,10 +105,8 @@ public class PKIXVerificationUtil {
 
         } catch (VerificationException e) {
             throw e;
-        } catch (GeneralSecurityException e) {
-            throw new VerificationException("Certificate chain validation failed: " + e.getMessage(), e);
         } catch (Exception e) {
-            throw new VerificationException("Error during certificate chain validation: " + e.getMessage(), e);
+            throw new VerificationException("Certificate chain validation failed", e);
         }
     }
 }
