@@ -75,6 +75,9 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
         ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        assertTrue(
+                response.getEntity().getContentType().getValue().startsWith("application/json"),
+                "response_uri endpoint should reply with application/json");
 
         // If auth context acquired in place, then cross-device flow assumed.
         // Assert that response to wallet does not contain a redirect URI.
