@@ -333,9 +333,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         // Read encryption key from request object
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        String encKid = encJwk.getKeyId();
 
-        // Encrypt the response object
-        String encResp = ECTestUtils.encryptMessage(resp, encKey);
+        // Encrypt the response object (kid must match client_metadata.jwks for JWE header validation)
+        String encResp = ECTestUtils.encryptMessage(resp, encKey, encKid);
 
         // Compose the response object as form-urlencoded parameters
         return new ArrayList<>(List.of(new BasicNameValuePair("response", encResp)));
