@@ -108,6 +108,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
+        assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
         assertEquals(ResponseMode.DIRECT_POST, requestObject.getResponseMode());
         assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
 

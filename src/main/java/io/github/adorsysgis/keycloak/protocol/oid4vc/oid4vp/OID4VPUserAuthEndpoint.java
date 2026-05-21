@@ -10,12 +10,14 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMeth
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -34,6 +36,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
 import java.security.interfaces.ECPrivateKey;
+import java.util.Map;
 import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -64,13 +67,12 @@ import org.keycloak.utils.StringUtil;
 public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implements RealmResourceProvider {
 
     private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpoint.class);
-    public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
-
     public static final String REQUEST_JWT_PATH = "/request.jwt";
     public static final String RESPONSE_URI_PATH = "/response";
     public static final String CALLBACK_URI_PATH = "/callback";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
     public static final String AUTH_CODE_PATH = "/code";
+    public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
 
     private final AuthorizationRequestService authorizationRequestService;
     private final AuthorizationResponseService authorizationResponseService;
@@ -240,6 +242,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public Response processAuthorizationResponse(
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
+            @FormParam(OAuth2Constants.ERROR) String error,
+            @FormParam(OAuth2Constants.ERROR_DESCRIPTION) String errorDescription,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
             @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
@@ -252,6 +256,27 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         String ephemeralKey = authorizationContext.getEphemeralKey();
         boolean expectsEncrypted = StringUtils.isNotBlank(ephemeralKey);
         boolean hasEncrypted = StringUtils.isNotBlank(encryptedResponse);
+        boolean hasWalletError = StringUtils.isNotBlank(error);
+
+        if (expectsEncrypted && !hasEncrypted && hasWalletError) {
+            if (StringUtils.isNotBlank(state) && !requestId.equals(state)) {
+                throw new BadRequestException(errorResponse(
+                        Response.Status.BAD_REQUEST,
+                        OAuthErrorException.INVALID_REQUEST,
+                        String.format("State param must match requestId. requestId: %s, state: %s", requestId, state)));
+            }
+
+            String walletErrorDescription =
+                    StringUtils.isBlank(errorDescription) ? error : String.format("%s: %s", error, errorDescription);
+
+            authorizationContext
+                    .setStatus(AuthorizationContextStatus.ERROR)
+                    .setError(ProcessingError.WALLET_OAUTH_ERROR)
+                    .setErrorDescription("Wallet returned error: " + walletErrorDescription);
+            new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
+            return CorsService.open().add(Response.ok(Map.of()));
+        }
+
         if (expectsEncrypted != hasEncrypted) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -266,7 +291,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
                     ? new ResponseObject(vpToken, state)
-                    : decryptResponse(encryptedResponse, ephemeralKey);
+                    : decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
 
             String parsedState = responseObject.getState();
             if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
@@ -522,8 +547,10 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * @param encryptedResponse the assumed JWE encrypted response string
      * @param ephemeralKey the ephemeral key generated for the authentication session
      */
-    private ResponseObject decryptResponse(String encryptedResponse, String ephemeralKey) {
+    private ResponseObject decryptResponse(
+            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
         try {
+            AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
             ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
             String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
             return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
