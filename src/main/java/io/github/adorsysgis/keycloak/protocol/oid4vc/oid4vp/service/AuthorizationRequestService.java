@@ -153,10 +153,10 @@ public class AuthorizationRequestService {
                     .setCodeChallengeMethod(codeChallengeParams.codeChallengeMethod());
         }
 
-        // Attach ephemeral key if generated
+        // Attach ephemeral private key for decrypting direct_post.jwt responses.
+        // The matching public key and kid are advertised in the signed request object's client_metadata.jwks.
         if (encryptionKey != null) {
-            String privKey = EphemeralKeyUtils.toBase64String(encryptionKey.privateKey());
-            authorizationContext.setEphemeralKey(privKey);
+            authorizationContext.setEphemeralKey(EphemeralKeyUtils.toBase64String(encryptionKey.privateKey()));
         }
 
         // Store authorization context in the authentication session
