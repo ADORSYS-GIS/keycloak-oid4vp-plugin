@@ -262,6 +262,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals("dc+sd-jwt", credentialQuery.getFormat());
         assertNotNull(
                 testFlowData.requestObject().getClientMetadata().getVpFormat().getDcSdJwt());
+        assertNotNull(
+                testFlowData.requestObject().getClientMetadata().getVpFormat().getJwtVcJson());
         assertAuthenticatingUser(opts, testFlowData.authCode());
     }
 
@@ -412,13 +414,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request SD-JWT credentials from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential("https://this-vct-is-not-expected.com", TEST_USER);
 
-        // Proceed to authentication
+        // DCQL presentation validation rejects vct before the authenticator runs
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
-                HttpStatus.SC_UNAUTHORIZED,
-                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Pattern matching failed for required field");
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presented SD-JWT vct does not match any value in meta.vct_values");
     }
 
     @Test
@@ -426,13 +428,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request SD-JWT credentials from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null, TEST_USER);
 
-        // Proceed to authentication
+        // DCQL presentation validation rejects missing requested claims before the authenticator runs
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
-                HttpStatus.SC_UNAUTHORIZED,
-                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (A required field was not presented: `sub`)");
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presented SD-JWT does not satisfy DCQL claim path: [sub]");
     }
 
     @Test

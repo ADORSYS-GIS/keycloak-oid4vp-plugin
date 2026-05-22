@@ -4,6 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlPresentationValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -17,6 +18,7 @@ import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
+import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
@@ -25,7 +27,6 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.MediaType;
@@ -72,8 +73,6 @@ public class AuthorizationResponseService {
         // Extract SD-JWT VP token from the response object
         String sdJwtVp = extractSdJwtVpToken(responseObject, authContext, store);
 
-        // Formally, we should then check that the VP token satisfies the DCQL constraints.
-        // Equivalently, we offload this task to the SD-JWT authenticator in the authentication flow.
         logger.debugf("Initializing authentication with extracted SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();
         String nonce = authContext.getRequestObject().getNonce();
@@ -131,13 +130,22 @@ public class AuthorizationResponseService {
     private String extractSdJwtVpToken(
             ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
         String parsedVpToken;
-        logger.debug("Extracting SD-JWT VP token from response object with DCQL matching");
-        parsedVpToken = extractSdJwtVpTokenWithDCQL(responseObject, authContext, store);
+        logger.debug("Extracting VP token from response object with DCQL matching");
+        parsedVpToken = extractVpTokenWithDCQL(responseObject, authContext, store);
 
         try {
             String vpToken = decodeIfBase64Url(parsedVpToken);
-            SdJwtVP.of(vpToken);
+            DcqlPresentationValidator.validatePresentation(authContext.getRequestObject().getDcqlQuery(), vpToken);
             return vpToken;
+        } catch (VerificationException e) {
+            logger.errorf(e, "Presented credential does not satisfy DCQL query");
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN,
+                    "Invalid vp_token",
+                    e.getMessage(),
+                    Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
         } catch (IllegalArgumentException e) {
             logger.errorf(e, "Failed to parse SD-JWT VP token");
             String detailed = "Could not parse SD-JWT VP token contained in `vp_token`";
@@ -152,9 +160,9 @@ public class AuthorizationResponseService {
     }
 
     /**
-     * Extract SD-JWT VP token from response object (DCQL era)
+     * Extract VP token from response object (DCQL era)
      */
-    private String extractSdJwtVpTokenWithDCQL(
+    private String extractVpTokenWithDCQL(
             ResponseObject responseObject, AuthorizationContext authContext, AuthenticationSessionStore store) {
         var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
         if (dcqlQuery == null || dcqlQuery.getCredentials().size() != 1) {

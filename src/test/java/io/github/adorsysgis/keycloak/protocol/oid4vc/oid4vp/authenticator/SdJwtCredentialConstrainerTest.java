@@ -34,6 +34,7 @@ public class SdJwtCredentialConstrainerTest {
                 .map(claim -> claim.getPath().getFirst())
                 .toList();
         assertEquals(map.requiredClaims(), paths);
+        assertEquals(Boolean.TRUE, credential.getRequireCryptographicHolderBinding());
 
         // Assert credential sets
         assertEquals(1, query.getCredentialSets().size());

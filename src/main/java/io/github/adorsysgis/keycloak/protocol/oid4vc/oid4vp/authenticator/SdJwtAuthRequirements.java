@@ -103,8 +103,18 @@ public class SdJwtAuthRequirements {
         return requirements.build();
     }
 
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
-        return new SdJwtCredentialConstrainer.QueryMap(getExpectedVcts(), getRequiredClaims());
+    public io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec
+            getSdJwtQuerySpec() {
+        return io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec.of(
+                getExpectedVcts(), getRequiredClaims());
+    }
+
+    /** @deprecated use {@link #getSdJwtQuerySpec()} */
+    @Deprecated
+    public io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap
+            getSdJwtQueryMap() {
+        return new io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap(
+                getExpectedVcts(), getRequiredClaims());
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {

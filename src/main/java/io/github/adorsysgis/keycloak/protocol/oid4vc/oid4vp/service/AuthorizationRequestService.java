@@ -8,7 +8,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateU
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -66,7 +67,7 @@ public class AuthorizationRequestService {
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
     private final KeycloakSession session;
-    private final SdJwtCredentialConstrainer constrainer;
+    private final SdJwtCredentialConstrainer sdJwtCredentialConstrainer;
     private final VerifierDiscoveryService discoveryService;
 
     private final String openID4VPRootUrl;
@@ -74,7 +75,7 @@ public class AuthorizationRequestService {
 
     public AuthorizationRequestService(KeycloakSession session) {
         this.session = session;
-        this.constrainer = new SdJwtCredentialConstrainer();
+        this.sdJwtCredentialConstrainer = new SdJwtCredentialConstrainer();
 
         // Initialize discovery service
         this.discoveryService = new VerifierDiscoveryService(session);
@@ -118,12 +119,10 @@ public class AuthorizationRequestService {
         String clientId = discoveryService.getClientId(config.getClientIdScheme(), certificate);
         ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
-        // Load query map for SD-JWT authentication
+        // Build request object with DCQL query for SD-JWT authentication
         SdJwtAuthRequirements authReqs = config.getAuthRequirements();
-        var queryMap = authReqs.getSdJwtQueryMap();
-
-        // Build request object
-        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);
+        RequestObject requestObject = buildRequestObject(
+                clientId, clientMetadata, config, authReqs.getSdJwtQuerySpec(), requestId);
 
         // Sign request object
         String requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
@@ -222,7 +221,7 @@ public class AuthorizationRequestService {
             String clientId,
             ClientMetadata clientMetadata,
             VerifierConfig config,
-            SdJwtCredentialConstrainer.QueryMap queryMap,
+            SdJwtCredentialConstrainer.QuerySpec querySpec,
             String requestId) {
         String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
@@ -257,7 +256,9 @@ public class AuthorizationRequestService {
                 .setClientMetadata(clientMetadata)
                 .setVerifierInfo(verifierInfo);
 
-        requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
+        var dcqlQuery = sdJwtCredentialConstrainer.buildQuery(querySpec);
+        DcqlQueryValidator.validateQuery(dcqlQuery);
+        requestObject.setDcqlQuery(dcqlQuery);
 
         return requestObject;
     }

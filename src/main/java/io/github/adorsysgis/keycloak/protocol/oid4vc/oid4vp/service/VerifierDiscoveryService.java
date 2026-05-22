@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.GenericFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.security.cert.X509Certificate;
@@ -43,9 +44,9 @@ public class VerifierDiscoveryService {
         logger.debug("Discovering Keycloak's metadata as an OpenID4VP client");
         ClientMetadata metadata = new ClientMetadata();
 
-        // Only SD-JWT presentations are supported for now.
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
         vpFormat.setDcSdJwt(getSdJwtVpFormat());
+        vpFormat.setJwtVcJson(getJwtVcJsonVpFormat());
         metadata.setVpFormat(vpFormat);
 
         // Advertise ephemeral key if any
@@ -103,6 +104,12 @@ public class VerifierDiscoveryService {
 
         // Prefix with scheme as per spec requirements
         return String.join(":", clientIdScheme.getValue(), clientId);
+    }
+
+    private GenericFormat getJwtVcJsonVpFormat() {
+        GenericFormat format = new GenericFormat();
+        format.setAlgValues(getSupportedSignatureAlgorithms());
+        return format;
     }
 
     private SdGenericFormat getSdJwtVpFormat() {
