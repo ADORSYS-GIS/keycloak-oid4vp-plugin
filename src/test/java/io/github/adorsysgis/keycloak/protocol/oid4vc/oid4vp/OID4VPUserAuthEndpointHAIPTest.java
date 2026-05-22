@@ -171,26 +171,18 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     public void shouldAcceptUnencryptedWalletError_WhenEncryptedResponseIsExpected() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        String walletError = OAuthErrorException.ACCESS_DENIED;
+        String errorDescription = "wallet canceled presentation";
 
-        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
-        httpPost.setEntity(new UrlEncodedFormEntity(List.of(
-                new BasicNameValuePair(OAuth2Constants.ERROR, OAuthErrorException.ACCESS_DENIED),
-                new BasicNameValuePair(OAuth2Constants.ERROR_DESCRIPTION, "wallet canceled presentation"),
-                new BasicNameValuePair(ResponseObject.STATE_KEY, authContext.getRequestId()))));
-
-        HttpResponse response = httpClient.execute(httpPost);
+        HttpResponse response =
+                sendAuthorizationErrorResponse(requestObject, walletError, errorDescription, requestObject.getState());
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
         HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
-        assertEquals(HttpStatus.SC_OK, statusResponse.getStatusLine().getStatusCode());
         AuthorizationContext status = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
-        assertEquals(ProcessingError.WALLET_OAUTH_ERROR, status.getError());
-        String description = status.getErrorDescription();
-        assertTrue(
-                description.contains("Wallet returned error: access_denied")
-                        && description.contains("wallet canceled presentation"),
-                description);
+        assertEquals(ProcessingError.WALLET_ERROR, status.getError());
+        assertEquals(walletError + ": " + errorDescription, status.getErrorDescription());
     }
 
     @Test

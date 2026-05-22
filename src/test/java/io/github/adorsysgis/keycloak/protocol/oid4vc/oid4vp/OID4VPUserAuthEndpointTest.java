@@ -385,6 +385,24 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldRejectWalletErrorResponseWithMismatchingState() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationErrorResponse(
+                requestObject, OAuthErrorException.ACCESS_DENIED, "End-User denied consent", "wrong-state");
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("State param must match requestId"));
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.PENDING, statusPayload.getStatus());
+    }
+
+    @Test
     public void shouldFailAuthentication_InvalidSdJwtVPToken_Unparseable() throws Exception {
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();

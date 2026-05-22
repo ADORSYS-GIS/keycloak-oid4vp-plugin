@@ -303,6 +303,22 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return httpClient.execute(httpPost);
     }
 
+    protected HttpResponse sendAuthorizationErrorResponse(
+            RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
+        List<BasicNameValuePair> oid4vpErrorResponse = new ArrayList<>();
+        oid4vpErrorResponse.add(new BasicNameValuePair("error", error));
+        if (errorDescription != null) {
+            oid4vpErrorResponse.add(new BasicNameValuePair("error_description", errorDescription));
+        }
+        if (state != null) {
+            oid4vpErrorResponse.add(new BasicNameValuePair(ResponseObject.STATE_KEY, state));
+        }
+
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(oid4vpErrorResponse));
+        return httpClient.execute(httpPost);
+    }
+
     /**
      * Prepare the OpenID4VP response object to be sent to Keycloak.
      *
