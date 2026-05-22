@@ -16,8 +16,7 @@ class DcqlPresentationValidatorTest {
 
     @Test
     void acceptsJwtVcJsonPresentationMatchingTypeValuesAndClaims() {
-        String vcJwt = unsignedJwt(
-                """
+        String vcJwt = unsignedJwt("""
                 {
                   "type": ["VerifiableCredential", "IDCredential"],
                   "credentialSubject": {
@@ -26,14 +25,12 @@ class DcqlPresentationValidatorTest {
                   }
                 }
                 """);
-        String vpJwt = unsignedJwt(
-                """
+        String vpJwt = unsignedJwt("""
                 {
                   "type": ["VerifiablePresentation"],
                   "verifiableCredential": ["%s"]
                 }
-                """
-                        .formatted(vcJwt));
+                """.formatted(vcJwt));
 
         DcqlQuery query = jwtVcConstrainer.buildQuery(new JwtVcJsonCredentialConstrainer.QuerySpec(
                 List.of(List.of("VerifiableCredential", "IDCredential")),
@@ -46,20 +43,17 @@ class DcqlPresentationValidatorTest {
 
     @Test
     void rejectsJwtVcJsonPresentationWithMismatchedTypeValues() {
-        String vcJwt = unsignedJwt(
-                """
+        String vcJwt = unsignedJwt("""
                 {
                   "type": ["VerifiableCredential", "OtherCredential"],
                   "credentialSubject": {"given_name": "Max"}
                 }
                 """);
-        String vpJwt = unsignedJwt(
-                """
+        String vpJwt = unsignedJwt("""
                 {
                   "verifiableCredential": ["%s"]
                 }
-                """
-                        .formatted(vcJwt));
+                """.formatted(vcJwt));
 
         DcqlQuery query = jwtVcConstrainer.buildQuery(new JwtVcJsonCredentialConstrainer.QuerySpec(
                 List.of(List.of("VerifiableCredential", "IDCredential")),
@@ -73,20 +67,17 @@ class DcqlPresentationValidatorTest {
 
     @Test
     void rejectsJwtVcJsonPresentationMissingRequestedClaim() {
-        String vcJwt = unsignedJwt(
-                """
+        String vcJwt = unsignedJwt("""
                 {
                   "type": ["VerifiableCredential", "IDCredential"],
                   "credentialSubject": {"given_name": "Max"}
                 }
                 """);
-        String vpJwt = unsignedJwt(
-                """
+        String vpJwt = unsignedJwt("""
                 {
                   "verifiableCredential": ["%s"]
                 }
-                """
-                        .formatted(vcJwt));
+                """.formatted(vcJwt));
 
         DcqlQuery query = jwtVcConstrainer.buildQuery(new JwtVcJsonCredentialConstrainer.QuerySpec(
                 List.of(List.of("VerifiableCredential", "IDCredential")),

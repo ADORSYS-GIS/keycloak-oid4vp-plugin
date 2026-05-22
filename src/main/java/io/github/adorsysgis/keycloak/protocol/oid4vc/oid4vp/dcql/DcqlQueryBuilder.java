@@ -15,9 +15,7 @@ public final class DcqlQueryBuilder {
     private DcqlQueryBuilder() {}
 
     public static List<Claim> claimsFromPaths(List<List<String>> paths) {
-        return paths.stream()
-                .map(DcqlQueryBuilder::claimFromPath)
-                .toList();
+        return paths.stream().map(DcqlQueryBuilder::claimFromPath).toList();
     }
 
     public static Claim claimFromPath(List<String> path) {

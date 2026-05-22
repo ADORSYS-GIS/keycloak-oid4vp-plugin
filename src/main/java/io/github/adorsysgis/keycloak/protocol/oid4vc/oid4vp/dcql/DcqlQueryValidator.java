@@ -16,7 +16,9 @@ public final class DcqlQueryValidator {
     private DcqlQueryValidator() {}
 
     public static void validateQuery(DcqlQuery query) {
-        if (query == null || query.getCredentials() == null || query.getCredentials().isEmpty()) {
+        if (query == null
+                || query.getCredentials() == null
+                || query.getCredentials().isEmpty()) {
             throw new IllegalArgumentException("dcql_query.credentials must be non-empty");
         }
         query.getCredentials().forEach(DcqlQueryValidator::validateCredential);
@@ -44,7 +46,8 @@ public final class DcqlQueryValidator {
             case VCFormat.SD_JWT_VC -> validateSdJwtMeta(meta);
             case VCFormat.JWT_VC -> validateJwtVcJsonMeta(meta);
             default ->
-                throw new IllegalArgumentException("Unsupported dcql_query credential format: " + credential.getFormat());
+                throw new IllegalArgumentException(
+                        "Unsupported dcql_query credential format: " + credential.getFormat());
         }
 
         validateClaimPaths(credential);
@@ -85,10 +88,9 @@ public final class DcqlQueryValidator {
                 throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
             }
             if (isVpWrapperPath(claim.getPath())) {
-                throw new IllegalArgumentException(
-                        credential.getFormat()
-                                + " claim paths must be relative to the VC root, not the VP wrapper: "
-                                + claim.getPath());
+                throw new IllegalArgumentException(credential.getFormat()
+                        + " claim paths must be relative to the VC root, not the VP wrapper: "
+                        + claim.getPath());
             }
         }
     }

@@ -37,9 +37,8 @@ public final class DcqlPresentationValidator {
             case VCFormat.SD_JWT_VC -> validateSdJwtPresentation(query, SdJwtVP.of(presentedToken));
             case VCFormat.JWT_VC -> validateJwtVcJsonPresentation(query, presentedToken);
             default ->
-                throw new VerificationException(
-                        "Unsupported dcql_query credential format for presentation validation: "
-                                + credentialQuery.getFormat());
+                throw new VerificationException("Unsupported dcql_query credential format for presentation validation: "
+                        + credentialQuery.getFormat());
         }
     }
 
@@ -97,8 +96,7 @@ public final class DcqlPresentationValidator {
         }
 
         String presentedVct = vctNode.asText();
-        boolean matches =
-                meta.getVctValues().stream().anyMatch(expected -> expected.equals(presentedVct));
+        boolean matches = meta.getVctValues().stream().anyMatch(expected -> expected.equals(presentedVct));
         if (!matches) {
             throw new VerificationException(
                     "Presented SD-JWT vct does not match any value in meta.vct_values: " + presentedVct);
@@ -114,7 +112,8 @@ public final class DcqlPresentationValidator {
         Set<String> presentedTypes = new HashSet<>();
         typeNode.forEach(node -> presentedTypes.add(node.asText()));
 
-        boolean matches = meta.getTypeValues().stream().anyMatch(requiredTypes -> presentedTypes.containsAll(requiredTypes));
+        boolean matches =
+                meta.getTypeValues().stream().anyMatch(requiredTypes -> presentedTypes.containsAll(requiredTypes));
         if (!matches) {
             throw new VerificationException(
                     "Presented jwt_vc_json type does not match any value in meta.type_values: " + presentedTypes);

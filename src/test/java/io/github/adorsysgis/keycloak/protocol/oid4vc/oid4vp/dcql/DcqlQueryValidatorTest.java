@@ -61,7 +61,8 @@ class DcqlQueryValidatorTest {
     @Test
     void acceptsValidSdJwtCredentialQuery() {
         var query = new SdJwtCredentialConstrainer()
-                .buildQuery(SdJwtCredentialConstrainer.QuerySpec.of(List.of("https://example.com/vct"), List.of("sub")));
+                .buildQuery(
+                        SdJwtCredentialConstrainer.QuerySpec.of(List.of("https://example.com/vct"), List.of("sub")));
         assertDoesNotThrow(() -> DcqlQueryValidator.validateQuery(query));
     }
 

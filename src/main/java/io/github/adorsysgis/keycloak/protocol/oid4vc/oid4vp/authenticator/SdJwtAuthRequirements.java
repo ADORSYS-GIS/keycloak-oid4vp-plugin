@@ -113,8 +113,8 @@ public class SdJwtAuthRequirements {
     @Deprecated
     public io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap
             getSdJwtQueryMap() {
-        return new io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap(
-                getExpectedVcts(), getRequiredClaims());
+        return new io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer
+                .QueryMap(getExpectedVcts(), getRequiredClaims());
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {

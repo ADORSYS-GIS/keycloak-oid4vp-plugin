@@ -52,7 +52,5 @@ public class JwtVcJsonCredentialConstrainer implements CredentialConstrainer<Jwt
      * @param claimPaths claim paths relative to the VC root (e.g. {@code ["credentialSubject", "given_name"]})
      */
     public record QuerySpec(
-            List<List<String>> typeValues,
-            List<List<String>> claimPaths,
-            Boolean requireCryptographicHolderBinding) {}
+            List<List<String>> typeValues, List<List<String>> claimPaths, Boolean requireCryptographicHolderBinding) {}
 }

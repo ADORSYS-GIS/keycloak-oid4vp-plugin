@@ -8,9 +8,9 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateU
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
@@ -121,8 +121,8 @@ public class AuthorizationRequestService {
 
         // Build request object with DCQL query for SD-JWT authentication
         SdJwtAuthRequirements authReqs = config.getAuthRequirements();
-        RequestObject requestObject = buildRequestObject(
-                clientId, clientMetadata, config, authReqs.getSdJwtQuerySpec(), requestId);
+        RequestObject requestObject =
+                buildRequestObject(clientId, clientMetadata, config, authReqs.getSdJwtQuerySpec(), requestId);
 
         // Sign request object
         String requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);

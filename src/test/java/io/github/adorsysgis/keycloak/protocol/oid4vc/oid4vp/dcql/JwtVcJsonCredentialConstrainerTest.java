@@ -21,6 +21,8 @@ class JwtVcJsonCredentialConstrainerTest {
         var credential = query.getCredentials().getFirst();
         assertEquals(VCFormat.JWT_VC, credential.getFormat());
         assertEquals(typeValues, credential.getMeta().getTypeValues());
-        assertEquals(claimPaths, credential.getClaims().stream().map(claim -> claim.getPath()).toList());
+        assertEquals(
+                claimPaths,
+                credential.getClaims().stream().map(claim -> claim.getPath()).toList());
     }
 }

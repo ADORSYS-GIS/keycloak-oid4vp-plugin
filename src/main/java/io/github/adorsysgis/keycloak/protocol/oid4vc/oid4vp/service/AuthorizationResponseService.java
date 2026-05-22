@@ -135,7 +135,8 @@ public class AuthorizationResponseService {
 
         try {
             String vpToken = decodeIfBase64Url(parsedVpToken);
-            DcqlPresentationValidator.validatePresentation(authContext.getRequestObject().getDcqlQuery(), vpToken);
+            DcqlPresentationValidator.validatePresentation(
+                    authContext.getRequestObject().getDcqlQuery(), vpToken);
             return vpToken;
         } catch (VerificationException e) {
             logger.errorf(e, "Presented credential does not satisfy DCQL query");
