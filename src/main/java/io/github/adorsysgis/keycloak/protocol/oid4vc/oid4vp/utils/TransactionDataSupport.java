@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
@@ -16,6 +17,8 @@ import org.keycloak.utils.StringUtil;
 public final class TransactionDataSupport {
 
     public static final String DEFAULT_HASH_ALG = "sha-256";
+
+    private static final Set<String> SUPPORTED_HASH_ALGORITHMS = Set.of(DEFAULT_HASH_ALG);
     public static final String TYPE_CLAIM = "type";
     public static final String CREDENTIAL_IDS_CLAIM = "credential_ids";
     public static final String HASH_ALGS_CLAIM = "transaction_data_hashes_alg";
@@ -131,12 +134,15 @@ public final class TransactionDataSupport {
             if (!alg.isTextual() || StringUtil.isBlank(alg.asText())) {
                 throw new IllegalArgumentException("transaction_data_hashes_alg entries must be non-empty strings");
             }
-            allowed.add(alg.asText());
+            String algName = alg.asText();
+            validateHashAlgorithm(algName);
+            allowed.add(algName);
         }
         return allowed;
     }
 
     public static byte[] hashWireString(String wire, String hashAlg) {
+        validateHashAlgorithm(hashAlg);
         try {
             return java.security.MessageDigest.getInstance(normalizeDigestName(hashAlg))
                     .digest(wire.getBytes(StandardCharsets.UTF_8));
@@ -149,10 +155,14 @@ public final class TransactionDataSupport {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 
-    private static String normalizeDigestName(String hashAlg) {
-        if (DEFAULT_HASH_ALG.equalsIgnoreCase(hashAlg)) {
-            return "SHA-256";
+    private static void validateHashAlgorithm(String hashAlg) {
+        if (!SUPPORTED_HASH_ALGORITHMS.contains(hashAlg)) {
+            throw new IllegalArgumentException("Unsupported transaction_data hash algorithm: " + hashAlg
+                    + ". Supported: " + SUPPORTED_HASH_ALGORITHMS);
         }
-        return hashAlg;
+    }
+
+    private static String normalizeDigestName(String hashAlg) {
+        return "SHA-256";
     }
 }

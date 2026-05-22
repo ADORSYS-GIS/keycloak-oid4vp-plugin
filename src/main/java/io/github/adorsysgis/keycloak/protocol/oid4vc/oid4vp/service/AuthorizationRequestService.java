@@ -56,8 +56,6 @@ public class AuthorizationRequestService {
 
     public static final String AUTH_REQ_JWT = "oauth-authz-req+jwt";
     public static final String X509_ATTR_CN = "CN";
-    public static final String REGISTRATION_CERT_FORMAT = "registration_cert";
-
     // The number of bytes to generate for secure random strings,
     // including request IDs, transaction IDs, and nonces (doubled).
     public static final int SECURE_RANDOM_ENTROPY = 20;
@@ -122,7 +120,7 @@ public class AuthorizationRequestService {
 
         // Load query map for SD-JWT authentication
         SdJwtAuthRequirements authReqs = config.getAuthRequirements();
-        var queryMap = authReqs.getSdJwtQueryMap();
+        var queryMap = authReqs.getSdJwtQueryMap(config.effectiveRequireCryptographicHolderBinding());
 
         // Build request object
         RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);

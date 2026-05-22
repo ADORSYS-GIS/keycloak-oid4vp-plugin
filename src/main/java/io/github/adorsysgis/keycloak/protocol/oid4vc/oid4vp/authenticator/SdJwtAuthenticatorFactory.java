@@ -174,7 +174,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Transaction data (base64url)");
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setHelpText(
-                "Optional comma-separated or newline-separated base64url-encoded transaction_data JSON objects (OpenID4VP §5.1). Requires holder binding.");
+                "Optional comma-separated or newline-separated base64url-encoded transaction_data JSON objects (OpenID4VP §5.1). Requires holder binding. Entries are normalized before signing; use the signed request JWT payload as the canonical wire form when debugging hash mismatches. Only sha-256 is supported for transaction_data_hashes.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();

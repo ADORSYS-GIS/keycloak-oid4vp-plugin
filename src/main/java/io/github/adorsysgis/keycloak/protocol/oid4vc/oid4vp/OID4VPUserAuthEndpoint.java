@@ -14,6 +14,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
@@ -472,27 +473,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     private void validateResponseState(
             ResponseObject responseObject, AuthorizationContext authorizationContext, String requestId) {
-        var credential = authorizationContext
-                .getRequestObject()
-                .getDcqlQuery()
-                .getCredentials()
-                .getFirst();
-        Boolean holderBindingRequired = credential.getRequireCryptographicHolderBinding();
-        String parsedState = responseObject.getState();
-
-        if (Boolean.FALSE.equals(holderBindingRequired)) {
-            if (StringUtils.isBlank(parsedState) || !requestId.equals(parsedState)) {
-                throw new IllegalArgumentException(String.format(
-                        "State param is required and must match requestId when holder binding is not required. requestId: %s, state: %s",
-                        requestId, parsedState));
-            }
-            return;
-        }
-
-        if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
-            throw new IllegalArgumentException(String.format(
-                    "State param must match requestId. requestId: %s, state: %s", requestId, parsedState));
-        }
+        ResponseStateValidator.validate(
+                responseObject, authorizationContext.getRequestObject().getDcqlQuery(), requestId);
     }
 
     /**

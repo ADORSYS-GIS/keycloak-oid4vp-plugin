@@ -1,8 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.REGISTRATION_CERT_FORMAT;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import java.util.ArrayList;
 import java.util.List;
 import org.keycloak.util.JsonSerialization;
@@ -21,7 +22,7 @@ public final class VerifierInfoSupport {
 
         if (!StringUtil.isBlank(registrationCertificate)) {
             entries.add(new VerifierInfo()
-                    .setFormat(AuthorizationRequestService.REGISTRATION_CERT_FORMAT)
+                    .setFormat(REGISTRATION_CERT_FORMAT)
                     .setData(registrationCertificate)
                     .setCredentialIds(List.of(dcqlCredentialId)));
         }

@@ -138,6 +138,14 @@ public class SdJwtVPTestUtils {
     }
 
     /**
+     * Scaffold an SD-JWT identity credential for unit tests (no Keycloak container required).
+     */
+    public static IssuerSignedJWT exampleIssuerSignedJwtForTest(
+            String iss, String vct, String subject, String username) {
+        return exampleSdJwtCredential(iss, vct, subject, username, false);
+    }
+
+    /**
      * Scaffold an SD-JWT identity credential that can clear authentication.
      */
     private static IssuerSignedJWT exampleSdJwtCredential(

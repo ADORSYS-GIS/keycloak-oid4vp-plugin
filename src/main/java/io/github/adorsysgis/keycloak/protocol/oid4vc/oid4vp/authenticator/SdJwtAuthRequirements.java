@@ -113,6 +113,10 @@ public class SdJwtAuthRequirements {
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
+        return getSdJwtQueryMap(requireCryptographicHolderBinding);
+    }
+
+    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap(boolean requireCryptographicHolderBinding) {
         return new SdJwtCredentialConstrainer.QueryMap(
                 getExpectedVcts(), getRequiredClaims(), requireCryptographicHolderBinding);
     }

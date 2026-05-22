@@ -14,6 +14,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -84,9 +85,8 @@ public class AuthorizationResponseService {
         processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
         processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
 
-        Credential dcqlCredential =
-                authContext.getRequestObject().getDcqlQuery().getCredentials().getFirst();
-        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(dcqlCredential);
+        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(
+                authContext.getRequestObject().getDcqlQuery().getCredentials());
         processorSession.setAuthNote(
                 SdJwtAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
                 String.valueOf(requireCryptographicHolderBinding));
@@ -134,9 +134,8 @@ public class AuthorizationResponseService {
         store.storeAuthorizationContext(authContext);
     }
 
-    private static boolean isCryptographicHolderBindingRequired(Credential credential) {
-        Boolean flag = credential.getRequireCryptographicHolderBinding();
-        return flag == null || flag;
+    private static boolean isCryptographicHolderBindingRequired(List<Credential> credentials) {
+        return credentials.stream().noneMatch(c -> Boolean.FALSE.equals(c.getRequireCryptographicHolderBinding()));
     }
 
     private static String getAuthenticatorErrorMessage(Response response) {

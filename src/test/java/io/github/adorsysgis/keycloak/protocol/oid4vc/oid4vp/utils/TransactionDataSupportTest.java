@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
@@ -26,6 +27,16 @@ class TransactionDataSupportTest {
     @Test
     void parseConfigValueReturnsEmptyForBlank() {
         assertEquals(List.of(), TransactionDataSupport.parseConfigValue("  "));
+    }
+
+    @Test
+    void rejectsUnsupportedHashAlgorithm() {
+        ObjectNode tx = JsonSerialization.mapper.createObjectNode();
+        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
+        tx.putArray(TransactionDataSupport.HASH_ALGS_CLAIM).add("sha-512");
+        String wire = TransactionDataSupport.encodeWireObject(tx);
+
+        assertThrows(IllegalArgumentException.class, () -> TransactionDataSupport.allowedHashAlgorithms(wire));
     }
 
     @Test

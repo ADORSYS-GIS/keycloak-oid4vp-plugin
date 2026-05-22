@@ -146,7 +146,7 @@ public class SdJwtAuthenticator implements Authenticator {
         return Boolean.parseBoolean(note);
     }
 
-    private void validateTransactionData(AuthenticationSessionModel authSession, SdJwtVP sdJwt) {
+    void validateTransactionData(AuthenticationSessionModel authSession, SdJwtVP sdJwt) {
         String wireJson = authSession.getAuthNote(TRANSACTION_DATA_WIRE_KEY);
         if (StringUtil.isBlank(wireJson)) {
             return;
