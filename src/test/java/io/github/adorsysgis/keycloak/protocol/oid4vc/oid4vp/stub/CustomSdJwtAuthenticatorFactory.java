@@ -34,7 +34,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
 
     @Override
     public Authenticator create(KeycloakSession session) {
-        return new SdJwtAuthenticator(createStatusListJwtFetcher(session));
+        return new SdJwtAuthenticator();
     }
 
     public static class MockTrustedStatusListJwtFetcher extends TrustedStatusListJwtFetcher {

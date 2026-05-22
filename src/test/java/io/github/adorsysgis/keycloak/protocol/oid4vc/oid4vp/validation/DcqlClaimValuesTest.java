@@ -33,4 +33,10 @@ class DcqlClaimValuesTest {
         assertTrue(DcqlClaimValues.matchesAny(resolved, List.of(42)));
         assertFalse(DcqlClaimValues.matchesAny(resolved, List.of(7)));
     }
+
+    @Test
+    void doesNotCoerceStringConstraintToOtherJsonTypes() {
+        assertFalse(DcqlClaimValues.matchesAny(List.of(JsonNodeFactory.instance.booleanNode(true)), List.of("true")));
+        assertFalse(DcqlClaimValues.matchesAny(List.of(JsonNodeFactory.instance.numberNode(42)), List.of("42")));
+    }
 }

@@ -9,6 +9,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.PresentedCredential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationResult;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationService;
@@ -33,6 +34,11 @@ import org.keycloak.utils.MediaType;
 /**
  * Dedicated service for processing OpenID4VP authorization responses for user authentication.
  *
+ * <p>This login flow authenticates the user from exactly one validated SD-JWT verifiable presentation.
+ * Multi-credential or {@code multiple: true} DCQL queries may pass {@link
+ * io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationPipeline} but are
+ * rejected here before {@link org.keycloak.authentication.AuthenticationProcessor#authenticateOnly()}.
+ *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public class AuthorizationResponseService {
@@ -46,7 +52,7 @@ public class AuthorizationResponseService {
 
     public AuthorizationResponseService(KeycloakSession session) {
         this.session = session;
-        this.vpTokenValidationService = new VpTokenValidationService(session);
+        this.vpTokenValidationService = VpTokenValidationService.create(session);
     }
 
     /**
@@ -71,10 +77,12 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        VpTokenValidationResult validationResult;
+        PresentedCredential presentedCredential;
         try {
             logger.debug("Running verifier-side vp_token validation pipeline");
-            validationResult = vpTokenValidationService.validate(responseObject, authContext.getRequestObject());
+            VpTokenValidationResult validationResult =
+                    vpTokenValidationService.validate(responseObject, authContext.getRequestObject());
+            presentedCredential = validationResult.requireSinglePresentation();
         } catch (VpTokenValidationException e) {
             logger.errorf(e, "vp_token validation failed");
             boolean formatFailure = VpTokenValidationException.Phase.FORMAT.equals(e.getPhase());
@@ -89,7 +97,7 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        String sdJwtVp = validationResult.requireSinglePresentation().encodedPresentation();
+        String sdJwtVp = presentedCredential.encodedPresentation();
 
         logger.debugf("Initializing authentication with validated SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();

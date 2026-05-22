@@ -177,6 +177,21 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
+     * Asserts that {@code vp_token} was rejected by the verifier-side validation pipeline
+     * ({@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationService})
+     * before the authentication processor runs.
+     */
+    protected void assertVpTokenRejectedByValidationPipeline(
+            HttpResponse postAuthResponse, String transactionId, String expectedErrorDescription) throws Exception {
+        assertFailingAuthentication(
+                postAuthResponse,
+                transactionId,
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                expectedErrorDescription);
+    }
+
+    /**
      * Helper for asserting failing flows.
      */
     protected void assertFailingAuthentication(
@@ -284,49 +299,38 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      */
     protected HttpResponse sendAuthorizationResponseWithVPToken(
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws Exception {
-        // Wrap the SD-JWT VP in an OpenID4VP response
+        return sendAuthorizationResponseWithVpTokenMap(
+                prepareVpTokenMap(sdJwtVpToken, requestObject), requestObject, opts);
+    }
+
+    /**
+     * Sends an OpenID4VP response with an explicit {@code vp_token} map (e.g. multiple presentations per id).
+     */
+    protected HttpResponse sendAuthorizationResponseWithVpTokenMap(
+            Map<String, List<String>> vpTokenMap, RequestObject requestObject, TestOpts opts) throws Exception {
         List<BasicNameValuePair> oid4vpResponse;
         if (!opts.shouldForceUnencryptedResponse()
                 && requestObject.getClientMetadata().getJwks() != null) {
-            oid4vpResponse = prepareEncryptedOpenID4VPResponse(sdJwtVpToken, requestObject);
+            oid4vpResponse = prepareEncryptedOpenID4VPResponse(vpTokenMap, requestObject);
         } else {
-            oid4vpResponse = prepareOpenID4VPResponse(sdJwtVpToken, requestObject);
+            oid4vpResponse = prepareOpenID4VPResponse(vpTokenMap, requestObject);
         }
 
-        // Send the OpenID4VP response to Keycloak
         String url = requestObject.getResponseUri();
         HttpPost httpPost = new HttpPost(url);
         httpPost.setEntity(new UrlEncodedFormEntity(oid4vpResponse));
         return httpClient.execute(httpPost);
     }
 
-    /**
-     * Prepare the OpenID4VP response object to be sent to Keycloak.
-     *
-     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the DCQL query
-     */
-    private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
-            throws IOException {
-        // Build final-spec vp_token map keyed by DCQL credential query ID
-        var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
-
-        // Compose the response object as form-urlencoded parameters
+    private List<BasicNameValuePair> prepareOpenID4VPResponse(
+            Map<String, List<String>> vpTokenMap, RequestObject requestObject) throws IOException {
         return new ArrayList<>(List.of(
                 new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, JsonSerialization.writeValueAsString(vpTokenMap)),
                 new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
     }
 
-    /**
-     * Prepare an encrypted OpenID4VP response object to be sent to Keycloak.
-     *
-     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the DCQL query
-     */
-    private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
-            throws IOException {
-        // Build final-spec vp_token map keyed by DCQL credential query ID
-        var vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
+    private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(
+            Map<String, List<String>> vpTokenMap, RequestObject requestObject) throws IOException {
         var respMap = Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap);
         String resp = JsonSerialization.writeValueAsString(respMap);
 
@@ -344,7 +348,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     /**
      * Maps VP token to credential query ID.
      */
-    private Map<String, List<String>> prepareVpTokenMap(String sdJwtVpToken, RequestObject requestObject) {
+    protected Map<String, List<String>> prepareVpTokenMap(String sdJwtVpToken, RequestObject requestObject) {
         DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
         Credential credentialQuery = dcqlQuery.getCredentials().getFirst();
         return Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));

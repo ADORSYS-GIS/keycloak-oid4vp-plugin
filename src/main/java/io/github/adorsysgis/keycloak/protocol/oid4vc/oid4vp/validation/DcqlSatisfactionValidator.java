@@ -143,10 +143,6 @@ public class DcqlSatisfactionValidator {
     }
 
     private boolean hasClaimPath(SdJwtVP presentation, Claim claimQuery) throws VpTokenValidationException {
-        if (claimQuery.getPath() == null || claimQuery.getPath().isEmpty()) {
-            throw new VpTokenValidationException(
-                    VpTokenValidationException.Phase.DCQL, "DCQL claim query is missing path");
-        }
         List<JsonNode> resolved = SdJwtClaimReader.resolveClaimPath(presentation, claimQuery.getPath());
         if (resolved.isEmpty()) {
             return false;

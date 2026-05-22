@@ -30,11 +30,20 @@ public final class SdJwtClaimReader {
         return root;
     }
 
+    public static List<JsonNode> resolveClaimPath(JsonNode claimsRoot, List<String> path)
+            throws VpTokenValidationException {
+        if (path == null || path.isEmpty()) {
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "DCQL claim query is missing path");
+        }
+        return ClaimsPathProcessor.process(claimsRoot, ClaimsPathProcessor.toPathComponents(path));
+    }
+
     public static List<JsonNode> resolveClaimPath(SdJwtVP sdJwt, List<String> path) throws VpTokenValidationException {
         try {
             JsonNode issuerPayload = sdJwt.getIssuerSignedJWT().getPayload();
             ObjectNode root = ClaimsPathProcessor.credentialClaimsRoot(issuerPayload, disclosedClaimsRoot(sdJwt));
-            return ClaimsPathProcessor.process(root, ClaimsPathProcessor.toPathComponents(path));
+            return resolveClaimPath(root, path);
         } catch (VerificationException e) {
             throw new VpTokenValidationException(
                     VpTokenValidationException.Phase.DCQL,

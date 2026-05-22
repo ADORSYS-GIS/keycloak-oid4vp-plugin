@@ -1,13 +1,12 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorConfigResolver;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactories;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import java.lang.reflect.Constructor;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.utils.StringUtil;
@@ -17,30 +16,26 @@ import org.keycloak.utils.StringUtil;
  */
 public class VpTokenValidationService {
 
-    private final VpTokenValidationPipeline pipeline;
     private final KeycloakSession session;
+    private final AuthenticatorConfigModel authConfig;
+    private final VpTokenValidationPipeline pipeline;
 
-    public VpTokenValidationService(KeycloakSession session) {
+    private VpTokenValidationService(
+            KeycloakSession session, AuthenticatorConfigModel authConfig, StatusListJwtFetcher statusListJwtFetcher) {
         this.session = session;
-        this.pipeline = new VpTokenValidationPipeline(resolveStatusListJwtFetcher(session));
+        this.authConfig = authConfig;
+        this.pipeline = new VpTokenValidationPipeline(statusListJwtFetcher);
     }
 
-    private static StatusListJwtFetcher resolveStatusListJwtFetcher(KeycloakSession session) {
-        try {
-            Class<?> mockFetcherClass = Class.forName(
-                    "io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.stub.CustomSdJwtAuthenticatorFactory$MockTrustedStatusListJwtFetcher");
-            Constructor<?> constructor = mockFetcherClass.getConstructor(KeycloakSession.class);
-            return (StatusListJwtFetcher) constructor.newInstance(session);
-        } catch (ClassNotFoundException ignored) {
-            return new SdJwtAuthenticatorFactory().createStatusListJwtFetcher(session);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Failed to initialize status list JWT fetcher", e);
-        }
+    public static VpTokenValidationService create(KeycloakSession session) {
+        return new VpTokenValidationService(
+                session,
+                SdJwtAuthenticatorConfigResolver.resolve(session),
+                SdJwtAuthenticatorFactories.createStatusListJwtFetcher(session));
     }
 
     public VpTokenValidationResult validate(ResponseObject responseObject, RequestObject requestObject)
             throws VpTokenValidationException {
-        AuthenticatorConfigModel authConfig = OID4VPUserAuthEndpointBase.resolveSdJwtAuthenticatorConfig(session);
         SdJwtAuthRequirements authRequirements = new SdJwtAuthRequirements(session.getContext(), authConfig);
 
         String audience = HolderBindingAudienceResolver.resolve(requestObject);

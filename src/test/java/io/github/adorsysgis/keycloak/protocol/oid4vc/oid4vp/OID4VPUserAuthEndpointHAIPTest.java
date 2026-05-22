@@ -130,6 +130,20 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     }
 
     @Test
+    public void shouldRejectInvalidVpTokenMapBeforeAuthenticator() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_HAIP);
+
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        requestObject.getDcqlQuery().getCredentials().getFirst().setId("wrong-dcql-credential-id");
+
+        HttpResponse response = sendAuthorizationResponse(
+                sdJwt, requestObject, TestOpts.getDefault().setTestUser(TEST_USER_HAIP));
+        assertVpTokenRejectedByValidationPipeline(
+                response, authContext.getTransactionId(), "vp_token contains unexpected credential query id");
+    }
+
+    @Test
     public void shouldRejectUnencryptedResponses() throws Exception {
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();

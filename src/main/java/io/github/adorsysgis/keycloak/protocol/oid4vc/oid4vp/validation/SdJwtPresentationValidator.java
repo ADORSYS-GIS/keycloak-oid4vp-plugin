@@ -62,7 +62,7 @@ public class SdJwtPresentationValidator implements PresentationFormatValidator {
 
             consumer.verifySdJwtPresentation(
                     presentation,
-                    authRequirements.getPresentationRequirementsForCredential(credentialQuery),
+                    SdJwtPresentationRequirements.forCredential(authRequirements, credentialQuery),
                     List.of(new SelfTrustedSdJwtIssuer(context.session())),
                     authRequirements.getIssuerSignedJwtVerificationOpts(),
                     kbJwtOpts);

@@ -4,7 +4,6 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import java.util.List;
@@ -106,36 +105,20 @@ public class SdJwtAuthRequirements {
         return requirements.build();
     }
 
+    public boolean isVerifyIssuerClaim() {
+        return verifyIssuerClaim;
+    }
+
+    public String getIssuerPattern() {
+        return Pattern.quote("\"%s\"".formatted(keycloakIssuerURI));
+    }
+
     /**
-     * Builds presentation requirements from the issued DCQL credential query (OpenID4VP §8.6).
+     * Regex pattern for {@code vct} as required by the DCQL credential query (OpenID4VP §8.6).
      */
-    public PresentationRequirements getPresentationRequirementsForCredential(Credential credentialQuery) {
-        var requirements = SimplePresentationDefinition.builder();
-
-        getRequiredClaims().forEach(claim -> requirements.addClaimRequirement(claim, ".*"));
-
-        if (credentialQuery.getClaims() != null) {
-            for (Claim claim : credentialQuery.getClaims()) {
-                if (claim.getPath() == null || claim.getPath().isEmpty()) {
-                    continue;
-                }
-                String claimName = claim.getPath().getLast();
-                requirements.addClaimRequirement(claimName, ".*");
-            }
-        }
-
+    public String getVctPatternForCredential(Credential credentialQuery) {
         String vctPattern = vctPatternFromMeta(credentialQuery.getMeta());
-        if (vctPattern != null) {
-            requirements.addClaimRequirement(CLAIM_NAME_VCT, vctPattern);
-        } else {
-            requirements.addClaimRequirement(CLAIM_NAME_VCT, expectedVctsPattern);
-        }
-
-        if (verifyIssuerClaim) {
-            requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
-        }
-
-        return requirements.build();
+        return vctPattern != null ? vctPattern : expectedVctsPattern;
     }
 
     private String vctPatternFromMeta(Meta meta) {

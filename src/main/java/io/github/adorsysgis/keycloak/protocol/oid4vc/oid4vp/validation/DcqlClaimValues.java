@@ -5,6 +5,10 @@ import java.util.List;
 
 /**
  * Compares presented claim values against DCQL {@code values} constraints (§6.3, §6.4.1).
+ *
+ * <p>Matching is strict by JSON value type: a string constraint such as {@code "true"} only matches
+ * a textual claim, not a boolean {@code true}; a string {@code "42"} only matches text, not numeric
+ * {@code 42}. Use boolean/number entries in {@code values} when those types are intended.
  */
 final class DcqlClaimValues {
 
@@ -47,18 +51,6 @@ final class DcqlClaimValues {
     }
 
     private static boolean equalsString(JsonNode actual, String expected) {
-        if (actual.isTextual()) {
-            return expected.equals(actual.asText());
-        }
-        if (actual.isBoolean()) {
-            return expected.equalsIgnoreCase(String.valueOf(actual.asBoolean()));
-        }
-        if (actual.isIntegralNumber()) {
-            return expected.equals(String.valueOf(actual.asLong()));
-        }
-        if (actual.isNumber()) {
-            return expected.equals(String.valueOf(actual.asDouble()));
-        }
-        return expected.equals(actual.toString());
+        return actual.isTextual() && expected.equals(actual.asText());
     }
 }

@@ -8,23 +8,16 @@ import java.util.List;
 public record VpTokenValidationResult(List<PresentedCredential> presentations) {
 
     /**
-     * Returns the sole presentation when the pipeline validated exactly one.
+     * Returns the sole presentation for user-login flows that authenticate with one SD-JWT VP.
      *
-     * @throws IllegalStateException when multiple credentials were presented
+     * @throws VpTokenValidationException when more than one credential was presented after validation
      */
-    public PresentedCredential requireSinglePresentation() {
+    public PresentedCredential requireSinglePresentation() throws VpTokenValidationException {
         if (presentations.size() != 1) {
-            throw new IllegalStateException(
-                    "Expected exactly one presented credential, found: " + presentations.size());
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.STRUCTURE,
+                    "User authentication requires exactly one presented credential, found: " + presentations.size());
         }
         return presentations.getFirst();
-    }
-
-    /**
-     * @deprecated use {@link #requireSinglePresentation()}
-     */
-    @Deprecated
-    public PresentedCredential singlePresentation() {
-        return requireSinglePresentation();
     }
 }

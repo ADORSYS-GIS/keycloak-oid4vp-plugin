@@ -1,6 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorConfigResolver;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -14,14 +14,12 @@ import org.jspecify.annotations.NonNull;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatedClientSessionModel;
-import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.AuthorizationEndpointBase;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.services.Urls;
@@ -86,17 +84,7 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
     }
 
     public static AuthenticatorConfigModel resolveSdJwtAuthenticatorConfig(KeycloakSession session) {
-        RealmModel realm = session.getContext().getRealm();
-        AuthenticationFlowModel flow = realm.getFlowByAlias(OID4VP_AUTH_FLOW);
-        if (flow == null) {
-            return new AuthenticatorConfigModel();
-        }
-        return realm.getAuthenticationExecutionsStream(flow.getId())
-                .filter(execution -> execution.getAuthenticator().equals(SdJwtAuthenticatorFactory.PROVIDER_ID))
-                .findFirst()
-                .map(AuthenticationExecutionModel::getAuthenticatorConfig)
-                .map(realm::getAuthenticatorConfigById)
-                .orElse(new AuthenticatorConfigModel());
+        return SdJwtAuthenticatorConfigResolver.resolve(session);
     }
 
     /**

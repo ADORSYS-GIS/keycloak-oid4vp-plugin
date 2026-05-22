@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -23,6 +24,7 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.HttpGet;
@@ -386,6 +388,44 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
                 "Could not parse SD-JWT VP token contained in `vp_token`");
+    }
+
+    @Test
+    public void shouldRejectInvalidVpTokenMapBeforeAuthenticator() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        requestObject.getDcqlQuery().getCredentials().getFirst().setId("wrong-dcql-credential-id");
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
+        assertVpTokenRejectedByValidationPipeline(
+                response, authContext.getTransactionId(), "vp_token contains unexpected credential query id");
+    }
+
+    @Test
+    public void shouldSetVpTokenValidatedKeyBeforeAuthenticator() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
+    }
+
+    @Test
+    public void shouldRejectMultiplePresentationsForUserLogin() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        Credential credentialQuery =
+                requestObject.getDcqlQuery().getCredentials().getFirst();
+
+        String sdJwtVpToken = sdJwtVPTestUtils.presentSdJwt(
+                sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+        Map<String, List<String>> vpTokenMap = Map.of(credentialQuery.getId(), List.of(sdJwtVpToken, sdJwtVpToken));
+
+        HttpResponse response =
+                sendAuthorizationResponseWithVpTokenMap(vpTokenMap, requestObject, TestOpts.getDefault());
+        assertVpTokenRejectedByValidationPipeline(
+                response, authContext.getTransactionId(), "must contain exactly one presentation for credential query");
     }
 
     @Test

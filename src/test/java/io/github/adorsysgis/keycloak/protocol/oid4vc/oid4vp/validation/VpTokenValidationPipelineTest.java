@@ -45,6 +45,41 @@ class VpTokenValidationPipelineTest {
     }
 
     @Test
+    void requireSinglePresentationRejectsMultipleValidatedCredentials() throws Exception {
+        PresentationFormatValidator acceptingValidator = new PresentationFormatValidator() {
+            @Override
+            public boolean supports(Credential credentialQuery) {
+                return true;
+            }
+
+            @Override
+            public ValidatedPresentation validate(
+                    String encodedPresentation, Credential credentialQuery, VpTokenValidationContext context) {
+                return new ValidatedPresentation(encodedPresentation, null);
+            }
+        };
+
+        var pipeline = new VpTokenValidationPipeline(acceptingValidator);
+        Credential credential = credential("cred-1");
+        credential.setMultiple(true);
+
+        DcqlQuery dcqlQuery = new DcqlQuery();
+        dcqlQuery.setCredentials(List.of(credential));
+
+        RequestObject requestObject =
+                new RequestObject().setDcqlQuery(dcqlQuery).setNonce("nonce").setClientId("client");
+
+        ResponseObject responseObject = responseWithVpToken(Map.of("cred-1", List.of("vp-1", "vp-2")));
+        VpTokenValidationResult result = pipeline.validate(responseObject, validationContext(requestObject));
+
+        VpTokenValidationException error =
+                assertThrows(VpTokenValidationException.class, result::requireSinglePresentation);
+
+        assertEquals(VpTokenValidationException.Phase.STRUCTURE, error.getPhase());
+        assertEquals("User authentication requires exactly one presented credential, found: 2", error.getMessage());
+    }
+
+    @Test
     void validatesOnlyPresentedCredentialsWhenCredentialSetsAllowAlternatives() throws Exception {
         Credential credA = credential("cred-a");
         Credential credB = credential("cred-b");
