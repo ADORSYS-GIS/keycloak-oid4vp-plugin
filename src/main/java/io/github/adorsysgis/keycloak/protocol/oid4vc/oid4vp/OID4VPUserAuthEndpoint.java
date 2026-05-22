@@ -7,12 +7,14 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -60,12 +62,12 @@ import org.keycloak.utils.StringUtil;
 public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implements RealmResourceProvider {
 
     private static final Logger logger = Logger.getLogger(OID4VPUserAuthEndpoint.class);
-
     public static final String REQUEST_JWT_PATH = "/request.jwt";
     public static final String RESPONSE_URI_PATH = "/response";
     public static final String CALLBACK_URI_PATH = "/callback";
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
     public static final String AUTH_CODE_PATH = "/code";
+    public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
 
     private final AuthorizationRequestService authorizationRequestService;
     private final AuthorizationResponseService authorizationResponseService;
@@ -127,12 +129,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      */
     @GET
     @Path(REQUEST_JWT_PATH + "/{requestId}")
-    @Produces(MediaType.TEXT_PLAIN)
+    @Produces(AUTH_REQ_JWT_MEDIA_TYPE)
     public Response getSignedRequestObject(@PathParam("requestId") String requestId) {
         logger.debug("Resolving request URI to signed request object...");
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
-        return CorsService.open().add(Response.ok(requestObjectJwt));
+        return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
     }
 
     /**
@@ -145,6 +147,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public Response processAuthorizationResponse(
             @PathParam("requestId") String requestId,
             @FormParam("response") String encryptedResponse,
+            @FormParam(OAuth2Constants.ERROR) String error,
+            @FormParam(OAuth2Constants.ERROR_DESCRIPTION) String errorDescription,
             @FormParam(ResponseObject.VP_TOKEN_KEY) String vpToken,
             @FormParam(ResponseObject.STATE_KEY) String state) {
         logger.debug("Processing authorization response for user authentication...");
@@ -153,10 +157,32 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
 
+        if (StringUtil.isNotBlank(error)) {
+            if (StringUtil.isNotBlank(encryptedResponse) || StringUtil.isNotBlank(vpToken)) {
+                throw new BadRequestException(errorResponse(
+                        Response.Status.BAD_REQUEST,
+                        OAuthErrorException.INVALID_REQUEST,
+                        "Wallet error response must not include VP response parameters"));
+            }
+            try {
+                validateResponseState(requestId, state);
+            } catch (IllegalArgumentException e) {
+                throw new BadRequestException(
+                        errorResponse(
+                                Response.Status.BAD_REQUEST,
+                                OAuthErrorException.INVALID_REQUEST,
+                                String.format("Unparseable response params (%s)", e.getMessage())),
+                        e);
+            }
+            persistWalletErrorResponse(authorizationContext, authSession, error, errorDescription);
+            return walletResponse(authorizationContext);
+        }
+
         // Validate that response is encrypted if required
         String ephemeralKey = authorizationContext.getEphemeralKey();
         boolean expectsEncrypted = StringUtils.isNotBlank(ephemeralKey);
         boolean hasEncrypted = StringUtils.isNotBlank(encryptedResponse);
+
         if (expectsEncrypted != hasEncrypted) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -171,14 +197,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         try {
             responseObject = StringUtils.isBlank(encryptedResponse)
                     ? new ResponseObject(vpToken, state)
-                    : decryptResponse(encryptedResponse, ephemeralKey);
+                    : decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
 
-            String parsedState = responseObject.getState();
-            if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
-                throw new IllegalArgumentException(String.format(
-                        "State param must match requestId. requestId: %s, state: %s",
-                        requestId, responseObject.getState()));
-            }
+            validateResponseState(requestId, responseObject.getState());
         } catch (IllegalArgumentException | JsonProcessingException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -193,7 +214,31 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         authorizationResponseService.processAuthorizationResponse(
                 responseObject, authorizationContext, authSession, authProcessor);
 
-        // Successful. Build redirect URI if response code attached to context, meaning same device.
+        return walletResponse(authorizationContext);
+    }
+
+    private void validateResponseState(String requestId, String state) {
+        if (StringUtils.isNotBlank(state) && !requestId.equals(state)) {
+            throw new IllegalArgumentException(
+                    String.format("State param must match requestId. requestId: %s, state: %s", requestId, state));
+        }
+    }
+
+    private void persistWalletErrorResponse(
+            AuthorizationContext authorizationContext,
+            AuthenticationSessionModel authSession,
+            String error,
+            String errorDescription) {
+        String walletErrorDetails =
+                StringUtil.isNotBlank(errorDescription) ? String.format("%s: %s", error, errorDescription) : error;
+        authorizationContext
+                .setStatus(AuthorizationContextStatus.ERROR)
+                .setError(ProcessingError.WALLET_ERROR)
+                .setErrorDescription(walletErrorDetails);
+        new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
+    }
+
+    private Response walletResponse(AuthorizationContext authorizationContext) {
         String responseCode = authorizationContext.getResponseCode();
         String redirectUri = StringUtil.isNotBlank(responseCode)
                 ? KeycloakUriBuilder.fromUri(openID4VPRootUrl)
@@ -202,10 +247,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                         .build()
                         .toString()
                 : null;
-
-        // Prompts wallet to redirect if same device, or returns empty object.
         ResponseToWallet response = new ResponseToWallet(redirectUri);
-        return CorsService.open().add(Response.ok(response));
+        return CorsService.open().add(Response.ok(response, MediaType.APPLICATION_JSON));
     }
 
     /**
@@ -427,8 +470,10 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * @param encryptedResponse the assumed JWE encrypted response string
      * @param ephemeralKey the ephemeral key generated for the authentication session
      */
-    private ResponseObject decryptResponse(String encryptedResponse, String ephemeralKey) {
+    private ResponseObject decryptResponse(
+            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
         try {
+            AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
             ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
             String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
             return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);

@@ -75,6 +75,9 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
         ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        assertTrue(
+                response.getEntity().getContentType().getValue().startsWith("application/json"),
+                "response_uri endpoint should reply with application/json");
 
         // If auth context acquired in place, then cross-device flow assumed.
         // Assert that response to wallet does not contain a redirect URI.
@@ -322,6 +325,22 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return httpClient.execute(httpPost);
     }
 
+    protected HttpResponse sendAuthorizationErrorResponse(
+            RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
+        List<BasicNameValuePair> oid4vpErrorResponse = new ArrayList<>();
+        oid4vpErrorResponse.add(new BasicNameValuePair("error", error));
+        if (errorDescription != null) {
+            oid4vpErrorResponse.add(new BasicNameValuePair("error_description", errorDescription));
+        }
+        if (state != null) {
+            oid4vpErrorResponse.add(new BasicNameValuePair(ResponseObject.STATE_KEY, state));
+        }
+
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(oid4vpErrorResponse));
+        return httpClient.execute(httpPost);
+    }
+
     private List<BasicNameValuePair> prepareOpenID4VPResponse(
             Map<String, List<String>> vpTokenMap, RequestObject requestObject) throws IOException {
         return new ArrayList<>(List.of(
@@ -337,9 +356,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         // Read encryption key from request object
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        String encKid = encJwk.getKeyId();
 
-        // Encrypt the response object
-        String encResp = ECTestUtils.encryptMessage(resp, encKey);
+        // Encrypt the response object (kid must match client_metadata.jwks for JWE header validation)
+        String encResp = ECTestUtils.encryptMessage(resp, encKey, encKid);
 
         // Compose the response object as form-urlencoded parameters
         return new ArrayList<>(List.of(new BasicNameValuePair("response", encResp)));
