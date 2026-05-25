@@ -4,6 +4,7 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -103,18 +104,8 @@ public class SdJwtAuthRequirements {
         return requirements.build();
     }
 
-    public io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec
-            getSdJwtQuerySpec() {
-        return io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec.of(
-                getExpectedVcts(), getRequiredClaims());
-    }
-
-    /** @deprecated use {@link #getSdJwtQuerySpec()} */
-    @Deprecated
-    public io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap
-            getSdJwtQueryMap() {
-        return new io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer
-                .QueryMap(getExpectedVcts(), getRequiredClaims());
+    public QuerySpec getSdJwtQuerySpec() {
+        return QuerySpec.of(getExpectedVcts(), getRequiredClaims());
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
