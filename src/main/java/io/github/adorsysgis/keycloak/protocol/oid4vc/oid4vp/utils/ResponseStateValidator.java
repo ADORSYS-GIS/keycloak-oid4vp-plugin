@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import com.apicatalog.jsonld.StringUtils;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import java.util.List;
@@ -18,21 +17,19 @@ public final class ResponseStateValidator {
      * mandatory and must equal {@code requestId}. The SD-JWT login flow currently issues one credential;
      * all credentials are scanned so multi-credential queries remain correct when added later.
      */
-    public static void validate(ResponseObject responseObject, DcqlQuery dcqlQuery, String requestId) {
+    public static void validate(String state, DcqlQuery dcqlQuery, String requestId) {
         if (anyCredentialWithoutHolderBinding(dcqlQuery.getCredentials())) {
-            String parsedState = responseObject.getState();
-            if (StringUtils.isBlank(parsedState) || !requestId.equals(parsedState)) {
+            if (StringUtils.isBlank(state) || !requestId.equals(state)) {
                 throw new IllegalArgumentException(String.format(
                         "State param is required and must match requestId when holder binding is not required. requestId: %s, state: %s",
-                        requestId, parsedState));
+                        requestId, state));
             }
             return;
         }
 
-        String parsedState = responseObject.getState();
-        if (StringUtils.isNotBlank(parsedState) && !requestId.equals(parsedState)) {
-            throw new IllegalArgumentException(String.format(
-                    "State param must match requestId. requestId: %s, state: %s", requestId, parsedState));
+        if (StringUtils.isNotBlank(state) && !requestId.equals(state)) {
+            throw new IllegalArgumentException(
+                    String.format("State param must match requestId. requestId: %s, state: %s", requestId, state));
         }
     }
 

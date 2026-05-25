@@ -236,6 +236,8 @@ public class AuthorizationRequestService {
                 .collect(Collectors.joining("."));
 
         DcqlQuery dcqlQuery = constrainer.generateDcqlQuery(queryMap);
+        // Single-credential SD-JWT login flow: transaction_data and verifier_info reference this id.
+        // Multi-credential queries would need coordinated changes in response extraction and wiring.
         String dcqlCredentialId = dcqlQuery.getCredentials().getFirst().getId();
 
         List<String> transactionData = config.getTransactionDataRaw().isEmpty()

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import java.util.List;
@@ -15,64 +14,63 @@ import org.keycloak.representations.JsonWebToken;
 class ResponseStateValidatorTest {
 
     private static final String REQUEST_ID = "session-marker.abc123";
-    private static final String DUMMY_VP_TOKEN = "{}";
 
     @Test
-    void requiresMatchingStateWhenAnyCredentialDisablesHolderBinding() throws Exception {
+    void requiresMatchingStateWhenAnyCredentialDisablesHolderBinding() {
         DcqlQuery query = queryWithHolderBinding(false);
-        ResponseObject response = new ResponseObject(DUMMY_VP_TOKEN, REQUEST_ID);
 
-        assertDoesNotThrow(() -> ResponseStateValidator.validate(response, query, REQUEST_ID));
+        assertDoesNotThrow(() -> ResponseStateValidator.validate(REQUEST_ID, query, REQUEST_ID));
     }
 
     @Test
-    void rejectsMissingStateWhenHolderBindingDisabled() throws Exception {
+    void rejectsMissingStateWhenHolderBindingDisabled() {
         DcqlQuery query = queryWithHolderBinding(false);
-        ResponseObject response = new ResponseObject(DUMMY_VP_TOKEN, null);
+
+        assertThrows(IllegalArgumentException.class, () -> ResponseStateValidator.validate(null, query, REQUEST_ID));
+    }
+
+    @Test
+    void rejectsMissingStateOnWalletErrorPath() {
+        DcqlQuery query = queryWithHolderBinding(false);
+
+        assertThrows(IllegalArgumentException.class, () -> ResponseStateValidator.validate("", query, REQUEST_ID));
+    }
+
+    @Test
+    void rejectsWrongStateWhenHolderBindingDisabled() {
+        DcqlQuery query = queryWithHolderBinding(false);
 
         assertThrows(
-                IllegalArgumentException.class, () -> ResponseStateValidator.validate(response, query, REQUEST_ID));
+                IllegalArgumentException.class,
+                () -> ResponseStateValidator.validate("wrong-state", query, REQUEST_ID));
     }
 
     @Test
-    void rejectsWrongStateWhenHolderBindingDisabled() throws Exception {
-        DcqlQuery query = queryWithHolderBinding(false);
-        ResponseObject response = new ResponseObject(DUMMY_VP_TOKEN, "wrong-state");
-
-        assertThrows(
-                IllegalArgumentException.class, () -> ResponseStateValidator.validate(response, query, REQUEST_ID));
-    }
-
-    @Test
-    void rejectsMismatchedStateWhenHolderBindingRequired() throws Exception {
+    void rejectsMismatchedStateWhenHolderBindingRequired() {
         DcqlQuery query = queryWithHolderBinding(true);
-        ResponseObject response = new ResponseObject(DUMMY_VP_TOKEN, "wrong-state");
 
         assertThrows(
-                IllegalArgumentException.class, () -> ResponseStateValidator.validate(response, query, REQUEST_ID));
+                IllegalArgumentException.class,
+                () -> ResponseStateValidator.validate("wrong-state", query, REQUEST_ID));
     }
 
     @Test
-    void allowsAbsentStateWhenHolderBindingRequired() throws Exception {
+    void allowsAbsentStateWhenHolderBindingRequired() {
         DcqlQuery query = queryWithHolderBinding(true);
-        ResponseObject response = new ResponseObject(DUMMY_VP_TOKEN, null);
 
-        assertDoesNotThrow(() -> ResponseStateValidator.validate(response, query, REQUEST_ID));
+        assertDoesNotThrow(() -> ResponseStateValidator.validate(null, query, REQUEST_ID));
     }
 
     @Test
-    void requiresStateWhenAnyCredentialInQueryDisablesHolderBinding() throws Exception {
+    void requiresStateWhenAnyCredentialInQueryDisablesHolderBinding() {
         Credential bound = credentialWithHolderBinding(true);
         Credential unbound = credentialWithHolderBinding(false);
         DcqlQuery query = new DcqlQuery();
         query.setCredentials(List.of(bound, unbound));
 
-        ResponseObject missingState = new ResponseObject(DUMMY_VP_TOKEN, null);
-        assertThrows(
-                IllegalArgumentException.class, () -> ResponseStateValidator.validate(missingState, query, REQUEST_ID));
+        assertThrows(IllegalArgumentException.class, () -> ResponseStateValidator.validate(null, query, REQUEST_ID));
 
-        ResponseObject matchingState = new ResponseObject(DUMMY_VP_TOKEN, REQUEST_ID);
-        assertDoesNotThrow(() -> ResponseStateValidator.validate(matchingState, query, REQUEST_ID));
+        assertDoesNotThrow(() -> ResponseStateValidator.validate(REQUEST_ID, query, REQUEST_ID));
     }
 
     private static DcqlQuery queryWithHolderBinding(boolean required) {
