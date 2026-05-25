@@ -100,7 +100,15 @@ public final class ClaimsPathProcessor {
     }
 
     /**
-     * Converts a DCQL path of strings to the mixed pointer components used by §7.1.
+     * Adapts a DCQL {@code path} from {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim}
+     * to the mixed components expected by {@link #process}.
+     *
+     * <p>Today {@code Claim.path} is {@code List<String>} because our DCQL schemas only use object-key
+     * segments. OpenID4VP §7.1 also allows integers (array indices) and {@code null} (all array elements),
+     * e.g. {@code ["address", null, "street_address"]}. {@link #process} already supports those types.
+     *
+     * <p>If {@code Claim.path} is widened to deserialize mixed JSON array elements, update this mapper to
+     * translate numeric indices and {@code null} entries—not only {@link List#copyOf} of strings.
      */
     public static List<Object> toPathComponents(List<String> path) {
         return List.copyOf(path);
