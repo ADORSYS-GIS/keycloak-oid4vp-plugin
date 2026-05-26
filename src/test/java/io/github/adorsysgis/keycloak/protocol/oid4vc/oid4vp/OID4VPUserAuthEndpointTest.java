@@ -8,6 +8,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Autho
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -25,10 +26,14 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -64,6 +69,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
+        assertNull(uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert full expected format
         String expectedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -171,6 +177,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(
                 "Authorization context not found for request ID: unknown-request-uri", errorRep.getErrorDescription());
+    }
+
+    @Test
+    public void shouldRejectRequestUriPost_WhenMethodIsNotPost() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
+
+        HttpPost httpPost = new HttpPost(requestUri);
+        httpPost.setHeader(HttpHeaders.ACCEPT, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("wallet_nonce", "nonce"))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals("invalid_request_uri_method", errorRep.getError());
     }
 
     @Test
@@ -383,6 +405,24 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(ProcessingError.INVALID_VP_TOKEN.getErrorString(), errorRep.getError());
         assertTrue(errorRep.getErrorDescription().contains("Could not parse SD-JWT VP token contained in `vp_token`"));
+    }
+
+    @Test
+    public void shouldRejectWalletErrorResponseWithMismatchingState() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationErrorResponse(
+                requestObject, OAuthErrorException.ACCESS_DENIED, "End-User denied consent", "wrong-state");
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("State param must match requestId"));
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.PENDING, statusPayload.getStatus());
     }
 
     @Test

@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
@@ -12,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtC
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
@@ -42,6 +44,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.utils.SessionExpiration;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Dedicated service for creating OpenID4VP authorization requests for user authentication.
@@ -125,12 +128,16 @@ public class AuthorizationRequestService {
         // Build request object
         RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);
 
-        // Sign request object
-        String requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
+        // Sign request object initially, unless we know request_uri_method = post
+        String requestObjectJwt = null;
+        if (!RequestUriMethod.POST.equals(config.getRequestUriMethod())) {
+            requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
+        }
 
         // Build authorization request link
         String urlScheme = config.getAuthReqUrlScheme();
-        String authorizationRequestLink = buildAuthorizationRequestLink(urlScheme, clientId, requestId);
+        String authorizationRequestLink =
+                buildAuthorizationRequestLink(urlScheme, clientId, requestId, config.getRequestUriMethod());
 
         // Gather authorization context
         AuthorizationContext authorizationContext = new AuthorizationContext()
@@ -142,6 +149,7 @@ public class AuthorizationRequestService {
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink)
+                .setRequestUriMethod(config.getRequestUriMethod())
                 .setResponseCode(responseCode);
 
         // Attach code challenge details for ownership binding if present
@@ -261,18 +269,66 @@ public class AuthorizationRequestService {
         return requestObject;
     }
 
-    private String buildAuthorizationRequestLink(String urlScheme, String clientId, String requestId) {
+    private String buildAuthorizationRequestLink(
+            String urlScheme, String clientId, String requestId, RequestUriMethod requestUriMethod) {
         var requestUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.REQUEST_JWT_PATH)
                 .path(requestId)
                 .build()
                 .toString();
 
+        String requestUriMethodQuery = RequestUriMethod.POST.equals(requestUriMethod) ? "&request_uri_method=post" : "";
         return String.format(
-                "%sauthorize?client_id=%s&request_uri=%s",
+                "%sauthorize?client_id=%s&request_uri=%s%s",
                 urlScheme,
                 URLEncoder.encode(clientId, StandardCharsets.UTF_8),
-                URLEncoder.encode(requestUri, StandardCharsets.UTF_8));
+                URLEncoder.encode(requestUri, StandardCharsets.UTF_8),
+                requestUriMethodQuery);
+    }
+
+    private String signRequestObject(RequestObject requestObject, VerifierConfig config) {
+        KeyWrapper signingKey = discoverSigningKey(config);
+        X509Certificate certificate = resolveAccessCertificate(config, signingKey);
+        return signRequestObject(requestObject, signingKey, certificate);
+    }
+
+    /**
+     * Finalizes authorization request given wallet-provided data.
+     */
+    public AuthorizationContext finalizeAuthorizationRequest(
+            VerifierConfig config,
+            AuthenticationSessionModel authSession,
+            AuthorizationContext authContext,
+            String walletNonce,
+            JsonNode walletMetadata) {
+
+        boolean contextChanged = false;
+        if (walletMetadata != null) {
+            authContext.setWalletMetadata(walletMetadata);
+            contextChanged = true;
+        }
+
+        RequestObject requestObject = authContext.getRequestObject();
+        boolean mustSign = false;
+
+        if (StringUtil.isNotBlank(walletNonce)) {
+            requestObject.setWalletNonce(walletNonce);
+            authContext.setRequestObject(requestObject);
+            mustSign = true;
+        }
+
+        String requestObjectJwt = authContext.getRequestObjectJwt();
+        if (requestObjectJwt == null || mustSign) {
+            requestObjectJwt = signRequestObject(requestObject, config);
+            authContext.setRequestObjectJwt(requestObjectJwt);
+            contextChanged = true;
+        }
+
+        if (contextChanged) {
+            new AuthenticationSessionStore(authSession).storeAuthorizationContext(authContext);
+        }
+
+        return authContext;
     }
 
     private String signRequestObject(RequestObject requestObject, KeyWrapper signingKey, X509Certificate certificate) {
