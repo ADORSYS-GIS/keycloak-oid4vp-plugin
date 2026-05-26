@@ -62,7 +62,7 @@
         "vct": "https://credentials.example.com/identity_credential",
         "requireExpClaim": "true",
         "enforceRevocationStatus": "true",
-        "clientIdScheme": "x509_hash",
+        "clientIdentifierPrefix": "x509_hash",
         "responseMode": "direct_post.jwt",
         "requestUriMethod": "post",
         "customUrlScheme": "haip-vp://",

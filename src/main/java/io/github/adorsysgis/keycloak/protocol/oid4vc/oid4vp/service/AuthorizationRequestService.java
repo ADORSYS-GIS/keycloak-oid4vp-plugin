@@ -118,7 +118,7 @@ public class AuthorizationRequestService {
         X509Certificate certificate = resolveAccessCertificate(config, signingKey);
 
         // Resolve client ID and discover client metadata
-        String clientId = discoveryService.getClientId(config.getClientIdScheme(), certificate);
+        String clientId = discoveryService.getClientId(config.getClientIdentifierPrefix(), certificate);
         ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
         // Load query map for SD-JWT authentication
@@ -258,7 +258,6 @@ public class AuthorizationRequestService {
                 .setResponseUri(responseUri)
                 .setResponseType(ResponseType.VP_TOKEN)
                 .setClientId(clientId)
-                .setClientIdScheme(config.getClientIdScheme())
                 .setNonce(nonce)
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)

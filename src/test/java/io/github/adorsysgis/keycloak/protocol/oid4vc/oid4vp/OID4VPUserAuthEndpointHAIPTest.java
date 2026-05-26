@@ -7,6 +7,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Autho
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,7 +16,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
@@ -97,10 +97,13 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         String accessCertificate = authConfig.get(ACCESS_CERTIFICATE_CONFIG).asText();
         X509Certificate cert = PemUtils.decodeCertificate(accessCertificate);
         String expectedClientId = "x509_hash:" + X509HashUtils.computeX509Hash(cert);
-        assertEquals(expectedClientId, clientIdParam, "Client ID should use x509_hash scheme");
+        assertEquals(expectedClientId, clientIdParam, "Client ID should use x509_hash prefix");
 
-        // Request object must use configured client ID scheme
-        assertEquals(ClientIdScheme.X509_HASH, requestObject.getClientIdScheme());
+        // Client Identifier Prefix is conveyed through client_id.
+        assertEquals(expectedClientId, requestObject.getClientId());
+        assertEquals(expectedClientId, requestObject.getIssuer());
+        ObjectNode requestPayload = JsonSerialization.readValue(jwsInput.getContent(), ObjectNode.class);
+        assertFalse(requestPayload.has("client_id_scheme"), "Signed request object must not contain client_id_scheme");
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
