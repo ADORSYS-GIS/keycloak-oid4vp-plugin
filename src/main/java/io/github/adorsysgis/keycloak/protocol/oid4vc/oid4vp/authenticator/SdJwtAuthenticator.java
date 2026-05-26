@@ -1,15 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -23,7 +18,6 @@ import org.keycloak.models.UserModel;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
-import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
@@ -31,68 +25,51 @@ import org.keycloak.utils.StringUtil;
 /**
  * Authenticate by presenting a valid SD-JWT credential.
  *
+ * <p>Presentation validation is performed upstream by
+ * {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationPipeline}
+ * before this authenticator runs. This authenticator only resolves the presenting user.
+ *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public class SdJwtAuthenticator implements Authenticator {
 
     private static final Logger logger = Logger.getLogger(SdJwtAuthenticator.class);
 
-    private final SdJwtPresentationConsumer consumer;
-    private final ReferencedTokenValidator tokenStatusValidator;
-
-    /**
-     * The authenticating party is challenged to produce a presentation with a nonce.
-     */
-    public static final String CHALLENGE_NONCE_KEY = "nonce";
-
-    /**
-     * The authenticating party is challenged to produce a presentation with an audience.
-     */
-    public static final String CHALLENGE_AUD_KEY = "aud";
-
     /**
      * The authenticating party presents a non-replayable SD-JWT token for authentication.
      */
     public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
 
-    public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
-        this.consumer = new SdJwtPresentationConsumer();
-        this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
-    }
+    /**
+     * Required for the OpenID4VP authorization-response flow. Set by
+     * {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService}
+     * after {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationPipeline}
+     * validates the presentation.
+     */
+    public static final String VP_TOKEN_VALIDATED_KEY = "vp_token_validated";
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
         AuthenticationSessionModel authSession = context.getAuthenticationSession();
         logger.info("Authenticating with SdJwtAuthenticator");
 
-        SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context);
-        String nonce = authSession.getAuthNote(CHALLENGE_NONCE_KEY);
-        String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
-        SdJwtVP sdJwt = SdJwtVP.of(authSession.getAuthNote(SDJWT_TOKEN_KEY));
-
-        try {
-            consumer.verifySdJwtPresentation(
-                    sdJwt,
-                    authReqs.getPresentationRequirements(),
-                    List.of(new SelfTrustedSdJwtIssuer(context)),
-                    authReqs.getIssuerSignedJwtVerificationOpts(),
-                    authReqs.getKeyBindingJwtVerificationOpts(nonce, aud));
-        } catch (VerificationException e) {
-            logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
-            failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
+        String sdJwtToken = authSession.getAuthNote(SDJWT_TOKEN_KEY);
+        if (StringUtil.isBlank(sdJwtToken)) {
+            logger.errorf("Missing SD-JWT VP token (authSession = %s)", correlationId(context));
+            failRejectingPresentedSdJwtToken(context, "Missing SD-JWT VP token");
             return;
         }
 
-        // Validate token status if enforced
-        if (authReqs.shouldEnforceRevocationStatus()) {
-            try {
-                tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
-            } catch (ReferencedTokenValidationException e) {
-                logger.errorf(e, "Token status verification failed (authSession = %s)", correlationId(context));
-                failRejectingPresentedSdJwtToken(context, "Token status verification failed", e);
-                return;
-            }
+        if (!"true".equals(authSession.getAuthNote(VP_TOKEN_VALIDATED_KEY))) {
+            logger.errorf(
+                    "VP token reached authenticator without prior pipeline validation (authSession = %s)",
+                    correlationId(context));
+            failRejectingPresentedSdJwtToken(context, "VP token was not validated by the verifier pipeline");
+            return;
         }
+
+        SdJwtVP sdJwt = SdJwtVP.of(sdJwtToken);
+        logger.debug("Resolving user from pipeline-validated SD-JWT presentation");
 
         UserModel user = recoverAuthenticatingUser(context, sdJwt);
         if (user == null) {
@@ -106,17 +83,13 @@ public class SdJwtAuthenticator implements Authenticator {
         }
 
         context.setUser(user);
-        context.success(); // Mark authentication as successful
+        context.success();
         logger.debugf("User '%s' successfully authenticated", user.getUsername());
     }
 
     @Override
     public void action(AuthenticationFlowContext context) {
         // No form action is relevant for this authenticator
-    }
-
-    private SdJwtAuthRequirements getAuthenticationRequirements(AuthenticationFlowContext context) {
-        return new SdJwtAuthRequirements(context.getSession().getContext(), context.getAuthenticatorConfig());
     }
 
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
@@ -206,16 +179,8 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {
-        failRejectingPresentedSdJwtToken(context, reason, null);
-    }
-
-    private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {
         String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        if (cause != null) {
-            logger.errorf(cause, "Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
-        } else {
-            logger.errorf("Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
-        }
+        logger.errorf("Presented SD-JWT rejected (authSession = %s): %s", correlationId, reason);
 
         String description = String.format("Invalid SD-JWT presentation (%s)", reason);
         var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);

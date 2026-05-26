@@ -182,8 +182,7 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
 
     @Override
     public Authenticator create(KeycloakSession session) {
-        StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);
-        return new SdJwtAuthenticator(httpFetcher);
+        return new SdJwtAuthenticator();
     }
 
     @Override

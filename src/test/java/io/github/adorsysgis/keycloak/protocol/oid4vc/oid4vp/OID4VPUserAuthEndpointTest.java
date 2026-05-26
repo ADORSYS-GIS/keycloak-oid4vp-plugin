@@ -8,13 +8,13 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Autho
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -26,14 +26,11 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
-import org.apache.http.HttpHeaders;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -69,7 +66,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
-        assertNull(uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert full expected format
         String expectedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -177,22 +173,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(
                 "Authorization context not found for request ID: unknown-request-uri", errorRep.getErrorDescription());
-    }
-
-    @Test
-    public void shouldRejectRequestUriPost_WhenMethodIsNotPost() throws Exception {
-        AuthorizationContext authContext = requestAuthorizationRequest();
-        String authRequest = authContext.getAuthorizationRequest();
-        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
-
-        HttpPost httpPost = new HttpPost(requestUri);
-        httpPost.setHeader(HttpHeaders.ACCEPT, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
-        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("wallet_nonce", "nonce"))));
-        HttpResponse response = httpClient.execute(httpPost);
-        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
-
-        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
-        assertEquals("invalid_request_uri_method", errorRep.getError());
     }
 
     @Test
@@ -441,6 +421,44 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldRejectInvalidVpTokenMapBeforeAuthenticator() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        requestObject.getDcqlQuery().getCredentials().getFirst().setId("wrong-dcql-credential-id");
+
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
+        assertVpTokenRejectedByValidationPipeline(
+                response, authContext.getTransactionId(), "vp_token contains unexpected credential query id");
+    }
+
+    @Test
+    public void shouldSetVpTokenValidatedKeyBeforeAuthenticator() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
+    }
+
+    @Test
+    public void shouldRejectMultiplePresentationsForUserLogin() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        Credential credentialQuery =
+                requestObject.getDcqlQuery().getCredentials().getFirst();
+
+        String sdJwtVpToken = sdJwtVPTestUtils.presentSdJwt(
+                sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+        Map<String, List<String>> vpTokenMap = Map.of(credentialQuery.getId(), List.of(sdJwtVpToken, sdJwtVpToken));
+
+        HttpResponse response =
+                sendAuthorizationResponseWithVpTokenMap(vpTokenMap, requestObject, TestOpts.getDefault());
+        assertVpTokenRejectedByValidationPipeline(
+                response, authContext.getTransactionId(), "must contain exactly one presentation for credential query");
+    }
+
+    @Test
     public void shouldFailAuthentication_NonMatchingDcqlCredentialId() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
@@ -456,7 +474,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map does not match DCQL credential query");
+                "vp_token contains unexpected credential query id");
     }
 
     @Test

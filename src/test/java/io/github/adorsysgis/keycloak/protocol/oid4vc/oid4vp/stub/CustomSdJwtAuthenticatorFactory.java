@@ -28,9 +28,13 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
     }
 
     @Override
+    public StatusListJwtFetcher createStatusListJwtFetcher(KeycloakSession session) {
+        return new MockTrustedStatusListJwtFetcher(session);
+    }
+
+    @Override
     public Authenticator create(KeycloakSession session) {
-        StatusListJwtFetcher httpFetcher = new MockTrustedStatusListJwtFetcher(session);
-        return new SdJwtAuthenticator(httpFetcher);
+        return new SdJwtAuthenticator();
     }
 
     public static class MockTrustedStatusListJwtFetcher extends TrustedStatusListJwtFetcher {
@@ -57,7 +61,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
             return exampleStatusListJwt(String.format("/tokenstatus/%s.txt", resource));
         }
 
-        public static String exampleStatusListJwt(String filename) {
+        static String exampleStatusListJwt(String filename) {
             try (InputStream stream = CustomSdJwtAuthenticatorFactory.class.getResourceAsStream(filename)) {
                 if (stream == null) {
                     throw new IllegalArgumentException("Resource not found: " + filename);

@@ -1,6 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorConfigResolver;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -14,7 +14,6 @@ import org.jspecify.annotations.NonNull;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatedClientSessionModel;
-import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
@@ -81,13 +80,11 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
      * Returns the SD-JWT authenticator configuration as part of the OpenID4VP authentication flow.
      */
     protected AuthenticatorConfigModel getSdjwtAuthenticatorConfig() {
-        AuthenticationFlowModel flow = getOid4vpAuthFlow();
-        return realm.getAuthenticationExecutionsStream(flow.getId())
-                .filter(execution -> execution.getAuthenticator().equals(SdJwtAuthenticatorFactory.PROVIDER_ID))
-                .findFirst()
-                .map(AuthenticationExecutionModel::getAuthenticatorConfig)
-                .map(realm::getAuthenticatorConfigById)
-                .orElse(new AuthenticatorConfigModel());
+        return resolveSdJwtAuthenticatorConfig(session);
+    }
+
+    public static AuthenticatorConfigModel resolveSdJwtAuthenticatorConfig(KeycloakSession session) {
+        return SdJwtAuthenticatorConfigResolver.resolve(session);
     }
 
     /**
