@@ -12,7 +12,7 @@ public class Claim {
     private List<String> path;
 
     @JsonProperty("values")
-    private List<String> values;
+    private List<Object> values;
 
     public String getId() {
         return id;
@@ -30,11 +30,11 @@ public class Claim {
         this.path = path;
     }
 
-    public List<String> getValues() {
+    public List<Object> getValues() {
         return values;
     }
 
-    public void setValues(List<String> values) {
+    public void setValues(List<Object> values) {
         this.values = values;
     }
 }
