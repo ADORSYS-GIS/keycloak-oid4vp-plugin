@@ -24,12 +24,10 @@ import java.util.regex.Pattern;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -99,29 +97,85 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     /**
-     * Resolve the request object associated with the authorization request.
-     * A request is sent to the request_uri dereferencing endpoint to retrieve the request object.     *
+     * Dereference {@code request_uri} and return the signed request object JWT (GET by default, or POST when
+     * {@code request_uri_method=post} is present in the authorization request).
      */
     protected String resolveSignedRequestObject(String authRequest) throws IOException {
-        HttpResponse response = resolveSignedRequestObjectResponse(authRequest);
+        return resolveSignedRequestObject(authRequest, null, null);
+    }
 
-        // Parse and return the expected JWT response
+    /**
+     * Dereference via POST when the authorization request advertises {@code request_uri_method=post}, with
+     * optional {@code wallet_nonce} / {@code wallet_metadata} (OpenID4VP Final 1.0 §5.10).
+     */
+    protected String resolveSignedRequestObject(String authRequest, String walletNonce, String walletMetadata)
+            throws IOException {
+        HttpResponse response = resolveSignedRequestObjectResponse(
+                authRequest, walletNonce, walletMetadata, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
         return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
     }
 
-    protected HttpResponse resolveSignedRequestObjectResponse(String authRequest) throws IOException {
-        // Extract the request_uri parameter
-        String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
-                .filter(p -> p.getName().equals("request_uri"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing query param: request_uri"));
+    /** GET fallback to the request URI endpoint (RFC 9101 / Final 1.0 compatibility). */
+    protected String resolveSignedRequestObjectWithGet(String authRequest) throws IOException {
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
 
-        // Send resolution request
-        HttpGet httpGet = new HttpGet(requestUri);
-        HttpResponse response = httpClient.execute(httpGet);
+        HttpResponse response = httpClient.execute(new HttpGet(requestUri));
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        return response;
+        return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+    }
+
+    protected HttpResponse resolveSignedRequestObjectWithGetResponse(String authRequest) throws IOException {
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
+
+        return httpClient.execute(new HttpGet(requestUri));
+    }
+
+    protected HttpResponse resolveSignedRequestObjectResponse(String authRequest) throws IOException {
+        return resolveSignedRequestObjectResponse(
+                authRequest, null, null, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+    }
+
+    protected HttpResponse resolveSignedRequestObjectResponse(
+            String authRequest, String walletNonce, String walletMetadata, String acceptHeader) throws IOException {
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
+        String requestUriMethod = getQueryParam(authRequest, "request_uri_method");
+        if (requestUriMethod == null) {
+            requestUriMethod = "get";
+        }
+
+        if ("post".equalsIgnoreCase(requestUriMethod)) {
+            HttpPost httpPost = new HttpPost(requestUri);
+            if (acceptHeader != null) {
+                httpPost.setHeader(HttpHeaders.ACCEPT, acceptHeader);
+            }
+            List<BasicNameValuePair> postParams = new ArrayList<>();
+            if (walletNonce != null) {
+                postParams.add(new BasicNameValuePair("wallet_nonce", walletNonce));
+            }
+            if (walletMetadata != null) {
+                postParams.add(new BasicNameValuePair("wallet_metadata", walletMetadata));
+            }
+            if (!postParams.isEmpty()) {
+                httpPost.setEntity(new UrlEncodedFormEntity(postParams));
+            }
+            return httpClient.execute(httpPost);
+        }
+
+        return httpClient.execute(new HttpGet(requestUri));
+    }
+
+    protected String getQueryParam(String authRequest, String name) {
+        ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(authRequest));
+        return uriInfo.getQueryParameters().getFirst(name);
+    }
+
+    protected String getRequiredQueryParam(String authRequest, String name) {
+        String val = getQueryParam(authRequest, name);
+        if (val == null) {
+            throw new AssertionError("Missing query param: " + name);
+        }
+        return val;
     }
 
     /**

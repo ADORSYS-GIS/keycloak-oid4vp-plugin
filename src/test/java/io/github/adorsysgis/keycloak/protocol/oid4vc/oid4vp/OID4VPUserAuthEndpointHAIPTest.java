@@ -51,6 +51,7 @@ import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.MediaType;
 
 /**
  * Testing compliance of the flow with requirements from the German wallet.
@@ -72,7 +73,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     public void shouldProduceValidAuthorizationRequests() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         String authRequest = authContext.getAuthorizationRequest();
-        String signedReqJwt = resolveSignedRequestObject(authRequest);
+        String signedReqJwt = resolveSignedRequestObject(authRequest, "wallet-nonce-haip", null);
         JWSInput jwsInput = new JWSInput(signedReqJwt);
         RequestObject requestObject = jwsInput.readJsonContent(RequestObject.class);
         HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
@@ -89,6 +90,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequestUri);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
+        assertEquals("post", uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert client ID uses x509_hash appropriately
         ObjectNode authConfig = getAuthConfig();
@@ -102,6 +104,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
+        assertEquals("wallet-nonce-haip", requestObject.getWalletNonce());
         assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
 
         // Assert: Ensure the request object contains a DCQL query
@@ -179,6 +182,48 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     }
 
     @Test
+    public void shouldRejectGetForPostRequestUriMethod() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        HttpResponse response = resolveSignedRequestObjectWithGetResponse(authContext.getAuthorizationRequest());
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals("invalid_request_uri_method", errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("This request_uri requires HTTP POST"));
+    }
+
+    @Test
+    public void shouldRejectInvalidWalletMetadataFromRequestUriPost() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String walletMetadata = "[]";
+
+        HttpResponse response = resolveSignedRequestObjectResponse(
+                authContext.getAuthorizationRequest(),
+                "wallet-nonce",
+                walletMetadata,
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("wallet_metadata is invalid"));
+    }
+
+    @Test
+    public void shouldRejectRequestUriPostWithoutRequiredAcceptHeader() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+
+        String invalidAccept = MediaType.APPLICATION_JSON;
+        HttpResponse response = resolveSignedRequestObjectResponse(authRequest, "nonce", null, invalidAccept);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Request URI POST must include Accept"));
+    }
+
+    @Test
     public void shouldAcceptUnencryptedWalletError_WhenEncryptedResponseIsExpected() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
@@ -219,7 +264,6 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
     @Test
     public void shouldRejectEncryptedResponse_MalformedJwe() throws Exception {
-        // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
