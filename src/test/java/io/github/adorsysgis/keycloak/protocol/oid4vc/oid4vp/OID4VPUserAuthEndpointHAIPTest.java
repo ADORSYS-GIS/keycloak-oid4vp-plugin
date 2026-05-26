@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.REGISTRATION_CERT_FORMAT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService.SUPPORTED_ENC_ALGS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,15 +19,23 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.net.URI;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPublicKey;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -37,9 +46,12 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.jose.jwe.JWEConstants;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
+import org.keycloak.jose.jwk.JWKParser;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.MediaType;
 
 /**
  * Testing compliance of the flow with requirements from the German wallet.
@@ -61,9 +73,14 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     public void shouldProduceValidAuthorizationRequests() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         String authRequest = authContext.getAuthorizationRequest();
-        String signedReqJwt = resolveSignedRequestObject(authRequest);
+        String signedReqJwt = resolveSignedRequestObject(authRequest, "wallet-nonce-haip", null);
         JWSInput jwsInput = new JWSInput(signedReqJwt);
         RequestObject requestObject = jwsInput.readJsonContent(RequestObject.class);
+        HttpResponse requestUriResponse = resolveSignedRequestObjectResponse(authRequest);
+        assertEquals(
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE,
+                requestUriResponse.getEntity().getContentType().getValue());
+        assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
 
         // Must use configured custom URL scheme
         URI authRequestUri = new URI(authRequest);
@@ -73,6 +90,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequestUri);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
+        assertEquals("post", uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert client ID uses x509_hash appropriately
         ObjectNode authConfig = getAuthConfig();
@@ -86,6 +104,8 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());
+        assertEquals("wallet-nonce-haip", requestObject.getWalletNonce());
+        assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
 
         // Assert: Ensure the request object contains a DCQL query
         var queryMap = new SdJwtCredentialConstrainer.QueryMap(
@@ -145,6 +165,131 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
         assertTrue(errorRep.getErrorDescription().contains("Authorization context expects encrypted response"));
+    }
+
+    @Test
+    public void shouldRejectGetForPostRequestUriMethod() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        HttpResponse response = resolveSignedRequestObjectWithGetResponse(authContext.getAuthorizationRequest());
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals("invalid_request_uri_method", errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("This request_uri requires HTTP POST"));
+    }
+
+    @Test
+    public void shouldRejectInvalidWalletMetadataFromRequestUriPost() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String walletMetadata = "[]";
+
+        HttpResponse response = resolveSignedRequestObjectResponse(
+                authContext.getAuthorizationRequest(),
+                "wallet-nonce",
+                walletMetadata,
+                OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("wallet_metadata is invalid"));
+    }
+
+    @Test
+    public void shouldRejectRequestUriPostWithoutRequiredAcceptHeader() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+
+        String invalidAccept = MediaType.APPLICATION_JSON;
+        HttpResponse response = resolveSignedRequestObjectResponse(authRequest, "nonce", null, invalidAccept);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Request URI POST must include Accept"));
+    }
+
+    @Test
+    public void shouldAcceptUnencryptedWalletError_WhenEncryptedResponseIsExpected() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        String walletError = OAuthErrorException.ACCESS_DENIED;
+        String errorDescription = "wallet canceled presentation";
+
+        HttpResponse response =
+                sendAuthorizationErrorResponse(requestObject, walletError, errorDescription, requestObject.getState());
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext status = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
+        assertEquals(ProcessingError.WALLET_ERROR, status.getError());
+        assertEquals(walletError + ": " + errorDescription, status.getErrorDescription());
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_WithUnsupportedAlg() throws Exception {
+        assertEncryptedJweRejected(
+                JWEConstants.ECDH_ES_A128KW, JWEConstants.A128GCM, null, "Unsupported JWE key management algorithm");
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_WithUnsupportedEnc() throws Exception {
+        assertEncryptedJweRejected(
+                JWEConstants.ECDH_ES, JWEConstants.A192GCM, null, "Unsupported JWE content encryption algorithm");
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_WithInvalidKid() throws Exception {
+        assertEncryptedJweRejected(
+                JWEConstants.ECDH_ES,
+                JWEConstants.A128GCM,
+                "invalid-kid",
+                "does not match the encryption key advertised");
+    }
+
+    @Test
+    public void shouldRejectEncryptedResponse_MalformedJwe() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("response", "malformed"))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Encrypted response is not a compact JWE"));
+    }
+
+    private void assertEncryptedJweRejected(String alg, String enc, String overrideKid, String expectedMessage)
+            throws Exception {
+        // Retrieve an authorization request
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        // Build minimal encrypted response payload
+        var dcql = requestObject.getDcqlQuery();
+        String credentialId = dcql.getCredentials().getFirst().getId();
+        var vpTokenMap = Map.of(credentialId, List.of("sd-jwt-vp-token"));
+        String payload = JsonSerialization.writeValueAsString(Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap));
+
+        // Encrypt with requested variations
+        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
+        var encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        String kid = overrideKid == null ? encJwk.getKeyId() : overrideKid;
+        String encrypted = ECTestUtils.encryptMessage(payload, encKey, alg, enc, kid);
+
+        // Send OpenID4VP response
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("response", encrypted))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains(expectedMessage));
     }
 
     private ObjectNode getAuthConfig() {
