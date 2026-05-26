@@ -4,6 +4,7 @@ import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -72,8 +73,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     public OID4VPUserAuthEndpoint(KeycloakSession session, EventBuilder event) {
         super(session, event);
-        this.authorizationRequestService = new AuthorizationRequestService(session);
-        this.authorizationResponseService = new AuthorizationResponseService(session);
+        var dcqlCapabilities = DcqlCredentialCapabilities.createDefault();
+        this.authorizationRequestService = new AuthorizationRequestService(session, dcqlCapabilities);
+        this.authorizationResponseService = new AuthorizationResponseService(session, dcqlCapabilities);
     }
 
     @OPTIONS

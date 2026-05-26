@@ -7,7 +7,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
-import java.util.HashSet;
 import java.util.Set;
 import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
@@ -21,7 +20,9 @@ import org.keycloak.utils.StringUtil;
  */
 public final class DcqlPresentationValidator {
 
+    private static final String VP_ENVELOPE_CLAIM = "vp";
     private static final String VP_VERIFIABLE_CREDENTIAL_CLAIM = "verifiableCredential";
+    private static final String JWT_VC_CLAIM = "vc";
 
     private DcqlPresentationValidator() {}
 
@@ -109,8 +110,7 @@ public final class DcqlPresentationValidator {
             throw new VerificationException("Presented jwt_vc_json credential is missing required type claim");
         }
 
-        Set<String> presentedTypes = new HashSet<>();
-        typeNode.forEach(node -> presentedTypes.add(node.asText()));
+        Set<String> presentedTypes = VcJsonLdTypeExpander.expandTypes(vcPayload);
 
         boolean matches =
                 meta.getTypeValues().stream().anyMatch(requiredTypes -> presentedTypes.containsAll(requiredTypes));
@@ -156,21 +156,42 @@ public final class DcqlPresentationValidator {
         }
     }
 
-    private static JsonNode extractVcPayload(JsonNode vpPayload) throws VerificationException {
-        JsonNode verifiableCredentials = vpPayload.get(VP_VERIFIABLE_CREDENTIAL_CLAIM);
+    private static JsonNode extractVcPayload(JsonNode vpJwtPayload) throws VerificationException {
+        JsonNode vpEnvelope = resolveVpEnvelope(vpJwtPayload);
+        JsonNode verifiableCredentials = vpEnvelope.get(VP_VERIFIABLE_CREDENTIAL_CLAIM);
         if (verifiableCredentials == null || !verifiableCredentials.isArray() || verifiableCredentials.isEmpty()) {
             throw new VerificationException(
                     "Presented jwt_vc_json Verifiable Presentation is missing verifiableCredential");
         }
 
-        JsonNode firstCredential = verifiableCredentials.get(0);
-        if (firstCredential.isTextual()) {
-            return parseJwtPayload(firstCredential.asText());
+        return extractVcRoot(verifiableCredentials.get(0));
+    }
+
+    private static JsonNode resolveVpEnvelope(JsonNode vpJwtPayload) {
+        JsonNode vp = vpJwtPayload.get(VP_ENVELOPE_CLAIM);
+        if (vp != null && vp.isObject()) {
+            return vp;
         }
-        if (firstCredential.isObject()) {
-            return firstCredential;
+        return vpJwtPayload;
+    }
+
+    private static JsonNode extractVcRoot(JsonNode credentialEntry) throws VerificationException {
+        if (credentialEntry.isTextual()) {
+            return unwrapVcClaim(parseJwtPayload(credentialEntry.asText()));
+        }
+        if (credentialEntry.isObject()) {
+            return unwrapVcClaim(credentialEntry);
         }
 
         throw new VerificationException("Unsupported verifiableCredential entry in jwt_vc_json presentation");
+    }
+
+    /** W3C VC content in jwt_vc_json is carried under the {@code vc} claim of the JWT payload. */
+    private static JsonNode unwrapVcClaim(JsonNode jwtOrVcPayload) {
+        JsonNode vc = jwtOrVcPayload.get(JWT_VC_CLAIM);
+        if (vc != null && vc.isObject()) {
+            return vc;
+        }
+        return jwtOrVcPayload;
     }
 }

@@ -4,7 +4,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlPresentationValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -43,9 +43,15 @@ public class AuthorizationResponseService {
     public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
 
     private final KeycloakSession session;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
 
     public AuthorizationResponseService(KeycloakSession session) {
+        this(session, DcqlCredentialCapabilities.createDefault());
+    }
+
+    public AuthorizationResponseService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
+        this.dcqlCapabilities = dcqlCapabilities;
     }
 
     /**
@@ -135,8 +141,8 @@ public class AuthorizationResponseService {
 
         try {
             String vpToken = decodeIfBase64Url(parsedVpToken);
-            DcqlPresentationValidator.validatePresentation(
-                    authContext.getRequestObject().getDcqlQuery(), vpToken);
+            var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+            dcqlCapabilities.resolveForPresentation(dcqlQuery).validatePresentation(dcqlQuery, vpToken);
             return vpToken;
         } catch (VerificationException e) {
             logger.errorf(e, "Presented credential does not satisfy DCQL query");

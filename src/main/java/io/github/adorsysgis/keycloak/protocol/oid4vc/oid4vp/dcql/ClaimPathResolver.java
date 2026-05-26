@@ -8,7 +8,11 @@ import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 
 /**
- * Resolves DCQL claim paths against presented SD-JWT credentials (VC root, not VP wrapper).
+ * Resolves DCQL claim paths for presentation validation (VC root, not VP wrapper).
+ *
+ * <p><strong>Scope:</strong> Only JSON object property names ({@code List<String>} segments) are
+ * supported. OpenID4VP 1.0 Claims Path Pointers for JSON credentials also allow {@code null} array
+ * wildcards and non-negative integer array indexes; those are not modeled or resolved here yet.
  */
 public final class ClaimPathResolver {
 

@@ -7,6 +7,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
@@ -262,7 +263,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals("dc+sd-jwt", credentialQuery.getFormat());
         assertNotNull(
                 testFlowData.requestObject().getClientMetadata().getVpFormat().getDcSdJwt());
-        assertNotNull(
+        assertNull(
                 testFlowData.requestObject().getClientMetadata().getVpFormat().getJwtVcJson());
         assertAuthenticatingUser(opts, testFlowData.authCode());
     }
