@@ -108,7 +108,7 @@ For provider configuration (including examples for `keycloak.conf`, `KC_*` envir
 
 ### SdJwt authenticator configuration
 
-Deployment-facing `sd-jwt-authenticator` options (for example `clientIdScheme`, `queryLanguage`,
+Deployment-facing `sd-jwt-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
 `responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 

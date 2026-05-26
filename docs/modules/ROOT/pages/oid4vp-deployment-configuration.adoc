@@ -8,11 +8,11 @@ OpenID4VP authorization requests and validates responses.
 |===
 |Setting |Example |Purpose
 
-|`clientIdScheme`
+|`clientIdentifierPrefix`
 |`x509_hash`
 a|How `client_id` is built in authorization requests.
 The OpenID4VP client identifier prefixes recognized in this plugin's model are:
-`pre-registered`, `redirect_uri`, `entity_id`, `did`, `verifier_attestation`, `x509_san_dns`, `x509_san_uri`, and `x509_hash`.
+`redirect_uri`, `openid_federation`, `decentralized_identifier`, `verifier_attestation`, `x509_san_dns`, `x509_hash`, and `origin`.
 Only `x509_san_dns` (default in the authenticator UI) and `x509_hash` are implemented for building `client_id` here:
 `x509_san_dns` uses the Keycloak frontend hostname; `x509_hash` uses a hash derived from the configured `accessCertificate`.
 
@@ -53,7 +53,7 @@ Generic example authenticator configuration (realm JSON import format):
 ----
 {
   "config": {
-    "clientIdScheme": "x509_hash",
+    "clientIdentifierPrefix": "x509_hash",
     "queryLanguage": "dcql_query",
     "responseMode": "direct_post.jwt",
     "customUrlScheme": "openid4vp://",

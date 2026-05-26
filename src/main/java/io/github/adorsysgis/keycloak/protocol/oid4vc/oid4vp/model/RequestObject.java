@@ -10,8 +10,7 @@ import org.keycloak.representations.JsonWebToken;
  * Request object payload for OpenID4VP authorization requests (JAR).
  * <p>
  * Credential requirements are expressed via {@code dcql_query}. Client identification uses a
- * {@code client_id} value with a Client Identifier Prefix, not the draft-era
- * {@code client_id_scheme} parameter.
+ * {@code client_id} value with a Client Identifier Prefix.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-authorization-request">

@@ -95,14 +95,12 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
         SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
 
-        // client identifier prefix is conveyed only via client_id, not client_id_scheme
+        // Client Identifier Prefix is conveyed through client_id.
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
         ObjectNode requestPayload = JsonSerialization.readValue(jwsInput.getContent(), ObjectNode.class);
-        assertFalse(
-                requestPayload.has("client_id_scheme"),
-                "Signed request object must not contain draft-era client_id_scheme");
+        assertFalse(requestPayload.has("client_id_scheme"), "Signed request object must not contain client_id_scheme");
         assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
         assertEquals(ResponseMode.DIRECT_POST, requestObject.getResponseMode());
         assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());

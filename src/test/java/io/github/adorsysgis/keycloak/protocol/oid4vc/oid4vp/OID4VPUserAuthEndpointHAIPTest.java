@@ -95,15 +95,13 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         String accessCertificate = authConfig.get(ACCESS_CERTIFICATE_CONFIG).asText();
         X509Certificate cert = PemUtils.decodeCertificate(accessCertificate);
         String expectedClientId = "x509_hash:" + X509HashUtils.computeX509Hash(cert);
-        assertEquals(expectedClientId, clientIdParam, "Client ID should use x509_hash scheme");
+        assertEquals(expectedClientId, clientIdParam, "Client ID should use x509_hash prefix");
 
-        // client identifier prefix is conveyed only via client_id, not client_id_scheme
+        // Client Identifier Prefix is conveyed through client_id.
         assertEquals(expectedClientId, requestObject.getClientId());
         assertEquals(expectedClientId, requestObject.getIssuer());
         ObjectNode requestPayload = JsonSerialization.readValue(jwsInput.getContent(), ObjectNode.class);
-        assertFalse(
-                requestPayload.has("client_id_scheme"),
-                "Signed request object must not contain draft-era client_id_scheme");
+        assertFalse(requestPayload.has("client_id_scheme"), "Signed request object must not contain client_id_scheme");
 
         // Request object must use configured response mode
         assertEquals(ResponseMode.DIRECT_POST_JWT, requestObject.getResponseMode());

@@ -3,7 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
@@ -25,7 +25,7 @@ public class VerifierConfig {
 
     private final SdJwtAuthRequirements authRequirements;
 
-    private final ClientIdScheme clientIdScheme;
+    private final ClientIdentifierPrefix clientIdentifierPrefix;
     private final ResponseMode responseMode;
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
@@ -40,9 +40,9 @@ public class VerifierConfig {
         // TODO: Relocate these non-SD-JWT-specific configurations.
         //  They should normally not be exposed through SdJwtAuthenticatorFactory.
 
-        this.clientIdScheme = validateClientIdScheme(config.getOrDefault(
-                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG,
-                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT));
+        this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
+                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,
+                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT));
 
         this.responseMode = validateResponseMode(config.getOrDefault(
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
@@ -61,13 +61,15 @@ public class VerifierConfig {
         this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
     }
 
-    private static ClientIdScheme validateClientIdScheme(String clientIdScheme) {
+    private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
         try {
-            return ClientIdScheme.fromValue(clientIdScheme);
+            return ClientIdentifierPrefix.fromValue(clientIdentifierPrefix);
         } catch (IllegalArgumentException e) {
-            String defaultClientIdScheme = SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT;
-            logger.warnf("Invalid client ID scheme: %s. Defaulting to %s", clientIdScheme, defaultClientIdScheme);
-            return ClientIdScheme.fromValue(defaultClientIdScheme);
+            String defaultClientIdentifierPrefix = SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT;
+            logger.warnf(
+                    "Invalid client identifier prefix: %s. Defaulting to %s",
+                    clientIdentifierPrefix, defaultClientIdentifierPrefix);
+            return ClientIdentifierPrefix.fromValue(defaultClientIdentifierPrefix);
         }
     }
 
@@ -115,8 +117,8 @@ public class VerifierConfig {
         return authRequirements;
     }
 
-    public ClientIdScheme getClientIdScheme() {
-        return clientIdScheme;
+    public ClientIdentifierPrefix getClientIdentifierPrefix() {
+        return clientIdentifierPrefix;
     }
 
     public ResponseMode getResponseMode() {
