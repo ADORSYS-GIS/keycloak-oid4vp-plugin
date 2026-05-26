@@ -2,7 +2,9 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 
 /**
  * Data context for an OpenID4VP authorization session.
@@ -87,6 +89,12 @@ public class AuthorizationContext {
      */
     @JsonProperty("request_object_jwt")
     private String requestObjectJwt;
+
+    @JsonProperty("request_uri_method")
+    private RequestUriMethod requestUriMethod;
+
+    @JsonProperty("wallet_metadata")
+    private JsonNode walletMetadata;
 
     /**
      * An optional ephemeral key for encrypting responses.
@@ -208,6 +216,24 @@ public class AuthorizationContext {
 
     public AuthorizationContext setRequestObjectJwt(String requestObjectJwt) {
         this.requestObjectJwt = requestObjectJwt;
+        return this;
+    }
+
+    public RequestUriMethod getRequestUriMethod() {
+        return requestUriMethod;
+    }
+
+    public AuthorizationContext setRequestUriMethod(RequestUriMethod requestUriMethod) {
+        this.requestUriMethod = requestUriMethod;
+        return this;
+    }
+
+    public JsonNode getWalletMetadata() {
+        return walletMetadata;
+    }
+
+    public AuthorizationContext setWalletMetadata(JsonNode walletMetadata) {
+        this.walletMetadata = walletMetadata;
         return this;
     }
 
