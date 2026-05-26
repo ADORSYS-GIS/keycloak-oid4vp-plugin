@@ -4,6 +4,8 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -101,6 +103,31 @@ public class SdJwtAuthRequirements {
             requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
         }
         return requirements.build();
+    }
+
+    public boolean isVerifyIssuerClaim() {
+        return verifyIssuerClaim;
+    }
+
+    public String getIssuerPattern() {
+        return Pattern.quote("\"%s\"".formatted(keycloakIssuerURI));
+    }
+
+    /**
+     * Regex pattern for {@code vct} as required by the DCQL credential query (OpenID4VP §8.6).
+     */
+    public String getVctPatternForCredential(Credential credentialQuery) {
+        String vctPattern = vctPatternFromMeta(credentialQuery.getMeta());
+        return vctPattern != null ? vctPattern : expectedVctsPattern;
+    }
+
+    private String vctPatternFromMeta(Meta meta) {
+        if (meta == null || meta.getVctValues() == null || meta.getVctValues().isEmpty()) {
+            return null;
+        }
+        return meta.getVctValues().stream()
+                .map(vct -> Pattern.quote("\"" + vct + "\""))
+                .collect(Collectors.joining("|", "(", ")"));
     }
 
     public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
