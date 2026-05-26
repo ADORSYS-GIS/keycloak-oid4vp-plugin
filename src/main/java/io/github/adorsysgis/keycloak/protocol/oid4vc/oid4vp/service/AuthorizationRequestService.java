@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
@@ -43,6 +44,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.utils.SessionExpiration;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Dedicated service for creating OpenID4VP authorization requests for user authentication.
@@ -126,8 +128,11 @@ public class AuthorizationRequestService {
         // Build request object
         RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);
 
-        // Sign request object
-        String requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
+        // Sign request object initially, unless we know request_uri_method = post
+        String requestObjectJwt = null;
+        if (!RequestUriMethod.POST.equals(config.getRequestUriMethod())) {
+            requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
+        }
 
         // Build authorization request link
         String urlScheme = config.getAuthReqUrlScheme();
@@ -282,10 +287,49 @@ public class AuthorizationRequestService {
                 requestUriMethodQuery);
     }
 
-    public String signRequestObject(RequestObject requestObject, VerifierConfig config) {
+    private String signRequestObject(RequestObject requestObject, VerifierConfig config) {
         KeyWrapper signingKey = discoverSigningKey(config);
         X509Certificate certificate = resolveAccessCertificate(config, signingKey);
         return signRequestObject(requestObject, signingKey, certificate);
+    }
+
+    /**
+     * Finalizes authorization request given wallet-provided data.
+     */
+    public AuthorizationContext finalizeAuthorizationRequest(
+            VerifierConfig config,
+            AuthenticationSessionModel authSession,
+            AuthorizationContext authContext,
+            String walletNonce,
+            JsonNode walletMetadata) {
+
+        boolean contextChanged = false;
+        if (walletMetadata != null) {
+            authContext.setWalletMetadata(walletMetadata);
+            contextChanged = true;
+        }
+
+        RequestObject requestObject = authContext.getRequestObject();
+        boolean mustSign = false;
+
+        if (StringUtil.isNotBlank(walletNonce)) {
+            requestObject.setWalletNonce(walletNonce);
+            authContext.setRequestObject(requestObject);
+            mustSign = true;
+        }
+
+        String requestObjectJwt = authContext.getRequestObjectJwt();
+        if (requestObjectJwt == null || mustSign) {
+            requestObjectJwt = signRequestObject(requestObject, config);
+            authContext.setRequestObjectJwt(requestObjectJwt);
+            contextChanged = true;
+        }
+
+        if (contextChanged) {
+            new AuthenticationSessionStore(authSession).storeAuthorizationContext(authContext);
+        }
+
+        return authContext;
     }
 
     private String signRequestObject(RequestObject requestObject, KeyWrapper signingKey, X509Certificate certificate) {

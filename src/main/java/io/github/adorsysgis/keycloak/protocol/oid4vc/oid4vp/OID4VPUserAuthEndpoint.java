@@ -1,11 +1,12 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
+import static org.keycloak.common.util.UriUtils.checkUrl;
+
 import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -114,8 +115,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         AuthorizationContext authContext;
         try {
-            authContext =
-                    startAuthentication(clientId, null, new CodeChallengeDetails(codeChallenge, codeChallengeMethod));
+            authContext = startAuthentication(clientId, null,
+                    new CodeChallengeDetails(codeChallenge, codeChallengeMethod));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -138,6 +139,10 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public Response getSignedRequestObject(@PathParam("requestId") String requestId) {
         logger.debug("Resolving request URI to signed request object...");
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
+        if (RequestUriMethod.POST.equals(authorizationContext.getRequestUriMethod())) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST, "invalid_request_uri_method", "This request_uri requires HTTP POST"));
+        }
         String requestObjectJwt = authorizationContext.getRequestObjectJwt();
         return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
     }
@@ -171,42 +176,24 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 if (!parsedWalletMetadata.isObject()) {
                     throw new IllegalArgumentException("wallet_metadata must be a JSON object");
                 }
-            } catch (IOException e) {
+            } catch (IOException | IllegalArgumentException e) {
                 throw new BadRequestException(
                         errorResponse(
                                 Response.Status.BAD_REQUEST,
                                 OAuthErrorException.INVALID_REQUEST,
                                 "wallet_metadata is invalid"),
                         e);
-            } catch (IllegalArgumentException e) {
-                throw new BadRequestException(
-                        errorResponse(Response.Status.BAD_REQUEST, OAuthErrorException.INVALID_REQUEST, e.getMessage()),
-                        e);
             }
         }
 
-        String requestObjectJwt = authorizationContext.getRequestObjectJwt();
-        boolean contextChanged = false;
-        if (parsedWalletMetadata != null) {
-            authorizationContext.setWalletMetadata(parsedWalletMetadata);
-            contextChanged = true;
-        }
-        if (StringUtil.isNotBlank(walletNonce)) {
-            RequestObject requestObject = authorizationContext.getRequestObject();
-            requestObject.setWalletNonce(walletNonce);
-            authorizationContext.setRequestObject(requestObject);
+        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
 
-            AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-            VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
-            requestObjectJwt = authorizationRequestService.signRequestObject(requestObject, config);
-            authorizationContext.setRequestObjectJwt(requestObjectJwt);
-            contextChanged = true;
-        }
-        if (contextChanged) {
-            AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
-            new AuthenticationSessionStore(authSession).storeAuthorizationContext(authorizationContext);
-        }
-        return CorsService.open().add(Response.ok(requestObjectJwt, AUTH_REQ_JWT_MEDIA_TYPE));
+        authorizationContext = authorizationRequestService.finalizeAuthorizationRequest(
+                config, authSession, authorizationContext, walletNonce, parsedWalletMetadata);
+
+        return CorsService.open().add(Response.ok(authorizationContext.getRequestObjectJwt(), AUTH_REQ_JWT_MEDIA_TYPE));
     }
 
     private void validateRequestUriPostHeaders() {
@@ -221,10 +208,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     private void validateRequestUriPostScheme() {
         URI requestUri = session.getContext().getUri().getRequestUri();
-        String scheme = requestUri.getScheme();
-        String host = requestUri.getHost();
-        boolean loopback = "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host);
-        if (!"https".equalsIgnoreCase(scheme) && !(loopback && "http".equalsIgnoreCase(scheme))) {
+        try {
+            checkUrl(session.getContext().getRealm().getSslRequired(), requestUri.toString(), "request_uri");
+        } catch (IllegalArgumentException e) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
                     OAuthErrorException.INVALID_REQUEST,
@@ -266,8 +252,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                         String.format("State param must match requestId. requestId: %s, state: %s", requestId, state)));
             }
 
-            String walletErrorDescription =
-                    StringUtils.isBlank(errorDescription) ? error : String.format("%s: %s", error, errorDescription);
+            String walletErrorDescription = StringUtils.isBlank(errorDescription) ? error
+                    : String.format("%s: %s", error, errorDescription);
 
             authorizationContext
                     .setStatus(AuthorizationContextStatus.ERROR)
@@ -388,8 +374,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         try {
             authSession = this.recoverAuthenticationSession(transactionId);
-            authorizationContext =
-                    new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
+            authorizationContext = new AuthenticationSessionStore(authSession)
+                    .getAuthorizationContextByTransactionId(transactionId);
         } catch (IllegalArgumentException e) {
             throw new NotFoundException(
                     errorResponse(
@@ -427,8 +413,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authorizationContext;
         try {
             authSession = this.recoverAuthenticationSession(transactionId);
-            authorizationContext =
-                    new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
+            authorizationContext = new AuthenticationSessionStore(authSession)
+                    .getAuthorizationContextByTransactionId(transactionId);
         } catch (IllegalArgumentException e) {
             throw new NotFoundException(
                     errorResponse(
@@ -464,8 +450,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     "Authorization code verifier not valid"));
         }
 
-        AuthorizationContext responseContext =
-                new AuthorizationContext().setAuthorizationCode(authorizationContext.getAuthorizationCode());
+        AuthorizationContext responseContext = new AuthorizationContext()
+                .setAuthorizationCode(authorizationContext.getAuthorizationCode());
         return CorsService.forWebOrigins(authSession).add(Response.ok(responseContext));
     }
 
@@ -544,6 +530,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     /**
      * Decrypt response to authorization request.
+     *
      * @param encryptedResponse the assumed JWE encrypted response string
      * @param ephemeralKey the ephemeral key generated for the authentication session
      */

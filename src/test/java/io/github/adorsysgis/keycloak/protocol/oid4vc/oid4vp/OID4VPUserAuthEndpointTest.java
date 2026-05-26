@@ -8,6 +8,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Autho
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
@@ -20,7 +21,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Processing
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
@@ -29,12 +29,10 @@ import java.util.List;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
@@ -70,7 +68,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
-        assertTrue(uriInfo.getQueryParameters().getFirst("request_uri_method") == null);
+        assertNull(uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert full expected format
         String expectedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -184,11 +182,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldRejectRequestUriPost_WhenMethodIsNotPost() throws Exception {
         AuthorizationContext authContext = requestAuthorizationRequest();
         String authRequest = authContext.getAuthorizationRequest();
-        String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
-                .filter(p -> p.getName().equals("request_uri"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElseThrow();
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
 
         HttpPost httpPost = new HttpPost(requestUri);
         httpPost.setHeader(HttpHeaders.ACCEPT, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);

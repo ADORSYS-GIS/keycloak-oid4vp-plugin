@@ -24,12 +24,10 @@ import java.util.regex.Pattern;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -120,15 +118,17 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
     /** GET fallback to the request URI endpoint (RFC 9101 / Final 1.0 compatibility). */
     protected String resolveSignedRequestObjectWithGet(String authRequest) throws IOException {
-        String requestUri = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8).stream()
-                .filter(p -> p.getName().equals("request_uri"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing query param: request_uri"));
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
 
         HttpResponse response = httpClient.execute(new HttpGet(requestUri));
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
         return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+    }
+
+    protected HttpResponse resolveSignedRequestObjectWithGetResponse(String authRequest) throws IOException {
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
+
+        return httpClient.execute(new HttpGet(requestUri));
     }
 
     protected HttpResponse resolveSignedRequestObjectResponse(String authRequest) throws IOException {
@@ -138,19 +138,13 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
     protected HttpResponse resolveSignedRequestObjectResponse(
             String authRequest, String walletNonce, String walletMetadata, String acceptHeader) throws IOException {
-        List<NameValuePair> params = URLEncodedUtils.parse(authRequest, StandardCharsets.UTF_8);
-        String requestUri = params.stream()
-                .filter(p -> p.getName().equals("request_uri"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing query param: request_uri"));
-        String requestUriMethod = params.stream()
-                .filter(p -> p.getName().equals("request_uri_method"))
-                .map(NameValuePair::getValue)
-                .findFirst()
-                .orElse("get");
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
+        String requestUriMethod = getQueryParam(authRequest, "request_uri_method");
+        if (requestUriMethod == null) {
+            requestUriMethod = "get";
+        }
 
-        if ("post".equals(requestUriMethod)) {
+        if ("post".equalsIgnoreCase(requestUriMethod)) {
             HttpPost httpPost = new HttpPost(requestUri);
             if (acceptHeader != null) {
                 httpPost.setHeader(HttpHeaders.ACCEPT, acceptHeader);
@@ -169,6 +163,19 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         }
 
         return httpClient.execute(new HttpGet(requestUri));
+    }
+
+    protected String getQueryParam(String authRequest, String name) {
+        ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(authRequest));
+        return uriInfo.getQueryParameters().getFirst(name);
+    }
+
+    protected String getRequiredQueryParam(String authRequest, String name) {
+        String val = getQueryParam(authRequest, name);
+        if (val == null) {
+            throw new AssertionError("Missing query param: " + name);
+        }
+        return val;
     }
 
     /**
