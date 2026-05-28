@@ -6,10 +6,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtA
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -32,6 +34,9 @@ public class VerifierConfig {
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
     private final String registrationCertificate;
+    private final boolean requireCryptographicHolderBinding;
+    private final List<String> transactionDataRaw;
+    private final String verifierInfoConfig;
 
     public VerifierConfig(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting verifier config properties");
@@ -62,6 +67,20 @@ public class VerifierConfig {
                 validateX5CCertificate(config.get(SdJwtAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG));
 
         this.registrationCertificate = config.get(SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG);
+
+        this.requireCryptographicHolderBinding = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
+
+        this.transactionDataRaw =
+                TransactionDataSupport.parseConfigValue(config.get(SdJwtAuthenticatorFactory.TRANSACTION_DATA_CONFIG));
+
+        this.verifierInfoConfig = config.get(SdJwtAuthenticatorFactory.VERIFIER_INFO_CONFIG);
+
+        if (!transactionDataRaw.isEmpty() && !requireCryptographicHolderBinding) {
+            throw new IllegalStateException(
+                    "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
+        }
 
         // Collect authentication requirements
         this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
@@ -155,5 +174,24 @@ public class VerifierConfig {
 
     public String getRegistrationCertificate() {
         return registrationCertificate;
+    }
+
+    public boolean requireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding;
+    }
+
+    public List<String> getTransactionDataRaw() {
+        return transactionDataRaw;
+    }
+
+    public String getVerifierInfoConfig() {
+        return verifierInfoConfig;
+    }
+
+    /**
+     * Holder binding is required when configured or when transaction data is present.
+     */
+    public boolean effectiveRequireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding || !transactionDataRaw.isEmpty();
     }
 }

@@ -1,10 +1,16 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.List;
+import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -18,8 +24,10 @@ import org.keycloak.models.UserModel;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.SdJwtUtils;
+import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -48,6 +56,16 @@ public class SdJwtAuthenticator implements Authenticator {
      */
     public static final String VP_TOKEN_VALIDATED_KEY = "vp_token_validated";
 
+    public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY = "require_cryptographic_holder_binding";
+
+    public static final String TRANSACTION_DATA_WIRE_KEY = "transaction_data_wire";
+
+    public SdJwtAuthenticator() {}
+
+    public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
+        this();
+    }
+
     @Override
     public void authenticate(AuthenticationFlowContext context) {
         AuthenticationSessionModel authSession = context.getAuthenticationSession();
@@ -71,6 +89,14 @@ public class SdJwtAuthenticator implements Authenticator {
         SdJwtVP sdJwt = SdJwtVP.of(sdJwtToken);
         logger.debug("Resolving user from pipeline-validated SD-JWT presentation");
 
+        try {
+            validateTransactionData(authSession, sdJwt);
+        } catch (IllegalArgumentException e) {
+            logger.errorf(e, "Transaction data validation failed (authSession = %s)", correlationId(context));
+            failRejectingPresentedSdJwtToken(context, e.getMessage());
+            return;
+        }
+
         UserModel user = recoverAuthenticatingUser(context, sdJwt);
         if (user == null) {
             return;
@@ -92,6 +118,27 @@ public class SdJwtAuthenticator implements Authenticator {
         // No form action is relevant for this authenticator
     }
 
+    void validateTransactionData(AuthenticationSessionModel authSession, SdJwtVP sdJwt) {
+        String wireJson = authSession.getAuthNote(TRANSACTION_DATA_WIRE_KEY);
+        if (StringUtil.isBlank(wireJson)) {
+            return;
+        }
+
+        List<String> transactionDataWire;
+        try {
+            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid transaction_data session state", e);
+        }
+
+        Optional<KeyBindingJWT> keyBindingJwt = sdJwt.getKeyBindingJWT();
+        if (keyBindingJwt.isEmpty()) {
+            throw new IllegalArgumentException("Key Binding JWT required when transaction_data is requested");
+        }
+
+        ObjectNode kbPayload = keyBindingJwt.get().getPayload();
+        TransactionDataValidator.validate(transactionDataWire, kbPayload);
+    }
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
         logger.info("Recovering authenticating user");
 

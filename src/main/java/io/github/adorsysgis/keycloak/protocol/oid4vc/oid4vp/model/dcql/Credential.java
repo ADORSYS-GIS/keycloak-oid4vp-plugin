@@ -22,7 +22,6 @@ public class Credential {
 
     @JsonProperty("multiple")
     private Boolean multiple;
-
     @JsonProperty("require_cryptographic_holder_binding")
     private Boolean requireCryptographicHolderBinding;
 
@@ -73,7 +72,6 @@ public class Credential {
     public void setMultiple(Boolean multiple) {
         this.multiple = multiple;
     }
-
     public Boolean getRequireCryptographicHolderBinding() {
         return requireCryptographicHolderBinding;
     }
@@ -81,7 +79,6 @@ public class Credential {
     public void setRequireCryptographicHolderBinding(Boolean requireCryptographicHolderBinding) {
         this.requireCryptographicHolderBinding = requireCryptographicHolderBinding;
     }
-
     public boolean allowsMultiplePresentations() {
         return Boolean.TRUE.equals(multiple);
     }

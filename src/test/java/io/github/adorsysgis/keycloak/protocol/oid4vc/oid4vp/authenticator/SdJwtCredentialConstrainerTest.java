@@ -22,6 +22,15 @@ public class SdJwtCredentialConstrainerTest {
         assertDcqlQuery(query, queryMap);
     }
 
+    @Test
+    void testGenerateDcqlQueryWithoutHolderBinding() {
+        List<String> vcts = List.of("vct1");
+        List<String> claims = List.of("name");
+        QueryMap queryMap = new QueryMap(vcts, claims, false);
+        DcqlQuery query = constrainer.generateDcqlQuery(queryMap);
+        assertEquals(Boolean.FALSE, query.getCredentials().getFirst().getRequireCryptographicHolderBinding());
+    }
+
     public static void assertDcqlQuery(DcqlQuery query, QueryMap map) {
         assertEquals(1, query.getCredentials().size());
         Credential credential = query.getCredentials().getFirst();
