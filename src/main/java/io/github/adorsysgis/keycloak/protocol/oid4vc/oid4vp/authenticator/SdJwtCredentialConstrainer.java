@@ -37,6 +37,9 @@ public class SdJwtCredentialConstrainer {
         credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
+        if (!queryMap.requireCryptographicHolderBinding()) {
+            credential.setRequireCryptographicHolderBinding(false);
+        }
 
         CredentialSet credentialSet = new CredentialSet();
         credentialSet.setOptions(List.of(List.of(credential.getId())));
@@ -47,5 +50,10 @@ public class SdJwtCredentialConstrainer {
         return query;
     }
 
-    public record QueryMap(List<String> expectedVcts, List<String> requiredClaims) {}
+    public record QueryMap(
+            List<String> expectedVcts, List<String> requiredClaims, boolean requireCryptographicHolderBinding) {
+        public QueryMap(List<String> expectedVcts, List<String> requiredClaims) {
+            this(expectedVcts, requiredClaims, true);
+        }
+    }
 }

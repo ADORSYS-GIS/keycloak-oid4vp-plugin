@@ -55,6 +55,9 @@ public class RequestObject extends JsonWebToken {
     @JsonProperty("verifier_info")
     private List<VerifierInfo> verifierInfo;
 
+    @JsonProperty("transaction_data")
+    private List<String> transactionData;
+
     public String getState() {
         return state;
     }
@@ -160,6 +163,15 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setVerifierInfo(List<VerifierInfo> verifierInfo) {
         this.verifierInfo = verifierInfo;
+        return this;
+    }
+
+    public List<String> getTransactionData() {
+        return transactionData;
+    }
+
+    public RequestObject setTransactionData(List<String> transactionData) {
+        this.transactionData = transactionData;
         return this;
     }
 
