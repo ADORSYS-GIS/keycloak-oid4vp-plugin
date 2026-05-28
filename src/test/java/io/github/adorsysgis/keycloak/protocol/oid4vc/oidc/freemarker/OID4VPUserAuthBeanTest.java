@@ -14,10 +14,13 @@ import static org.mockito.ArgumentMatchers.nullable;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,13 +74,22 @@ public class OID4VPUserAuthBeanTest {
                 .when(oid4vp)
                 .checkClient(anyString());
 
+        Mockito.lenient()
+                .when(oid4vp.getAuthenticationProfilesForClient(TEST_CLIENT_ID))
+                .thenReturn(List.of(new AuthenticationProfile()
+                        .setId(AuthenticationProfile.DEFAULT_PROFILE_ID)
+                        .setDisplayCta(Map.of("en", AuthenticationProfile.DEFAULT_CTA))));
+
         // oid4vp.startAuthentication()
         AuthorizationContext authContext = new AuthorizationContext();
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
         Mockito.lenient()
                 .when(oid4vp.startAuthentication(
-                        eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), nullable(CodeChallengeDetails.class)))
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class)))
                 .thenReturn(authContext);
     }
 

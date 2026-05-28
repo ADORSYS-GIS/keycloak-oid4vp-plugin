@@ -2,13 +2,13 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.io.IOException;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -22,10 +22,10 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -54,6 +54,11 @@ public class SdJwtAuthenticator implements Authenticator {
      * The authenticating party presents a non-replayable SD-JWT token for authentication.
      */
     public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
+
+    /**
+     * Optional serialized profile credential requirement to use instead of legacy flat config.
+     */
+    public static final String CREDENTIAL_REQUIREMENT_KEY = "sdjwt_credential_requirement";
 
     public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
@@ -116,6 +121,18 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private SdJwtAuthRequirements getAuthenticationRequirements(AuthenticationFlowContext context) {
+        String credentialRequirement = context.getAuthenticationSession().getAuthNote(CREDENTIAL_REQUIREMENT_KEY);
+        if (StringUtil.isNotBlank(credentialRequirement)) {
+            try {
+                CredentialRequirement requirement =
+                        JsonSerialization.readValue(credentialRequirement, CredentialRequirement.class);
+                return new SdJwtAuthRequirements(
+                        context.getSession().getContext(), context.getAuthenticatorConfig(), requirement);
+            } catch (IOException e) {
+                throw new IllegalStateException("Invalid SD-JWT credential requirement auth note", e);
+            }
+        }
+
         return new SdJwtAuthRequirements(context.getSession().getContext(), context.getAuthenticatorConfig());
     }
 
@@ -176,29 +193,7 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private String readClaimFromCredential(SdJwtVP sdJwt, String claimName) {
-        JsonNode issuerSignedJwtPayload = sdJwt.getIssuerSignedJWT().getPayload();
-        JsonNode claim = issuerSignedJwtPayload.get(claimName);
-
-        if (claim == null) {
-            claim = readSelectivelyDisclosedClaim(sdJwt, claimName);
-        }
-
-        return claim != null ? claim.asText() : null;
-    }
-
-    private JsonNode readSelectivelyDisclosedClaim(SdJwtVP sdJwt, String claimName) {
-        for (String disclosure : sdJwt.getDisclosuresString()) {
-            try {
-                ArrayNode arrayNode = SdJwtUtils.decodeDisclosureString(disclosure);
-                if (arrayNode.size() == 3 && arrayNode.get(1).asText().equals(claimName)) {
-                    return arrayNode.get(2);
-                }
-            } catch (VerificationException e) {
-                logger.warnf(e, "Failed to decode disclosure string");
-            }
-        }
-
-        return null;
+        return SdJwtCredentialClaims.readClaim(sdJwt, claimName);
     }
 
     private static String correlationId(AuthenticationFlowContext context) {

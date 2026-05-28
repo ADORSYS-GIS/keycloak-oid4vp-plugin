@@ -41,6 +41,7 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
+import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -52,6 +53,8 @@ import org.keycloak.util.JsonSerialization;
 public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
+    public static final String DUAL_PROFILE_ID = "dual";
+    private static final String TEST_REALM_SD_JWT_AUTH_CONFIG_ID = "81d62be9-cf06-4718-8837-fdfb4727b20a";
 
     @Test
     public void shouldProduceAuthorizationRequests() throws Exception {
@@ -321,6 +324,37 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_WithDualCredentialProfile() throws Exception {
+        AuthenticatorConfigRepresentation originalConfig = getAuthenticatorConfig();
+        try {
+            AuthenticatorConfigRepresentation updatedConfig = getAuthenticatorConfig();
+            updatedConfig.getConfig().put("profiles", dualProfileConfigJson());
+            updatedConfig.getConfig().put("enforceRevocationStatus", "false");
+            updateAuthenticatorConfig(updatedConfig);
+
+            ApiFlowData apiFlow = startApiAuthorizationRequest(DUAL_PROFILE_ID);
+            assertEquals(DUAL_PROFILE_ID, apiFlow.authContext().getProfileId());
+
+            RequestObject requestObject =
+                    resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
+            assertEquals(2, requestObject.getDcqlQuery().getCredentials().size());
+            assertEquals(
+                    List.of("primary", "supporting"),
+                    requestObject.getDcqlQuery().getCredentials().stream()
+                            .map(credential -> credential.getId())
+                            .toList());
+
+            String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+            TestOpts opts =
+                    TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
+
+            testSuccessfulAuthentication(sdJwt, opts);
+        } finally {
+            updateAuthenticatorConfig(originalConfig);
+        }
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_OtherAcceptedVct() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_ALT, TEST_USER);
@@ -456,7 +490,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map does not match DCQL credential query");
+                "Presented vp_token map must contain exactly one token for credential");
     }
 
     @Test
@@ -605,5 +639,59 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
             testFailAuthentication_InvalidKbJwt(
                     null, invalidAud, null, null, "claim 'aud' does not match actual value");
         }
+    }
+
+    private AuthenticatorConfigRepresentation getAuthenticatorConfig() {
+        return getActiveTestRealmResource().flows().getAuthenticatorConfig(TEST_REALM_SD_JWT_AUTH_CONFIG_ID);
+    }
+
+    private void updateAuthenticatorConfig(AuthenticatorConfigRepresentation config) {
+        getActiveTestRealmResource().flows().updateAuthenticatorConfig(config.getId(), config);
+    }
+
+    private String dualProfileConfigJson() {
+        return """
+                [
+                  {
+                    "id": "default",
+                    "displayCta": { "en": "Sign in with a wallet" },
+                    "credentials": [
+                      {
+                        "id": "identity",
+                        "role": "primary",
+                        "vct": ["%s", "%s"],
+                        "claims": ["sub", "username"]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "%s",
+                    "displayCta": { "en": "Sign in with two credentials" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "vct": ["%s"],
+                        "claims": ["sub", "username"]
+                      },
+                      {
+                        "id": "supporting",
+                        "role": "supporting",
+                        "vct": ["%s"],
+                        "claims": ["username"],
+                        "trust": [{ "type": "self" }],
+                        "binding": [
+                          {
+                            "type": "claim_equals_primary_claim",
+                            "credentialClaim": "username",
+                            "primaryCredentialClaim": "username"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.formatted(
+                        VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT, DUAL_PROFILE_ID, VCT_CONFIG_DEFAULT, VCT_CONFIG_DEFAULT);
     }
 }

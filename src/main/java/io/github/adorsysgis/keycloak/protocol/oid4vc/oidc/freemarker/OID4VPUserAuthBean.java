@@ -16,6 +16,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.jboss.logging.Logger;
@@ -62,6 +64,16 @@ public class OID4VPUserAuthBean {
      * URL to trigger UI view for signing in with a wallet
      */
     public String getLoginUrl() {
+        return getLoginProfiles().stream()
+                .findFirst()
+                .map(LoginProfileBean::getLoginUrl)
+                .orElse(null);
+    }
+
+    /**
+     * URLs to trigger UI views for every configured wallet authentication profile.
+     */
+    public List<LoginProfileBean> getLoginProfiles() {
         URI currentUri = session.getContext().getUri().getRequestUri();
 
         // Read client ID
@@ -73,14 +85,20 @@ public class OID4VPUserAuthBean {
             oid4vp.checkClient(clientId);
         } catch (IllegalArgumentException e) {
             logger.debugf("Invalid client ID '%s' in OIDC URL. Not offering option for OpenID4VP login", clientId);
-            return null;
+            return List.of();
         }
 
-        // Build a new URI with the extra query parameter
-        return UriBuilder.fromUri(currentUri)
-                .replaceQueryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
-                .build()
-                .toString();
+        Locale locale = session.getContext().resolveLocale(null);
+        return oid4vp.getAuthenticationProfilesForClient(clientId).stream()
+                .map(profile -> new LoginProfileBean()
+                        .setId(profile.getId())
+                        .setDisplayName(profile.getDisplayCta(locale))
+                        .setLoginUrl(UriBuilder.fromUri(currentUri)
+                                .replaceQueryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
+                                .replaceQueryParam(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM, profile.getId())
+                                .build()
+                                .toString()))
+                .toList();
     }
 
     /**
@@ -117,8 +135,9 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        AuthorizationContext authContext = startOpenID4VPAuthentication(clientId, false);
-        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, true);
+        String profileId = params.getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM);
+        AuthorizationContext authContext = startOpenID4VPAuthentication(clientId, profileId, false);
+        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, profileId, true);
 
         // Convert authorization request to QR code (cross-device)
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
@@ -135,10 +154,14 @@ public class OID4VPUserAuthBean {
         return authContextBean;
     }
 
-    private AuthorizationContext startOpenID4VPAuthentication(String clientId, boolean enableSameDeviceResponse) {
+    private AuthorizationContext startOpenID4VPAuthentication(
+            String clientId, String profileId, boolean enableSameDeviceResponse) {
         // TODO: Generate and pass code challenge details for ownership binding and enhanced security in started subflow
         return oid4vp.startAuthentication(
-                clientId, new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse), null);
+                clientId,
+                profileId,
+                new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
+                null);
     }
 
     private String buildAuthStatusUrl(String transactionId) {
@@ -178,6 +201,40 @@ public class OID4VPUserAuthBean {
      * Track session data of OIDC authentication
      */
     public record OIDCAuthSession(String authSessionId, String loginActionUrl, boolean enableSameDeviceResponse) {}
+
+    public static class LoginProfileBean {
+
+        private String id;
+        private String displayName;
+        private String loginUrl;
+
+        public String getId() {
+            return id;
+        }
+
+        public LoginProfileBean setId(String id) {
+            this.id = id;
+            return this;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public LoginProfileBean setDisplayName(String displayName) {
+            this.displayName = displayName;
+            return this;
+        }
+
+        public String getLoginUrl() {
+            return loginUrl;
+        }
+
+        public LoginProfileBean setLoginUrl(String loginUrl) {
+            this.loginUrl = loginUrl;
+            return this;
+        }
+    }
 
     /**
      * Parameters for OpenID4VP authentication

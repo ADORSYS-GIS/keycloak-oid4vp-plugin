@@ -4,6 +4,7 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -30,8 +31,9 @@ public class SdJwtAuthRequirements {
 
     private static final Logger logger = Logger.getLogger(SdJwtAuthRequirements.class);
 
-    private final List<String> expectedVcts;
-    private final String expectedVctsPattern;
+    private List<String> expectedVcts;
+    private List<String> requiredClaims;
+    private String expectedVctsPattern;
     private final String keycloakIssuerURI;
 
     private final int kbJwtMaxAllowedAge;
@@ -49,6 +51,7 @@ public class SdJwtAuthRequirements {
 
         this.expectedVcts = parseMultiStr(config.getOrDefault(
                 SdJwtAuthenticatorFactory.VCT_CONFIG, SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT));
+        this.requiredClaims = List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
 
         this.kbJwtMaxAllowedAge = Integer.parseInt(config.getOrDefault(
                 SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG,
@@ -78,14 +81,22 @@ public class SdJwtAuthRequirements {
                 .collect(Collectors.joining("|", "(", ")"));
     }
 
+    public SdJwtAuthRequirements(
+            KeycloakContext context, AuthenticatorConfigModel authConfig, CredentialRequirement credentialRequirement) {
+        this(context, authConfig);
+        this.expectedVcts = credentialRequirement.getVct();
+        this.requiredClaims = credentialRequirement.getClaims();
+        this.expectedVctsPattern = expectedVcts.stream()
+                .map(vct -> Pattern.quote("\"" + vct + "\""))
+                .collect(Collectors.joining("|", "(", ")"));
+    }
+
     public List<String> getExpectedVcts() {
         return expectedVcts;
     }
 
     public List<String> getRequiredClaims() {
-        // A subject is required so we can recover the user by stable identifier
-        // A username is required so we can cross-check the presented user
-        return List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
+        return requiredClaims;
     }
 
     public boolean shouldEnforceRevocationStatus() {

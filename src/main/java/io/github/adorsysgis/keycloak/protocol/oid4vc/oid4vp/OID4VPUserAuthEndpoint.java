@@ -13,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
@@ -37,6 +38,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
 import java.security.interfaces.ECPrivateKey;
+import java.util.List;
 import java.util.Objects;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -74,6 +76,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public static final String AUTH_STATUS_PATH = "/status/{transactionId}";
     public static final String AUTH_CODE_PATH = "/code";
     public static final String AUTH_REQ_JWT_MEDIA_TYPE = "application/oauth-authz-req+jwt";
+    public static final String PROFILE_ID_PARAM = "profile_id";
 
     private final AuthorizationRequestService authorizationRequestService;
     private final AuthorizationResponseService authorizationResponseService;
@@ -98,6 +101,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAuthenticationRequest(
             @QueryParam(OAuth2Constants.CLIENT_ID) String clientId,
+            @QueryParam(PROFILE_ID_PARAM) String profileId,
             @QueryParam(OAuth2Constants.CODE_CHALLENGE) String codeChallenge,
             @QueryParam(OAuth2Constants.CODE_CHALLENGE_METHOD) String codeChallengeMethod) {
         logger.debug("Initiating user authentication over OpenID4VP...");
@@ -115,8 +119,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         AuthorizationContext authContext;
         try {
-            authContext =
-                    startAuthentication(clientId, null, new CodeChallengeDetails(codeChallenge, codeChallengeMethod));
+            authContext = startAuthentication(
+                    clientId, profileId, null, new CodeChallengeDetails(codeChallenge, codeChallengeMethod));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -294,8 +298,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to process the authorization response
         AuthenticationProcessor authProcessor = getAuthenticationProcessor();
+        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticationProfile profile = config.getProfileConfig().getProfile(authorizationContext.getProfileId());
+
         authorizationResponseService.processAuthorizationResponse(
-                responseObject, authorizationContext, authSession, authProcessor);
+                responseObject, authorizationContext, authSession, authProcessor, authConfig, profile);
 
         return walletResponse(authorizationContext);
     }
@@ -479,7 +487,10 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * Initializes OpenID4VP authentication and return authorization context
      */
     public AuthorizationContext startAuthentication(
-            String clientId, OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
+            String clientId,
+            String profileId,
+            OIDCAuthSession oidcAuthSession,
+            CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
         if (oidcAuthSession == null) {
@@ -491,14 +502,16 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthenticationSessionModel authSession = createAuthSession(client);
         AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
         VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config, authSession, oidcAuthSession, codeChallengeDetails);
+                config, profile, authSession, oidcAuthSession, codeChallengeDetails);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
-                .setTransactionId(authorizationContext.getTransactionId());
+                .setTransactionId(authorizationContext.getTransactionId())
+                .setProfileId(authorizationContext.getProfileId());
     }
 
     /**
@@ -516,6 +529,13 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         return client;
+    }
+
+    public List<AuthenticationProfile> getAuthenticationProfilesForClient(String clientId) {
+        checkClient(clientId);
+        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        return config.getProfileConfig().getProfilesForClient(clientId);
     }
 
     /**

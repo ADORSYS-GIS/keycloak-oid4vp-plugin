@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.keycloak.VCFormat;
@@ -20,6 +23,33 @@ public class SdJwtCredentialConstrainerTest {
         QueryMap queryMap = new QueryMap(vcts, claims);
         DcqlQuery query = constrainer.generateDcqlQuery(queryMap);
         assertDcqlQuery(query, queryMap);
+    }
+
+    @Test
+    void testGenerateMultiCredentialDcqlQuery() {
+        AuthenticationProfile profile = new AuthenticationProfile()
+                .setId("dual")
+                .setCredentials(List.of(
+                        new CredentialRequirement()
+                                .setId("main")
+                                .setRole(CredentialRole.PRIMARY)
+                                .setVct(List.of("main-vct"))
+                                .setClaims(List.of("sub", "username")),
+                        new CredentialRequirement()
+                                .setId("supporting")
+                                .setRole(CredentialRole.SUPPORTING)
+                                .setVct(List.of("supporting-vct"))
+                                .setClaims(List.of("username"))));
+
+        DcqlQuery query = constrainer.generateDcqlQuery(profile);
+
+        assertEquals(2, query.getCredentials().size());
+        assertEquals(
+                List.of("main", "supporting"),
+                query.getCredentials().stream().map(Credential::getId).toList());
+        assertEquals(
+                List.of("main", "supporting"),
+                query.getCredentialSets().getFirst().getOptions().getFirst());
     }
 
     public static void assertDcqlQuery(DcqlQuery query, QueryMap map) {

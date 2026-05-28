@@ -8,7 +8,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.Ep
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
@@ -19,6 +18,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -93,6 +93,7 @@ public class AuthorizationRequestService {
      */
     public AuthorizationContext createAuthorizationRequest(
             VerifierConfig config,
+            AuthenticationProfile profile,
             AuthenticationSessionModel authSession,
             OIDCAuthSession oidcAuthSession,
             CodeChallengeDetails codeChallengeParams) {
@@ -121,12 +122,8 @@ public class AuthorizationRequestService {
         String clientId = discoveryService.getClientId(config.getClientIdentifierPrefix(), certificate);
         ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
-        // Load query map for SD-JWT authentication
-        SdJwtAuthRequirements authReqs = config.getAuthRequirements();
-        var queryMap = authReqs.getSdJwtQueryMap();
-
         // Build request object
-        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);
+        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, profile, requestId);
 
         // Sign request object initially, unless we know request_uri_method = post
         String requestObjectJwt = null;
@@ -150,6 +147,7 @@ public class AuthorizationRequestService {
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink)
                 .setRequestUriMethod(config.getRequestUriMethod())
+                .setProfileId(profile.getId())
                 .setResponseCode(responseCode);
 
         // Attach code challenge details for ownership binding if present
@@ -230,7 +228,7 @@ public class AuthorizationRequestService {
             String clientId,
             ClientMetadata clientMetadata,
             VerifierConfig config,
-            SdJwtCredentialConstrainer.QueryMap queryMap,
+            AuthenticationProfile profile,
             String requestId) {
         String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
@@ -264,7 +262,7 @@ public class AuthorizationRequestService {
                 .setClientMetadata(clientMetadata)
                 .setVerifierInfo(verifierInfo);
 
-        requestObject.setDcqlQuery(constrainer.generateDcqlQuery(queryMap));
+        requestObject.setDcqlQuery(constrainer.generateDcqlQuery(profile));
 
         return requestObject;
     }
