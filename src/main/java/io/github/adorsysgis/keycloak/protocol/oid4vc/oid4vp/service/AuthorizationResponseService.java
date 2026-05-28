@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -13,6 +14,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -28,6 +30,7 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.MediaType;
 
 /**
@@ -82,6 +85,23 @@ public class AuthorizationResponseService {
         processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
         processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
 
+        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(
+                authContext.getRequestObject().getDcqlQuery().getCredentials());
+        processorSession.setAuthNote(
+                SdJwtAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
+                String.valueOf(requireCryptographicHolderBinding));
+
+        var transactionData = authContext.getRequestObject().getTransactionData();
+        if (transactionData != null && !transactionData.isEmpty()) {
+            try {
+                processorSession.setAuthNote(
+                        SdJwtAuthenticator.TRANSACTION_DATA_WIRE_KEY,
+                        JsonSerialization.writeValueAsString(transactionData));
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to persist transaction_data for validation", e);
+            }
+        }
+
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");
         try (Response response = authProcessor.authenticateOnly()) {
@@ -112,6 +132,10 @@ public class AuthorizationResponseService {
 
         // Persist authorization context
         store.storeAuthorizationContext(authContext);
+    }
+
+    private static boolean isCryptographicHolderBindingRequired(List<Credential> credentials) {
+        return credentials.stream().noneMatch(c -> Boolean.FALSE.equals(c.getRequireCryptographicHolderBinding()));
     }
 
     private static String getAuthenticatorErrorMessage(Response response) {

@@ -20,6 +20,9 @@ public class Credential {
     @JsonProperty("claim_sets")
     private List<List<String>> claimSets;
 
+    @JsonProperty("require_cryptographic_holder_binding")
+    private Boolean requireCryptographicHolderBinding;
+
     public String getId() {
         return id;
     }
@@ -58,5 +61,13 @@ public class Credential {
 
     public void setClaimSets(List<List<String>> claimSets) {
         this.claimSets = claimSets;
+    }
+
+    public Boolean getRequireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding;
+    }
+
+    public void setRequireCryptographicHolderBinding(Boolean requireCryptographicHolderBinding) {
+        this.requireCryptographicHolderBinding = requireCryptographicHolderBinding;
     }
 }
