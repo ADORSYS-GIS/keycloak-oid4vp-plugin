@@ -3,7 +3,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
@@ -27,8 +28,9 @@ public class VerifierConfig {
 
     private final SdJwtAuthRequirements authRequirements;
 
-    private final ClientIdScheme clientIdScheme;
+    private final ClientIdentifierPrefix clientIdentifierPrefix;
     private final ResponseMode responseMode;
+    private final RequestUriMethod requestUriMethod;
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
     private final String registrationCertificate;
@@ -45,13 +47,17 @@ public class VerifierConfig {
         // TODO: Relocate these non-SD-JWT-specific configurations.
         //  They should normally not be exposed through SdJwtAuthenticatorFactory.
 
-        this.clientIdScheme = validateClientIdScheme(config.getOrDefault(
-                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG,
-                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT));
+        this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
+                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,
+                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT));
 
         this.responseMode = validateResponseMode(config.getOrDefault(
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT));
+
+        this.requestUriMethod = validateRequestUriMethod(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG,
+                SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT));
 
         this.authReqUrlScheme = validateCustomUrlScheme(config.getOrDefault(
                 SdJwtAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG,
@@ -80,13 +86,15 @@ public class VerifierConfig {
         this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
     }
 
-    private static ClientIdScheme validateClientIdScheme(String clientIdScheme) {
+    private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
         try {
-            return ClientIdScheme.fromValue(clientIdScheme);
+            return ClientIdentifierPrefix.fromValue(clientIdentifierPrefix);
         } catch (IllegalArgumentException e) {
-            String defaultClientIdScheme = SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT;
-            logger.warnf("Invalid client ID scheme: %s. Defaulting to %s", clientIdScheme, defaultClientIdScheme);
-            return ClientIdScheme.fromValue(defaultClientIdScheme);
+            String defaultClientIdentifierPrefix = SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT;
+            logger.warnf(
+                    "Invalid client identifier prefix: %s. Defaulting to %s",
+                    clientIdentifierPrefix, defaultClientIdentifierPrefix);
+            return ClientIdentifierPrefix.fromValue(defaultClientIdentifierPrefix);
         }
     }
 
@@ -116,6 +124,16 @@ public class VerifierConfig {
         return customUrlScheme;
     }
 
+    private static RequestUriMethod validateRequestUriMethod(String requestUriMethod) {
+        try {
+            return RequestUriMethod.fromValue(requestUriMethod);
+        } catch (IllegalArgumentException e) {
+            String fallback = SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT;
+            logger.warnf("Invalid request URI method: %s. Defaulting to %s", requestUriMethod, fallback);
+            return RequestUriMethod.fromValue(fallback);
+        }
+    }
+
     private static X509Certificate validateX5CCertificate(String certificate) {
         if (StringUtils.isBlank(certificate)) {
             return null;
@@ -134,8 +152,8 @@ public class VerifierConfig {
         return authRequirements;
     }
 
-    public ClientIdScheme getClientIdScheme() {
-        return clientIdScheme;
+    public ClientIdentifierPrefix getClientIdentifierPrefix() {
+        return clientIdentifierPrefix;
     }
 
     public ResponseMode getResponseMode() {
@@ -144,6 +162,10 @@ public class VerifierConfig {
 
     public String getAuthReqUrlScheme() {
         return authReqUrlScheme;
+    }
+
+    public RequestUriMethod getRequestUriMethod() {
+        return requestUriMethod;
     }
 
     public X509Certificate getAccessCertificate() {

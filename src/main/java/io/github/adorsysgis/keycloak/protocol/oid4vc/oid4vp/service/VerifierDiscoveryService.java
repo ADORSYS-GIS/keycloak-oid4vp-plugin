@@ -1,7 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
@@ -90,19 +90,19 @@ public class VerifierDiscoveryService {
         return session.getContext().getUri().getBaseUri().getHost();
     }
 
-    public String getClientId(ClientIdScheme clientIdScheme, X509Certificate clientCertificate) {
-        // Compute client ID as per client ID scheme rules
+    public String getClientId(ClientIdentifierPrefix clientIdentifierPrefix, X509Certificate clientCertificate) {
+        // Compute client ID as per client identifier prefix rules
         String clientId =
-                switch (clientIdScheme) {
+                switch (clientIdentifierPrefix) {
                     case X509_SAN_DNS -> getDnsNameClientId();
                     case X509_HASH -> X509HashUtils.computeX509Hash(clientCertificate);
                     default ->
                         throw new IllegalArgumentException(
-                                "ClientIdScheme not supported: " + clientIdScheme.getValue());
+                                "ClientIdentifierPrefix not supported: " + clientIdentifierPrefix.getValue());
                 };
 
-        // Prefix with scheme as per spec requirements
-        return String.join(":", clientIdScheme.getValue(), clientId);
+        // Prefix with client identifier prefix as per spec requirements
+        return String.join(":", clientIdentifierPrefix.getValue(), clientId);
     }
 
     private SdGenericFormat getSdJwtVpFormat() {

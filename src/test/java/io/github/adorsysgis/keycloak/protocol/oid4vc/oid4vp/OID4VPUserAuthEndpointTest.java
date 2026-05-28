@@ -8,10 +8,11 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Autho
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -25,10 +26,14 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -37,6 +42,7 @@ import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * Testing OpenID4VP user authentication via presentation of SD-JWT identity credentials.
@@ -63,6 +69,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(authRequest);
         String clientIdParam = uriInfo.getQueryParameters().getFirst("client_id");
         assertNotNull(clientIdParam, "client_id parameter should be present");
+        assertNull(uriInfo.getQueryParameters().getFirst("request_uri_method"));
 
         // Assert full expected format
         String expectedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -93,13 +100,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         var queryMap = new QueryMap(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
         SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
-        // Request object must use expected default client ID scheme
-        assertEquals(ClientIdScheme.X509_SAN_DNS, requestObject.getClientIdScheme());
 
-        // Assert: client IDs are schemed across the request object
+        // Client Identifier Prefix is conveyed through client_id.
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
         assertEquals(schemedClientId, requestObject.getIssuer());
         assertEquals(schemedClientId, requestObject.getClientId());
+        ObjectNode requestPayload = JsonSerialization.readValue(jwsInput.getContent(), ObjectNode.class);
+        assertFalse(requestPayload.has("client_id_scheme"), "Signed request object must not contain client_id_scheme");
         assertEquals(getVerifierClientId(), new URI(requestObject.getResponseUri()).getHost());
         assertEquals(ResponseMode.DIRECT_POST, requestObject.getResponseMode());
         assertEquals(AUTH_REQ_JWT, jwsInput.getHeader().getType());
@@ -170,6 +177,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(
                 "Authorization context not found for request ID: unknown-request-uri", errorRep.getErrorDescription());
+    }
+
+    @Test
+    public void shouldRejectRequestUriPost_WhenMethodIsNotPost() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        String authRequest = authContext.getAuthorizationRequest();
+        String requestUri = getRequiredQueryParam(authRequest, "request_uri");
+
+        HttpPost httpPost = new HttpPost(requestUri);
+        httpPost.setHeader(HttpHeaders.ACCEPT, OID4VPUserAuthEndpoint.AUTH_REQ_JWT_MEDIA_TYPE);
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair("wallet_nonce", "nonce"))));
+        HttpResponse response = httpClient.execute(httpPost);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals("invalid_request_uri_method", errorRep.getError());
     }
 
     @Test

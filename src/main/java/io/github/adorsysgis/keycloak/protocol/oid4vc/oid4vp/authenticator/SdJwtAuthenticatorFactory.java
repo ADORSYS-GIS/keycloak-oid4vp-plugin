@@ -1,7 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
@@ -43,8 +44,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     public static final String ENFORCE_REVOCATION_STATUS_CONFIG = "enforceRevocationStatus";
     public static final boolean ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT = false;
 
-    public static final String CLIENT_ID_SCHEME_CONFIG = "clientIdScheme";
-    public static final String CLIENT_ID_SCHEME_CONFIG_DEFAULT = ClientIdScheme.X509_SAN_DNS.getValue();
+    public static final String CLIENT_IDENTIFIER_PREFIX_CONFIG = "clientIdentifierPrefix";
+    public static final String CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT = ClientIdentifierPrefix.X509_SAN_DNS.getValue();
 
     public static final String RESPONSE_MODE_CONFIG = "responseMode";
     public static final String RESPONSE_MODE_CONFIG_DEFAULT = ResponseMode.DIRECT_POST.getValue();
@@ -62,6 +63,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     public static final boolean REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT = true;
 
     public static final String VERIFIER_INFO_CONFIG = "verifierInfo";
+    public static final String REQUEST_URI_METHOD_CONFIG = "requestUriMethod";
+    public static final String REQUEST_URI_METHOD_CONFIG_DEFAULT = RequestUriMethod.GET.getValue();
 
     static {
         ProviderConfigProperty property;
@@ -111,11 +114,12 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
-        property.setName(CLIENT_ID_SCHEME_CONFIG);
-        property.setLabel("Client ID scheme");
+        property.setName(CLIENT_IDENTIFIER_PREFIX_CONFIG);
+        property.setLabel("Client Identifier Prefix");
         property.setType(ProviderConfigProperty.LIST_TYPE);
-        property.setDefaultValue(CLIENT_ID_SCHEME_CONFIG_DEFAULT);
-        property.setOptions(List.of(ClientIdScheme.X509_SAN_DNS.getValue(), ClientIdScheme.X509_HASH.getValue()));
+        property.setDefaultValue(CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT);
+        property.setOptions(
+                List.of(ClientIdentifierPrefix.X509_SAN_DNS.getValue(), ClientIdentifierPrefix.X509_HASH.getValue()));
         property.setHelpText("Client Identifier Prefix to conform to as per OpenID4VP spec.");
         configProperties.add(property);
 
@@ -149,6 +153,15 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setLabel("Registration certificate");
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setHelpText("Opaque string to advertise under the verifier_info claim of request objects.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(REQUEST_URI_METHOD_CONFIG);
+        property.setLabel("Request URI method");
+        property.setType(ProviderConfigProperty.LIST_TYPE);
+        property.setDefaultValue(REQUEST_URI_METHOD_CONFIG_DEFAULT);
+        property.setOptions(List.of(RequestUriMethod.GET.getValue(), RequestUriMethod.POST.getValue()));
+        property.setHelpText("How wallets should dereference request_uri (default get, optionally post).");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
