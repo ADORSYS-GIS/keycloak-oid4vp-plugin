@@ -139,6 +139,7 @@ public class SdJwtAuthenticator implements Authenticator {
         ObjectNode kbPayload = keyBindingJwt.get().getPayload();
         TransactionDataValidator.validate(transactionDataWire, kbPayload);
     }
+
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
         logger.info("Recovering authenticating user");
 
