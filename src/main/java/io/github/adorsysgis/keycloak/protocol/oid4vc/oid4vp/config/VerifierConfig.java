@@ -3,13 +3,16 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -26,12 +29,15 @@ public class VerifierConfig {
 
     private final SdJwtAuthRequirements authRequirements;
 
-    private final ClientIdScheme clientIdScheme;
+    private final ClientIdentifierPrefix clientIdentifierPrefix;
     private final ResponseMode responseMode;
     private final RequestUriMethod requestUriMethod;
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
     private final String registrationCertificate;
+    private final boolean requireCryptographicHolderBinding;
+    private final List<String> transactionDataRaw;
+    private final String verifierInfoConfig;
 
     public VerifierConfig(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting verifier config properties");
@@ -42,9 +48,9 @@ public class VerifierConfig {
         // TODO: Relocate these non-SD-JWT-specific configurations.
         //  They should normally not be exposed through SdJwtAuthenticatorFactory.
 
-        this.clientIdScheme = validateClientIdScheme(config.getOrDefault(
-                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG,
-                SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT));
+        this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
+                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,
+                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT));
 
         this.responseMode = validateResponseMode(config.getOrDefault(
                 SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
@@ -63,17 +69,33 @@ public class VerifierConfig {
 
         this.registrationCertificate = config.get(SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG);
 
+        this.requireCryptographicHolderBinding = Boolean.parseBoolean(config.getOrDefault(
+                SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
+                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
+
+        this.transactionDataRaw =
+                TransactionDataSupport.parseConfigValue(config.get(SdJwtAuthenticatorFactory.TRANSACTION_DATA_CONFIG));
+
+        this.verifierInfoConfig = config.get(SdJwtAuthenticatorFactory.VERIFIER_INFO_CONFIG);
+
+        if (!transactionDataRaw.isEmpty() && !requireCryptographicHolderBinding) {
+            throw new IllegalStateException(
+                    "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
+        }
+
         // Collect authentication requirements
         this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
     }
 
-    private static ClientIdScheme validateClientIdScheme(String clientIdScheme) {
+    private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
         try {
-            return ClientIdScheme.fromValue(clientIdScheme);
+            return ClientIdentifierPrefix.fromValue(clientIdentifierPrefix);
         } catch (IllegalArgumentException e) {
-            String defaultClientIdScheme = SdJwtAuthenticatorFactory.CLIENT_ID_SCHEME_CONFIG_DEFAULT;
-            logger.warnf("Invalid client ID scheme: %s. Defaulting to %s", clientIdScheme, defaultClientIdScheme);
-            return ClientIdScheme.fromValue(defaultClientIdScheme);
+            String defaultClientIdentifierPrefix = SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT;
+            logger.warnf(
+                    "Invalid client identifier prefix: %s. Defaulting to %s",
+                    clientIdentifierPrefix, defaultClientIdentifierPrefix);
+            return ClientIdentifierPrefix.fromValue(defaultClientIdentifierPrefix);
         }
     }
 
@@ -131,8 +153,12 @@ public class VerifierConfig {
         return authRequirements;
     }
 
-    public ClientIdScheme getClientIdScheme() {
-        return clientIdScheme;
+    public QuerySpec buildSdJwtQuerySpec() {
+        return authRequirements.getSdJwtQuerySpec(effectiveRequireCryptographicHolderBinding());
+    }
+
+    public ClientIdentifierPrefix getClientIdentifierPrefix() {
+        return clientIdentifierPrefix;
     }
 
     public ResponseMode getResponseMode() {
@@ -153,5 +179,24 @@ public class VerifierConfig {
 
     public String getRegistrationCertificate() {
         return registrationCertificate;
+    }
+
+    public boolean requireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding;
+    }
+
+    public List<String> getTransactionDataRaw() {
+        return transactionDataRaw;
+    }
+
+    public String getVerifierInfoConfig() {
+        return verifierInfoConfig;
+    }
+
+    /**
+     * Holder binding is required when configured or when transaction data is present.
+     */
+    public boolean effectiveRequireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding || !transactionDataRaw.isEmpty();
     }
 }

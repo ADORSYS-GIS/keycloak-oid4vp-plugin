@@ -18,9 +18,14 @@ public class SdJwtCredentialConstrainer {
      */
     public DcqlQuery generateDcqlQuery(QueryMap queryMap) {
         var spec = io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec.of(
-                queryMap.expectedVcts(), queryMap.requiredClaims());
+                queryMap.expectedVcts(), queryMap.requiredClaims(), queryMap.requireCryptographicHolderBinding());
         return delegate.buildQuery(spec);
     }
 
-    public record QueryMap(List<String> expectedVcts, List<String> requiredClaims) {}
+    public record QueryMap(
+            List<String> expectedVcts, List<String> requiredClaims, boolean requireCryptographicHolderBinding) {
+        public QueryMap(List<String> expectedVcts, List<String> requiredClaims) {
+            this(expectedVcts, requiredClaims, true);
+        }
+    }
 }

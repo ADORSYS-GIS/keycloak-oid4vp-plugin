@@ -1,7 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdScheme;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
@@ -44,8 +44,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     public static final String ENFORCE_REVOCATION_STATUS_CONFIG = "enforceRevocationStatus";
     public static final boolean ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT = false;
 
-    public static final String CLIENT_ID_SCHEME_CONFIG = "clientIdScheme";
-    public static final String CLIENT_ID_SCHEME_CONFIG_DEFAULT = ClientIdScheme.X509_SAN_DNS.getValue();
+    public static final String CLIENT_IDENTIFIER_PREFIX_CONFIG = "clientIdentifierPrefix";
+    public static final String CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT = ClientIdentifierPrefix.X509_SAN_DNS.getValue();
 
     public static final String RESPONSE_MODE_CONFIG = "responseMode";
     public static final String RESPONSE_MODE_CONFIG_DEFAULT = ResponseMode.DIRECT_POST.getValue();
@@ -57,6 +57,12 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
 
     public static final String REGISTRATION_CERTIFICATE_CONFIG = "registrationCertificate";
 
+    public static final String TRANSACTION_DATA_CONFIG = "transactionData";
+
+    public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG = "requireCryptographicHolderBinding";
+    public static final boolean REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT = true;
+
+    public static final String VERIFIER_INFO_CONFIG = "verifierInfo";
     public static final String REQUEST_URI_METHOD_CONFIG = "requestUriMethod";
     public static final String REQUEST_URI_METHOD_CONFIG_DEFAULT = RequestUriMethod.GET.getValue();
 
@@ -108,11 +114,12 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
-        property.setName(CLIENT_ID_SCHEME_CONFIG);
-        property.setLabel("Client ID scheme");
+        property.setName(CLIENT_IDENTIFIER_PREFIX_CONFIG);
+        property.setLabel("Client Identifier Prefix");
         property.setType(ProviderConfigProperty.LIST_TYPE);
-        property.setDefaultValue(CLIENT_ID_SCHEME_CONFIG_DEFAULT);
-        property.setOptions(List.of(ClientIdScheme.X509_SAN_DNS.getValue(), ClientIdScheme.X509_HASH.getValue()));
+        property.setDefaultValue(CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT);
+        property.setOptions(
+                List.of(ClientIdentifierPrefix.X509_SAN_DNS.getValue(), ClientIdentifierPrefix.X509_HASH.getValue()));
         property.setHelpText("Client Identifier Prefix to conform to as per OpenID4VP spec.");
         configProperties.add(property);
 
@@ -164,6 +171,31 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setDefaultValue(ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT);
         property.setHelpText(
                 "Reject credentials whose status indicates they are no longer valid as per the Token Status List mechanism.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG);
+        property.setLabel("Require cryptographic holder binding");
+        property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+        property.setDefaultValue(REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT);
+        property.setHelpText(
+                "When false, the DCQL query requests a presentation without Key Binding JWT and state binding is enforced on the response (OpenID4VP §5.3).");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(TRANSACTION_DATA_CONFIG);
+        property.setLabel("Transaction data (base64url)");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setHelpText(
+                "Optional comma-separated or newline-separated base64url-encoded transaction_data JSON objects (OpenID4VP §5.1). Requires holder binding. Entries are normalized before signing; use the signed request JWT payload as the canonical wire form when debugging hash mismatches. Only sha-256 is supported for transaction_data_hashes.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(VERIFIER_INFO_CONFIG);
+        property.setLabel("Verifier info (JSON array)");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setHelpText(
+                "Optional JSON array of verifier_info objects ({format, data, credential_ids?}) merged with the registration certificate entry.");
         configProperties.add(property);
     }
 

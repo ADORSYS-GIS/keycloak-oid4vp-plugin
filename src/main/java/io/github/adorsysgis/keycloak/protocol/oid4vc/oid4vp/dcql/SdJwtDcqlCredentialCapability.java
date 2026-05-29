@@ -25,7 +25,7 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
 
     @Override
     public DcqlQuery buildAuthorizationQuery(VerifierConfig config) {
-        return constrainer.buildQuery(config.getAuthRequirements().getSdJwtQuerySpec());
+        return constrainer.buildQuery(config.buildSdJwtQuerySpec());
     }
 
     @Override

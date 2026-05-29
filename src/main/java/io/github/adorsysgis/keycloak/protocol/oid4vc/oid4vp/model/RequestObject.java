@@ -7,7 +7,10 @@ import java.util.List;
 import org.keycloak.representations.JsonWebToken;
 
 /**
- * Request object payload for OpenID4VP Authorization Request.
+ * Request object payload for OpenID4VP authorization requests (JAR).
+ * <p>
+ * Credential requirements are expressed via {@code dcql_query}. Client identification uses a
+ * {@code client_id} value with a Client Identifier Prefix.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  * @see <a href="https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-authorization-request">
@@ -37,9 +40,6 @@ public class RequestObject extends JsonWebToken {
     @JsonProperty("client_id")
     private String clientId;
 
-    @JsonProperty("client_id_scheme")
-    private ClientIdScheme clientIdScheme;
-
     @JsonProperty("nonce")
     private String nonce;
 
@@ -54,6 +54,9 @@ public class RequestObject extends JsonWebToken {
 
     @JsonProperty("verifier_info")
     private List<VerifierInfo> verifierInfo;
+
+    @JsonProperty("transaction_data")
+    private List<String> transactionData;
 
     public String getState() {
         return state;
@@ -118,15 +121,6 @@ public class RequestObject extends JsonWebToken {
         return this;
     }
 
-    public ClientIdScheme getClientIdScheme() {
-        return clientIdScheme;
-    }
-
-    public RequestObject setClientIdScheme(ClientIdScheme clientIdScheme) {
-        this.clientIdScheme = clientIdScheme;
-        return this;
-    }
-
     public String getNonce() {
         return nonce;
     }
@@ -169,6 +163,15 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setVerifierInfo(List<VerifierInfo> verifierInfo) {
         this.verifierInfo = verifierInfo;
+        return this;
+    }
+
+    public List<String> getTransactionData() {
+        return transactionData;
+    }
+
+    public RequestObject setTransactionData(List<String> transactionData) {
+        this.transactionData = transactionData;
         return this;
     }
 

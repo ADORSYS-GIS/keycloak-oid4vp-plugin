@@ -56,9 +56,14 @@ public class SdJwtCredentialConstrainer implements CredentialConstrainer<SdJwtCr
             List<String> vctValues, List<List<String>> claimPaths, Boolean requireCryptographicHolderBinding) {
 
         public static QuerySpec of(List<String> vctValues, List<String> flatClaimNames) {
+            return of(vctValues, flatClaimNames, true);
+        }
+
+        public static QuerySpec of(
+                List<String> vctValues, List<String> flatClaimNames, boolean requireCryptographicHolderBinding) {
             List<List<String>> paths =
                     flatClaimNames.stream().map(name -> List.of(name)).toList();
-            return new QuerySpec(vctValues, paths, true);
+            return new QuerySpec(vctValues, paths, requireCryptographicHolderBinding);
         }
     }
 }

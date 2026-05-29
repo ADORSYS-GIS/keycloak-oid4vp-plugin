@@ -19,6 +19,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
@@ -250,7 +251,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                         "Wallet error response must not include VP response parameters"));
             }
             try {
-                validateResponseState(requestId, state);
+                validateResponseState(state, authorizationContext, requestId);
             } catch (IllegalArgumentException e) {
                 throw new BadRequestException(
                         errorResponse(
@@ -284,7 +285,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     ? new ResponseObject(vpToken, state)
                     : decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
 
-            validateResponseState(requestId, responseObject.getState());
+            validateResponseState(responseObject.getState(), authorizationContext, requestId);
         } catch (IllegalArgumentException | JsonProcessingException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -300,13 +301,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 responseObject, authorizationContext, authSession, authProcessor);
 
         return walletResponse(authorizationContext);
-    }
-
-    private void validateResponseState(String requestId, String state) {
-        if (StringUtils.isNotBlank(state) && !requestId.equals(state)) {
-            throw new IllegalArgumentException(
-                    String.format("State param must match requestId. requestId: %s, state: %s", requestId, state));
-        }
     }
 
     private void persistWalletErrorResponse(
@@ -578,6 +572,11 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         var errorResponse = new OAuth2ErrorRepresentation(error, errorDescription);
         return CorsService.open()
                 .add(Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON));
+    }
+
+    private void validateResponseState(String state, AuthorizationContext authorizationContext, String requestId) {
+        ResponseStateValidator.validate(
+                state, authorizationContext.getRequestObject().getDcqlQuery(), requestId);
     }
 
     /**

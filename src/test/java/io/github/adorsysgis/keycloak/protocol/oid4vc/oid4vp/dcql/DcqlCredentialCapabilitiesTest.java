@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import java.util.List;
@@ -17,9 +16,7 @@ class DcqlCredentialCapabilitiesTest {
     void defaultRegistryBuildsSdJwtAuthorizationQuery() {
         var capabilities = DcqlCredentialCapabilities.createDefault();
         VerifierConfig config = Mockito.mock(VerifierConfig.class);
-        SdJwtAuthRequirements authRequirements = Mockito.mock(SdJwtAuthRequirements.class);
-        Mockito.when(config.getAuthRequirements()).thenReturn(authRequirements);
-        Mockito.when(authRequirements.getSdJwtQuerySpec())
+        Mockito.when(config.buildSdJwtQuerySpec())
                 .thenReturn(
                         SdJwtCredentialConstrainer.QuerySpec.of(List.of("https://example.com/vct"), List.of("sub")));
 
