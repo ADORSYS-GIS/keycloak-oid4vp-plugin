@@ -8,15 +8,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
@@ -30,7 +31,6 @@ import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakUriInfo;
 import org.keycloak.models.RealmModel;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -79,8 +79,7 @@ public class OID4VPUserAuthBeanTest {
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
         Mockito.lenient()
-                .when(oid4vp.startAuthentication(
-                        eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), nullable(CodeChallengeDetails.class)))
+                .when(oid4vp.startAuthentication(eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), any()))
                 .thenReturn(authContext);
     }
 
@@ -128,19 +127,13 @@ public class OID4VPUserAuthBeanTest {
     }
 
     @Test
-    public void shouldForwardPkceParamsFromOidcQuery() {
-        String codeChallenge = "test-code-challenge";
-        OID4VPUserAuthBean bean = createTestBeanWithPkce(codeChallenge, OAuth2Constants.PKCE_METHOD_S256);
+    public void shouldNotReadPkceParamsFromOidcQuery() {
+        OID4VPUserAuthBean bean = createTestBeanWithPkce("test-code-challenge", OAuth2Constants.PKCE_METHOD_S256);
 
         bean.getAuthContext();
 
-        ArgumentCaptor<CodeChallengeDetails> captor = ArgumentCaptor.forClass(CodeChallengeDetails.class);
         verify(oid4vp, atLeastOnce())
-                .startAuthentication(eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), captor.capture());
-
-        assertTrue(captor.getAllValues().stream().allMatch(details -> codeChallenge.equals(details.codeChallenge())));
-        assertTrue(captor.getAllValues().stream()
-                .allMatch(details -> OAuth2Constants.PKCE_METHOD_S256.equals(details.codeChallengeMethod())));
+                .startAuthentication(eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), isNull());
     }
 
     private OID4VPUserAuthBean createTestBean() {

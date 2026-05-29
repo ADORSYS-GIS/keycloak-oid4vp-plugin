@@ -148,18 +148,14 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
             return failOnInvalidCode(authSession, "Authorization code was not issued for this OIDC session");
         }
 
-        // Enforce PKCE continuity when PKCE is present on the wrapped OIDC authorization request.
         String parentCodeChallenge = authSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
         String parentCodeChallengeMethod = authSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
-        if (parentCodeChallenge != null || parentCodeChallengeMethod != null) {
-            String issuedCodeChallenge = result.getClientSession().getNote(OAuth2Constants.CODE_CHALLENGE);
-            String issuedCodeChallengeMethod = result.getClientSession().getNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
+        String issuedCodeChallenge = result.getClientSession().getNote(OAuth2Constants.CODE_CHALLENGE);
+        String issuedCodeChallengeMethod = result.getClientSession().getNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
 
-            if (!Objects.equals(parentCodeChallenge, issuedCodeChallenge)
-                    || !Objects.equals(parentCodeChallengeMethod, issuedCodeChallengeMethod)) {
-                return failOnInvalidCode(
-                        authSession, "Authorization code PKCE binding does not match this OIDC session");
-            }
+        if (!Objects.equals(parentCodeChallenge, issuedCodeChallenge)
+                || !Objects.equals(parentCodeChallengeMethod, issuedCodeChallengeMethod)) {
+            return failOnInvalidCode(authSession, "Authorization code PKCE binding does not match this OIDC session");
         }
 
         // Attach authenticated user to OIDC sessions

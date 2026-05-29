@@ -611,30 +611,24 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     private CodeChallengeDetails resolveCodeChallengeDetails(
             OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
-        if (codeChallengeDetails != null
-                && StringUtil.isNotBlank(codeChallengeDetails.codeChallenge())
-                && StringUtil.isNotBlank(codeChallengeDetails.codeChallengeMethod())) {
-            return codeChallengeDetails;
+        if (oidcAuthSession != null && StringUtil.isNotBlank(oidcAuthSession.authSessionId())) {
+            AuthenticationSessionModel parentAuthSession =
+                    getAuthSession(oidcAuthSession.authSessionId()).orElse(null);
+            if (parentAuthSession == null) {
+                return null;
+            }
+
+            String codeChallenge = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
+            String codeChallengeMethod = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
+
+            if (StringUtil.isBlank(codeChallenge) || StringUtil.isBlank(codeChallengeMethod)) {
+                return null;
+            }
+
+            return new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
         }
 
-        if (oidcAuthSession == null || StringUtil.isBlank(oidcAuthSession.authSessionId())) {
-            return codeChallengeDetails;
-        }
-
-        AuthenticationSessionModel parentAuthSession =
-                getAuthSession(oidcAuthSession.authSessionId()).orElse(null);
-        if (parentAuthSession == null) {
-            return codeChallengeDetails;
-        }
-
-        String codeChallenge = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
-        String codeChallengeMethod = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
-
-        if (StringUtil.isBlank(codeChallenge) || StringUtil.isBlank(codeChallengeMethod)) {
-            return codeChallengeDetails;
-        }
-
-        return new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
+        return codeChallengeDetails;
     }
 
     @Override

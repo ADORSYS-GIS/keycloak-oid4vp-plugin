@@ -29,8 +29,10 @@ import org.jsoup.nodes.Element;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.OAuthErrorException;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventType;
+import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 
 /**
@@ -133,6 +135,27 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         // Authentication is expected to fail because this auth code was not issued upon OpenID4VP authentication
         shouldFailAuthenticationWithAltAuthCode(
                 authCode, "Authorization code was not issued upon OpenID4VP authentication");
+    }
+
+    @Test
+    public void shouldRejectApiCodeRedemption_ForWrappedOidcFlow() throws Exception {
+        FormData formData = getFreshOid4vpFormActionUrl();
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        TestOpts opts =
+                TestOpts.getDefault().setAuthContext(formData.authContext()).setShouldRetrieveAccessToken(false);
+        testSuccessfulAuthenticationVerbose(sdJwt, opts);
+
+        String codeVerifier = PkceUtils.generateCodeVerifier();
+        HttpResponse redemptionResponse =
+                redeemAuthorizationCodeResponse(formData.authContext().getTransactionId(), codeVerifier);
+        assertEquals(
+                HttpStatus.SC_BAD_REQUEST, redemptionResponse.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription()
+                .contains("Authorization code redemption is not configured for this flow"));
     }
 
     @Test

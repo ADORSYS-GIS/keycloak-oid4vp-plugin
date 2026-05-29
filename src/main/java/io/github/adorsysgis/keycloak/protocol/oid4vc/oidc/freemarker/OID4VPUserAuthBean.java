@@ -9,7 +9,6 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
 import jakarta.ws.rs.core.UriBuilder;
@@ -137,14 +136,8 @@ public class OID4VPUserAuthBean {
     }
 
     private AuthorizationContext startOpenID4VPAuthentication(String clientId, boolean enableSameDeviceResponse) {
-        var params = session.getContext().getUri().getQueryParameters();
-        CodeChallengeDetails codeChallengeDetails = new CodeChallengeDetails(
-                params.getFirst(OAuth2Constants.CODE_CHALLENGE),
-                params.getFirst(OAuth2Constants.CODE_CHALLENGE_METHOD));
         return oid4vp.startAuthentication(
-                clientId,
-                new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
-                codeChallengeDetails);
+                clientId, new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse), null);
     }
 
     private String buildAuthStatusUrl(String transactionId) {
