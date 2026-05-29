@@ -27,7 +27,7 @@ public class SdJwtCredentialConstrainer {
                 .map(claimName -> {
                     Claim claim = new Claim();
                     claim.setId(UUID.randomUUID().toString());
-                    claim.setPath(List.of(claimName));
+                    claim.setPath(List.<Object>of(claimName));
                     return claim;
                 })
                 .toList();

@@ -9,7 +9,7 @@ public class Claim {
     private String id;
 
     @JsonProperty("path")
-    private List<String> path;
+    private List<Object> path;
 
     @JsonProperty("values")
     private List<Object> values;
@@ -22,11 +22,11 @@ public class Claim {
         this.id = id;
     }
 
-    public List<String> getPath() {
+    public List<Object> getPath() {
         return path;
     }
 
-    public void setPath(List<String> path) {
+    public void setPath(List<Object> path) {
         this.path = path;
     }
 

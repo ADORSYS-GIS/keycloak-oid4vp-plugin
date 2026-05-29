@@ -22,9 +22,11 @@ public class DcqlSatisfactionValidator {
 
     public void validate(List<PresentedCredential> presentations, DcqlQuery dcqlQuery)
             throws VpTokenValidationException {
+        DcqlQueryRules.validateVpTokenStructure(presentations, dcqlQuery, VpTokenValidationException.Phase.DCQL);
+
         Map<String, PresentedCredential> presentedById = new HashMap<>();
         for (PresentedCredential presented : presentations) {
-            presentedById.put(presented.credentialQueryId(), presented);
+            presentedById.putIfAbsent(presented.credentialQueryId(), presented);
         }
 
         if (!DcqlQueryRules.usesCredentialSets(dcqlQuery)) {
@@ -45,7 +47,7 @@ public class DcqlSatisfactionValidator {
     private void validateCredentialQuery(SdJwtVP presentation, Credential credentialQuery)
             throws VpTokenValidationException {
         validateFormat(credentialQuery);
-        validateMeta(presentation, credentialQuery.getMeta());
+        validateMeta(presentation, credentialQuery);
         validateClaims(presentation, credentialQuery);
     }
 
@@ -62,9 +64,12 @@ public class DcqlSatisfactionValidator {
         }
     }
 
-    private void validateMeta(SdJwtVP presentation, Meta meta) throws VpTokenValidationException {
+    private void validateMeta(SdJwtVP presentation, Credential credentialQuery) throws VpTokenValidationException {
+        Meta meta = credentialQuery.getMeta();
         if (meta == null || meta.getVctValues() == null || meta.getVctValues().isEmpty()) {
-            return;
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL,
+                    "DCQL credential query is missing required meta.vct_values for SD-JWT format");
         }
 
         String presentedVct = readScalarClaim(presentation, CLAIM_NAME_VCT);

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -54,11 +55,14 @@ public final class ClaimsPathProcessor {
                 VpTokenValidationException.Phase.DCQL, "Unsupported claims path pointer component: " + component);
     }
 
-    private static List<JsonNode> selectObjectKey(List<JsonNode> current, String key) {
+    private static List<JsonNode> selectObjectKey(List<JsonNode> current, String key)
+            throws VpTokenValidationException {
         List<JsonNode> next = new ArrayList<>();
         for (JsonNode node : current) {
             if (!node.isObject()) {
-                continue;
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL,
+                        "Claims path pointer expected an object at the current selection");
             }
             JsonNode child = node.get(key);
             if (child != null) {
@@ -101,17 +105,60 @@ public final class ClaimsPathProcessor {
 
     /**
      * Adapts a DCQL {@code path} from {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim}
-     * to the mixed components expected by {@link #process}.
-     *
-     * <p>Today {@code Claim.path} is {@code List<String>} because our DCQL schemas only use object-key
-     * segments. OpenID4VP §7.1 also allows integers (array indices) and {@code null} (all array elements),
-     * e.g. {@code ["address", null, "street_address"]}. {@link #process} already supports those types.
-     *
-     * <p>If {@code Claim.path} is widened to deserialize mixed JSON array elements, update this mapper to
-     * translate numeric indices and {@code null} entries—not only {@link List#copyOf} of strings.
+     * to the mixed components expected by {@link #process} (OpenID4VP §7.1).
      */
-    public static List<Object> toPathComponents(List<String> path) {
-        return List.copyOf(path);
+    public static List<Object> toPathComponents(List<Object> path) throws VpTokenValidationException {
+        if (path == null || path.isEmpty()) {
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "DCQL claim query is missing path");
+        }
+
+        List<Object> components = new ArrayList<>(path.size());
+        for (Object component : path) {
+            components.add(normalizePathComponent(component));
+        }
+        return Collections.unmodifiableList(components);
+    }
+
+    private static Object normalizePathComponent(Object component) throws VpTokenValidationException {
+        if (component == null) {
+            return null;
+        }
+        if (component instanceof String key) {
+            if (key.isEmpty()) {
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL,
+                        "Claims path pointer object key must be a non-empty string");
+            }
+            return key;
+        }
+        if (component instanceof Integer index) {
+            return normalizeArrayIndex(index);
+        }
+        if (component instanceof Long index) {
+            return normalizeArrayIndex(index);
+        }
+        if (component instanceof Number number) {
+            if (number.doubleValue() != Math.floor(number.doubleValue()) || number.longValue() < 0) {
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL, "Claims path index must be a non-negative integer");
+            }
+            if (number.longValue() > Integer.MAX_VALUE) {
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL, "Claims path index is out of range");
+            }
+            return number.intValue();
+        }
+        throw new VpTokenValidationException(
+                VpTokenValidationException.Phase.DCQL, "Unsupported claims path pointer component: " + component);
+    }
+
+    private static int normalizeArrayIndex(long index) throws VpTokenValidationException {
+        if (index < 0 || index > Integer.MAX_VALUE) {
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL, "Claims path index must be a non-negative integer");
+        }
+        return (int) index;
     }
 
     /**
