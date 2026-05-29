@@ -86,12 +86,19 @@ public class DcqlSatisfactionValidator {
 
     private void validateClaims(SdJwtVP presentation, Credential credentialQuery) throws VpTokenValidationException {
         List<Claim> claims = credentialQuery.getClaims();
+        boolean hasClaimSets = credentialQuery.getClaimSets() != null
+                && !credentialQuery.getClaimSets().isEmpty();
+
         if (claims == null || claims.isEmpty()) {
+            if (hasClaimSets) {
+                throw new VpTokenValidationException(
+                        VpTokenValidationException.Phase.DCQL,
+                        "DCQL claim_sets MUST NOT be present when claims is absent");
+            }
             return;
         }
 
-        if (credentialQuery.getClaimSets() != null
-                && !credentialQuery.getClaimSets().isEmpty()) {
+        if (hasClaimSets) {
             validateClaimSets(presentation, credentialQuery, claims);
             return;
         }

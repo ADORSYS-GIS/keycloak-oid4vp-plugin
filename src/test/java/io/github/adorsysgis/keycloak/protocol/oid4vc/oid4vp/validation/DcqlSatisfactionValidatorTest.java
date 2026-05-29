@@ -56,6 +56,18 @@ class DcqlSatisfactionValidatorTest {
     }
 
     @Test
+    void rejectsClaimSetsWhenClaimsAbsent() {
+        Credential credentialQuery = credentialWithId("cred-1");
+        credentialQuery.setClaimSets(List.of(List.of("claim-1")));
+        SdJwtVP presentation = mockPresentationWithVctOnly();
+        DcqlQuery query = queryWithCredentials(credentialQuery);
+
+        PresentedCredential presented = new PresentedCredential("cred-1", credentialQuery, "vp", presentation);
+
+        assertValidationThrows(List.of(presented), query);
+    }
+
+    @Test
     void acceptsClaimWhenValuesMatch() {
         Credential credentialQuery = credentialWithClaim("username", List.of("alice"));
         SdJwtVP presentation = mockPresentationWithClaim("username", "alice");

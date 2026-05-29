@@ -2,7 +2,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -159,16 +158,5 @@ public final class ClaimsPathProcessor {
                     VpTokenValidationException.Phase.DCQL, "Claims path index must be a non-negative integer");
         }
         return (int) index;
-    }
-
-    /**
-     * Merges issuer-signed payload with selectively disclosed claims for path resolution.
-     */
-    public static ObjectNode credentialClaimsRoot(JsonNode issuerSignedPayload, JsonNode disclosedClaims) {
-        ObjectNode root = issuerSignedPayload.deepCopy();
-        if (disclosedClaims != null && disclosedClaims.isObject()) {
-            disclosedClaims.properties().forEach(entry -> root.set(entry.getKey(), entry.getValue()));
-        }
-        return root;
     }
 }
