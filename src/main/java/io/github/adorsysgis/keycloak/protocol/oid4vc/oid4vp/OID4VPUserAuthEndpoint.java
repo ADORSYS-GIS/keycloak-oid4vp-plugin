@@ -445,6 +445,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     "Authorization has not completed successfully"));
         }
 
+        // This endpoint is intended for API-initiated flows only. Wrapped OIDC flows must complete through
+        // oid4vp-auth-login to preserve browser session binding and continuity checks.
+        if (StringUtil.isNotBlank(authorizationContext.getParentAuthSessionId())) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Authorization code redemption is not configured for this flow"));
+        }
+
         if (StringUtil.isBlank(authorizationContext.getCodeChallenge())
                 || StringUtil.isBlank(authorizationContext.getCodeChallengeMethod())) {
             throw new BadRequestException(errorResponse(
