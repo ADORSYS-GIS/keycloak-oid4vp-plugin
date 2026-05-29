@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -28,6 +30,7 @@ import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakUriInfo;
 import org.keycloak.models.RealmModel;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -124,6 +127,22 @@ public class OID4VPUserAuthBeanTest {
         assertEquals(authContext1, authContext2);
     }
 
+    @Test
+    public void shouldForwardPkceParamsFromOidcQuery() {
+        String codeChallenge = "test-code-challenge";
+        OID4VPUserAuthBean bean = createTestBeanWithPkce(codeChallenge, OAuth2Constants.PKCE_METHOD_S256);
+
+        bean.getAuthContext();
+
+        ArgumentCaptor<CodeChallengeDetails> captor = ArgumentCaptor.forClass(CodeChallengeDetails.class);
+        verify(oid4vp, atLeastOnce())
+                .startAuthentication(eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), captor.capture());
+
+        assertTrue(captor.getAllValues().stream().allMatch(details -> codeChallenge.equals(details.codeChallenge())));
+        assertTrue(captor.getAllValues().stream()
+                .allMatch(details -> OAuth2Constants.PKCE_METHOD_S256.equals(details.codeChallengeMethod())));
+    }
+
     private OID4VPUserAuthBean createTestBean() {
         return createTestBean(TEST_CLIENT_ID, true);
     }
@@ -139,6 +158,19 @@ public class OID4VPUserAuthBeanTest {
         URI uri = uriBuilder.build();
         mockContextUri(uri);
 
+        String authSessionId = UUID.randomUUID().toString();
+        return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
+    }
+
+    private OID4VPUserAuthBean createTestBeanWithPkce(String codeChallenge, String codeChallengeMethod) {
+        UriBuilder uriBuilder = UriBuilder.fromUri("https://keycloak.org/")
+                .queryParam(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
+                .queryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
+                .queryParam(OAuth2Constants.CODE_CHALLENGE, codeChallenge)
+                .queryParam(OAuth2Constants.CODE_CHALLENGE_METHOD, codeChallengeMethod);
+
+        URI uri = uriBuilder.build();
+        mockContextUri(uri);
         String authSessionId = UUID.randomUUID().toString();
         return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
     }

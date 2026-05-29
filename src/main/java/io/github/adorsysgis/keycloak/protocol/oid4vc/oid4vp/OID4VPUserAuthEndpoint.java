@@ -476,9 +476,16 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String clientId, OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
+        CodeChallengeDetails effectiveCodeChallengeDetails =
+                resolveCodeChallengeDetails(oidcAuthSession, codeChallengeDetails);
+
+        // API-initiated authentication sessions must always include PKCE details.
         if (oidcAuthSession == null) {
-            // Require code challenge details for API-initiated authentication sessions
-            validateOwnershipBinding(codeChallengeDetails);
+            validateOwnershipBinding(effectiveCodeChallengeDetails);
+        } else if (effectiveCodeChallengeDetails != null
+                && StringUtil.isNotBlank(effectiveCodeChallengeDetails.codeChallenge())
+                && StringUtil.isNotBlank(effectiveCodeChallengeDetails.codeChallengeMethod())) {
+            validateOwnershipBinding(effectiveCodeChallengeDetails);
         }
 
         ClientModel client = checkClient(clientId);
@@ -488,7 +495,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config, authSession, oidcAuthSession, codeChallengeDetails);
+                config, authSession, oidcAuthSession, effectiveCodeChallengeDetails);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -591,6 +598,34 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeDetails.codeChallengeMethod())) {
             throw new IllegalArgumentException("Only S256 code challenge method is supported");
         }
+    }
+
+    private CodeChallengeDetails resolveCodeChallengeDetails(
+            OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
+        if (codeChallengeDetails != null
+                && StringUtil.isNotBlank(codeChallengeDetails.codeChallenge())
+                && StringUtil.isNotBlank(codeChallengeDetails.codeChallengeMethod())) {
+            return codeChallengeDetails;
+        }
+
+        if (oidcAuthSession == null || StringUtil.isBlank(oidcAuthSession.authSessionId())) {
+            return codeChallengeDetails;
+        }
+
+        AuthenticationSessionModel parentAuthSession =
+                getAuthSession(oidcAuthSession.authSessionId()).orElse(null);
+        if (parentAuthSession == null) {
+            return codeChallengeDetails;
+        }
+
+        String codeChallenge = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
+        String codeChallengeMethod = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
+
+        if (StringUtil.isBlank(codeChallenge) || StringUtil.isBlank(codeChallengeMethod)) {
+            return codeChallengeDetails;
+        }
+
+        return new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
     }
 
     @Override
