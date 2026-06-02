@@ -60,23 +60,6 @@ class DcqlQueryValidatorTest {
     }
 
     @Test
-    void rejectsVpWrapperPathsForJwtVcJson() {
-        Credential credential = new Credential();
-        credential.setId("cred-1");
-        credential.setFormat(VCFormat.JWT_VC);
-        Meta meta = new Meta();
-        meta.setTypeValues(List.of(List.of("VerifiableCredential", "IDCredential")));
-        credential.setMeta(meta);
-
-        Claim claim = new Claim();
-        claim.setId("claim-1");
-        claim.setPath(List.of("verifiableCredential", "credentialSubject", "given_name"));
-        credential.setClaims(List.of(claim));
-
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
-    }
-
-    @Test
     void rejectsInvalidCredentialIdSyntax() {
         Credential credential = sdJwtCredential("cred.1", List.of());
         assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
@@ -149,16 +132,6 @@ class DcqlQueryValidatorTest {
         var query = new SdJwtCredentialConstrainer()
                 .buildQuery(
                         SdJwtCredentialConstrainer.QuerySpec.of(List.of("https://example.com/vct"), List.of("sub")));
-        assertDoesNotThrow(() -> DcqlQueryValidator.validateQuery(query));
-    }
-
-    @Test
-    void acceptsValidJwtVcJsonCredentialQuery() {
-        var query = new JwtVcJsonCredentialConstrainer()
-                .buildQuery(new JwtVcJsonCredentialConstrainer.QuerySpec(
-                        List.of(List.of("VerifiableCredential", "IDCredential")),
-                        List.of(List.of("credentialSubject", "given_name")),
-                        null));
         assertDoesNotThrow(() -> DcqlQueryValidator.validateQuery(query));
     }
 

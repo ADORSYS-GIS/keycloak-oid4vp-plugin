@@ -3,8 +3,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import java.util.List;
 import org.keycloak.common.VerificationException;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
  * Format-specific DCQL support for authorization requests and presentation validation.
@@ -21,6 +23,11 @@ public interface DcqlCredentialCapability {
     DcqlQuery buildAuthorizationQuery(VerifierConfig config);
 
     void validatePresentation(DcqlQuery query, String presentedToken) throws VerificationException;
+
+    void setupAuthenticationSession(
+            AuthenticationSessionModel authenticationSession,
+            String presentedToken,
+            AuthorizationContext authorizationContext);
 
     void contributeVpFormatsSupported(ClientMetadata.VpFormat vpFormat, List<String> signatureAlgorithms);
 }

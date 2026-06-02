@@ -46,13 +46,10 @@ public final class DcqlQueryValidator {
                     "dcql_query credential meta must be present for format " + credential.getFormat());
         }
 
-        switch (credential.getFormat()) {
-            case VCFormat.SD_JWT_VC -> validateSdJwtMeta(meta);
-            case VCFormat.JWT_VC -> validateJwtVcJsonMeta(meta);
-            default ->
-                throw new IllegalArgumentException(
-                        "Unsupported dcql_query credential format: " + credential.getFormat());
+        if (!VCFormat.SD_JWT_VC.equals(credential.getFormat())) {
+            throw new IllegalArgumentException("Unsupported dcql_query credential format: " + credential.getFormat());
         }
+        validateSdJwtMeta(meta);
 
         validateClaimsAndClaimSets(credential);
         validateClaimPaths(credential);
@@ -157,20 +154,6 @@ public final class DcqlQueryValidator {
         }
         if (meta.getVctValues().stream().anyMatch(StringUtil::isBlank)) {
             throw new IllegalArgumentException("meta.vct_values must not contain blank entries");
-        }
-    }
-
-    private static void validateJwtVcJsonMeta(Meta meta) {
-        if (meta.getTypeValues() == null || meta.getTypeValues().isEmpty()) {
-            throw new IllegalArgumentException("meta.type_values must be non-empty for jwt_vc_json credential queries");
-        }
-        for (List<String> typeSet : meta.getTypeValues()) {
-            if (typeSet == null || typeSet.isEmpty()) {
-                throw new IllegalArgumentException("meta.type_values entries must be non-empty arrays");
-            }
-            if (typeSet.stream().anyMatch(StringUtil::isBlank)) {
-                throw new IllegalArgumentException("meta.type_values must not contain blank type strings");
-            }
         }
     }
 
