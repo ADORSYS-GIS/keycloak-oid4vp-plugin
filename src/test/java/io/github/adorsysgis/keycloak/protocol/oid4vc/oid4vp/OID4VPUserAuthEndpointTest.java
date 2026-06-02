@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
@@ -487,6 +488,33 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
                 "Presented SD-JWT does not satisfy DCQL claim path: [sub]");
+    }
+
+    @Test
+    public void shouldRespectHolderBindingRequirementForSdJwtWithoutKeyBindingJwt() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Build an auth request to inspect holder-binding requirement used by runtime DCQL.
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        boolean requireHolderBinding = Boolean.TRUE.equals(
+                requestObject.getDcqlQuery().getCredentials().getFirst().getRequireCryptographicHolderBinding());
+
+        // This test specifically verifies "missing KB-JWT" rejection and only applies where
+        // the runtime DCQL query requires holder binding.
+        assumeTrue(requireHolderBinding, "Holder binding is not required in this runtime configuration");
+
+        // Send issuer-signed SD-JWT directly as vp_token (no KB-JWT attached) and assert
+        // DCQL layer rejects early with invalid_vp_token.
+        HttpResponse response = sendAuthorizationResponseWithVPToken(
+                sdJwt, requestObject, TestOpts.getDefault().setAuthContext(authContext));
+        assertFailingAuthentication(
+                response,
+                authContext.getTransactionId(),
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "DCQL query requires cryptographic holder binding");
     }
 
     @Test

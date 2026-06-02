@@ -26,6 +26,7 @@ public final class DcqlQueryBuilder {
     }
 
     public static DcqlQuery singleCredentialQuery(Credential credential) {
+        // Keep credential_sets even for one credential for wallet interoperability (HAIP tests expect this shape).
         CredentialSet credentialSet = new CredentialSet();
         credentialSet.setOptions(List.of(List.of(credential.getId())));
 

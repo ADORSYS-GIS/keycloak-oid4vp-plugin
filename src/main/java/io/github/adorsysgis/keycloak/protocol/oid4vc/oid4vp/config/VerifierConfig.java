@@ -153,6 +153,11 @@ public class VerifierConfig {
         return authRequirements;
     }
 
+    /**
+     * Builds the DCQL SD-JWT query specification from authenticator requirements.
+     * Keep this as the single source of requested VCTs/claims to avoid drift between
+     * DCQL pre-validation and authenticator validation.
+     */
     public QuerySpec buildSdJwtQuerySpec() {
         return authRequirements.getSdJwtQuerySpec(effectiveRequireCryptographicHolderBinding());
     }
