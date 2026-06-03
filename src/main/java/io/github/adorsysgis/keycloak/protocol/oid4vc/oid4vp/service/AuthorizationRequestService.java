@@ -241,8 +241,8 @@ public class AuthorizationRequestService {
                 .limit(2)
                 .collect(Collectors.joining("."));
 
-        DcqlQuery dcqlQuery = constrainer.generateDcqlQuery(
-                profile, config.effectiveRequireCryptographicHolderBinding());
+        DcqlQuery dcqlQuery =
+                constrainer.generateDcqlQuery(profile, config.effectiveRequireCryptographicHolderBinding());
         // transaction_data and verifier_info currently reference the primary DCQL
         // credential id. Multi-credential profile support keeps the selected
         // profile's first credential as the verifier-scoped credential id.

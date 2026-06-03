@@ -63,10 +63,9 @@ public class SdJwtCredentialConstrainer {
      * Constructs a DCQL query with one credential query per configured profile credential.
      */
     public DcqlQuery generateDcqlQuery(AuthenticationProfile profile, boolean requireCryptographicHolderBinding) {
-        List<Credential> credentials =
-                profile.getCredentials().stream()
-                        .map(requirement -> toCredentialQuery(requirement, requireCryptographicHolderBinding))
-                        .toList();
+        List<Credential> credentials = profile.getCredentials().stream()
+                .map(requirement -> toCredentialQuery(requirement, requireCryptographicHolderBinding))
+                .toList();
 
         CredentialSet credentialSet = new CredentialSet();
         // A single option containing all credential IDs means the profile requires
@@ -80,8 +79,7 @@ public class SdJwtCredentialConstrainer {
         return query;
     }
 
-    private Credential toCredentialQuery(
-            CredentialRequirement requirement, boolean requireCryptographicHolderBinding) {
+    private Credential toCredentialQuery(CredentialRequirement requirement, boolean requireCryptographicHolderBinding) {
         Meta meta = new Meta();
         meta.setVctValues(requirement.getVct());
 
