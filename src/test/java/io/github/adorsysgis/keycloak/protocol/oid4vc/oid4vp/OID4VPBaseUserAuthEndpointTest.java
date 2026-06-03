@@ -108,7 +108,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Assert the identity of the authenticated user.
      */
     protected void assertAuthenticatingUser(TestOpts opts, String authCode) throws VerificationException, IOException {
-        String accessTokenStr = requestAccessToken(authCode, opts.shouldEnforceRedirectUri());
+        String accessTokenStr =
+                requestAccessToken(authCode, opts.shouldEnforceRedirectUri(), opts.getOidcPkceCodeVerifier());
         AccessToken accessToken =
                 TokenVerifier.create(accessTokenStr, AccessToken.class).getToken();
 
@@ -384,6 +385,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         private String testUser = TEST_USER;
         private AuthorizationContext authContext;
         private String codeVerifier;
+        private String oidcPkceCodeVerifier;
         private boolean shouldBase64EncodeVpToken;
         private boolean shouldRetrieveAccessToken = true;
         private boolean shouldEnforceRedirectUri = false;
@@ -418,6 +420,15 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         public TestOpts setCodeVerifier(String codeVerifier) {
             this.codeVerifier = codeVerifier;
+            return this;
+        }
+
+        public String getOidcPkceCodeVerifier() {
+            return oidcPkceCodeVerifier;
+        }
+
+        public TestOpts setOidcPkceCodeVerifier(String oidcPkceCodeVerifier) {
+            this.oidcPkceCodeVerifier = oidcPkceCodeVerifier;
             return this;
         }
 

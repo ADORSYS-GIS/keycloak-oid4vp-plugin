@@ -487,15 +487,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         CodeChallengeDetails effectiveCodeChallengeDetails =
                 resolveCodeChallengeDetails(oidcAuthSession, codeChallengeDetails);
-
-        // API-initiated authentication sessions must always include PKCE details.
-        if (oidcAuthSession == null) {
-            validateOwnershipBinding(effectiveCodeChallengeDetails);
-        } else if (effectiveCodeChallengeDetails != null
-                && StringUtil.isNotBlank(effectiveCodeChallengeDetails.codeChallenge())
-                && StringUtil.isNotBlank(effectiveCodeChallengeDetails.codeChallengeMethod())) {
-            validateOwnershipBinding(effectiveCodeChallengeDetails);
-        }
+        validateOwnershipBinding(effectiveCodeChallengeDetails);
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
@@ -612,17 +604,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     private CodeChallengeDetails resolveCodeChallengeDetails(
             OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
         if (oidcAuthSession != null && StringUtil.isNotBlank(oidcAuthSession.authSessionId())) {
-            AuthenticationSessionModel parentAuthSession =
-                    getAuthSession(oidcAuthSession.authSessionId()).orElse(null);
-            if (parentAuthSession == null) {
-                return null;
-            }
+            AuthenticationSessionModel parentAuthSession = getAuthSession(oidcAuthSession.authSessionId())
+                    .orElseThrow(() -> new IllegalArgumentException("OIDC authentication session not found"));
 
             String codeChallenge = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
             String codeChallengeMethod = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
 
             if (StringUtil.isBlank(codeChallenge) || StringUtil.isBlank(codeChallengeMethod)) {
-                return null;
+                throw new IllegalArgumentException(
+                        "OIDC session must include code_challenge and code_challenge_method (S256) for OpenID4VP login");
             }
 
             return new CodeChallengeDetails(codeChallenge, codeChallengeMethod);

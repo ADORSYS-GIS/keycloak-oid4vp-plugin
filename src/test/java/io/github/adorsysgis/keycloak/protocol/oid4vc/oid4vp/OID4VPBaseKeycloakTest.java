@@ -218,13 +218,39 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     /**
      * Scrapes the action URL of the OpenID4VP login form.
      */
-    protected FormData getFreshOid4vpFormActionUrl() throws IOException {
-        String authEndpoint = Objects.requireNonNull(new URIBuilder(getAuthEndpointURI())
+    protected record WrappedOidcAuthorizeRequest(URI uri, String oidcPkceCodeVerifier) {}
+
+    /**
+     * Builds an OIDC authorize URL for wrapped OpenID4VP login tests.
+     */
+    protected WrappedOidcAuthorizeRequest buildWrappedOidcAuthorizeRequest(boolean includePkce) throws Exception {
+        URIBuilder builder = new URIBuilder(getAuthEndpointURI())
                 .addParameter(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
                 .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
                 .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
-                .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
-                .toString());
+                .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI);
+
+        String codeVerifier = null;
+        if (includePkce) {
+            codeVerifier = PkceUtils.generateCodeVerifier();
+            String codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+            builder.addParameter(OAuth2Constants.CODE_CHALLENGE, codeChallenge)
+                    .addParameter(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256);
+        }
+
+        return new WrappedOidcAuthorizeRequest(builder.build(), codeVerifier);
+    }
+
+    protected FormData getFreshOid4vpFormActionUrl() throws IOException {
+        String authEndpoint;
+        String oidcPkceCodeVerifier;
+        try {
+            WrappedOidcAuthorizeRequest authorizeRequest = buildWrappedOidcAuthorizeRequest(true);
+            authEndpoint = authorizeRequest.uri().toString();
+            oidcPkceCodeVerifier = authorizeRequest.oidcPkceCodeVerifier();
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
 
         Connection.Response res =
                 Jsoup.connect(authEndpoint).method(Connection.Method.GET).execute();
@@ -267,7 +293,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
         AuthorizationContext authContextSameDevice = new AuthorizationContext().setAuthorizationRequest(authReqLink);
 
-        return new FormData(authContext, authContextSameDevice, actionUrl, cookies);
+        return new FormData(authContext, authContextSameDevice, actionUrl, cookies, oidcPkceCodeVerifier);
     }
 
     /**
@@ -380,7 +406,8 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
             AuthorizationContext authContext,
             AuthorizationContext authContextSameDevice,
             String actionUrl,
-            BasicCookieStore cookieStore) {}
+            BasicCookieStore cookieStore,
+            String oidcPkceCodeVerifier) {}
 
     protected record ApiFlowData(AuthorizationContext authContext, String codeVerifier) {}
 }
