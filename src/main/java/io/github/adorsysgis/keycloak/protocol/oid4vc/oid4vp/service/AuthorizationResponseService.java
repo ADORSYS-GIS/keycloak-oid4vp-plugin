@@ -8,6 +8,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtA
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialClaims;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SelfTrustedSdJwtIssuer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -118,6 +119,23 @@ public class AuthorizationResponseService {
                     store);
         }
 
+        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(
+                authContext.getRequestObject().getDcqlQuery().getCredentials());
+        processorSession.setAuthNote(
+                SdJwtAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
+                String.valueOf(requireCryptographicHolderBinding));
+
+        var transactionData = authContext.getRequestObject().getTransactionData();
+        if (transactionData != null && !transactionData.isEmpty()) {
+            try {
+                processorSession.setAuthNote(
+                        SdJwtAuthenticator.TRANSACTION_DATA_WIRE_KEY,
+                        JsonSerialization.writeValueAsString(transactionData));
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to persist transaction_data for validation", e);
+            }
+        }
+
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");
         try (Response response = authProcessor.authenticateOnly()) {
@@ -158,6 +176,10 @@ public class AuthorizationResponseService {
 
         // Persist authorization context
         store.storeAuthorizationContext(authContext);
+    }
+
+    private static boolean isCryptographicHolderBindingRequired(List<Credential> credentials) {
+        return credentials.stream().noneMatch(c -> Boolean.FALSE.equals(c.getRequireCryptographicHolderBinding()));
     }
 
     private static String getAuthenticatorErrorMessage(Response response) {

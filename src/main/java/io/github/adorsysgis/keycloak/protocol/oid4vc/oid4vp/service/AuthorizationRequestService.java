@@ -15,11 +15,13 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseType;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.VerifierInfo;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.VerifierInfoSupport;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -57,8 +59,6 @@ public class AuthorizationRequestService {
 
     public static final String AUTH_REQ_JWT = "oauth-authz-req+jwt";
     public static final String X509_ATTR_CN = "CN";
-    public static final String REGISTRATION_CERT_FORMAT = "registration_cert";
-
     // The number of bytes to generate for secure random strings,
     // including request IDs, transaction IDs, and nonces (doubled).
     public static final int SECURE_RANDOM_ENTROPY = 20;
@@ -241,13 +241,19 @@ public class AuthorizationRequestService {
                 .limit(2)
                 .collect(Collectors.joining("."));
 
-        // If registration certificate configured, expose it under verifier info.
-        // See https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/rp/onboarding/Example_BDB/
-        String registrationCertificate = config.getRegistrationCertificate();
-        List<VerifierInfo> verifierInfo = Optional.ofNullable(registrationCertificate)
-                .map(rc -> new VerifierInfo().setData(rc).setFormat(REGISTRATION_CERT_FORMAT))
-                .map(List::of)
-                .orElse(null);
+        DcqlQuery dcqlQuery = constrainer.generateDcqlQuery(
+                profile, config.effectiveRequireCryptographicHolderBinding());
+        // transaction_data and verifier_info currently reference the primary DCQL
+        // credential id. Multi-credential profile support keeps the selected
+        // profile's first credential as the verifier-scoped credential id.
+        String dcqlCredentialId = dcqlQuery.getCredentials().getFirst().getId();
+
+        List<String> transactionData = config.getTransactionDataRaw().isEmpty()
+                ? null
+                : TransactionDataSupport.prepareWireEntries(config.getTransactionDataRaw(), dcqlCredentialId);
+
+        var verifierInfo = VerifierInfoSupport.build(
+                config.getRegistrationCertificate(), config.getVerifierInfoConfig(), dcqlCredentialId);
 
         // Aggregate properties
         RequestObject requestObject = new RequestObject()
@@ -260,9 +266,10 @@ public class AuthorizationRequestService {
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
                 .setClientMetadata(clientMetadata)
-                .setVerifierInfo(verifierInfo);
+                .setVerifierInfo(verifierInfo)
+                .setTransactionData(transactionData);
 
-        requestObject.setDcqlQuery(constrainer.generateDcqlQuery(profile));
+        requestObject.setDcqlQuery(dcqlQuery);
 
         return requestObject;
     }

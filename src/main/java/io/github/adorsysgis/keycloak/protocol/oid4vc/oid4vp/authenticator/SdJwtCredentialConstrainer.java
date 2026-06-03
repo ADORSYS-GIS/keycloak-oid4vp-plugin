@@ -39,6 +39,9 @@ public class SdJwtCredentialConstrainer {
         credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
+        if (!queryMap.requireCryptographicHolderBinding()) {
+            credential.setRequireCryptographicHolderBinding(false);
+        }
 
         CredentialSet credentialSet = new CredentialSet();
         credentialSet.setOptions(List.of(List.of(credential.getId())));
@@ -53,8 +56,17 @@ public class SdJwtCredentialConstrainer {
      * Constructs a DCQL query with one credential query per configured profile credential.
      */
     public DcqlQuery generateDcqlQuery(AuthenticationProfile profile) {
+        return generateDcqlQuery(profile, true);
+    }
+
+    /**
+     * Constructs a DCQL query with one credential query per configured profile credential.
+     */
+    public DcqlQuery generateDcqlQuery(AuthenticationProfile profile, boolean requireCryptographicHolderBinding) {
         List<Credential> credentials =
-                profile.getCredentials().stream().map(this::toCredentialQuery).toList();
+                profile.getCredentials().stream()
+                        .map(requirement -> toCredentialQuery(requirement, requireCryptographicHolderBinding))
+                        .toList();
 
         CredentialSet credentialSet = new CredentialSet();
         // A single option containing all credential IDs means the profile requires
@@ -68,7 +80,8 @@ public class SdJwtCredentialConstrainer {
         return query;
     }
 
-    private Credential toCredentialQuery(CredentialRequirement requirement) {
+    private Credential toCredentialQuery(
+            CredentialRequirement requirement, boolean requireCryptographicHolderBinding) {
         Meta meta = new Meta();
         meta.setVctValues(requirement.getVct());
 
@@ -86,8 +99,16 @@ public class SdJwtCredentialConstrainer {
         credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
+        if (!requireCryptographicHolderBinding) {
+            credential.setRequireCryptographicHolderBinding(false);
+        }
         return credential;
     }
 
-    public record QueryMap(List<String> expectedVcts, List<String> requiredClaims) {}
+    public record QueryMap(
+            List<String> expectedVcts, List<String> requiredClaims, boolean requireCryptographicHolderBinding) {
+        public QueryMap(List<String> expectedVcts, List<String> requiredClaims) {
+            this(expectedVcts, requiredClaims, true);
+        }
+    }
 }
