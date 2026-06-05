@@ -4,7 +4,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import org.keycloak.sdjwt.vp.SdJwtVP;
 
 /**
- * A presentation bound to its DCQL credential query after format validation.
+ * A parsed presentation bound to its DCQL credential query.
  */
 public record PresentedCredential(
         String credentialQueryId, Credential credentialQuery, String encodedPresentation, SdJwtVP presentation) {}

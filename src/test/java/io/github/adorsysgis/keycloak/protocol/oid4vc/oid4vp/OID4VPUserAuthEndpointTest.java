@@ -456,7 +456,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map does not match DCQL credential query");
+                "vp_token contains unexpected credential query id");
     }
 
     @Test
@@ -468,9 +468,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
-                HttpStatus.SC_UNAUTHORIZED,
-                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Pattern matching failed for required field");
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presentation vct does not match any value requested in DCQL meta.vct_values");
     }
 
     @Test
@@ -482,9 +482,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
-                HttpStatus.SC_UNAUTHORIZED,
-                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (A required field was not presented: `sub`)");
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presentation does not contain claim required by DCQL path");
     }
 
     @Test

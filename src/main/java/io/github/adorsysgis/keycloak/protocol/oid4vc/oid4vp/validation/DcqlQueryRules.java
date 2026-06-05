@@ -78,8 +78,7 @@ final class DcqlQueryRules {
             VpTokenValidationException.Phase phase)
             throws VpTokenValidationException {
         for (Map.Entry<String, Integer> entry : presentationCounts.entrySet()) {
-            Credential credentialQuery = credentialsById.get(entry.getKey());
-            if (!credentialQuery.allowsMultiplePresentations() && entry.getValue() != 1) {
+            if (entry.getValue() != 1) {
                 throw new VpTokenValidationException(
                         phase,
                         "vp_token must contain exactly one presentation for DCQL credential query id: "

@@ -20,9 +20,6 @@ public class Credential {
     @JsonProperty("claim_sets")
     private List<List<String>> claimSets;
 
-    @JsonProperty("multiple")
-    private Boolean multiple;
-
     @JsonProperty("require_cryptographic_holder_binding")
     private Boolean requireCryptographicHolderBinding;
 
@@ -66,24 +63,12 @@ public class Credential {
         this.claimSets = claimSets;
     }
 
-    public Boolean getMultiple() {
-        return multiple;
-    }
-
-    public void setMultiple(Boolean multiple) {
-        this.multiple = multiple;
-    }
-
     public Boolean getRequireCryptographicHolderBinding() {
         return requireCryptographicHolderBinding;
     }
 
     public void setRequireCryptographicHolderBinding(Boolean requireCryptographicHolderBinding) {
         this.requireCryptographicHolderBinding = requireCryptographicHolderBinding;
-    }
-
-    public boolean allowsMultiplePresentations() {
-        return Boolean.TRUE.equals(multiple);
     }
 
     public boolean requiresCryptographicHolderBinding() {

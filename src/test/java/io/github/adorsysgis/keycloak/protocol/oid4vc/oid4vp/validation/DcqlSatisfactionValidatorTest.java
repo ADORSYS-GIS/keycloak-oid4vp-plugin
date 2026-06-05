@@ -176,19 +176,6 @@ class DcqlSatisfactionValidatorTest {
         assertValidationPasses(List.of(pidPresentation, addressPresentation), query);
     }
 
-    @Test
-    void acceptsMultiplePresentationsWhenMultipleIsTrue() {
-        Credential credentialQuery = credentialWithClaim("username", List.of("alice"));
-        credentialQuery.setMultiple(true);
-        SdJwtVP presentation = mockPresentationWithClaim("username", "alice");
-        DcqlQuery query = queryWithCredentials(credentialQuery);
-
-        PresentedCredential first = new PresentedCredential("cred-1", credentialQuery, "vp-1", presentation);
-        PresentedCredential second = new PresentedCredential("cred-1", credentialQuery, "vp-2", presentation);
-
-        assertValidationPasses(List.of(first, second), query);
-    }
-
     private void assertValidationPasses(List<PresentedCredential> presentations, DcqlQuery query) {
         try {
             validator.validate(presentations, query);
