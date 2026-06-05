@@ -29,8 +29,7 @@ public class VpTokenDcqlValidator {
                 || dcqlQuery.getCredentials() == null
                 || dcqlQuery.getCredentials().isEmpty()) {
             throw new VpTokenValidationException(
-                    VpTokenValidationException.Phase.STRUCTURE,
-                    "Issued authorization request is missing a DCQL query");
+                    VpTokenValidationException.Phase.STRUCTURE, "Issued authorization request is missing a DCQL query");
         }
 
         Map<String, Credential> credentialsById = new HashMap<>();

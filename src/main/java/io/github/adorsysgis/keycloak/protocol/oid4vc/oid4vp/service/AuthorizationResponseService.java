@@ -162,8 +162,7 @@ public class AuthorizationResponseService {
         }
 
         try {
-            List<PresentedCredential> validated =
-                    vpTokenDcqlValidator.validate(responseObject.getVpToken(), dcqlQuery);
+            List<PresentedCredential> validated = vpTokenDcqlValidator.validate(responseObject.getVpToken(), dcqlQuery);
             if (validated.size() != 1) {
                 throw new VpTokenValidationException(
                         VpTokenValidationException.Phase.STRUCTURE,

@@ -42,9 +42,7 @@ class VpTokenDcqlValidatorTest {
         Credential credentialQuery = credentialWithClaim("username", List.of("alice"));
         DcqlQuery query = queryWithCredentials(credentialQuery);
 
-        assertThrows(
-                VpTokenValidationException.class,
-                () -> validator.validate(Map.of(), query));
+        assertThrows(VpTokenValidationException.class, () -> validator.validate(Map.of(), query));
     }
 
     @Test
@@ -64,8 +62,7 @@ class VpTokenDcqlValidatorTest {
 
         assertThrows(
                 VpTokenValidationException.class,
-                () -> validator.validate(
-                        Map.of(credentialQuery.getId(), List.of("vp-token-1", "vp-token-2")), query));
+                () -> validator.validate(Map.of(credentialQuery.getId(), List.of("vp-token-1", "vp-token-2")), query));
     }
 
     @Test
