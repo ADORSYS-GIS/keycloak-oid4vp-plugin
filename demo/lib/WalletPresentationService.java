@@ -36,7 +36,6 @@ public final class WalletPresentationService {
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
         claimSet.put(OAuth2Constants.ISSUER, cfg.issuer());
         claimSet.put("vct", cfg.vct());
-        // DCQL requires sub (see SdJwtAuthRequirements); tests use username + "-id" as a stable subject id.
         claimSet.put(JsonWebToken.SUBJECT, scenario.username(cfg) + "-id");
         claimSet.put(OAuth2Constants.USERNAME, scenario.username(cfg));
         claimSet.put("iat", now);
