@@ -36,6 +36,7 @@ public final class WalletPresentationService {
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
         claimSet.put(OAuth2Constants.ISSUER, cfg.issuer());
         claimSet.put("vct", cfg.vct());
+        claimSet.put(JsonWebToken.SUBJECT, scenario.username(cfg) + "-id");
         claimSet.put(OAuth2Constants.USERNAME, scenario.username(cfg));
         claimSet.put("iat", now);
         claimSet.put("exp", now + scenario.expirationOffsetSeconds(ISSUER_SIGNED_JWT_LIFESPAN_SECS));
