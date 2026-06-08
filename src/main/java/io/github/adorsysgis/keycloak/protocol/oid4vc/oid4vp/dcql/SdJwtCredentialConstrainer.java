@@ -12,6 +12,10 @@ import org.keycloak.VCFormat;
  */
 public class SdJwtCredentialConstrainer implements CredentialConstrainer<SdJwtCredentialConstrainer.QuerySpec> {
 
+    public static SdJwtCredentialConstrainer create() {
+        return new SdJwtCredentialConstrainer();
+    }
+
     @Override
     public String format() {
         return VCFormat.SD_JWT_VC;
@@ -26,14 +30,7 @@ public class SdJwtCredentialConstrainer implements CredentialConstrainer<SdJwtCr
         Meta meta = new Meta();
         meta.setVctValues(spec.vctValues());
 
-        List<Claim> claims = spec.claimPaths().stream()
-                .map(path -> {
-                    Claim claim = new Claim();
-                    claim.setId(UUID.randomUUID().toString());
-                    claim.setPath(path);
-                    return claim;
-                })
-                .toList();
+        List<Claim> claims = DcqlQueryBuilder.claimsFromPaths(spec.claimPaths());
 
         Credential credential = new Credential();
         credential.setId(UUID.randomUUID().toString());

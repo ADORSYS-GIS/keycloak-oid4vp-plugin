@@ -34,19 +34,8 @@ public final class DcqlPresentationValidator {
         validateSdJwtPresentation(query, SdJwtVP.of(presentedToken));
     }
 
-    public static void validateSdJwtPresentation(DcqlQuery query, SdJwtVP presentation) throws VerificationException {
-        DcqlQueryValidator.validateQuery(query);
-        if (query.getCredentials().size() != 1) {
-            throw new VerificationException(
-                    "Only single-credential DCQL queries are supported for SD-JWT presentation validation");
-        }
-
+    private static void validateSdJwtPresentation(DcqlQuery query, SdJwtVP presentation) throws VerificationException {
         Credential credentialQuery = query.getCredentials().getFirst();
-        if (!VCFormat.SD_JWT_VC.equals(credentialQuery.getFormat())) {
-            throw new VerificationException(
-                    "Expected dc+sd-jwt credential query but found: " + credentialQuery.getFormat());
-        }
-
         validateHolderBinding(credentialQuery, presentation);
         validateSdJwtMeta(credentialQuery.getMeta(), presentation);
         validateSdJwtRequestedClaims(credentialQuery, presentation);

@@ -121,15 +121,6 @@ public class SdJwtAuthRequirements {
         return QuerySpec.of(getExpectedVcts(), getRequiredClaims(), requireHolderBinding);
     }
 
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
-        return getSdJwtQueryMap(requireCryptographicHolderBinding);
-    }
-
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap(boolean requireCryptographicHolderBinding) {
-        return new SdJwtCredentialConstrainer.QueryMap(
-                getExpectedVcts(), getRequiredClaims(), requireCryptographicHolderBinding);
-    }
-
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
         return IssuerSignedJwtVerificationOpts.builder()
                 .withIatCheck(Integer.MAX_VALUE, true)

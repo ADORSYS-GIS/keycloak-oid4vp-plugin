@@ -25,6 +25,7 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
 
     @Override
     public boolean supports(VerifierConfig config) {
+        // TODO: Gate on verifier format/authenticator selection once additional DCQL capabilities exist.
         return true;
     }
 
