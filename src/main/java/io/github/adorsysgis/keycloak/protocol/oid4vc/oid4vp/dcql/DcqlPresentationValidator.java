@@ -44,7 +44,7 @@ public final class DcqlPresentationValidator {
     private static void validateHolderBinding(Credential credentialQuery, SdJwtVP presentation)
             throws VerificationException {
         Boolean required = credentialQuery.getRequireCryptographicHolderBinding();
-        if (Boolean.TRUE.equals(required) && presentation.getKeyBindingJWT().isEmpty()) {
+        if (!Boolean.FALSE.equals(required) && presentation.getKeyBindingJWT().isEmpty()) {
             throw new VerificationException("DCQL query requires cryptographic holder binding (Key Binding JWT)");
         }
     }
