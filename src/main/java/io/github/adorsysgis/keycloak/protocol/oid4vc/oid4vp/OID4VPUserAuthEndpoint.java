@@ -404,10 +404,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 .setError(authorizationContext.getError())
                 .setErrorDescription(authorizationContext.getErrorDescription());
 
-        if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
-            reducedContext.setAuthorizationCode(authorizationContext.getAuthorizationCode());
-        }
-
         return CorsService.forWebOrigins(authSession).add(Response.ok(reducedContext));
     }
 
@@ -445,15 +441,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     "Authorization has not completed successfully"));
         }
 
-        // This endpoint is intended for API-initiated flows only. Wrapped OIDC flows must complete through
-        // oid4vp-auth-login to preserve browser session binding and continuity checks.
-        if (StringUtil.isNotBlank(authorizationContext.getParentAuthSessionId())) {
-            throw new BadRequestException(errorResponse(
-                    Response.Status.BAD_REQUEST,
-                    OAuthErrorException.INVALID_REQUEST,
-                    "Authorization code redemption is not configured for this flow"));
-        }
-
         if (StringUtil.isBlank(authorizationContext.getCodeChallenge())
                 || StringUtil.isBlank(authorizationContext.getCodeChallengeMethod())) {
             throw new BadRequestException(errorResponse(
@@ -485,9 +472,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String clientId, OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
-        CodeChallengeDetails effectiveCodeChallengeDetails =
-                resolveCodeChallengeDetails(oidcAuthSession, codeChallengeDetails);
-        validateOwnershipBinding(effectiveCodeChallengeDetails);
+        validateOwnershipBinding(codeChallengeDetails);
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
@@ -496,7 +481,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config, authSession, oidcAuthSession, effectiveCodeChallengeDetails);
+                config, authSession, oidcAuthSession, codeChallengeDetails);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -599,26 +584,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         if (!OAuth2Constants.PKCE_METHOD_S256.equals(codeChallengeDetails.codeChallengeMethod())) {
             throw new IllegalArgumentException("Only S256 code challenge method is supported");
         }
-    }
-
-    private CodeChallengeDetails resolveCodeChallengeDetails(
-            OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
-        if (oidcAuthSession != null && StringUtil.isNotBlank(oidcAuthSession.authSessionId())) {
-            AuthenticationSessionModel parentAuthSession = getAuthSession(oidcAuthSession.authSessionId())
-                    .orElseThrow(() -> new IllegalArgumentException("OIDC authentication session not found"));
-
-            String codeChallenge = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
-            String codeChallengeMethod = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
-
-            if (StringUtil.isBlank(codeChallenge) || StringUtil.isBlank(codeChallengeMethod)) {
-                throw new IllegalArgumentException(
-                        "OIDC session must include code_challenge and code_challenge_method (S256) for OpenID4VP login");
-            }
-
-            return new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
-        }
-
-        return codeChallengeDetails;
     }
 
     @Override

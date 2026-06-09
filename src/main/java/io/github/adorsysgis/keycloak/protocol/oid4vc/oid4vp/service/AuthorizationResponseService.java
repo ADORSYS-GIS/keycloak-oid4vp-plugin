@@ -32,7 +32,6 @@ import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.MediaType;
-import org.keycloak.utils.StringUtil;
 
 /**
  * Dedicated service for processing OpenID4VP authorization responses for user authentication.
@@ -229,12 +228,6 @@ public class AuthorizationResponseService {
 
         if (authContext.getParentAuthSessionId() != null) {
             clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
-        }
-
-        if (StringUtil.isNotBlank(authContext.getCodeChallenge())
-                && StringUtil.isNotBlank(authContext.getCodeChallengeMethod())) {
-            clientSession.setNote(OAuth2Constants.CODE_CHALLENGE, authContext.getCodeChallenge());
-            clientSession.setNote(OAuth2Constants.CODE_CHALLENGE_METHOD, authContext.getCodeChallengeMethod());
         }
 
         clientSession.setNote(

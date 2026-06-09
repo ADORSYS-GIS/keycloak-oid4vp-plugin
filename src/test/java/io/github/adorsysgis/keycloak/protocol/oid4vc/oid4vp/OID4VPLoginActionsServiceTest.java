@@ -2,12 +2,15 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import jakarta.ws.rs.core.MediaType;
@@ -35,6 +38,7 @@ import org.keycloak.events.Details;
 import org.keycloak.events.EventType;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Testing OIDC login via OpenID4VP.
@@ -62,6 +66,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         // Proceed to authentication
         TestOpts opts = TestOpts.getDefault()
                 .setAuthContext(authContext)
+                .setCodeVerifier(formData.oid4vpCodeVerifier())
                 .setOidcPkceCodeVerifier(formData.oidcPkceCodeVerifier())
                 .setShouldRetrieveAccessToken(false);
         String authCode = testSuccessfulAuthentication(sdJwt, opts);
@@ -144,47 +149,49 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     }
 
     @Test
-    public void shouldNotProvisionOid4vpLogin_WhenOidcAuthorizeWithoutPkce() throws Exception {
+    public void shouldProvisionOid4vpLogin_WhenOidcAuthorizeWithoutPkce() throws Exception {
         String authEndpoint = buildWrappedOidcAuthorizeRequest(false).uri().toString();
 
         HttpGet httpGet = new HttpGet(authEndpoint);
         try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
             HttpResponse response = client.execute(httpGet);
-            int status = response.getStatusLine().getStatusCode();
-            if (status == HttpStatus.SC_OK) {
-                String html = EntityUtils.toString(response.getEntity());
-                assertNull(
-                        Jsoup.parse(html).selectFirst("form#kc-oid4vp-completion-form"),
-                        "OpenID4VP QR login must not start without PKCE on the parent OIDC authorize request");
-            } else {
-                assertTrue(
-                        status >= HttpStatus.SC_BAD_REQUEST,
-                        "Missing parent PKCE should fail before provisioning the OpenID4VP login UI");
-            }
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+            String html = EntityUtils.toString(response.getEntity());
+            assertNotNull(
+                    Jsoup.parse(html).selectFirst("form#kc-oid4vp-completion-form"),
+                    "OpenID4VP login should start with OpenID4VP-owned PKCE even without parent OIDC PKCE");
         }
     }
 
     @Test
-    public void shouldRejectApiCodeRedemption_ForWrappedOidcFlow() throws Exception {
+    public void shouldRedeemAuthorizationCode_InWrappedOidcFlow() throws Exception {
         FormData formData = getFreshOid4vpFormActionUrl();
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
-        TestOpts opts = TestOpts.getDefault()
-                .setAuthContext(formData.authContext())
-                .setOidcPkceCodeVerifier(formData.oidcPkceCodeVerifier())
-                .setShouldRetrieveAccessToken(false);
-        testSuccessfulAuthenticationVerbose(sdJwt, opts);
+        TestOpts opts =
+                TestOpts.getDefault().setAuthContext(formData.authContext()).setShouldRetrieveAccessToken(false);
+        RequestObject requestObject =
+                resolveRequestObject(formData.authContext().getAuthorizationRequest());
+        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        String codeVerifier = PkceUtils.generateCodeVerifier();
-        HttpResponse redemptionResponse =
-                redeemAuthorizationCodeResponse(formData.authContext().getTransactionId(), codeVerifier);
+        HttpResponse statusResponse =
+                fetchAuthenticationStatus(formData.authContext().getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
+        assertNull(statusPayload.getAuthorizationCode());
+
+        HttpResponse badRedemptionResponse = redeemAuthorizationCodeResponse(
+                formData.authContext().getTransactionId(), PkceUtils.generateCodeVerifier());
         assertEquals(
-                HttpStatus.SC_BAD_REQUEST, redemptionResponse.getStatusLine().getStatusCode());
+                HttpStatus.SC_BAD_REQUEST, badRedemptionResponse.getStatusLine().getStatusCode());
+        OAuth2ErrorRepresentation badRedemptionError = parseErrorResponse(badRedemptionResponse);
+        assertEquals(OAuthErrorException.INVALID_GRANT, badRedemptionError.getError());
 
-        OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
-        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription()
-                .contains("Authorization code redemption is not configured for this flow"));
+        String authCode =
+                redeemAuthorizationCode(formData.authContext().getTransactionId(), formData.oid4vpCodeVerifier());
+        assertFalse(StringUtil.isBlank(authCode));
     }
 
     @Test
@@ -202,7 +209,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         AuthorizationContext authContext = formData.authContext();
 
         // Authentication is expected to fail because a new, unrelated OIDC session will be started
-        String authCode = completeOid4vpAuth(authContext);
+        String authCode = completeOid4vpAuth(authContext, formData.oid4vpCodeVerifier());
         shouldFailAuthenticationWithAltAuthCode(authCode, "Authorization code was not issued for this OIDC session");
 
         // Try reusing authCode in original session - expected to fail again because the code must
@@ -249,8 +256,8 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     /**
      * Complete API authentication and return auth code.
      */
-    private String completeOid4vpAuth(AuthorizationContext authContext) throws Exception {
-        return completeOid4vpAuth(new ApiFlowData(authContext, null));
+    private String completeOid4vpAuth(AuthorizationContext authContext, String codeVerifier) throws Exception {
+        return completeOid4vpAuth(new ApiFlowData(authContext, codeVerifier));
     }
 
     /**
@@ -275,12 +282,13 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
 
         // Collect OIDC session data (same device flow)
-        FormData formData = getFreshOid4vpFormActionUrl();
+        FormData formData = getFreshOid4vpFormActionUrl(false);
         AuthorizationContext authContext = formData.authContextSameDevice();
 
         // Proceed to authentication
         TestOpts opts = TestOpts.getDefault()
                 .setAuthContext(authContext)
+                .setCodeVerifier(formData.oid4vpCodeVerifier())
                 .setOidcPkceCodeVerifier(formData.oidcPkceCodeVerifier());
         TestFlowData testFlowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
         ResponseToWallet responseToWallet = testFlowData.responseToWallet();

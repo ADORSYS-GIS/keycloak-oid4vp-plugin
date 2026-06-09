@@ -11,6 +11,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.BaseKeycloakTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.QRCodeTestUtils;
+import jakarta.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -19,8 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -182,7 +181,12 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Fetches the authentication status of an opened session by transaction ID.
      */
     protected HttpResponse fetchAuthenticationStatus(String transactionId) throws IOException {
-        String url = getOid4vpEndpoint(String.format("/status/%s", transactionId));
+        String url = UriBuilder.fromUri(getTestRealmEndpoint())
+                .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
+                .path("status")
+                .path(transactionId)
+                .build()
+                .toString();
         HttpGet httpGet = new HttpGet(url);
         return httpClient.execute(httpGet);
     }
@@ -216,7 +220,9 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     /**
-     * Scrapes the action URL of the OpenID4VP login form.
+     * OIDC authorize request used to start wrapped OpenID4VP login tests.
+     * {@code oidcPkceCodeVerifier} is only set when the parent authorize URL includes PKCE
+     * (needed for token endpoint assertions, not for OpenID4VP subflow protection).
      */
     protected record WrappedOidcAuthorizeRequest(URI uri, String oidcPkceCodeVerifier) {}
 
@@ -242,6 +248,10 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     }
 
     protected FormData getFreshOid4vpFormActionUrl() throws IOException {
+        return getFreshOid4vpFormActionUrl(true);
+    }
+
+    protected FormData getFreshOid4vpFormActionUrl(boolean requireCrossDeviceContext) throws IOException {
         String authEndpoint;
         String oidcPkceCodeVerifier;
         try {
@@ -268,22 +278,28 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         String actionUrl = form.attr("action");
         assertFalse(actionUrl.isBlank(), "Login form action URL should not be blank");
 
-        // Collect authorization context details (QR code / cross-device)
+        // Collect authorization context details (cross-device QR flow)
+        Element transactionIdInput = html.selectFirst("input#kc-oid4vp-transaction-id");
+        assertNotNull(transactionIdInput, "OpenID4VP transaction ID should be present in the response");
+        String transactionId = transactionIdInput.attr("value");
+        assertFalse(StringUtil.isBlank(transactionId), "OpenID4VP transaction ID should not be blank");
 
-        Element qrCodeImg = html.selectFirst("img#kc-oid4vp-qrcode");
-        assertNotNull(qrCodeImg, "QR Code image should be present in the response");
-        String qrCodeDataUrl = qrCodeImg.attr("src");
-        assertTrue(StringUtil.isNotBlank(qrCodeDataUrl), "QR Code data URL should not be blank");
-        String qrCodeReqLink = QRCodeTestUtils.decodeQrCodeFromDataUrl(qrCodeDataUrl);
+        Element codeVerifierInput = html.selectFirst("input#kc-oid4vp-code-verifier");
+        assertNotNull(codeVerifierInput, "OpenID4VP code verifier should be present in the response");
+        String oid4vpCodeVerifier = codeVerifierInput.attr("value");
+        assertFalse(StringUtil.isBlank(oid4vpCodeVerifier), "OpenID4VP code verifier should not be blank");
 
-        Element script = html.selectFirst("script:containsData(checkAuthStatus)");
-        assertNotNull(script, "A script should be present in the response");
-        Matcher m = Pattern.compile("checkAuthStatus\\(.*/([^/]+)\",").matcher(script.data());
-        String transactionId = m.find() ? m.group(1) : null;
-
-        AuthorizationContext authContext = new AuthorizationContext()
-                .setAuthorizationRequest(qrCodeReqLink)
-                .setTransactionId(transactionId);
+        AuthorizationContext authContext = null;
+        if (requireCrossDeviceContext) {
+            Element qrCodeImg = html.selectFirst("img#kc-oid4vp-qrcode");
+            assertNotNull(qrCodeImg, "QR Code image should be present in the response");
+            String qrCodeDataUrl = qrCodeImg.attr("src");
+            assertTrue(StringUtil.isNotBlank(qrCodeDataUrl), "QR Code data URL should not be blank");
+            String qrCodeReqLink = QRCodeTestUtils.decodeQrCodeFromDataUrl(qrCodeDataUrl);
+            authContext = new AuthorizationContext()
+                    .setAuthorizationRequest(qrCodeReqLink)
+                    .setTransactionId(transactionId);
+        }
 
         // Collect authorization context details (same-device)
 
@@ -293,7 +309,8 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
         AuthorizationContext authContextSameDevice = new AuthorizationContext().setAuthorizationRequest(authReqLink);
 
-        return new FormData(authContext, authContextSameDevice, actionUrl, cookies, oidcPkceCodeVerifier);
+        return new FormData(
+                authContext, authContextSameDevice, actionUrl, cookies, oidcPkceCodeVerifier, oid4vpCodeVerifier);
     }
 
     /**
@@ -407,7 +424,8 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
             AuthorizationContext authContextSameDevice,
             String actionUrl,
             BasicCookieStore cookieStore,
-            String oidcPkceCodeVerifier) {}
+            String oidcPkceCodeVerifier,
+            String oid4vpCodeVerifier) {}
 
     protected record ApiFlowData(AuthorizationContext authContext, String codeVerifier) {}
 }

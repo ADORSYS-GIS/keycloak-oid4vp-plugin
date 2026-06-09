@@ -23,7 +23,6 @@ import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.http.HttpRequest;
-import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
@@ -39,7 +38,6 @@ import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.SessionCodeChecks;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.CommonClientSessionModel.Action;
-import org.keycloak.utils.StringUtil;
 
 /**
  * Adds form action endpoint for completing OpenID4VP authentication after QR code scanning.
@@ -150,10 +148,6 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
             return failOnInvalidCode(authSession, "Authorization code was not issued for this OIDC session");
         }
 
-        if (!verifyWrappedFlowPkceBinding(authSession, result.getClientSession())) {
-            return failOnInvalidCode(authSession, "Authorization code PKCE binding does not match this OIDC session");
-        }
-
         // Attach authenticated user to OIDC sessions
         authSession.setAuthenticatedUser(
                 result.getClientSession().getUserSession().getUser());
@@ -172,27 +166,6 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 clientConnection,
                 event,
                 authSession);
-    }
-
-    /**
-     * Wrapped OIDC flows must carry non-empty, matching PKCE notes on the parent session and issued code.
-     */
-    static boolean verifyWrappedFlowPkceBinding(
-            AuthenticationSessionModel parentAuthSession, AuthenticatedClientSessionModel issuedCodeSession) {
-        String parentCodeChallenge = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE);
-        String parentCodeChallengeMethod = parentAuthSession.getClientNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
-        String issuedCodeChallenge = issuedCodeSession.getNote(OAuth2Constants.CODE_CHALLENGE);
-        String issuedCodeChallengeMethod = issuedCodeSession.getNote(OAuth2Constants.CODE_CHALLENGE_METHOD);
-
-        if (StringUtil.isBlank(parentCodeChallenge) || StringUtil.isBlank(parentCodeChallengeMethod)) {
-            return false;
-        }
-        if (StringUtil.isBlank(issuedCodeChallenge) || StringUtil.isBlank(issuedCodeChallengeMethod)) {
-            return false;
-        }
-
-        return Objects.equals(parentCodeChallenge, issuedCodeChallenge)
-                && Objects.equals(parentCodeChallengeMethod, issuedCodeChallengeMethod);
     }
 
     private Response failOnInvalidCode(AuthenticationSessionModel authSession, String reason) {
