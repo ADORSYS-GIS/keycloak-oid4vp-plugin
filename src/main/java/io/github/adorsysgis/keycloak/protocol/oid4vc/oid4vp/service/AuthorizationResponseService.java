@@ -17,6 +17,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustedSdJwtIssuer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
@@ -43,6 +44,7 @@ import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
+import org.keycloak.sdjwt.consumer.TrustedSdJwtIssuer;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -276,16 +278,16 @@ public class AuthorizationResponseService {
             AuthenticatorConfigModel authConfig,
             AuthorizationContext authContext,
             AuthenticationSessionStore store) {
-        enforceSupportedTrustPolicy(credential, authContext, store);
         SdJwtVP sdJwt = parseSdJwtVp(sdJwtVpToken, authContext, store);
         SdJwtAuthRequirements authReqs = new SdJwtAuthRequirements(session.getContext(), authConfig, credential);
+        List<TrustedSdJwtIssuer> trustedIssuers = trustedIssuersFor(credential, authContext, store);
 
         try {
             new SdJwtPresentationConsumer()
                     .verifySdJwtPresentation(
                             sdJwt,
                             authReqs.getPresentationRequirements(),
-                            List.of(new SelfTrustedSdJwtIssuer(session)),
+                            trustedIssuers,
                             authReqs.getIssuerSignedJwtVerificationOpts(),
                             authReqs.getKeyBindingJwtVerificationOpts(
                                     authContext.getRequestObject().getNonce(),
@@ -307,20 +309,45 @@ public class AuthorizationResponseService {
         }
     }
 
-    private void enforceSupportedTrustPolicy(
+    private List<TrustedSdJwtIssuer> trustedIssuersFor(
             CredentialRequirement credential, AuthorizationContext authContext, AuthenticationSessionStore store) {
-        boolean selfTrusted = credential.getTrust() == null
-                || credential.getTrust().isEmpty()
-                || credential.getTrust().stream().anyMatch(trust -> TrustPolicy.SELF.equals(trust.getType()));
-        if (!selfTrusted) {
+        if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
+            return List.of(new SelfTrustedSdJwtIssuer(session));
+        }
+
+        List<TrustedSdJwtIssuer> trustedIssuers = credential.getTrust().stream()
+                .map(trust -> trustedIssuerFor(credential, trust, authContext, store))
+                .toList();
+        if (trustedIssuers.isEmpty()) {
             throw failWithHttpException(
                     ProcessingError.VP_TOKEN_AUTH_ERROR,
                     "Invalid SD-JWT presentation",
-                    "Credential '%s' uses an unsupported trust policy".formatted(credential.getId()),
+                    "Credential '%s' has no supported trust policy".formatted(credential.getId()),
                     Response.Status.BAD_REQUEST,
                     authContext,
                     store);
         }
+        return trustedIssuers;
+    }
+
+    private TrustedSdJwtIssuer trustedIssuerFor(
+            CredentialRequirement credential,
+            TrustPolicy trust,
+            AuthorizationContext authContext,
+            AuthenticationSessionStore store) {
+        return switch (trust.getType()) {
+            case TrustPolicy.SELF -> new SelfTrustedSdJwtIssuer(session);
+            case TrustPolicy.EUDI_PID_TRUST_LIST -> new EudiPidTrustedSdJwtIssuer(session, trust);
+            default ->
+                throw failWithHttpException(
+                        ProcessingError.VP_TOKEN_AUTH_ERROR,
+                        "Invalid SD-JWT presentation",
+                        "Credential '%s' uses an unsupported trust policy: %s"
+                                .formatted(credential.getId(), trust.getType()),
+                        Response.Status.BAD_REQUEST,
+                        authContext,
+                        store);
+        };
     }
 
     private void applyBindingRules(
