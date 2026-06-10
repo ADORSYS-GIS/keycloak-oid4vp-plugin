@@ -120,6 +120,37 @@ public class OID4VPUserAuthBeanTest {
     }
 
     @Test
+    public void shouldExposeOneLoginProfilePerConfiguredAuthProfile() {
+        Mockito.when(oid4vp.getAuthenticationProfilesForClient(TEST_CLIENT_ID))
+                .thenReturn(List.of(
+                        new AuthenticationProfile()
+                                .setId(AuthenticationProfile.DEFAULT_PROFILE_ID)
+                                .setDisplayCta(Map.of("en", "Sign in with a wallet")),
+                        new AuthenticationProfile().setId("dual").setDisplayCta(Map.of("en", "Dual login"))));
+
+        OID4VPUserAuthBean bean = createTestBean();
+
+        var loginProfiles = bean.getLoginProfiles();
+        assertEquals(2, loginProfiles.size());
+        assertEquals(
+                AuthenticationProfile.DEFAULT_PROFILE_ID,
+                loginProfiles.getFirst().getId());
+        assertEquals("Sign in with a wallet", loginProfiles.getFirst().getDisplayName());
+        assertEquals("dual", loginProfiles.get(1).getId());
+        assertEquals("Dual login", loginProfiles.get(1).getDisplayName());
+
+        ResteasyUriInfo defaultLoginUri =
+                new ResteasyUriInfo(URI.create(loginProfiles.getFirst().getLoginUrl()));
+        assertEquals(
+                AuthenticationProfile.DEFAULT_PROFILE_ID,
+                defaultLoginUri.getQueryParameters().getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM));
+
+        ResteasyUriInfo dualLoginUri =
+                new ResteasyUriInfo(URI.create(loginProfiles.get(1).getLoginUrl()));
+        assertEquals("dual", dualLoginUri.getQueryParameters().getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM));
+    }
+
+    @Test
     public void shouldNotInjectAuthContextIfLoginMethodNotExplicit() {
         OID4VPUserAuthBean bean = createTestBean(TEST_CLIENT_ID, false);
         assertNull(bean.getAuthContext()); // Null because no login_method param

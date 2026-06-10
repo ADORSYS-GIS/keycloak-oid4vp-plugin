@@ -504,8 +504,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
-                .setTransactionId(authorizationContext.getTransactionId())
-                .setProfileId(authorizationContext.getProfileId());
+                .setTransactionId(authorizationContext.getTransactionId());
     }
 
     /**

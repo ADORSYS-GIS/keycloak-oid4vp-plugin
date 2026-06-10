@@ -42,12 +42,12 @@ public class SdJwtCredentialConstrainerTest {
                         new CredentialRequirement()
                                 .setId("main")
                                 .setRole(CredentialRole.PRIMARY)
-                                .setVct(List.of("main-vct"))
+                                .setCredentialTypes(List.of("main-vct"))
                                 .setClaims(List.of("sub", "username")),
                         new CredentialRequirement()
                                 .setId("supporting")
                                 .setRole(CredentialRole.SUPPORTING)
-                                .setVct(List.of("supporting-vct"))
+                                .setCredentialTypes(List.of("supporting-vct"))
                                 .setClaims(List.of("username"))));
 
         DcqlQuery query = constrainer.generateDcqlQuery(profile);

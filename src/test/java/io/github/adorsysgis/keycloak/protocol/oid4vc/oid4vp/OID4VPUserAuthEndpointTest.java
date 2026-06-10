@@ -54,6 +54,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
     public static final String DUAL_PROFILE_ID = "dual";
+    // Imported realm fixture ID for the SD-JWT authenticator config used by these integration tests.
     private static final String TEST_REALM_SD_JWT_AUTH_CONFIG_ID = "81d62be9-cf06-4718-8837-fdfb4727b20a";
 
     @Test
@@ -333,7 +334,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
             updateAuthenticatorConfig(updatedConfig);
 
             ApiFlowData apiFlow = startApiAuthorizationRequest(DUAL_PROFILE_ID);
-            assertEquals(DUAL_PROFILE_ID, apiFlow.authContext().getProfileId());
+            assertNull(apiFlow.authContext().getProfileId(), "Profile id must not be leaked to the wallet");
 
             RequestObject requestObject =
                     resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
@@ -659,7 +660,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                       {
                         "id": "identity",
                         "role": "primary",
-                        "vct": ["%s", "%s"],
+                        "credentialTypes": ["%s", "%s"],
                         "claims": ["sub", "username"]
                       }
                     ]
@@ -671,13 +672,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                       {
                         "id": "primary",
                         "role": "primary",
-                        "vct": ["%s"],
+                        "credentialTypes": ["%s"],
                         "claims": ["sub", "username"]
                       },
                       {
                         "id": "supporting",
                         "role": "supporting",
-                        "vct": ["%s"],
+                        "credentialTypes": ["%s"],
                         "claims": ["username"],
                         "trust": [{ "type": "self" }],
                         "binding": [

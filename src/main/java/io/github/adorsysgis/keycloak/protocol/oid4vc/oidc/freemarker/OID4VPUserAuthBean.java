@@ -61,7 +61,7 @@ public class OID4VPUserAuthBean {
     }
 
     /**
-     * URL to trigger UI view for signing in with a wallet
+     * Legacy single-button URL. New templates should use {@link #getLoginProfiles()}.
      */
     public String getLoginUrl() {
         return getLoginProfiles().stream()

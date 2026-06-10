@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import org.keycloak.VCFormat;
@@ -15,8 +16,9 @@ public class CredentialRequirement {
     @JsonProperty("formats")
     private List<String> formats = List.of(VCFormat.SD_JWT_VC);
 
-    @JsonProperty("vct")
-    private List<String> vct;
+    @JsonProperty("credentialTypes")
+    @JsonAlias("vct")
+    private List<String> credentialTypes;
 
     @JsonProperty("claims")
     private List<String> claims;
@@ -55,11 +57,19 @@ public class CredentialRequirement {
     }
 
     public List<String> getVct() {
-        return vct;
+        return getCredentialTypes();
     }
 
     public CredentialRequirement setVct(List<String> vct) {
-        this.vct = vct;
+        return setCredentialTypes(vct);
+    }
+
+    public List<String> getCredentialTypes() {
+        return credentialTypes;
+    }
+
+    public CredentialRequirement setCredentialTypes(List<String> credentialTypes) {
+        this.credentialTypes = credentialTypes;
         return this;
     }
 
@@ -88,5 +98,15 @@ public class CredentialRequirement {
     public CredentialRequirement setBinding(List<BindingRule> binding) {
         this.binding = binding;
         return this;
+    }
+
+    public boolean isPrimary() {
+        return CredentialRole.PRIMARY.equals(role);
+    }
+
+    public boolean isSelfTrusted() {
+        return trust == null
+                || trust.isEmpty()
+                || trust.stream().anyMatch(policy -> TrustPolicy.SELF.equals(policy.getType()));
     }
 }

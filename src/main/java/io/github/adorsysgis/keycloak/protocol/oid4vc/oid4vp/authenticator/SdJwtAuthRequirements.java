@@ -81,19 +81,15 @@ public class SdJwtAuthRequirements {
         this.keycloakIssuerURI = Urls.realmIssuer(
                 context.getUri().getBaseUri(), context.getRealm().getName());
 
-        this.expectedVctsPattern = expectedVcts.stream()
-                .map(vct -> Pattern.quote("\"" + vct + "\""))
-                .collect(Collectors.joining("|", "(", ")"));
+        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
     }
 
     public SdJwtAuthRequirements(
             KeycloakContext context, AuthenticatorConfigModel authConfig, CredentialRequirement credentialRequirement) {
         this(context, authConfig);
-        this.expectedVcts = credentialRequirement.getVct();
+        this.expectedVcts = credentialRequirement.getCredentialTypes();
         this.requiredClaims = credentialRequirement.getClaims();
-        this.expectedVctsPattern = expectedVcts.stream()
-                .map(vct -> Pattern.quote("\"" + vct + "\""))
-                .collect(Collectors.joining("|", "(", ")"));
+        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
     }
 
     public List<String> getExpectedVcts() {
@@ -169,6 +165,12 @@ public class SdJwtAuthRequirements {
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
         // Final 1.0 requires using the full Client Identifier, including prefix, in proof bindings.
         return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, String::equals);
+    }
+
+    private String buildExpectedVctsPattern(List<String> expectedVcts) {
+        return expectedVcts.stream()
+                .map(vct -> Pattern.quote("\"" + vct + "\""))
+                .collect(Collectors.joining("|", "(", ")"));
     }
 
     private List<String> parseMultiStr(String str) {

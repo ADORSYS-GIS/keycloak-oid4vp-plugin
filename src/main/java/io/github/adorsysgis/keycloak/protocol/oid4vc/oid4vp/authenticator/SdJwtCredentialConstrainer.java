@@ -22,26 +22,7 @@ public class SdJwtCredentialConstrainer {
      * Constructs a DCQL query requiring the disclosure of some claims.
      */
     public DcqlQuery generateDcqlQuery(QueryMap queryMap) {
-        Meta meta = new Meta();
-        meta.setVctValues(queryMap.expectedVcts());
-
-        List<Claim> claims = queryMap.requiredClaims().stream()
-                .map(claimName -> {
-                    Claim claim = new Claim();
-                    claim.setId(UUID.randomUUID().toString());
-                    claim.setPath(List.of(claimName));
-                    return claim;
-                })
-                .toList();
-
-        Credential credential = new Credential();
-        credential.setId(UUID.randomUUID().toString());
-        credential.setFormat(VCFormat.SD_JWT_VC);
-        credential.setMeta(meta);
-        credential.setClaims(claims);
-        if (!queryMap.requireCryptographicHolderBinding()) {
-            credential.setRequireCryptographicHolderBinding(false);
-        }
+        Credential credential = toCredentialQuery(UUID.randomUUID().toString(), queryMap);
 
         CredentialSet credentialSet = new CredentialSet();
         credentialSet.setOptions(List.of(List.of(credential.getId())));
@@ -80,27 +61,36 @@ public class SdJwtCredentialConstrainer {
     }
 
     private Credential toCredentialQuery(CredentialRequirement requirement, boolean requireCryptographicHolderBinding) {
-        Meta meta = new Meta();
-        meta.setVctValues(requirement.getVct());
+        return toCredentialQuery(
+                requirement.getId(),
+                new QueryMap(
+                        requirement.getCredentialTypes(), requirement.getClaims(), requireCryptographicHolderBinding));
+    }
 
-        List<Claim> claims = requirement.getClaims().stream()
-                .map(claimName -> {
-                    Claim claim = new Claim();
-                    claim.setId(UUID.randomUUID().toString());
-                    claim.setPath(List.of(claimName));
-                    return claim;
-                })
+    private Credential toCredentialQuery(String id, QueryMap queryMap) {
+        Meta meta = new Meta();
+        meta.setVctValues(queryMap.expectedVcts());
+
+        List<Claim> claims = queryMap.requiredClaims().stream()
+                .map(SdJwtCredentialConstrainer::toClaim)
                 .toList();
 
         Credential credential = new Credential();
-        credential.setId(requirement.getId());
+        credential.setId(id);
         credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
-        if (!requireCryptographicHolderBinding) {
+        if (!queryMap.requireCryptographicHolderBinding()) {
             credential.setRequireCryptographicHolderBinding(false);
         }
         return credential;
+    }
+
+    private static Claim toClaim(String claimName) {
+        Claim claim = new Claim();
+        claim.setId(UUID.randomUUID().toString());
+        claim.setPath(List.of(claimName));
+        return claim;
     }
 
     public record QueryMap(
