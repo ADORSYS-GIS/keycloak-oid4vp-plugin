@@ -62,8 +62,23 @@ public class VpTokenDcqlValidator {
             }
         }
 
+        for (PresentedCredential presented : presentations) {
+            validateHolderBinding(presented);
+        }
+
         dcqlSatisfactionValidator.validate(presentations, dcqlQuery);
         return presentations;
+    }
+
+    private static void validateHolderBinding(PresentedCredential presented) throws VpTokenValidationException {
+        Credential credentialQuery = presented.credentialQuery();
+        Boolean required = credentialQuery.getRequireCryptographicHolderBinding();
+        if (!Boolean.FALSE.equals(required)
+                && presented.presentation().getKeyBindingJWT().isEmpty()) {
+            throw new VpTokenValidationException(
+                    VpTokenValidationException.Phase.DCQL,
+                    "DCQL query requires cryptographic holder binding (Key Binding JWT)");
+        }
     }
 
     private static PresentedCredential parsePresentation(

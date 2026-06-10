@@ -3,9 +3,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -30,7 +29,6 @@ import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
-import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.MediaType;
 
 /**
@@ -46,10 +44,16 @@ public class AuthorizationResponseService {
 
     private final KeycloakSession session;
     private final VpTokenDcqlValidator vpTokenDcqlValidator;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
 
     public AuthorizationResponseService(KeycloakSession session) {
+        this(session, DcqlCredentialCapabilities.createDefault());
+    }
+
+    public AuthorizationResponseService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
         this.vpTokenDcqlValidator = new VpTokenDcqlValidator();
+        this.dcqlCapabilities = dcqlCapabilities;
     }
 
     /**
@@ -79,28 +83,9 @@ public class AuthorizationResponseService {
 
         logger.debugf("Initializing authentication with DCQL-validated SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();
-        String nonce = authContext.getRequestObject().getNonce();
-        String aud = authContext.getRequestObject().getClientId();
-        processorSession.setAuthNote(SdJwtAuthenticator.SDJWT_TOKEN_KEY, sdJwtVp);
-        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
-        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
-
-        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(
-                authContext.getRequestObject().getDcqlQuery().getCredentials());
-        processorSession.setAuthNote(
-                SdJwtAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
-                String.valueOf(requireCryptographicHolderBinding));
-
-        var transactionData = authContext.getRequestObject().getTransactionData();
-        if (transactionData != null && !transactionData.isEmpty()) {
-            try {
-                processorSession.setAuthNote(
-                        SdJwtAuthenticator.TRANSACTION_DATA_WIRE_KEY,
-                        JsonSerialization.writeValueAsString(transactionData));
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to persist transaction_data for validation", e);
-            }
-        }
+        var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+        var dcqlCapability = dcqlCapabilities.resolveForPresentation(dcqlQuery);
+        dcqlCapability.setupAuthenticationSession(processorSession, sdJwtVp, authContext);
 
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");
@@ -132,10 +117,6 @@ public class AuthorizationResponseService {
 
         // Persist authorization context
         store.storeAuthorizationContext(authContext);
-    }
-
-    private static boolean isCryptographicHolderBindingRequired(List<Credential> credentials) {
-        return credentials.stream().noneMatch(c -> Boolean.FALSE.equals(c.getRequireCryptographicHolderBinding()));
     }
 
     private static String getAuthenticatorErrorMessage(Response response) {

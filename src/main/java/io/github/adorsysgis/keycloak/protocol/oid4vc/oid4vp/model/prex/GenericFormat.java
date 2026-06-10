@@ -8,21 +8,21 @@ import java.util.List;
 import javax.annotation.processing.Generated;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"alg"})
+@JsonPropertyOrder({"alg_values"})
 @Generated("jsonschema2pojo")
 public class GenericFormat {
 
-    @JsonProperty("alg")
-    private List<String> alg = new ArrayList<String>();
+    @JsonProperty("alg_values")
+    private List<String> algValues = new ArrayList<String>();
 
-    @JsonProperty("alg")
-    public List<String> getAlg() {
-        return alg;
+    @JsonProperty("alg_values")
+    public List<String> getAlgValues() {
+        return algValues;
     }
 
-    @JsonProperty("alg")
-    public void setAlg(List<String> alg) {
-        this.alg = alg;
+    @JsonProperty("alg_values")
+    public void setAlgValues(List<String> algValues) {
+        this.algValues = algValues;
     }
 
     @Override
@@ -32,9 +32,9 @@ public class GenericFormat {
                 .append('@')
                 .append(Integer.toHexString(System.identityHashCode(this)))
                 .append('[');
-        sb.append("alg");
+        sb.append("algValues");
         sb.append('=');
-        sb.append(((this.alg == null) ? "<null>" : this.alg));
+        sb.append(((this.algValues == null) ? "<null>" : this.algValues));
         sb.append(',');
         if (sb.charAt((sb.length() - 1)) == ',') {
             sb.setCharAt((sb.length() - 1), ']');
@@ -47,7 +47,7 @@ public class GenericFormat {
     @Override
     public int hashCode() {
         int result = 1;
-        result = ((result * 31) + ((this.alg == null) ? 0 : this.alg.hashCode()));
+        result = ((result * 31) + ((this.algValues == null) ? 0 : this.algValues.hashCode()));
         return result;
     }
 
@@ -60,6 +60,7 @@ public class GenericFormat {
             return false;
         }
         GenericFormat rhs = ((GenericFormat) other);
-        return ((this.alg == rhs.alg) || ((this.alg != null) && this.alg.equals(rhs.alg)));
+        return ((this.algValues == rhs.algValues)
+                || ((this.algValues != null) && this.algValues.equals(rhs.algValues)));
     }
 }

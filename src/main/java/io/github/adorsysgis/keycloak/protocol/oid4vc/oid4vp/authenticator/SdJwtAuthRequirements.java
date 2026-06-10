@@ -4,6 +4,7 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -112,13 +113,12 @@ public class SdJwtAuthRequirements {
         return requirements.build();
     }
 
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
-        return getSdJwtQueryMap(requireCryptographicHolderBinding);
+    public QuerySpec getSdJwtQuerySpec() {
+        return getSdJwtQuerySpec(requireCryptographicHolderBinding);
     }
 
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap(boolean requireCryptographicHolderBinding) {
-        return new SdJwtCredentialConstrainer.QueryMap(
-                getExpectedVcts(), getRequiredClaims(), requireCryptographicHolderBinding);
+    public QuerySpec getSdJwtQuerySpec(boolean requireHolderBinding) {
+        return QuerySpec.of(getExpectedVcts(), getRequiredClaims(), requireHolderBinding);
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {

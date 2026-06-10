@@ -1,18 +1,35 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public class VerifierDiscoveryServiceTest {
+
+    @Test
+    void shouldAdvertiseOnlyDcSdJwtWithDefaultCapabilities() throws Exception {
+        VerifierDiscoveryService discoveryService =
+                new VerifierDiscoveryService(null, DcqlCredentialCapabilities.createDefault());
+
+        JsonNode metadata = JsonSerialization.mapper.valueToTree(discoveryService.getClientMetadata(null));
+        JsonNode vpFormats = metadata.get("vp_formats_supported");
+        assertTrue(vpFormats.has("dc+sd-jwt"));
+        assertFalse(vpFormats.has("jwt_vc_json"));
+    }
 
     @Nested
     class TestPreferECKey extends OID4VPBaseKeycloakTest {

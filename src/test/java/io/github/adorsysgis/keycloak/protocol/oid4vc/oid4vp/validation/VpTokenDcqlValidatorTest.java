@@ -106,6 +106,7 @@ class VpTokenDcqlValidatorTest {
         credential.setMeta(new Meta());
         credential.getMeta().setVctValues(List.of("https://example.com/vct"));
         credential.setClaims(List.of(claim));
+        credential.setRequireCryptographicHolderBinding(false);
         return credential;
     }
 

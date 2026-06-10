@@ -10,15 +10,15 @@ import javax.annotation.processing.Generated;
  * <p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"dc+sd-jwt", "jwt", "jwt_vc", "jwt_vp", "ldp", "ldp_vc", "ldp_vp"})
+@JsonPropertyOrder({"dc+sd-jwt", "jwt", "jwt_vc_json", "jwt_vp", "ldp", "ldp_vc", "ldp_vp"})
 @Generated("jsonschema2pojo")
 public class ClaimFormat {
 
     @JsonProperty("jwt")
     private GenericFormat jwt;
 
-    @JsonProperty("jwt_vc")
-    private GenericFormat jwtVc;
+    @JsonProperty("jwt_vc_json")
+    private GenericFormat jwtVcJson;
 
     @JsonProperty("jwt_vp")
     private GenericFormat jwtVp;
@@ -45,14 +45,14 @@ public class ClaimFormat {
         this.jwt = jwt;
     }
 
-    @JsonProperty("jwt_vc")
-    public GenericFormat getJwtVc() {
-        return jwtVc;
+    @JsonProperty("jwt_vc_json")
+    public GenericFormat getJwtVcJson() {
+        return jwtVcJson;
     }
 
-    @JsonProperty("jwt_vc")
-    public void setJwtVc(GenericFormat jwtVc) {
-        this.jwtVc = jwtVc;
+    @JsonProperty("jwt_vc_json")
+    public void setJwtVcJson(GenericFormat jwtVcJson) {
+        this.jwtVcJson = jwtVcJson;
     }
 
     @JsonProperty("jwt_vp")
@@ -116,9 +116,9 @@ public class ClaimFormat {
         sb.append('=');
         sb.append(((this.jwt == null) ? "<null>" : this.jwt));
         sb.append(',');
-        sb.append("jwtVc");
+        sb.append("jwtVcJson");
         sb.append('=');
-        sb.append(((this.jwtVc == null) ? "<null>" : this.jwtVc));
+        sb.append(((this.jwtVcJson == null) ? "<null>" : this.jwtVcJson));
         sb.append(',');
         sb.append("jwtVp");
         sb.append('=');
@@ -155,7 +155,7 @@ public class ClaimFormat {
         result = ((result * 31) + ((this.ldpVc == null) ? 0 : this.ldpVc.hashCode()));
         result = ((result * 31) + ((this.jwt == null) ? 0 : this.jwt.hashCode()));
         result = ((result * 31) + ((this.dcSdJwt == null) ? 0 : this.dcSdJwt.hashCode()));
-        result = ((result * 31) + ((this.jwtVc == null) ? 0 : this.jwtVc.hashCode()));
+        result = ((result * 31) + ((this.jwtVcJson == null) ? 0 : this.jwtVcJson.hashCode()));
         result = ((result * 31) + ((this.ldp == null) ? 0 : this.ldp.hashCode()));
         result = ((result * 31) + ((this.jwtVp == null) ? 0 : this.jwtVp.hashCode()));
         return result;
@@ -178,8 +178,8 @@ public class ClaimFormat {
                                                         || ((this.jwt != null) && this.jwt.equals(rhs.jwt))))
                                         && ((this.dcSdJwt == rhs.dcSdJwt)
                                                 || ((this.dcSdJwt != null) && this.dcSdJwt.equals(rhs.dcSdJwt))))
-                                && ((this.jwtVc == rhs.jwtVc)
-                                        || ((this.jwtVc != null) && this.jwtVc.equals(rhs.jwtVc))))
+                                && ((this.jwtVcJson == rhs.jwtVcJson)
+                                        || ((this.jwtVcJson != null) && this.jwtVcJson.equals(rhs.jwtVcJson))))
                         && ((this.ldp == rhs.ldp) || ((this.ldp != null) && this.ldp.equals(rhs.ldp))))
                 && ((this.jwtVp == rhs.jwtVp) || ((this.jwtVp != null) && this.jwtVp.equals(rhs.jwtVp))));
     }
