@@ -8,9 +8,9 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.Ep
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -69,18 +69,20 @@ public class AuthorizationRequestService {
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
     private final KeycloakSession session;
-    private final SdJwtCredentialConstrainer constrainer;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
     private final VerifierDiscoveryService discoveryService;
 
     private final String openID4VPRootUrl;
     private final int authSessionLifespanSecs;
 
     public AuthorizationRequestService(KeycloakSession session) {
-        this.session = session;
-        this.constrainer = new SdJwtCredentialConstrainer();
+        this(session, DcqlCredentialCapabilities.createDefault());
+    }
 
-        // Initialize discovery service
-        this.discoveryService = new VerifierDiscoveryService(session);
+    public AuthorizationRequestService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
+        this.session = session;
+        this.dcqlCapabilities = dcqlCapabilities;
+        this.discoveryService = new VerifierDiscoveryService(session, dcqlCapabilities);
         this.openID4VPRootUrl = OID4VPUserAuthEndpointBase.getOpenID4VPRootUrl(session);
 
         // Read the authentication session lifespan from the realm configuration
@@ -121,12 +123,8 @@ public class AuthorizationRequestService {
         String clientId = discoveryService.getClientId(config.getClientIdentifierPrefix(), certificate);
         ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
-        // Load query map for SD-JWT authentication
-        SdJwtAuthRequirements authReqs = config.getAuthRequirements();
-        var queryMap = authReqs.getSdJwtQueryMap(config.effectiveRequireCryptographicHolderBinding());
-
-        // Build request object
-        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, queryMap, requestId);
+        // Build request object with DCQL query from the active format capability
+        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, requestId);
 
         // Sign request object initially, unless we know request_uri_method = post
         String requestObjectJwt = null;
@@ -227,11 +225,7 @@ public class AuthorizationRequestService {
      * Returns a starter for building request objects.
      */
     private RequestObject buildRequestObject(
-            String clientId,
-            ClientMetadata clientMetadata,
-            VerifierConfig config,
-            SdJwtCredentialConstrainer.QueryMap queryMap,
-            String requestId) {
+            String clientId, ClientMetadata clientMetadata, VerifierConfig config, String requestId) {
         String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
                 .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
                 .path(requestId)
@@ -243,7 +237,10 @@ public class AuthorizationRequestService {
                 .limit(2)
                 .collect(Collectors.joining("."));
 
-        DcqlQuery dcqlQuery = constrainer.generateDcqlQuery(queryMap);
+        var dcqlCapability = dcqlCapabilities.resolve(config);
+        DcqlQuery dcqlQuery = dcqlCapability.buildAuthorizationQuery(config);
+        DcqlQueryValidator.validateQuery(dcqlQuery);
+
         // Single-credential SD-JWT login flow: transaction_data and verifier_info reference this id.
         // Multi-credential queries would need coordinated changes in response extraction and wiring.
         String dcqlCredentialId = dcqlQuery.getCredentials().getFirst().getId();
