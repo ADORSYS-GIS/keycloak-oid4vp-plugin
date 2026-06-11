@@ -31,7 +31,7 @@ fi
 
 # ---- Defaults ----
 DEMO_COMPOSE_PROJECT="${DEMO_COMPOSE_PROJECT:-oid4vp-demo}"
-KEYCLOAK_IMAGE="${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.1}"
+KEYCLOAK_IMAGE="${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.3}"
 KC_ADMIN_USER="${KC_ADMIN_USER:-admin}"
 KC_ADMIN_PASS="${KC_ADMIN_PASS:-admin}"
 KC_HTTP_PORT="${KC_HTTP_PORT:-18080}"
