@@ -414,10 +414,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 .setError(authorizationContext.getError())
                 .setErrorDescription(authorizationContext.getErrorDescription());
 
-        if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
-            reducedContext.setAuthorizationCode(authorizationContext.getAuthorizationCode());
-        }
-
         return CorsService.forWebOrigins(authSession).add(Response.ok(reducedContext));
     }
 
@@ -489,8 +485,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
-        if (oidcAuthSession == null) {
-            // Require code challenge details for API-initiated authentication sessions
+        if (oidcAuthSession == null || !oidcAuthSession.enableSameDeviceResponse()) {
             validateOwnershipBinding(codeChallengeDetails);
         }
 

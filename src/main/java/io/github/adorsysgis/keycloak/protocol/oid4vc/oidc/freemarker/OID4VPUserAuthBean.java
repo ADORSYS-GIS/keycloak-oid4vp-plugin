@@ -9,6 +9,7 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
 import jakarta.ws.rs.core.UriBuilder;
@@ -25,6 +26,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.protocol.oidc.utils.PkceUtils;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -123,35 +125,53 @@ public class OID4VPUserAuthBean {
             return authContextBean;
         }
 
-        // Initiate OID4VP authentication
+        // Initiate OID4VP authentication (cross-device QR flow drives status polling + /code redemption)
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
         String profileId = params.getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM);
-        AuthorizationContext authContext = startOpenID4VPAuthentication(clientId, profileId, false);
-        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, profileId, true);
+        OpenId4vpPkce crossDevicePkce = OpenId4vpPkce.generate();
+        AuthorizationContext authContext =
+                startOpenID4VPAuthentication(clientId, profileId, false, crossDevicePkce.challengeDetails());
+        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, profileId, true, null);
 
         // Convert authorization request to QR code (cross-device)
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
 
-        // Build URL for polling status (cross-device)
+        // Build URLs for polling status and PKCE-protected code redemption
         String authStatusUrl = buildAuthStatusUrl(authContext.getTransactionId());
+        String authCodeRedemptionUrl = buildAuthCodeRedemptionUrl();
 
         // Gather context
         authContextBean = new AuthContextBean()
                 .setAuthReqQrCode(authReqQrCode)
                 .setAuthStatusUrl(authStatusUrl)
+                .setAuthCodeRedemptionUrl(authCodeRedemptionUrl)
+                .setTransactionId(authContext.getTransactionId())
+                .setCodeVerifier(crossDevicePkce.codeVerifier())
                 .setAuthReqLink(authContextSameDevice.getAuthorizationRequest());
 
         return authContextBean;
     }
 
     private AuthorizationContext startOpenID4VPAuthentication(
-            String clientId, String profileId, boolean enableSameDeviceResponse) {
-        // TODO: Generate and pass code challenge details for ownership binding and enhanced security in started subflow
+            String clientId,
+            String profileId,
+            boolean enableSameDeviceResponse,
+            CodeChallengeDetails codeChallengeDetails) {
         return oid4vp.startAuthentication(
                 clientId,
                 profileId,
                 new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
-                null);
+                codeChallengeDetails);
+    }
+
+    private String buildAuthCodeRedemptionUrl() {
+        URI currentUri = session.getContext().getUri().getBaseUri();
+        return UriBuilder.fromUri(currentUri)
+                .path(ServiceUrlConstants.REALM_INFO_PATH)
+                .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
+                .path(OID4VPUserAuthEndpoint.AUTH_CODE_PATH)
+                .build(realm.getName())
+                .toString();
     }
 
     private String buildAuthStatusUrl(String transactionId) {
@@ -234,6 +254,9 @@ public class OID4VPUserAuthBean {
         private String authReqLink;
         private String authReqQrCode;
         private String authStatusUrl;
+        private String authCodeRedemptionUrl;
+        private String transactionId;
+        private String codeVerifier;
 
         public String getAuthReqLink() {
             return authReqLink;
@@ -262,18 +285,63 @@ public class OID4VPUserAuthBean {
             return this;
         }
 
+        public String getAuthCodeRedemptionUrl() {
+            return authCodeRedemptionUrl;
+        }
+
+        public AuthContextBean setAuthCodeRedemptionUrl(String authCodeRedemptionUrl) {
+            this.authCodeRedemptionUrl = authCodeRedemptionUrl;
+            return this;
+        }
+
+        public String getTransactionId() {
+            return transactionId;
+        }
+
+        public AuthContextBean setTransactionId(String transactionId) {
+            this.transactionId = transactionId;
+            return this;
+        }
+
+        public String getCodeVerifier() {
+            return codeVerifier;
+        }
+
+        public AuthContextBean setCodeVerifier(String codeVerifier) {
+            this.codeVerifier = codeVerifier;
+            return this;
+        }
+
         @Override
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             AuthContextBean that = (AuthContextBean) o;
             return Objects.equals(getAuthReqLink(), that.getAuthReqLink())
                     && Objects.equals(getAuthReqQrCode(), that.getAuthReqQrCode())
-                    && Objects.equals(getAuthStatusUrl(), that.getAuthStatusUrl());
+                    && Objects.equals(getAuthStatusUrl(), that.getAuthStatusUrl())
+                    && Objects.equals(getAuthCodeRedemptionUrl(), that.getAuthCodeRedemptionUrl())
+                    && Objects.equals(getTransactionId(), that.getTransactionId())
+                    && Objects.equals(getCodeVerifier(), that.getCodeVerifier());
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(getAuthReqLink(), getAuthReqQrCode(), getAuthStatusUrl());
+            return Objects.hash(
+                    getAuthReqLink(),
+                    getAuthReqQrCode(),
+                    getAuthStatusUrl(),
+                    getAuthCodeRedemptionUrl(),
+                    getTransactionId(),
+                    getCodeVerifier());
+        }
+    }
+
+    private record OpenId4vpPkce(String codeVerifier, CodeChallengeDetails challengeDetails) {
+        private static OpenId4vpPkce generate() {
+            String codeVerifier = PkceUtils.generateCodeVerifier();
+            String codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+            return new OpenId4vpPkce(
+                    codeVerifier, new CodeChallengeDetails(codeChallenge, OAuth2Constants.PKCE_METHOD_S256));
         }
     }
 }
