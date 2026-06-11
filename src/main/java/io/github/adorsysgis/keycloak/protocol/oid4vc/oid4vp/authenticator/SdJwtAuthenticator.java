@@ -3,16 +3,21 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -26,7 +31,6 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
@@ -61,6 +65,11 @@ public class SdJwtAuthenticator implements Authenticator {
      */
     public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
 
+    /**
+     * Optional serialized map of DCQL credential IDs to presented SD-JWT VP tokens.
+     */
+    public static final String SDJWT_TOKENS_KEY = "sdjwt_tokens";
+
     public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY = "require_cryptographic_holder_binding";
 
     public static final String TRANSACTION_DATA_WIRE_KEY = "transaction_data_wire";
@@ -75,7 +84,9 @@ public class SdJwtAuthenticator implements Authenticator {
         AuthenticationSessionModel authSession = context.getAuthenticationSession();
         logger.info("Authenticating with SdJwtAuthenticator");
 
-        SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context);
+        AuthenticationProfile profile = getAuthenticationProfile(context);
+        CredentialRequirement primaryCredential = profile.getPrimaryCredential();
+        SdJwtAuthRequirements authReqs = getAuthenticationRequirements(context, primaryCredential);
         String nonce = authSession.getAuthNote(CHALLENGE_NONCE_KEY);
         String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
         boolean requireCryptographicHolderBinding = parseRequireCryptographicHolderBinding(
@@ -125,6 +136,24 @@ public class SdJwtAuthenticator implements Authenticator {
             return;
         }
 
+        try {
+            Map<String, String> sdJwtVpTokens = getPresentedSdJwtTokens(authSession);
+            new SdJwtSupportingCredentialVerifier(context.getSession(), consumer, tokenStatusValidator)
+                    .verify(
+                            profile,
+                            sdJwtVpTokens,
+                            sdJwt,
+                            user,
+                            context.getAuthenticatorConfig(),
+                            nonce,
+                            aud,
+                            requireCryptographicHolderBinding);
+        } catch (VerificationException | IllegalStateException e) {
+            logger.errorf(e, "Supporting credential verification failed (authSession = %s)", correlationId(context));
+            failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
+            return;
+        }
+
         context.setUser(user);
         context.success(); // Mark authentication as successful
         logger.debugf("User '%s' successfully authenticated", user.getUsername());
@@ -135,8 +164,37 @@ public class SdJwtAuthenticator implements Authenticator {
         // No form action is relevant for this authenticator
     }
 
-    private SdJwtAuthRequirements getAuthenticationRequirements(AuthenticationFlowContext context) {
-        return new SdJwtAuthRequirements(context.getSession().getContext(), context.getAuthenticatorConfig());
+    private SdJwtAuthRequirements getAuthenticationRequirements(
+            AuthenticationFlowContext context, CredentialRequirement primaryCredential) {
+        if (!primaryCredential.isPrimary()) {
+            throw new IllegalStateException("Authentication profile primary credential is invalid");
+        }
+        return new SdJwtAuthRequirements(
+                context.getSession().getContext(), context.getAuthenticatorConfig(), primaryCredential);
+    }
+
+    private AuthenticationProfile getAuthenticationProfile(AuthenticationFlowContext context) {
+        try {
+            AuthorizationContext authContext =
+                    new AuthenticationSessionStore(context.getAuthenticationSession()).getAuthorizationContext();
+            return new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig())
+                    .getProfile(authContext.getProfileId());
+        } catch (IllegalArgumentException e) {
+            return new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig())
+                    .getProfile(AuthenticationProfile.DEFAULT_PROFILE_ID);
+        }
+    }
+
+    private Map<String, String> getPresentedSdJwtTokens(AuthenticationSessionModel authSession) {
+        String tokensJson = authSession.getAuthNote(SDJWT_TOKENS_KEY);
+        if (StringUtil.isBlank(tokensJson)) {
+            return Map.of();
+        }
+        try {
+            return JsonSerialization.readValue(tokensJson, new TypeReference<Map<String, String>>() {});
+        } catch (IOException e) {
+            throw new IllegalStateException("Invalid SD-JWT tokens auth note", e);
+        }
     }
 
     private static boolean parseRequireCryptographicHolderBinding(String note) {
@@ -225,29 +283,7 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private String readClaimFromCredential(SdJwtVP sdJwt, String claimName) {
-        JsonNode issuerSignedJwtPayload = sdJwt.getIssuerSignedJWT().getPayload();
-        JsonNode claim = issuerSignedJwtPayload.get(claimName);
-
-        if (claim == null) {
-            claim = readSelectivelyDisclosedClaim(sdJwt, claimName);
-        }
-
-        return claim != null ? claim.asText() : null;
-    }
-
-    private JsonNode readSelectivelyDisclosedClaim(SdJwtVP sdJwt, String claimName) {
-        for (String disclosure : sdJwt.getDisclosuresString()) {
-            try {
-                ArrayNode arrayNode = SdJwtUtils.decodeDisclosureString(disclosure);
-                if (arrayNode.size() == 3 && arrayNode.get(1).asText().equals(claimName)) {
-                    return arrayNode.get(2);
-                }
-            } catch (VerificationException e) {
-                logger.warnf(e, "Failed to decode disclosure string");
-            }
-        }
-
-        return null;
+        return SdJwtCredentialClaims.readClaim(sdJwt, claimName);
     }
 
     private static String correlationId(AuthenticationFlowContext context) {

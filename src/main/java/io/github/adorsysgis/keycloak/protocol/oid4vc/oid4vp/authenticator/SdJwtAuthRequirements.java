@@ -5,6 +5,7 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -31,8 +32,9 @@ public class SdJwtAuthRequirements {
 
     private static final Logger logger = Logger.getLogger(SdJwtAuthRequirements.class);
 
-    private final List<String> expectedVcts;
-    private final String expectedVctsPattern;
+    private List<String> expectedVcts;
+    private List<String> requiredClaims;
+    private String expectedVctsPattern;
     private final String keycloakIssuerURI;
 
     private final int kbJwtMaxAllowedAge;
@@ -51,6 +53,7 @@ public class SdJwtAuthRequirements {
 
         this.expectedVcts = parseMultiStr(config.getOrDefault(
                 SdJwtAuthenticatorFactory.VCT_CONFIG, SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT));
+        this.requiredClaims = List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
 
         this.kbJwtMaxAllowedAge = Integer.parseInt(config.getOrDefault(
                 SdJwtAuthenticatorFactory.KBJWT_MAX_AGE_CONFIG,
@@ -79,9 +82,15 @@ public class SdJwtAuthRequirements {
         this.keycloakIssuerURI = Urls.realmIssuer(
                 context.getUri().getBaseUri(), context.getRealm().getName());
 
-        this.expectedVctsPattern = expectedVcts.stream()
-                .map(vct -> Pattern.quote("\"" + vct + "\""))
-                .collect(Collectors.joining("|", "(", ")"));
+        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
+    }
+
+    public SdJwtAuthRequirements(
+            KeycloakContext context, AuthenticatorConfigModel authConfig, CredentialRequirement credentialRequirement) {
+        this(context, authConfig);
+        this.expectedVcts = credentialRequirement.getCredentialTypes();
+        this.requiredClaims = credentialRequirement.getClaims();
+        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
     }
 
     public List<String> getExpectedVcts() {
@@ -89,9 +98,7 @@ public class SdJwtAuthRequirements {
     }
 
     public List<String> getRequiredClaims() {
-        // A subject is required so we can recover the user by stable identifier
-        // A username is required so we can cross-check the presented user
-        return List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
+        return requiredClaims;
     }
 
     public boolean shouldEnforceRevocationStatus() {
@@ -179,6 +186,12 @@ public class SdJwtAuthRequirements {
         return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, (expectedAud, aud) -> expectedPattern
                 .matcher(aud)
                 .matches());
+    }
+
+    private String buildExpectedVctsPattern(List<String> expectedVcts) {
+        return expectedVcts.stream()
+                .map(vct -> Pattern.quote("\"" + vct + "\""))
+                .collect(Collectors.joining("|", "(", ")"));
     }
 
     private List<String> parseMultiStr(String str) {
