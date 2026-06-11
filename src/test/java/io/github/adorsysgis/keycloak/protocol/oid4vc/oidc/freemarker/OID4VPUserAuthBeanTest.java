@@ -148,12 +148,14 @@ public class OID4VPUserAuthBeanTest {
                 .startAuthentication(
                         eq(TEST_CLIENT_ID), oidcAuthSessionCaptor.capture(), codeChallengeDetailsCaptor.capture());
 
-        OIDCAuthSession crossDeviceSession = oidcAuthSessionCaptor.getAllValues().get(0);
+        OIDCAuthSession crossDeviceSession =
+                oidcAuthSessionCaptor.getAllValues().get(0);
         OIDCAuthSession sameDeviceSession = oidcAuthSessionCaptor.getAllValues().get(1);
         assertFalse(crossDeviceSession.enableSameDeviceResponse());
         assertTrue(sameDeviceSession.enableSameDeviceResponse());
 
-        CodeChallengeDetails crossDevicePkce = codeChallengeDetailsCaptor.getAllValues().get(0);
+        CodeChallengeDetails crossDevicePkce =
+                codeChallengeDetailsCaptor.getAllValues().get(0);
         assertNotNull(crossDevicePkce);
         assertNotNull(crossDevicePkce.codeChallenge());
         assertEquals(OAuth2Constants.PKCE_METHOD_S256, crossDevicePkce.codeChallengeMethod());
