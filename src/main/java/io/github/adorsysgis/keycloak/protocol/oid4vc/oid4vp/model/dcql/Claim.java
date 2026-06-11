@@ -13,10 +13,10 @@ public class Claim {
      * support {@code null} array wildcards or integer indexes from OpenID4VP Claims Path Pointers.
      */
     @JsonProperty("path")
-    private List<String> path;
+    private List<Object> path;
 
     @JsonProperty("values")
-    private List<String> values;
+    private List<Object> values;
 
     public String getId() {
         return id;
@@ -26,19 +26,19 @@ public class Claim {
         this.id = id;
     }
 
-    public List<String> getPath() {
+    public List<Object> getPath() {
         return path;
     }
 
-    public void setPath(List<String> path) {
+    public void setPath(List<Object> path) {
         this.path = path;
     }
 
-    public List<String> getValues() {
+    public List<Object> getValues() {
         return values;
     }
 
-    public void setValues(List<String> values) {
+    public void setValues(List<Object> values) {
         this.values = values;
     }
 }

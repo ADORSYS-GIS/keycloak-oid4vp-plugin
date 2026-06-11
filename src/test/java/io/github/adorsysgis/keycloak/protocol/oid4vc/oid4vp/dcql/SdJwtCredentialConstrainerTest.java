@@ -41,7 +41,7 @@ public class SdJwtCredentialConstrainerTest {
         assertEquals(spec.claimPaths().size(), credential.getClaims().size());
 
         var paths = credential.getClaims().stream()
-                .map(claim -> claim.getPath().getFirst())
+                .map(claim -> (String) claim.getPath().getFirst())
                 .toList();
         var expectedPaths =
                 spec.claimPaths().stream().map(path -> path.getFirst()).toList();

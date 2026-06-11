@@ -459,7 +459,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map does not match DCQL credential query");
+                "vp_token contains unexpected credential query id");
     }
 
     @Test
@@ -473,7 +473,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented SD-JWT vct does not match any value in meta.vct_values");
+                "Presentation vct does not match any value requested in DCQL meta.vct_values");
     }
 
     @Test
@@ -487,7 +487,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented SD-JWT does not satisfy DCQL claim path: [sub]");
+                "Presentation does not contain claim required by DCQL path");
     }
 
     @Test

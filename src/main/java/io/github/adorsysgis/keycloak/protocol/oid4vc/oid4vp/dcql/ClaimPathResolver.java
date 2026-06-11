@@ -18,11 +18,11 @@ public final class ClaimPathResolver {
 
     private ClaimPathResolver() {}
 
-    public static boolean isPresentInJson(JsonNode root, List<String> path) {
+    public static boolean isPresentInJson(JsonNode root, List<Object> path) {
         return isPresent(resolveInPayload(root, path));
     }
 
-    public static boolean isPresentInSdJwt(SdJwtVP sdJwt, List<String> path) {
+    public static boolean isPresentInSdJwt(SdJwtVP sdJwt, List<Object> path) {
         if (path == null || path.isEmpty()) {
             return false;
         }
@@ -33,21 +33,30 @@ public final class ClaimPathResolver {
         }
 
         if (path.size() == 1) {
-            return hasDisclosedClaim(sdJwt, path.getFirst());
+            return hasDisclosedClaim(sdJwt, pathSegmentAsString(path.getFirst()));
         }
 
         return false;
     }
 
-    private static JsonNode resolveInPayload(JsonNode root, List<String> path) {
+    private static JsonNode resolveInPayload(JsonNode root, List<Object> path) {
         JsonNode current = root;
-        for (String segment : path) {
+        for (Object segment : path) {
+            String propertyName = pathSegmentAsString(segment);
             if (current == null || current.isNull()) {
                 return null;
             }
-            current = current.get(segment);
+            current = current.get(propertyName);
         }
         return current;
+    }
+
+    private static String pathSegmentAsString(Object segment) {
+        if (segment instanceof String propertyName) {
+            return propertyName;
+        }
+        throw new IllegalArgumentException(
+                "Claim path supports object property name segments only; unsupported segment: " + segment);
     }
 
     private static boolean hasDisclosedClaim(SdJwtVP sdJwt, String claimName) {

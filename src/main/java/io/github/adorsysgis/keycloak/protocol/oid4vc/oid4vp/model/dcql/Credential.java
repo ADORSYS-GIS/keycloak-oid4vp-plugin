@@ -70,4 +70,8 @@ public class Credential {
     public void setRequireCryptographicHolderBinding(Boolean requireCryptographicHolderBinding) {
         this.requireCryptographicHolderBinding = requireCryptographicHolderBinding;
     }
+
+    public boolean requiresCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding == null || requireCryptographicHolderBinding;
+    }
 }

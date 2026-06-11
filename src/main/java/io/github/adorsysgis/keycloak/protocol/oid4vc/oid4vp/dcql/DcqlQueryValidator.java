@@ -11,10 +11,10 @@ import org.keycloak.VCFormat;
 import org.keycloak.utils.StringUtil;
 
 /**
- * Validates DCQL queries at build time per OpenID4VP 1.0 format-specific rules.
+ * Validates DCQL queries at build time per OpenID4VP 1.0 (Section 6) format-specific rules.
  *
  * <p>Claim {@code path} validation is limited to non-empty object property name segments; array
- * indexes and {@code null} wildcards from Claims Path Pointers are not supported yet.
+ * indexes and {@code null} wildcards from Claims Path Pointers (Section 7) are not supported yet.
  */
 public final class DcqlQueryValidator {
 
@@ -93,7 +93,7 @@ public final class DcqlQueryValidator {
         }
 
         Set<String> claimIds = new HashSet<>();
-        Set<List<String>> claimPaths = new HashSet<>();
+        Set<List<Object>> claimPaths = new HashSet<>();
         boolean claimSetsPresent = claimSets != null && !claimSets.isEmpty();
 
         for (Claim claim : claims) {
@@ -162,22 +162,36 @@ public final class DcqlQueryValidator {
             return;
         }
         for (Claim claim : credential.getClaims()) {
-            if (claim.getPath() == null || claim.getPath().isEmpty()) {
+            List<Object> path = claim.getPath();
+            if (path == null || path.isEmpty()) {
                 throw new IllegalArgumentException("dcql_query claim path must be non-empty");
             }
-            if (claim.getPath().stream().anyMatch(StringUtil::isBlank)) {
-                throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
+            for (Object segment : path) {
+                String segmentText = pathSegmentAsString(segment);
+                if (StringUtil.isBlank(segmentText)) {
+                    throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
+                }
+                if (isUnsupportedPathSegment(segmentText)) {
+                    throw new IllegalArgumentException(
+                            "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
+                }
             }
-            if (claim.getPath().stream().anyMatch(DcqlQueryValidator::isUnsupportedPathSegment)) {
-                throw new IllegalArgumentException(
-                        "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
-            }
-            if (isVpWrapperPath(claim.getPath())) {
+            if (isVpWrapperPath(path)) {
                 throw new IllegalArgumentException(credential.getFormat()
                         + " claim paths must be relative to the VC root, not the VP wrapper: "
-                        + claim.getPath());
+                        + path);
             }
         }
+    }
+
+    private static String pathSegmentAsString(Object segment) {
+        if (segment instanceof String propertyName) {
+            return propertyName;
+        }
+        if (segment == null) {
+            return "null";
+        }
+        return segment.toString();
     }
 
     private static boolean isUnsupportedPathSegment(String segment) {
@@ -187,11 +201,11 @@ public final class DcqlQueryValidator {
         return !segment.isEmpty() && segment.chars().allMatch(Character::isDigit);
     }
 
-    private static boolean isVpWrapperPath(List<String> path) {
+    private static boolean isVpWrapperPath(List<Object> path) {
         if (path.isEmpty()) {
             return false;
         }
-        String first = path.getFirst();
+        String first = pathSegmentAsString(path.getFirst());
         return "verifiableCredential".equals(first) || "vp".equals(first);
     }
 
