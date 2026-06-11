@@ -8,8 +8,10 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.Ep
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -69,18 +71,20 @@ public class AuthorizationRequestService {
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
     private final KeycloakSession session;
-    private final SdJwtCredentialConstrainer constrainer;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
     private final VerifierDiscoveryService discoveryService;
 
     private final String openID4VPRootUrl;
     private final int authSessionLifespanSecs;
 
     public AuthorizationRequestService(KeycloakSession session) {
-        this.session = session;
-        this.constrainer = new SdJwtCredentialConstrainer();
+        this(session, DcqlCredentialCapabilities.createDefault());
+    }
 
-        // Initialize discovery service
-        this.discoveryService = new VerifierDiscoveryService(session);
+    public AuthorizationRequestService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
+        this.session = session;
+        this.dcqlCapabilities = dcqlCapabilities;
+        this.discoveryService = new VerifierDiscoveryService(session, dcqlCapabilities);
         this.openID4VPRootUrl = OID4VPUserAuthEndpointBase.getOpenID4VPRootUrl(session);
 
         // Read the authentication session lifespan from the realm configuration
@@ -122,7 +126,7 @@ public class AuthorizationRequestService {
         String clientId = discoveryService.getClientId(config.getClientIdentifierPrefix(), certificate);
         ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
-        // Build request object
+        // Build request object with DCQL query from the selected authentication profile.
         RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, profile, requestId);
 
         // Sign request object initially, unless we know request_uri_method = post
@@ -241,8 +245,10 @@ public class AuthorizationRequestService {
                 .limit(2)
                 .collect(Collectors.joining("."));
 
-        DcqlQuery dcqlQuery =
-                constrainer.generateDcqlQuery(profile, config.effectiveRequireCryptographicHolderBinding());
+        DcqlQuery dcqlQuery = SdJwtCredentialConstrainer.create()
+                .buildQuery(profile, config.effectiveRequireCryptographicHolderBinding());
+        DcqlQueryValidator.validateQuery(dcqlQuery);
+
         // transaction_data and verifier_info currently reference the primary DCQL
         // credential id. Multi-credential profile support keeps the selected
         // profile's first credential as the verifier-scoped credential id.

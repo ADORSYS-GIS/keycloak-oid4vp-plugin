@@ -4,8 +4,11 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -22,6 +25,7 @@ import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationProcessor;
+import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
@@ -31,7 +35,6 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
@@ -49,9 +52,15 @@ public class AuthorizationResponseService {
     public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
 
     private final KeycloakSession session;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
 
     public AuthorizationResponseService(KeycloakSession session) {
+        this(session, DcqlCredentialCapabilities.createDefault());
+    }
+
+    public AuthorizationResponseService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
+        this.dcqlCapabilities = dcqlCapabilities;
     }
 
     /**
@@ -82,34 +91,14 @@ public class AuthorizationResponseService {
         HashMap<String, String> sdJwtVpTokens = extractSdJwtVpTokens(responseObject, profile, store, authContext);
         String primarySdJwtVp = sdJwtVpTokens.get(primaryCredential.getId());
 
-        // Formally, we should then check that the VP token satisfies the DCQL constraints.
-        // Equivalently, we offload this task to the SD-JWT authenticator in the authentication flow.
         logger.debugf("Initializing authentication with extracted SD-JWT VP token");
         var processorSession = authProcessor.getAuthenticationSession();
-        String nonce = authContext.getRequestObject().getNonce();
-        String aud = authContext.getRequestObject().getClientId();
-        processorSession.setAuthNote(SdJwtAuthenticator.SDJWT_TOKEN_KEY, primarySdJwtVp);
-        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
-        processorSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
+        var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+        var dcqlCapability =
+                dcqlCapabilities.resolveForPresentation(singleCredentialQuery(dcqlQuery, primaryCredential.getId()));
+        dcqlCapability.setupAuthenticationSession(processorSession, primarySdJwtVp, authContext);
         processorSession.setAuthNote(
                 SdJwtAuthenticator.SDJWT_TOKENS_KEY, JsonSerialization.valueAsString(sdJwtVpTokens));
-
-        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(
-                authContext.getRequestObject().getDcqlQuery().getCredentials());
-        processorSession.setAuthNote(
-                SdJwtAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
-                String.valueOf(requireCryptographicHolderBinding));
-
-        var transactionData = authContext.getRequestObject().getTransactionData();
-        if (transactionData != null && !transactionData.isEmpty()) {
-            try {
-                processorSession.setAuthNote(
-                        SdJwtAuthenticator.TRANSACTION_DATA_WIRE_KEY,
-                        JsonSerialization.writeValueAsString(transactionData));
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to persist transaction_data for validation", e);
-            }
-        }
 
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");
@@ -141,10 +130,6 @@ public class AuthorizationResponseService {
 
         // Persist authorization context
         store.storeAuthorizationContext(authContext);
-    }
-
-    private static boolean isCryptographicHolderBindingRequired(List<Credential> credentials) {
-        return credentials.stream().noneMatch(c -> Boolean.FALSE.equals(c.getRequireCryptographicHolderBinding()));
     }
 
     private static String getAuthenticatorErrorMessage(Response response) {
@@ -187,7 +172,7 @@ public class AuthorizationResponseService {
                 failInvalidVpToken(errorMsg, authContext, store);
             }
             String sdJwtVpToken = decodeIfBase64Url(credentialTokens.getFirst());
-            validateSdJwtVpToken(sdJwtVpToken, authContext, store);
+            validateSdJwtVpToken(sdJwtVpToken, credential.getId(), authContext, store);
             tokens.put(credential.getId(), sdJwtVpToken);
         }
 
@@ -195,13 +180,44 @@ public class AuthorizationResponseService {
     }
 
     private void validateSdJwtVpToken(
-            String sdJwtVpToken, AuthorizationContext authContext, AuthenticationSessionStore store) {
+            String sdJwtVpToken,
+            String credentialId,
+            AuthorizationContext authContext,
+            AuthenticationSessionStore store) {
         try {
-            SdJwtVP.of(sdJwtVpToken);
+            var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+            DcqlQuery credentialQuery = singleCredentialQuery(dcqlQuery, credentialId);
+            dcqlCapabilities
+                    .resolveForPresentation(credentialQuery)
+                    .validatePresentation(credentialQuery, sdJwtVpToken);
+        } catch (VerificationException e) {
+            logger.errorf(e, "Presented credential does not satisfy DCQL query");
+            throw failWithHttpException(
+                    ProcessingError.INVALID_VP_TOKEN,
+                    "Invalid vp_token",
+                    e.getMessage(),
+                    Response.Status.BAD_REQUEST,
+                    authContext,
+                    store);
         } catch (IllegalArgumentException e) {
             logger.errorf(e, "Failed to parse SD-JWT VP token");
             throw failInvalidVpToken("Could not parse SD-JWT VP token contained in `vp_token`", authContext, store);
         }
+    }
+
+    private DcqlQuery singleCredentialQuery(DcqlQuery dcqlQuery, String credentialId) {
+        Credential credential = dcqlQuery.getCredentials().stream()
+                .filter(candidate -> credentialId.equals(candidate.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("DCQL query has no credential id: " + credentialId));
+
+        CredentialSet credentialSet = new CredentialSet();
+        credentialSet.setOptions(List.of(List.of(credential.getId())));
+
+        DcqlQuery query = new DcqlQuery();
+        query.setCredentials(List.of(credential));
+        query.setCredentialSets(List.of(credentialSet));
+        return query;
     }
 
     private WebApplicationException failInvalidVpToken(

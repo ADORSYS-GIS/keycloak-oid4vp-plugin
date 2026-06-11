@@ -1,8 +1,9 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec.of;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
@@ -14,23 +15,23 @@ import org.keycloak.VCFormat;
 
 public class SdJwtCredentialConstrainerTest {
 
-    SdJwtCredentialConstrainer constrainer = new SdJwtCredentialConstrainer();
+    private final SdJwtCredentialConstrainer constrainer = SdJwtCredentialConstrainer.create();
 
     @Test
     void testGenerateDcqlQuery() {
         List<String> vcts = List.of("vct1", "vct2");
         List<String> claims = List.of("name", "email");
-        QueryMap queryMap = new QueryMap(vcts, claims);
-        DcqlQuery query = constrainer.generateDcqlQuery(queryMap);
-        assertDcqlQuery(query, queryMap);
+        QuerySpec spec = of(vcts, claims);
+        DcqlQuery query = constrainer.buildQuery(spec);
+        assertDcqlQuery(query, spec);
     }
 
     @Test
     void testGenerateDcqlQueryWithoutHolderBinding() {
         List<String> vcts = List.of("vct1");
         List<String> claims = List.of("name");
-        QueryMap queryMap = new QueryMap(vcts, claims, false);
-        DcqlQuery query = constrainer.generateDcqlQuery(queryMap);
+        QuerySpec spec = of(vcts, claims, false);
+        DcqlQuery query = constrainer.buildQuery(spec);
         assertEquals(Boolean.FALSE, query.getCredentials().getFirst().getRequireCryptographicHolderBinding());
     }
 
@@ -50,7 +51,7 @@ public class SdJwtCredentialConstrainerTest {
                                 .setCredentialTypes(List.of("supporting-vct"))
                                 .setClaims(List.of("username"))));
 
-        DcqlQuery query = constrainer.generateDcqlQuery(profile);
+        DcqlQuery query = constrainer.buildQuery(profile, true);
 
         assertEquals(2, query.getCredentials().size());
         assertEquals(
@@ -61,20 +62,26 @@ public class SdJwtCredentialConstrainerTest {
                 query.getCredentialSets().getFirst().getOptions().getFirst());
     }
 
-    public static void assertDcqlQuery(DcqlQuery query, QueryMap map) {
+    public static void assertDcqlQuery(DcqlQuery query, QuerySpec spec) {
         assertEquals(1, query.getCredentials().size());
         Credential credential = query.getCredentials().getFirst();
 
         assertEquals(VCFormat.SD_JWT_VC, credential.getFormat());
-        assertEquals(map.expectedVcts(), credential.getMeta().getVctValues());
-        assertEquals(map.requiredClaims().size(), credential.getClaims().size());
+        assertEquals(spec.vctValues(), credential.getMeta().getVctValues());
+        assertEquals(spec.claimPaths().size(), credential.getClaims().size());
 
         var paths = credential.getClaims().stream()
                 .map(claim -> claim.getPath().getFirst())
                 .toList();
-        assertEquals(map.requiredClaims(), paths);
+        var expectedPaths =
+                spec.claimPaths().stream().map(path -> path.getFirst()).toList();
+        assertEquals(expectedPaths, paths);
+        assertEquals(
+                spec.requireCryptographicHolderBinding() != null
+                        ? spec.requireCryptographicHolderBinding()
+                        : Boolean.TRUE,
+                credential.getRequireCryptographicHolderBinding());
 
-        // Assert credential sets
         assertEquals(1, query.getCredentialSets().size());
         var credentialSet = query.getCredentialSets().getFirst();
         assertEquals(1, credentialSet.getOptions().size());

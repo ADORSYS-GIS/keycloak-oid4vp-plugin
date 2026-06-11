@@ -98,7 +98,7 @@ public class OID4VPUserAuthBeanTest {
         OID4VPUserAuthBean bean = createTestBean();
 
         // Login URL should contain login_method=oid4vp
-        URI loginUrl = URI.create(bean.getLoginUrl());
+        URI loginUrl = URI.create(bean.getLoginProfiles().getFirst().getLoginUrl());
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(loginUrl);
         String loginMethod = uriInfo.getQueryParameters().getFirst(PARAM_LOGIN_METHOD);
         assertEquals(LOGIN_METHOD_OID4VP, loginMethod);
@@ -116,7 +116,7 @@ public class OID4VPUserAuthBeanTest {
     @Test
     public void shouldNotInjectLoginUrlIfInvalidClient() {
         OID4VPUserAuthBean bean = createTestBean("unknown-client", true);
-        assertNull(bean.getLoginUrl()); // Null because clientId is invalid
+        assertTrue(bean.getLoginProfiles().isEmpty()); // Empty because clientId is invalid
     }
 
     @Test

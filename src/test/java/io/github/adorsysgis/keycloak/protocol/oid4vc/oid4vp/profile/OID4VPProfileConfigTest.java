@@ -54,31 +54,6 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
-    void shouldParseLegacyVctAlias() {
-        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
-        config.setConfig(Map.of(PROFILES_CONFIG, """
-                [
-                  {
-                    "id": "legacy",
-                    "credentials": [
-                      { "id": "primary", "role": "primary", "vct": ["legacy-vct"], "claims": ["sub", "username"] }
-                    ]
-                  }
-                ]
-                """));
-
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
-
-        assertEquals(
-                "legacy-vct",
-                profileConfig
-                        .getProfile("legacy")
-                        .getPrimaryCredential()
-                        .getCredentialTypes()
-                        .getFirst());
-    }
-
-    @Test
     void shouldRejectProfilesWithoutExactlyOnePrimaryCredential() {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """

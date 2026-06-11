@@ -1,6 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import org.keycloak.VCFormat;
@@ -17,7 +16,6 @@ public class CredentialRequirement {
     private List<String> formats = List.of(VCFormat.SD_JWT_VC);
 
     @JsonProperty("credentialTypes")
-    @JsonAlias("vct")
     private List<String> credentialTypes;
 
     @JsonProperty("claims")
@@ -54,14 +52,6 @@ public class CredentialRequirement {
     public CredentialRequirement setFormats(List<String> formats) {
         this.formats = formats;
         return this;
-    }
-
-    public List<String> getVct() {
-        return getCredentialTypes();
-    }
-
-    public CredentialRequirement setVct(List<String> vct) {
-        return setCredentialTypes(vct);
     }
 
     public List<String> getCredentialTypes() {

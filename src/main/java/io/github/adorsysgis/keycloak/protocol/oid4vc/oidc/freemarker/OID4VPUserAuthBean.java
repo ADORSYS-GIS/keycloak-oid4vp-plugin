@@ -61,16 +61,6 @@ public class OID4VPUserAuthBean {
     }
 
     /**
-     * Legacy single-button URL. New templates should use {@link #getLoginProfiles()}.
-     */
-    public String getLoginUrl() {
-        return getLoginProfiles().stream()
-                .findFirst()
-                .map(LoginProfileBean::getLoginUrl)
-                .orElse(null);
-    }
-
-    /**
      * URLs to trigger UI views for every configured wallet authentication profile.
      */
     public List<LoginProfileBean> getLoginProfiles() {
