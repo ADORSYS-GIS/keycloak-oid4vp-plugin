@@ -87,17 +87,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
                     "Response to wallet should not contain a redirect URI in cross-device flow");
         }
 
-        // Check auth status
+        // Check auth status and redeem authorization code via PKCE-protected endpoint
         String authCode = null;
         if (authContext.getTransactionId() != null) {
-            AuthorizationContext statusPayload = assertSuccessfulAuthorizationStatus(apiFlow);
-
-            // Redeem authorization code when it is not disclosed in the status response
-            authCode = statusPayload.getAuthorizationCode();
-            if (authCode == null) {
-                assertNotNull(apiFlow.codeVerifier(), "Code verifier should not be null for API flows");
-                authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-            }
+            assertSuccessfulAuthorizationStatus(apiFlow);
+            assertNotNull(apiFlow.codeVerifier(), "Code verifier required for PKCE-protected code redemption");
+            authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
         }
 
         // Bubble up test flow data
@@ -108,7 +103,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * Assert the identity of the authenticated user.
      */
     protected void assertAuthenticatingUser(TestOpts opts, String authCode) throws VerificationException, IOException {
-        String accessTokenStr = requestAccessToken(authCode, opts.shouldEnforceRedirectUri());
+        String accessTokenStr =
+                requestAccessToken(authCode, opts.shouldEnforceRedirectUri(), opts.getOidcPkceCodeVerifier());
         AccessToken accessToken =
                 TokenVerifier.create(accessTokenStr, AccessToken.class).getToken();
 
@@ -204,7 +200,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
     private ApiFlowData resolveApiFlow(TestOpts opts) {
         if (opts.getAuthContext() != null) {
-            return new ApiFlowData(opts.getAuthContext(), opts.getCodeVerifier());
+            String codeVerifier = opts.getCodeVerifier();
+            return new ApiFlowData(opts.getAuthContext(), codeVerifier);
         }
 
         ApiFlowData apiFlow = startApiAuthorizationRequest();
@@ -219,10 +216,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
                 fetchAuthenticationStatus(apiFlow.authContext().getTransactionId());
         AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
-
-        if (apiFlow.codeVerifier() != null) {
-            assertNull(statusPayload.getAuthorizationCode(), "authorization_code must stay hidden for API flows");
-        }
+        assertNull(statusPayload.getAuthorizationCode(), "authorization_code must not be exposed in status responses");
 
         return statusPayload;
     }
@@ -384,6 +378,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         private String testUser = TEST_USER;
         private AuthorizationContext authContext;
         private String codeVerifier;
+        private String oidcPkceCodeVerifier;
         private boolean shouldBase64EncodeVpToken;
         private boolean shouldRetrieveAccessToken = true;
         private boolean shouldEnforceRedirectUri = false;
@@ -418,6 +413,15 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         public TestOpts setCodeVerifier(String codeVerifier) {
             this.codeVerifier = codeVerifier;
+            return this;
+        }
+
+        public String getOidcPkceCodeVerifier() {
+            return oidcPkceCodeVerifier;
+        }
+
+        public TestOpts setOidcPkceCodeVerifier(String oidcPkceCodeVerifier) {
+            this.oidcPkceCodeVerifier = oidcPkceCodeVerifier;
             return this;
         }
 

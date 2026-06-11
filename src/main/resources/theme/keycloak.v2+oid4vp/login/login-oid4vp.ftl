@@ -31,7 +31,15 @@
 
         <script type="module">
             import { checkAuthStatus } from "${url.resourcesPath}/js/oid4vp.js";
-            checkAuthStatus("${oid4vp.authContext.authStatusUrl}", 2500);
+            const transactionId = "${oid4vp.authContext.transactionId!""}";
+            const codeVerifier = "${oid4vp.authContext.codeVerifier!""}";
+            checkAuthStatus(
+                "${oid4vp.authContext.authStatusUrl}",
+                "${oid4vp.authContext.authCodeRedemptionUrl}",
+                transactionId,
+                codeVerifier,
+                2500
+            );
         </script>
     </#if>
 
