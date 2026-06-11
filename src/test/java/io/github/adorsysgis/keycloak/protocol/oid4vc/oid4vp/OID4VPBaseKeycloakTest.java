@@ -20,6 +20,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -255,7 +257,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         String authEndpoint;
         String oidcPkceCodeVerifier;
         try {
-            WrappedOidcAuthorizeRequest authorizeRequest = buildWrappedOidcAuthorizeRequest(true);
+            WrappedOidcAuthorizeRequest authorizeRequest = buildWrappedOidcAuthorizeRequest(false);
             authEndpoint = authorizeRequest.uri().toString();
             oidcPkceCodeVerifier = authorizeRequest.oidcPkceCodeVerifier();
         } catch (Exception e) {
@@ -278,15 +280,19 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         String actionUrl = form.attr("action");
         assertFalse(actionUrl.isBlank(), "Login form action URL should not be blank");
 
-        // Collect authorization context details (cross-device QR flow)
-        Element transactionIdInput = html.selectFirst("input#kc-oid4vp-transaction-id");
-        assertNotNull(transactionIdInput, "OpenID4VP transaction ID should be present in the response");
-        String transactionId = transactionIdInput.attr("value");
+        // Collect cross-device polling context from page script (not hidden form fields)
+        Element script = html.selectFirst("script:containsData(checkAuthStatus)");
+        assertNotNull(script, "OpenID4VP polling script should be present in the response");
+        String scriptData = script.data();
+        Matcher transactionMatcher =
+                Pattern.compile("const transactionId = \"([^\"]+)\"").matcher(scriptData);
+        Matcher verifierMatcher =
+                Pattern.compile("const codeVerifier = \"([^\"]+)\"").matcher(scriptData);
+        assertTrue(transactionMatcher.find(), "OpenID4VP transaction ID should be present in the polling script");
+        String transactionId = transactionMatcher.group(1);
         assertFalse(StringUtil.isBlank(transactionId), "OpenID4VP transaction ID should not be blank");
-
-        Element codeVerifierInput = html.selectFirst("input#kc-oid4vp-code-verifier");
-        assertNotNull(codeVerifierInput, "OpenID4VP code verifier should be present in the response");
-        String oid4vpCodeVerifier = codeVerifierInput.attr("value");
+        assertTrue(verifierMatcher.find(), "OpenID4VP code verifier should be present in the polling script");
+        String oid4vpCodeVerifier = verifierMatcher.group(1);
         assertFalse(StringUtil.isBlank(oid4vpCodeVerifier), "OpenID4VP code verifier should not be blank");
 
         AuthorizationContext authContext = null;

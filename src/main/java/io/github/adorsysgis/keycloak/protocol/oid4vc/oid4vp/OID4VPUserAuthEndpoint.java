@@ -472,7 +472,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String clientId, OIDCAuthSession oidcAuthSession, CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
-        validateOwnershipBinding(codeChallengeDetails);
+        if (oidcAuthSession == null || !oidcAuthSession.enableSameDeviceResponse()) {
+            validateOwnershipBinding(codeChallengeDetails);
+        }
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);

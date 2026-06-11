@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.BaseKeycloakTest.TES
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,7 +13,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
@@ -56,6 +57,9 @@ public class OID4VPUserAuthBeanTest {
 
     @Mock
     OID4VPUserAuthEndpoint oid4vp;
+
+    @Captor
+    ArgumentCaptor<OIDCAuthSession> oidcAuthSessionCaptor;
 
     @Captor
     ArgumentCaptor<CodeChallengeDetails> codeChallengeDetailsCaptor;
@@ -140,14 +144,20 @@ public class OID4VPUserAuthBeanTest {
 
         bean.getAuthContext();
 
-        verify(oid4vp, atLeastOnce())
+        verify(oid4vp, times(2))
                 .startAuthentication(
-                        eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), codeChallengeDetailsCaptor.capture());
+                        eq(TEST_CLIENT_ID), oidcAuthSessionCaptor.capture(), codeChallengeDetailsCaptor.capture());
 
-        CodeChallengeDetails details = codeChallengeDetailsCaptor.getValue();
-        assertNotNull(details);
-        assertNotNull(details.codeChallenge());
-        assertEquals(OAuth2Constants.PKCE_METHOD_S256, details.codeChallengeMethod());
+        OIDCAuthSession crossDeviceSession = oidcAuthSessionCaptor.getAllValues().get(0);
+        OIDCAuthSession sameDeviceSession = oidcAuthSessionCaptor.getAllValues().get(1);
+        assertFalse(crossDeviceSession.enableSameDeviceResponse());
+        assertTrue(sameDeviceSession.enableSameDeviceResponse());
+
+        CodeChallengeDetails crossDevicePkce = codeChallengeDetailsCaptor.getAllValues().get(0);
+        assertNotNull(crossDevicePkce);
+        assertNotNull(crossDevicePkce.codeChallenge());
+        assertEquals(OAuth2Constants.PKCE_METHOD_S256, crossDevicePkce.codeChallengeMethod());
+        assertNull(codeChallengeDetailsCaptor.getAllValues().get(1));
     }
 
     private OID4VPUserAuthBean createTestBean() {

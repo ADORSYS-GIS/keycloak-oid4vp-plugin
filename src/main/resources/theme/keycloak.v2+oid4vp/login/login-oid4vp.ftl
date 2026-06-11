@@ -27,17 +27,17 @@
               method="post"
               style="display:none;">
             <input type="hidden" id="kc-oid4vp-code-input" name="code" value="" />
-            <input type="hidden" id="kc-oid4vp-transaction-id" value="${oid4vp.authContext.transactionId!""}" />
-            <input type="hidden" id="kc-oid4vp-code-verifier" value="${oid4vp.authContext.codeVerifier!""}" />
         </form>
 
         <script type="module">
             import { checkAuthStatus } from "${url.resourcesPath}/js/oid4vp.js";
+            const transactionId = "${oid4vp.authContext.transactionId!""}";
+            const codeVerifier = "${oid4vp.authContext.codeVerifier!""}";
             checkAuthStatus(
                 "${oid4vp.authContext.authStatusUrl}",
                 "${oid4vp.authContext.authCodeRedemptionUrl}",
-                "${oid4vp.authContext.transactionId!""}",
-                "${oid4vp.authContext.codeVerifier!""}",
+                transactionId,
+                codeVerifier,
                 2500
             );
         </script>

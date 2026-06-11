@@ -122,8 +122,7 @@ public class OID4VPUserAuthBean {
         OpenId4vpPkce crossDevicePkce = OpenId4vpPkce.generate();
         AuthorizationContext authContext =
                 startOpenID4VPAuthentication(clientId, false, crossDevicePkce.challengeDetails());
-        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(
-                clientId, true, OpenId4vpPkce.generate().challengeDetails());
+        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, true, null);
 
         // Convert authorization request to QR code (cross-device)
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
