@@ -324,6 +324,17 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_DoubleSchemedAud() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Proceed to authentication (Prefix aud with scheme twice)
+        String aud = "x509_san_dns:x509_san_dns:%s".formatted(getVerifierClientId());
+        TestOpts opts = TestOpts.getDefault().setOverridePresentationAud(aud);
+        testSuccessfulAuthentication(sdJwt, opts);
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_OtherAcceptedVct() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_ALT, TEST_USER);
@@ -629,6 +640,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 "invalid-aud",
                 getVerifierClientId(), // Missing required client_id prefix
                 ":" + getVerifierClientId(), // Missing scheme
+                "x509_hash:x509_san_dns:" + getVerifierClientId(), // Double scheming of different prefixes
                 "double:scheme:" + getVerifierClientId());
 
         for (String invalidAud : invalidAuds) {
