@@ -1,6 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.keycloak.models.ClientModel;
 import org.keycloak.services.cors.Cors;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -47,11 +50,12 @@ public class CorsService {
      * @return CORS builder configured for client-specific origins
      */
     public static Cors forWebOrigins(AuthenticationSessionModel authSession) {
-        String[] clientWebOrigins = Optional.ofNullable(authSession.getClient())
+        List<String> clientWebOrigins = Optional.ofNullable(authSession.getClient())
                 .map(ClientModel::getWebOrigins)
-                .map(s -> s.toArray(String[]::new))
-                .orElseGet(() -> new String[0]);
+                .map(Set::stream)
+                .map(Stream::toList)
+                .orElseGet(List::of);
 
-        return Cors.builder().allowedOrigins(clientWebOrigins).auth();
+        return Cors.builder().checkAllowedOrigins(clientWebOrigins).auth();
     }
 }

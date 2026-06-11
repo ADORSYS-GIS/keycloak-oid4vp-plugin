@@ -1,6 +1,6 @@
 services:
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.1}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.3}
     command: start-dev --features=oid4vc-vci --log-level=${KC_LOG_LEVEL:-INFO}
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_ADMIN_USER:-admin}
