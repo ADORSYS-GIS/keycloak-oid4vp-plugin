@@ -5,9 +5,9 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryBuilder;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -20,7 +20,6 @@ import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.List;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -211,13 +210,7 @@ public class AuthorizationResponseService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("DCQL query has no credential id: " + credentialId));
 
-        CredentialSet credentialSet = new CredentialSet();
-        credentialSet.setOptions(List.of(List.of(credential.getId())));
-
-        DcqlQuery query = new DcqlQuery();
-        query.setCredentials(List.of(credential));
-        query.setCredentialSets(List.of(credentialSet));
-        return query;
+        return DcqlQueryBuilder.singleCredentialQuery(credential);
     }
 
     private WebApplicationException failInvalidVpToken(

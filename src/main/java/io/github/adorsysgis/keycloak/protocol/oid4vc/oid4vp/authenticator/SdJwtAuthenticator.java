@@ -174,15 +174,15 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private AuthenticationProfile getAuthenticationProfile(AuthenticationFlowContext context) {
-        try {
-            AuthorizationContext authContext =
-                    new AuthenticationSessionStore(context.getAuthenticationSession()).getAuthorizationContext();
-            return new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig())
-                    .getProfile(authContext.getProfileId());
-        } catch (IllegalArgumentException e) {
-            return new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig())
-                    .getProfile(AuthenticationProfile.DEFAULT_PROFILE_ID);
+        OID4VPProfileConfig profileConfig =
+                new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig());
+        AuthenticationSessionStore store = new AuthenticationSessionStore(context.getAuthenticationSession());
+        if (!store.hasAuthorizationContext()) {
+            return profileConfig.getProfile(AuthenticationProfile.DEFAULT_PROFILE_ID);
         }
+
+        AuthorizationContext authContext = store.getAuthorizationContext();
+        return profileConfig.getProfile(authContext.getProfileId());
     }
 
     private Map<String, String> getPresentedSdJwtTokens(AuthenticationSessionModel authSession) {

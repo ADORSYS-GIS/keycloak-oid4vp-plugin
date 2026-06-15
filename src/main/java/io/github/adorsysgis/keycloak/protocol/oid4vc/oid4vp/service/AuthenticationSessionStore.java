@@ -94,4 +94,8 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
             throw new RuntimeException("Failed to deserialize authorization context", e);
         }
     }
+
+    public boolean hasAuthorizationContext() {
+        return authenticationSession.getAuthNote(AUTH_CONTEXT_SESSION_KEY) != null;
+    }
 }

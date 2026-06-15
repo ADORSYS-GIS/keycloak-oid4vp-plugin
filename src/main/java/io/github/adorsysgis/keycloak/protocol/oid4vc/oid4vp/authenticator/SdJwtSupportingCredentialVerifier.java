@@ -66,6 +66,7 @@ class SdJwtSupportingCredentialVerifier {
             boolean requireCryptographicHolderBinding)
             throws VerificationException {
         if (!credential.isSelfTrusted()) {
+            // TODO: Route external trust policies to dedicated issuer validators when those profiles are enabled.
             throw new VerificationException(
                     "Credential '%s' uses an unsupported trust policy".formatted(credential.getId()));
         }
