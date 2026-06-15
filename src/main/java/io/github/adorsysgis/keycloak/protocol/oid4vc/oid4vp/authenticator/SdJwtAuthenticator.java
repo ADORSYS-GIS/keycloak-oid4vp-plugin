@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
@@ -65,6 +67,10 @@ public class SdJwtAuthenticator implements Authenticator {
 
     public static final String TRANSACTION_DATA_WIRE_KEY = "transaction_data_wire";
 
+    public static final String DCQL_QUERY_KEY = "dcql_query";
+
+    public static final String INVALID_VP_TOKEN_ERROR = "invalid_vp_token";
+
     public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
@@ -81,17 +87,28 @@ public class SdJwtAuthenticator implements Authenticator {
         boolean requireCryptographicHolderBinding = parseRequireCryptographicHolderBinding(
                 authSession.getAuthNote(REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY));
         SdJwtVP sdJwt = SdJwtVP.of(authSession.getAuthNote(SDJWT_TOKEN_KEY));
+        boolean dcqlValidationEnabled = !StringUtil.isBlank(authSession.getAuthNote(DCQL_QUERY_KEY));
 
         try {
             consumer.verifySdJwtPresentation(
                     sdJwt,
-                    authReqs.getPresentationRequirements(),
+                    dcqlValidationEnabled
+                            ? authReqs.getIntegrityOnlyPresentationRequirements()
+                            : authReqs.getPresentationRequirements(),
                     List.of(new SelfTrustedSdJwtIssuer(context)),
                     authReqs.getIssuerSignedJwtVerificationOpts(),
                     authReqs.getKeyBindingJwtVerificationOpts(nonce, aud, requireCryptographicHolderBinding));
         } catch (VerificationException e) {
             logger.errorf(e, "Token verification failed (authSession = %s)", correlationId(context));
             failRejectingPresentedSdJwtToken(context, e.getMessage(), e);
+            return;
+        }
+
+        try {
+            validateDcqlSatisfaction(authSession);
+        } catch (VerificationException e) {
+            logger.errorf(e, "DCQL satisfaction failed (authSession = %s)", correlationId(context));
+            failRejectingDcqlMismatch(context, e.getMessage(), e);
             return;
         }
 
@@ -144,6 +161,24 @@ public class SdJwtAuthenticator implements Authenticator {
             return true;
         }
         return Boolean.parseBoolean(note);
+    }
+
+    private static void validateDcqlSatisfaction(AuthenticationSessionModel authSession) throws VerificationException {
+        String dcqlQueryWire = authSession.getAuthNote(DCQL_QUERY_KEY);
+        if (StringUtil.isBlank(dcqlQueryWire)) {
+            return;
+        }
+
+        DcqlQuery dcqlQuery;
+        try {
+            dcqlQuery = JsonSerialization.readValue(dcqlQueryWire, DcqlQuery.class);
+        } catch (Exception e) {
+            throw new VerificationException("Invalid DCQL query session state", e);
+        }
+
+        DcqlCredentialCapabilities.createDefault()
+                .resolveForPresentation(dcqlQuery)
+                .validatePresentation(dcqlQuery, authSession.getAuthNote(SDJWT_TOKEN_KEY));
     }
 
     void validateTransactionData(AuthenticationSessionModel authSession, SdJwtVP sdJwt) {
@@ -252,6 +287,29 @@ public class SdJwtAuthenticator implements Authenticator {
 
     private static String correlationId(AuthenticationFlowContext context) {
         return ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
+    }
+
+    private void failRejectingDcqlMismatch(AuthenticationFlowContext context, String reason, Throwable cause) {
+        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
+        if (cause != null) {
+            logger.errorf(
+                    cause,
+                    "Presented credential does not satisfy DCQL query (authSession = %s): %s",
+                    correlationId,
+                    reason);
+        } else {
+            logger.errorf(
+                    "Presented credential does not satisfy DCQL query (authSession = %s): %s", correlationId, reason);
+        }
+
+        var errorRep = new OAuth2ErrorRepresentation(INVALID_VP_TOKEN_ERROR, reason);
+
+        context.failure(
+                AuthenticationFlowError.INVALID_CREDENTIALS,
+                Response.status(Response.Status.BAD_REQUEST.getStatusCode())
+                        .type(MediaType.APPLICATION_JSON_TYPE)
+                        .entity(errorRep)
+                        .build());
     }
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {

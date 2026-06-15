@@ -7,9 +7,13 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.DcqlSatisfactionValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.PresentedCredential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.VpTokenValidationException;
 import java.util.List;
 import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
+import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 
@@ -17,6 +21,7 @@ import org.keycloak.util.JsonSerialization;
 public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapability {
 
     private final SdJwtCredentialConstrainer constrainer = new SdJwtCredentialConstrainer();
+    private final DcqlSatisfactionValidator dcqlSatisfactionValidator = new DcqlSatisfactionValidator();
 
     @Override
     public String format() {
@@ -36,7 +41,27 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
 
     @Override
     public void validatePresentation(DcqlQuery query, String presentedToken) throws VerificationException {
-        DcqlPresentationValidator.validatePresentation(query, presentedToken);
+        if (query.getCredentials().size() != 1) {
+            throw new VerificationException(
+                    "Only single-credential DCQL queries are supported for presentation validation");
+        }
+
+        Credential credentialQuery = query.getCredentials().getFirst();
+        if (!VCFormat.SD_JWT_VC.equals(credentialQuery.getFormat())) {
+            throw new VerificationException("Unsupported dcql_query credential format for presentation validation: "
+                    + credentialQuery.getFormat());
+        }
+
+        try {
+            SdJwtVP presentation = SdJwtVP.of(presentedToken);
+            PresentedCredential presented =
+                    new PresentedCredential(credentialQuery.getId(), credentialQuery, presentedToken, presentation);
+            dcqlSatisfactionValidator.validate(List.of(presented), query);
+        } catch (VpTokenValidationException e) {
+            throw new VerificationException(e.getMessage(), e);
+        } catch (RuntimeException e) {
+            throw new VerificationException("Could not parse SD-JWT VP token contained in `vp_token`", e);
+        }
     }
 
     @Override
@@ -50,8 +75,15 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
 
-        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(
-                authorizationContext.getRequestObject().getDcqlQuery().getCredentials());
+        var dcqlQuery = authorizationContext.getRequestObject().getDcqlQuery();
+        try {
+            authenticationSession.setAuthNote(
+                    SdJwtAuthenticator.DCQL_QUERY_KEY, JsonSerialization.writeValueAsString(dcqlQuery));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to persist DCQL query for validation", e);
+        }
+
+        boolean requireCryptographicHolderBinding = isCryptographicHolderBindingRequired(dcqlQuery.getCredentials());
         authenticationSession.setAuthNote(
                 SdJwtAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
                 String.valueOf(requireCryptographicHolderBinding));

@@ -459,7 +459,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "vp_token contains unexpected credential query id");
+                "Presented vp_token map does not match DCQL credential query");
     }
 
     @Test
@@ -467,7 +467,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request SD-JWT credentials from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential("https://this-vct-is-not-expected.com", TEST_USER);
 
-        // DCQL presentation validation rejects vct before the authenticator runs
+        // DCQL presentation validation rejects vct after cryptographic verification
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
@@ -481,7 +481,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request SD-JWT credentials from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null, TEST_USER);
 
-        // DCQL presentation validation rejects missing requested claims before the authenticator runs
+        // DCQL presentation validation rejects missing requested claims after cryptographic verification
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
@@ -506,15 +506,15 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assumeTrue(requireHolderBinding, "Holder binding is not required in this runtime configuration");
 
         // Send issuer-signed SD-JWT directly as vp_token (no KB-JWT attached) and assert
-        // DCQL layer rejects early with invalid_vp_token.
+        // cryptographic holder-binding verification rejects the presentation.
         HttpResponse response = sendAuthorizationResponseWithVPToken(
                 sdJwt, requestObject, TestOpts.getDefault().setAuthContext(authContext));
         assertFailingAuthentication(
                 response,
                 authContext.getTransactionId(),
-                HttpStatus.SC_BAD_REQUEST,
-                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "DCQL query requires cryptographic holder binding");
+                HttpStatus.SC_UNAUTHORIZED,
+                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                "Invalid SD-JWT presentation");
     }
 
     @Test

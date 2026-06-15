@@ -22,6 +22,10 @@ public interface DcqlCredentialCapability {
 
     DcqlQuery buildAuthorizationQuery(VerifierConfig config);
 
+    /**
+     * Verifies DCQL satisfaction for a presentation that has already passed integrity and authenticity checks
+     * (OpenID4VP §8.6 step 2).
+     */
     void validatePresentation(DcqlQuery query, String presentedToken) throws VerificationException;
 
     void setupAuthenticationSession(

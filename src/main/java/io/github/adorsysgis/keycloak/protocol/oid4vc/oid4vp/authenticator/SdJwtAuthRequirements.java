@@ -113,6 +113,18 @@ public class SdJwtAuthRequirements {
         return requirements.build();
     }
 
+    /**
+     * Presentation requirements for integrity and authenticity only. DCQL claim and {@code vct} constraints are
+     * validated separately once the presentation has been cryptographically verified (OpenID4VP §8.6).
+     */
+    public PresentationRequirements getIntegrityOnlyPresentationRequirements() {
+        var requirements = SimplePresentationDefinition.builder();
+        if (verifyIssuerClaim) {
+            requirements.addClaimRequirement(CLAIM_NAME_ISSUER, Pattern.quote("\"%s\"".formatted(keycloakIssuerURI)));
+        }
+        return requirements.build();
+    }
+
     public QuerySpec getSdJwtQuerySpec() {
         return getSdJwtQuerySpec(requireCryptographicHolderBinding);
     }

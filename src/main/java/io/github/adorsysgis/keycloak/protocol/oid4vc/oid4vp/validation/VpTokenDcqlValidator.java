@@ -9,11 +9,12 @@ import java.util.Map;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 
 /**
- * Validates returned {@code vp_token} presentations against the issued DCQL query (OpenID4VP §6.4, §8.6).
+ * Full {@code vp_token} parsing and DCQL satisfaction pipeline for multi-presentation flows.
  *
- * <p>Integrity and authenticity checks remain in {@link
- * io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator}; this validator
- * verifies DCQL satisfaction on the verifier side.
+ * <p>The OID4VP login path uses {@link
+ * io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability#validatePresentation} after
+ * {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator} has verified
+ * integrity and authenticity (OpenID4VP §8.6).
  */
 public class VpTokenDcqlValidator {
 
@@ -62,23 +63,8 @@ public class VpTokenDcqlValidator {
             }
         }
 
-        for (PresentedCredential presented : presentations) {
-            validateHolderBinding(presented);
-        }
-
         dcqlSatisfactionValidator.validate(presentations, dcqlQuery);
         return presentations;
-    }
-
-    private static void validateHolderBinding(PresentedCredential presented) throws VpTokenValidationException {
-        Credential credentialQuery = presented.credentialQuery();
-        Boolean required = credentialQuery.getRequireCryptographicHolderBinding();
-        if (!Boolean.FALSE.equals(required)
-                && presented.presentation().getKeyBindingJWT().isEmpty()) {
-            throw new VpTokenValidationException(
-                    VpTokenValidationException.Phase.DCQL,
-                    "DCQL query requires cryptographic holder binding (Key Binding JWT)");
-        }
     }
 
     private static PresentedCredential parsePresentation(
