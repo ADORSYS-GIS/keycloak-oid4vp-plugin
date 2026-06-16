@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import java.util.ArrayList;
 import java.util.List;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sdjwt.SdJwtUtils;
@@ -9,59 +10,129 @@ import org.keycloak.sdjwt.vp.SdJwtVP;
 
 /**
  * Resolves DCQL claim paths for presentation validation (VC root, not VP wrapper).
- *
- * <p><strong>Scope:</strong> Only JSON object property names ({@code List<String>} segments) are
- * supported. OpenID4VP 1.0 Claims Path Pointers for JSON credentials also allow {@code null} array
- * wildcards and non-negative integer array indexes; those are not modeled or resolved here yet.
  */
 public final class ClaimPathResolver {
 
     private ClaimPathResolver() {}
 
-    public static boolean isPresentInJson(JsonNode root, List<String> path) {
-        return isPresent(resolveInPayload(root, path));
+    public static boolean isPresentInJson(JsonNode root, List<Object> path) {
+        return !resolveInJson(root, path).isEmpty();
     }
 
-    public static boolean isPresentInSdJwt(SdJwtVP sdJwt, List<String> path) {
+    public static boolean isPresentInSdJwt(SdJwtVP sdJwt, List<Object> path) {
+        return !resolveInSdJwt(sdJwt, path).isEmpty();
+    }
+
+    public static List<JsonNode> resolveInSdJwt(SdJwtVP sdJwt, List<Object> path) {
         if (path == null || path.isEmpty()) {
-            return false;
+            return List.of();
         }
 
-        JsonNode resolved = resolveInPayload(sdJwt.getIssuerSignedJWT().getPayload(), path);
-        if (isPresent(resolved)) {
-            return true;
+        List<JsonNode> resolved = resolveInJson(sdJwt.getIssuerSignedJWT().getPayload(), path);
+        if (!resolved.isEmpty()) {
+            return resolved;
         }
 
-        if (path.size() == 1) {
-            return hasDisclosedClaim(sdJwt, path.getFirst());
-        }
-
-        return false;
-    }
-
-    private static JsonNode resolveInPayload(JsonNode root, List<String> path) {
-        JsonNode current = root;
-        for (String segment : path) {
-            if (current == null || current.isNull()) {
-                return null;
+        if (path.size() == 1 && path.getFirst() instanceof String claimName) {
+            JsonNode disclosedClaim = findDisclosedClaim(sdJwt, claimName);
+            if (isPresent(disclosedClaim)) {
+                return List.of(disclosedClaim);
             }
-            current = current.get(segment);
         }
-        return current;
+
+        return List.of();
     }
 
-    private static boolean hasDisclosedClaim(SdJwtVP sdJwt, String claimName) {
-        for (String disclosure : sdJwt.getDisclosuresString()) {
-            try {
-                ArrayNode arrayNode = SdJwtUtils.decodeDisclosureString(disclosure);
-                if (arrayNode.size() == 3 && arrayNode.get(1).asText().equals(claimName)) {
-                    return isPresent(arrayNode.get(2));
+    static List<JsonNode> resolveInJson(JsonNode root, List<Object> path) {
+        if (root == null || path == null || path.isEmpty()) {
+            return List.of();
+        }
+
+        List<JsonNode> selected = List.of(root);
+        for (Object segment : path) {
+            selected = resolvePathSegment(selected, segment);
+            if (selected.isEmpty()) {
+                return List.of();
+            }
+        }
+        return selected;
+    }
+
+    private static List<JsonNode> resolvePathSegment(List<JsonNode> selected, Object segment) {
+        if (segment instanceof String key) {
+            List<JsonNode> next = new ArrayList<>();
+            for (JsonNode node : selected) {
+                if (!node.isObject()) {
+                    return List.of();
                 }
-            } catch (VerificationException ignored) {
-                // skip malformed disclosure
+                JsonNode child = node.get(key);
+                if (isPresent(child)) {
+                    next.add(child);
+                }
+            }
+            return next;
+        }
+
+        if (segment == null) {
+            List<JsonNode> next = new ArrayList<>();
+            for (JsonNode node : selected) {
+                if (!node.isArray()) {
+                    return List.of();
+                }
+                node.forEach(next::add);
+            }
+            return next;
+        }
+
+        Integer index = asNonNegativeInteger(segment);
+        if (index == null) {
+            return List.of();
+        }
+
+        List<JsonNode> next = new ArrayList<>();
+        for (JsonNode node : selected) {
+            if (!node.isArray()) {
+                return List.of();
+            }
+            if (index < node.size()) {
+                next.add(node.get(index));
             }
         }
-        return false;
+        return next;
+    }
+
+    private static Integer asNonNegativeInteger(Object segment) {
+        if (segment instanceof Integer index) {
+            return index >= 0 ? index : null;
+        }
+        if (segment instanceof Number number) {
+            if (number.doubleValue() == Math.floor(number.doubleValue()) && number.longValue() >= 0) {
+                return number.intValue();
+            }
+        }
+        return null;
+    }
+
+    private static JsonNode findDisclosedClaim(SdJwtVP sdJwt, String claimName) {
+        for (String disclosure : sdJwt.getDisclosuresString()) {
+            JsonNode disclosedValue = decodeDisclosedValue(disclosure, claimName);
+            if (isPresent(disclosedValue)) {
+                return disclosedValue;
+            }
+        }
+        return null;
+    }
+
+    private static JsonNode decodeDisclosedValue(String disclosure, String claimName) {
+        try {
+            ArrayNode arrayNode = SdJwtUtils.decodeDisclosureString(disclosure);
+            if (arrayNode.size() == 3 && arrayNode.get(1).asText().equals(claimName)) {
+                return arrayNode.get(2);
+            }
+        } catch (VerificationException ignored) {
+            return null;
+        }
+        return null;
     }
 
     private static boolean isPresent(JsonNode node) {

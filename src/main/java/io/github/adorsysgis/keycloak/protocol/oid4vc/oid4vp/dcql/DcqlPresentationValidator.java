@@ -7,9 +7,13 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sdjwt.vp.SdJwtVP;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -70,11 +74,77 @@ public final class DcqlPresentationValidator {
             return;
         }
 
-        for (Claim claim : credentialQuery.getClaims()) {
-            if (!ClaimPathResolver.isPresentInSdJwt(presentation, claim.getPath())) {
-                throw new VerificationException(
-                        "Presented SD-JWT does not satisfy DCQL claim path: " + claim.getPath());
+        Map<String, ClaimValidationResult> claimResults = evaluateClaims(credentialQuery.getClaims(), presentation);
+
+        List<List<String>> claimSets = credentialQuery.getClaimSets();
+        if (claimSets == null || claimSets.isEmpty()) {
+            for (Claim claim : credentialQuery.getClaims()) {
+                ClaimValidationResult result = evaluateClaim(claim, presentation);
+                if (!result.satisfied()) {
+                    throw new VerificationException(result.errorMessage());
+                }
             }
+            return;
+        }
+
+        if (satisfiesAnyClaimSet(claimSets, claimResults)) {
+            return;
+        }
+        throw new VerificationException("Presented SD-JWT does not satisfy any DCQL claim_sets option");
+    }
+
+    private static Map<String, ClaimValidationResult> evaluateClaims(List<Claim> claims, SdJwtVP presentation) {
+        Map<String, ClaimValidationResult> claimResults = new HashMap<>();
+        for (Claim claim : claims) {
+            claimResults.put(claim.getId(), evaluateClaim(claim, presentation));
+        }
+        return claimResults;
+    }
+
+    private static boolean satisfiesAnyClaimSet(
+            List<List<String>> claimSets, Map<String, ClaimValidationResult> claimResults) {
+        return claimSets.stream().anyMatch(option -> option.stream()
+                .allMatch(claimId -> claimResults.containsKey(claimId)
+                        && claimResults.get(claimId).satisfied()));
+    }
+
+    private static ClaimValidationResult evaluateClaim(Claim claim, SdJwtVP presentation) {
+        List<JsonNode> selectedClaimValues = ClaimPathResolver.resolveInSdJwt(presentation, claim.getPath());
+        if (selectedClaimValues.isEmpty()) {
+            return ClaimValidationResult.failed(
+                    "Presented SD-JWT does not satisfy DCQL claim path: " + claim.getPath());
+        }
+        try {
+            validateRequestedClaimValues(claim, selectedClaimValues);
+            return ClaimValidationResult.ok();
+        } catch (VerificationException e) {
+            return ClaimValidationResult.failed(e.getMessage());
+        }
+    }
+
+    private static void validateRequestedClaimValues(Claim claim, List<JsonNode> selectedClaimValues)
+            throws VerificationException {
+        if (claim.getValues() == null || claim.getValues().isEmpty()) {
+            return;
+        }
+
+        boolean hasAnyExpectedMatch = claim.getValues().stream()
+                .map(JsonSerialization.mapper::valueToTree)
+                .anyMatch(expected -> selectedClaimValues.stream().anyMatch(expected::equals));
+
+        if (!hasAnyExpectedMatch) {
+            throw new VerificationException(
+                    "Presented SD-JWT does not satisfy DCQL claim values for path: " + claim.getPath());
+        }
+    }
+
+    private record ClaimValidationResult(boolean satisfied, String errorMessage) {
+        private static ClaimValidationResult ok() {
+            return new ClaimValidationResult(true, null);
+        }
+
+        private static ClaimValidationResult failed(String errorMessage) {
+            return new ClaimValidationResult(false, errorMessage);
         }
     }
 }

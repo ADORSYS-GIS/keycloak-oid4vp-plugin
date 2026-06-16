@@ -10,12 +10,7 @@ import java.util.Set;
 import org.keycloak.VCFormat;
 import org.keycloak.utils.StringUtil;
 
-/**
- * Validates DCQL queries at build time per OpenID4VP 1.0 format-specific rules.
- *
- * <p>Claim {@code path} validation is limited to non-empty object property name segments; array
- * indexes and {@code null} wildcards from Claims Path Pointers are not supported yet.
- */
+/** Validates DCQL queries at build time per OpenID4VP 1.0 format-specific rules. */
 public final class DcqlQueryValidator {
 
     private DcqlQueryValidator() {}
@@ -93,7 +88,7 @@ public final class DcqlQueryValidator {
         }
 
         Set<String> claimIds = new HashSet<>();
-        Set<List<String>> claimPaths = new HashSet<>();
+        Set<List<Object>> claimPaths = new HashSet<>();
         boolean claimSetsPresent = claimSets != null && !claimSets.isEmpty();
 
         for (Claim claim : claims) {
@@ -162,36 +157,54 @@ public final class DcqlQueryValidator {
             return;
         }
         for (Claim claim : credential.getClaims()) {
-            if (claim.getPath() == null || claim.getPath().isEmpty()) {
+            List<Object> path = claim.getPath();
+            if (path == null || path.isEmpty()) {
                 throw new IllegalArgumentException("dcql_query claim path must be non-empty");
             }
-            if (claim.getPath().stream().anyMatch(StringUtil::isBlank)) {
-                throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
+            for (Object segment : path) {
+                validatePathSegment(segment);
             }
-            if (claim.getPath().stream().anyMatch(DcqlQueryValidator::isUnsupportedPathSegment)) {
-                throw new IllegalArgumentException(
-                        "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
-            }
-            if (isVpWrapperPath(claim.getPath())) {
+            if (isVpWrapperPath(path)) {
                 throw new IllegalArgumentException(credential.getFormat()
                         + " claim paths must be relative to the VC root, not the VP wrapper: "
-                        + claim.getPath());
+                        + path);
             }
         }
     }
 
-    private static boolean isUnsupportedPathSegment(String segment) {
-        if ("null".equals(segment)) {
-            return true;
+    private static void validatePathSegment(Object segment) {
+        if (segment == null) {
+            return;
         }
-        return !segment.isEmpty() && segment.chars().allMatch(Character::isDigit);
+        if (segment instanceof String propertyName) {
+            if (StringUtil.isBlank(propertyName)) {
+                throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
+            }
+            return;
+        }
+        if (segment instanceof Integer index) {
+            if (index < 0) {
+                throw new IllegalArgumentException("dcql_query claim path indexes must be non-negative");
+            }
+            return;
+        }
+        if (segment instanceof Number number) {
+            if (number.doubleValue() != Math.floor(number.doubleValue()) || number.longValue() < 0) {
+                throw new IllegalArgumentException("dcql_query claim path indexes must be non-negative integers");
+            }
+            return;
+        }
+        throw new IllegalArgumentException("dcql_query claim path segments must be string, integer, or null");
     }
 
-    private static boolean isVpWrapperPath(List<String> path) {
+    private static boolean isVpWrapperPath(List<Object> path) {
         if (path.isEmpty()) {
             return false;
         }
-        String first = path.getFirst();
+        Object firstSegment = path.getFirst();
+        if (!(firstSegment instanceof String first)) {
+            return false;
+        }
         return "verifiableCredential".equals(first) || "vp".equals(first);
     }
 
