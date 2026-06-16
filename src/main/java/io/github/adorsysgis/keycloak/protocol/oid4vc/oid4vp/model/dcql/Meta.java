@@ -11,6 +11,9 @@ public class Meta {
     @JsonProperty("vct_values")
     private List<String> vctValues;
 
+    @JsonProperty("type_values")
+    private List<List<String>> typeValues;
+
     public String getDoctypeValue() {
         return doctypeValue;
     }
@@ -25,5 +28,13 @@ public class Meta {
 
     public void setVctValues(List<String> vctValues) {
         this.vctValues = vctValues;
+    }
+
+    public List<List<String>> getTypeValues() {
+        return typeValues;
+    }
+
+    public void setTypeValues(List<List<String>> typeValues) {
+        this.typeValues = typeValues;
     }
 }

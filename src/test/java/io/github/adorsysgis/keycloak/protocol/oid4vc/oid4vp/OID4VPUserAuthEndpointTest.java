@@ -3,16 +3,17 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainer.QueryMap;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec.of;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtCredentialConstrainerTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainerTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -54,7 +55,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
     public static final String DUAL_PROFILE_ID = "dual";
-    private static final String TEST_REALM_SD_JWT_AUTH_CONFIG_ID = "81d62be9-cf06-4718-8837-fdfb4727b20a";
+    private static final String TEST_REALM_SD_JWT_AUTH_CONFIG_ID = "sdjwt-auth-config-id";
 
     @Test
     public void shouldProduceAuthorizationRequests() throws Exception {
@@ -100,9 +101,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals(expectedSessionId, actualSessionId);
 
         // Assert: Ensure the request object contains a final-spec DCQL query.
-        var queryMap = new QueryMap(
+        var querySpec = of(
                 List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
-        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), queryMap);
+        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), querySpec);
 
         // Client Identifier Prefix is conveyed through client_id.
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -299,6 +300,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals("dc+sd-jwt", credentialQuery.getFormat());
         assertNotNull(
                 testFlowData.requestObject().getClientMetadata().getVpFormat().getDcSdJwt());
+        assertNull(
+                testFlowData.requestObject().getClientMetadata().getVpFormat().getJwtVcJson());
         assertAuthenticatingUser(opts, testFlowData.authCode());
     }
 
@@ -333,7 +336,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
             updateAuthenticatorConfig(updatedConfig);
 
             ApiFlowData apiFlow = startApiAuthorizationRequest(DUAL_PROFILE_ID);
-            assertEquals(DUAL_PROFILE_ID, apiFlow.authContext().getProfileId());
+            assertNull(apiFlow.authContext().getProfileId(), "Profile id must not be leaked to the wallet");
 
             RequestObject requestObject =
                     resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
@@ -352,6 +355,16 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         } finally {
             updateAuthenticatorConfig(originalConfig);
         }
+    }
+
+    public void shouldAuthenticateSuccessfully_DoubleSchemedAud() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Proceed to authentication (Prefix aud with scheme twice)
+        String aud = "x509_san_dns:x509_san_dns:%s".formatted(getVerifierClientId());
+        TestOpts opts = TestOpts.getDefault().setOverridePresentationAud(aud);
+        testSuccessfulAuthentication(sdJwt, opts);
     }
 
     @Test
@@ -498,13 +511,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request SD-JWT credentials from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential("https://this-vct-is-not-expected.com", TEST_USER);
 
-        // Proceed to authentication
+        // DCQL presentation validation rejects vct before the authenticator runs
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
-                HttpStatus.SC_UNAUTHORIZED,
-                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Pattern matching failed for required field");
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presented SD-JWT vct does not match any value in meta.vct_values");
     }
 
     @Test
@@ -512,13 +525,40 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request SD-JWT credentials from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null, TEST_USER);
 
-        // Proceed to authentication
+        // DCQL presentation validation rejects missing requested claims before the authenticator runs
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
-                HttpStatus.SC_UNAUTHORIZED,
-                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (A required field was not presented: `sub`)");
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "Presented SD-JWT does not satisfy DCQL claim path: [sub]");
+    }
+
+    @Test
+    public void shouldRespectHolderBindingRequirementForSdJwtWithoutKeyBindingJwt() throws Exception {
+        // Request a valid SD-JWT credential from Keycloak to use for authentication
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+
+        // Build an auth request to inspect holder-binding requirement used by runtime DCQL.
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        boolean requireHolderBinding = Boolean.TRUE.equals(
+                requestObject.getDcqlQuery().getCredentials().getFirst().getRequireCryptographicHolderBinding());
+
+        // This test specifically verifies "missing KB-JWT" rejection and only applies where
+        // the runtime DCQL query requires holder binding.
+        assumeTrue(requireHolderBinding, "Holder binding is not required in this runtime configuration");
+
+        // Send issuer-signed SD-JWT directly as vp_token (no KB-JWT attached) and assert
+        // DCQL layer rejects early with invalid_vp_token.
+        HttpResponse response = sendAuthorizationResponseWithVPToken(
+                sdJwt, requestObject, TestOpts.getDefault().setAuthContext(authContext));
+        assertFailingAuthentication(
+                response,
+                authContext.getTransactionId(),
+                HttpStatus.SC_BAD_REQUEST,
+                ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                "DCQL query requires cryptographic holder binding");
     }
 
     @Test
@@ -633,6 +673,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 "invalid-aud",
                 getVerifierClientId(), // Missing required client_id prefix
                 ":" + getVerifierClientId(), // Missing scheme
+                "x509_hash:x509_san_dns:" + getVerifierClientId(), // Double scheming of different prefixes
                 "double:scheme:" + getVerifierClientId());
 
         for (String invalidAud : invalidAuds) {
@@ -659,7 +700,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                       {
                         "id": "identity",
                         "role": "primary",
-                        "vct": ["%s", "%s"],
+                        "credentialTypes": ["%s", "%s"],
                         "claims": ["sub", "username"]
                       }
                     ]
@@ -671,13 +712,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                       {
                         "id": "primary",
                         "role": "primary",
-                        "vct": ["%s"],
+                        "credentialTypes": ["%s"],
                         "claims": ["sub", "username"]
                       },
                       {
                         "id": "supporting",
                         "role": "supporting",
-                        "vct": ["%s"],
+                        "credentialTypes": ["%s"],
                         "claims": ["username"],
                         "trust": [{ "type": "self" }],
                         "binding": [

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.keycloak.utils.StringUtil;
 
 public class AuthenticationProfile {
 
@@ -83,5 +84,24 @@ public class AuthenticationProfile {
         }
 
         return displayCta.getOrDefault("en", displayCta.values().iterator().next());
+    }
+
+    public CredentialRequirement getPrimaryCredential() {
+        return credentials.stream()
+                .filter(CredentialRequirement::isPrimary)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Profile has no primary credential: " + id));
+    }
+
+    public CredentialRequirement getCredential(String credentialId) {
+        return credentials.stream()
+                .filter(credential -> credential.getId().equals(credentialId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Profile does not define credential '%s': %s".formatted(credentialId, id)));
+    }
+
+    public boolean isDefaultProfile() {
+        return StringUtil.isBlank(id) || DEFAULT_PROFILE_ID.equals(id);
     }
 }

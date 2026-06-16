@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -84,8 +85,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     public OID4VPUserAuthEndpoint(KeycloakSession session, EventBuilder event) {
         super(session, event);
-        this.authorizationRequestService = new AuthorizationRequestService(session);
-        this.authorizationResponseService = new AuthorizationResponseService(session);
+        var dcqlCapabilities = DcqlCredentialCapabilities.createDefault();
+        this.authorizationRequestService = new AuthorizationRequestService(session, dcqlCapabilities);
+        this.authorizationResponseService = new AuthorizationResponseService(session, dcqlCapabilities);
     }
 
     @OPTIONS
@@ -412,10 +414,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 .setError(authorizationContext.getError())
                 .setErrorDescription(authorizationContext.getErrorDescription());
 
-        if (!StringUtil.isBlank(authorizationContext.getParentAuthSessionId())) {
-            reducedContext.setAuthorizationCode(authorizationContext.getAuthorizationCode());
-        }
-
         return CorsService.forWebOrigins(authSession).add(Response.ok(reducedContext));
     }
 
@@ -487,8 +485,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             CodeChallengeDetails codeChallengeDetails) {
         logger.debug("Generating new authentication context...");
 
-        if (oidcAuthSession == null) {
-            // Require code challenge details for API-initiated authentication sessions
+        if (oidcAuthSession == null || !oidcAuthSession.enableSameDeviceResponse()) {
             validateOwnershipBinding(codeChallengeDetails);
         }
 

@@ -4,6 +4,7 @@ import static org.keycloak.OID4VCConstants.CLAIM_NAME_ISSUER;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import java.util.List;
@@ -82,22 +83,18 @@ public class SdJwtAuthRequirements {
         this.keycloakIssuerURI = Urls.realmIssuer(
                 context.getUri().getBaseUri(), context.getRealm().getName());
 
-        this.expectedVctsPattern = expectedVcts.stream()
-                .map(vct -> Pattern.quote("\"" + vct + "\""))
-                .collect(Collectors.joining("|", "(", ")"));
+        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
     }
 
     public SdJwtAuthRequirements(
             KeycloakContext context, AuthenticatorConfigModel authConfig, CredentialRequirement credentialRequirement) {
         this(context, authConfig);
-        this.expectedVcts = credentialRequirement.getVct();
+        this.expectedVcts = credentialRequirement.getCredentialTypes();
         this.requiredClaims = credentialRequirement.getClaims();
         if (usesExternalIssuerTrust(credentialRequirement)) {
             this.verifyIssuerClaim = false;
         }
-        this.expectedVctsPattern = expectedVcts.stream()
-                .map(vct -> Pattern.quote("\"" + vct + "\""))
-                .collect(Collectors.joining("|", "(", ")"));
+        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
     }
 
     public List<String> getExpectedVcts() {
@@ -127,13 +124,12 @@ public class SdJwtAuthRequirements {
         return requirements.build();
     }
 
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap() {
-        return getSdJwtQueryMap(requireCryptographicHolderBinding);
+    public QuerySpec getSdJwtQuerySpec() {
+        return getSdJwtQuerySpec(requireCryptographicHolderBinding);
     }
 
-    public SdJwtCredentialConstrainer.QueryMap getSdJwtQueryMap(boolean requireCryptographicHolderBinding) {
-        return new SdJwtCredentialConstrainer.QueryMap(
-                getExpectedVcts(), getRequiredClaims(), requireCryptographicHolderBinding);
+    public QuerySpec getSdJwtQuerySpec(boolean requireHolderBinding) {
+        return QuerySpec.of(getExpectedVcts(), getRequiredClaims(), requireHolderBinding);
     }
 
     public IssuerSignedJwtVerificationOpts getIssuerSignedJwtVerificationOpts() {
@@ -173,6 +169,12 @@ public class SdJwtAuthRequirements {
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
         // Final 1.0 requires using the full Client Identifier, including prefix, in proof bindings.
         return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, String::equals);
+    }
+
+    private String buildExpectedVctsPattern(List<String> expectedVcts) {
+        return expectedVcts.stream()
+                .map(vct -> Pattern.quote("\"" + vct + "\""))
+                .collect(Collectors.joining("|", "(", ")"));
     }
 
     private boolean usesExternalIssuerTrust(CredentialRequirement credentialRequirement) {

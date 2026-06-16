@@ -22,13 +22,13 @@ public class OID4VPProfileConfigTest {
                       {
                         "id": "primary",
                         "role": "primary",
-                        "vct": ["main-vct"],
+                        "credentialTypes": ["main-vct"],
                         "claims": ["sub", "username"]
                       },
                       {
                         "id": "supporting",
                         "role": "supporting",
-                        "vct": ["supporting-vct"],
+                        "credentialTypes": ["supporting-vct"],
                         "claims": ["username"],
                         "binding": [
                           {
@@ -49,6 +49,8 @@ public class OID4VPProfileConfigTest {
         assertEquals("dual", profile.getId());
         assertEquals("Sign in with two credentials", profile.getDisplayCta(java.util.Locale.ENGLISH));
         assertEquals(2, profile.getCredentials().size());
+        assertEquals(
+                "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
     }
 
     @Test
@@ -59,11 +61,16 @@ public class OID4VPProfileConfigTest {
                   {
                     "id": "dual-pid",
                     "credentials": [
-                      { "id": "primary", "role": "primary", "vct": ["tax-advisor"], "claims": ["sub"] },
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "credentialTypes": ["tax-advisor"],
+                        "claims": ["sub", "username"]
+                      },
                       {
                         "id": "pid",
                         "role": "supporting",
-                        "vct": ["urn:eudi:pid:de:1"],
+                        "credentialTypes": ["https://demo.pid-issuer.bundesdruckerei.de/credentials/pid/1.0"],
                         "claims": ["given_name", "family_name"],
                         "trust": [
                           {
@@ -84,10 +91,9 @@ public class OID4VPProfileConfigTest {
 
         TrustPolicy trustPolicy = profileConfig
                 .getProfile("dual-pid")
-                .getCredentials()
-                .get(1)
+                .getCredential("pid")
                 .getTrust()
-                .get(0);
+                .getFirst();
         assertEquals(TrustPolicy.EUDI_PID_TRUST_LIST, trustPolicy.getType());
         assertEquals(
                 "https://bmi.usercontent.opencode.de/eudi-wallet/test-trust-lists/pid-provider.jwt",
@@ -105,12 +111,34 @@ public class OID4VPProfileConfigTest {
                   {
                     "id": "broken",
                     "credentials": [
-                      { "id": "one", "role": "supporting", "vct": ["vct"], "claims": ["username"] }
+                      { "id": "one", "role": "supporting", "credentialTypes": ["vct"], "claims": ["username"] }
                     ]
                   }
                 ]
                 """));
 
-        assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        assertEquals("OpenID4VP profile must have exactly one primary credential: broken", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectDuplicateCredentialIds() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "broken",
+                    "credentials": [
+                      { "id": "same-id", "role": "primary", "credentialTypes": ["main-vct"], "claims": ["sub", "username"] },
+                      { "id": "same-id", "role": "supporting", "credentialTypes": ["supporting-vct"], "claims": ["username"] }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        assertEquals("OpenID4VP credential ids must be unique in profile: broken", error.getMessage());
     }
 }

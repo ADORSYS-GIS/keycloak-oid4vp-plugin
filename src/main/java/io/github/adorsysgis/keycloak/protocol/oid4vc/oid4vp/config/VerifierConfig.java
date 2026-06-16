@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
@@ -153,6 +154,15 @@ public class VerifierConfig {
 
     public SdJwtAuthRequirements getAuthRequirements() {
         return authRequirements;
+    }
+
+    /**
+     * Builds the DCQL SD-JWT query specification from authenticator requirements.
+     * Keep this as the single source of requested VCTs/claims to avoid drift between
+     * DCQL pre-validation and authenticator validation.
+     */
+    public QuerySpec buildSdJwtQuerySpec() {
+        return authRequirements.getSdJwtQuerySpec(effectiveRequireCryptographicHolderBinding());
     }
 
     public ClientIdentifierPrefix getClientIdentifierPrefix() {

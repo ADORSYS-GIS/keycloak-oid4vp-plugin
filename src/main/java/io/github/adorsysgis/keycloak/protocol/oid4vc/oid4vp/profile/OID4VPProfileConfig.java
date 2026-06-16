@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.PROFILES_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
@@ -24,7 +25,7 @@ public class OID4VPProfileConfig {
     public OID4VPProfileConfig(KeycloakContext context, AuthenticatorConfigModel authConfig) {
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
-        String configuredProfiles = config.get("profiles");
+        String configuredProfiles = config.get(PROFILES_CONFIG);
         this.profiles = StringUtil.isBlank(configuredProfiles)
                 ? List.of(defaultProfile(context, authConfig))
                 : parseProfiles(configuredProfiles);
@@ -68,7 +69,7 @@ public class OID4VPProfileConfig {
         CredentialRequirement credential = new CredentialRequirement()
                 .setId("identity")
                 .setRole(CredentialRole.PRIMARY)
-                .setVct(
+                .setCredentialTypes(
                         authRequirements.getExpectedVcts().isEmpty()
                                 ? List.of(VCT_CONFIG_DEFAULT)
                                 : authRequirements.getExpectedVcts())
@@ -93,9 +94,8 @@ public class OID4VPProfileConfig {
                 throw new IllegalStateException(
                         "OpenID4VP profile must request at least one credential: " + profile.getId());
             }
-
             long primaryCount = profile.getCredentials().stream()
-                    .filter(credential -> CredentialRole.PRIMARY.equals(credential.getRole()))
+                    .filter(CredentialRequirement::isPrimary)
                     .count();
             if (primaryCount != 1) {
                 throw new IllegalStateException(
@@ -107,14 +107,30 @@ public class OID4VPProfileConfig {
                     throw new IllegalStateException(
                             "OpenID4VP credential id must not be blank in profile: " + profile.getId());
                 }
-                if (credential.getVct() == null || credential.getVct().isEmpty()) {
-                    throw new IllegalStateException("OpenID4VP credential must define vct values: " + profile.getId()
-                            + "/" + credential.getId());
+                if (credential.getCredentialTypes() == null
+                        || credential.getCredentialTypes().isEmpty()) {
+                    throw new IllegalStateException("OpenID4VP credential must define credentialTypes values: "
+                            + profile.getId() + "/" + credential.getId());
                 }
                 if (credential.getClaims() == null || credential.getClaims().isEmpty()) {
                     throw new IllegalStateException("OpenID4VP credential must request at least one claim: "
                             + profile.getId() + "/" + credential.getId());
                 }
+                if (credential.isPrimary()
+                        && (!credential.getClaims().contains(JsonWebToken.SUBJECT)
+                                || !credential.getClaims().contains(OAuth2Constants.USERNAME))) {
+                    throw new IllegalStateException("OpenID4VP primary credential must request sub and username: "
+                            + profile.getId() + "/" + credential.getId());
+                }
+            }
+
+            long credentialIdCount = profile.getCredentials().stream()
+                    .map(CredentialRequirement::getId)
+                    .distinct()
+                    .count();
+            if (credentialIdCount != profile.getCredentials().size()) {
+                throw new IllegalStateException(
+                        "OpenID4VP credential ids must be unique in profile: " + profile.getId());
             }
         }
     }
