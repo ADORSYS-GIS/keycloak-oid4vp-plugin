@@ -68,14 +68,21 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
      * Request a fresh OpenID4VP authorization request from Keycloak together with a client-side verifier.
      */
     protected ApiFlowData startApiAuthorizationRequest() {
+        return startApiAuthorizationRequest(null);
+    }
+
+    protected ApiFlowData startApiAuthorizationRequest(String profileId) {
         try {
             String codeVerifier = PkceUtils.generateCodeVerifier();
             String codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
-            URI uri = new URIBuilder(getOid4vpEndpoint("/request"))
+            URIBuilder uriBuilder = new URIBuilder(getOid4vpEndpoint("/request"))
                     .addParameter("client_id", TEST_CLIENT_ID)
                     .addParameter(OAuth2Constants.CODE_CHALLENGE, codeChallenge)
-                    .addParameter(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)
-                    .build();
+                    .addParameter(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256);
+            if (profileId != null) {
+                uriBuilder.addParameter(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM, profileId);
+            }
+            URI uri = uriBuilder.build();
 
             HttpGet httpGet = new HttpGet(uri);
             HttpResponse response = httpClient.execute(httpGet);

@@ -93,6 +93,9 @@ public class AuthorizationContext {
     @JsonProperty("request_uri_method")
     private RequestUriMethod requestUriMethod;
 
+    @JsonProperty("profile_id")
+    private String profileId;
+
     @JsonProperty("wallet_metadata")
     private JsonNode walletMetadata;
 
@@ -225,6 +228,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setRequestUriMethod(RequestUriMethod requestUriMethod) {
         this.requestUriMethod = requestUriMethod;
+        return this;
+    }
+
+    public String getProfileId() {
+        return profileId;
+    }
+
+    public AuthorizationContext setProfileId(String profileId) {
+        this.profileId = profileId;
         return this;
     }
 
