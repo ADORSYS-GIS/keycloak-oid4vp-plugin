@@ -19,6 +19,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.QRCodeTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
@@ -47,6 +48,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
  */
 @ExtendWith(MockitoExtension.class)
 public class OID4VPUserAuthBeanTest {
+
+    private static final String AUTHORIZATION_REQUEST = "openid4vp://authorize?client_id=<>&request_uri=<>";
 
     @Mock
     KeycloakSession session;
@@ -93,7 +96,7 @@ public class OID4VPUserAuthBeanTest {
 
         // oid4vp.startAuthentication()
         AuthorizationContext authContext = new AuthorizationContext();
-        authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
+        authContext.setAuthorizationRequest(AUTHORIZATION_REQUEST);
         authContext.setTransactionId(UUID.randomUUID().toString());
         Mockito.lenient()
                 .when(oid4vp.startAuthentication(
@@ -121,6 +124,7 @@ public class OID4VPUserAuthBeanTest {
         var authContext = bean.getAuthContext();
         assertTrue(authContext.getAuthReqLink().startsWith("openid4vp://"));
         assertTrue(authContext.getAuthReqQrCode().startsWith("data:image/png;base64,"));
+        assertEquals(AUTHORIZATION_REQUEST, QRCodeTestUtils.decodeQrCodeFromDataUrl(authContext.getAuthReqQrCode()));
         assertNotNull(authContext.getAuthStatusUrl());
         assertNotNull(authContext.getAuthCodeRedemptionUrl());
         assertNotNull(authContext.getTransactionId());
