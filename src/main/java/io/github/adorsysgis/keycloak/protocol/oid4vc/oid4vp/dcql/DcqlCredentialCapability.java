@@ -5,6 +5,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import java.util.List;
+import java.util.Map;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
@@ -26,7 +27,7 @@ public interface DcqlCredentialCapability {
 
     void setupAuthenticationSession(
             AuthenticationSessionModel authenticationSession,
-            String presentedToken,
+            Map<String, String> presentedTokens,
             AuthorizationContext authorizationContext);
 
     void contributeVpFormatsSupported(ClientMetadata.VpFormat vpFormat, List<String> signatureAlgorithms);

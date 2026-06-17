@@ -8,10 +8,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import java.util.List;
+import java.util.Map;
 import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 /** Production DCQL path for {@code dc+sd-jwt} user authentication. */
 public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapability {
@@ -42,11 +44,15 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
     @Override
     public void setupAuthenticationSession(
             AuthenticationSessionModel authenticationSession,
-            String presentedToken,
+            Map<String, String> presentedTokens,
             AuthorizationContext authorizationContext) {
+        authenticationSession.setAuthNote(
+                SdJwtAuthenticator.SDJWT_TOKENS_KEY, JsonSerialization.valueAsString(presentedTokens));
+        if (!StringUtil.isBlank(authorizationContext.getProfileId())) {
+            authenticationSession.setAuthNote(SdJwtAuthenticator.PROFILE_ID_KEY, authorizationContext.getProfileId());
+        }
         String nonce = authorizationContext.getRequestObject().getNonce();
         String aud = authorizationContext.getRequestObject().getClientId();
-        authenticationSession.setAuthNote(SdJwtAuthenticator.SDJWT_TOKEN_KEY, presentedToken);
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
 

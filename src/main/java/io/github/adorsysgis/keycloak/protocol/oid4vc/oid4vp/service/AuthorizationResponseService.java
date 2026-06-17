@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryBuilder;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
@@ -36,7 +35,6 @@ import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.Urls;
 import org.keycloak.sessions.AuthenticationSessionModel;
-import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.MediaType;
 
 /**
@@ -86,18 +84,15 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        CredentialRequirement primaryCredential = profile.getPrimaryCredential();
         HashMap<String, String> sdJwtVpTokens = extractSdJwtVpTokens(responseObject, profile, store, authContext);
-        String primarySdJwtVp = sdJwtVpTokens.get(primaryCredential.getId());
 
-        logger.debugf("Initializing authentication with extracted SD-JWT VP token");
+        logger.debugf("Initializing authentication with extracted SD-JWT VP tokens");
         var processorSession = authProcessor.getAuthenticationSession();
         var dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+        CredentialRequirement primaryCredential = profile.getPrimaryCredential();
         var dcqlCapability =
                 dcqlCapabilities.resolveForPresentation(singleCredentialQuery(dcqlQuery, primaryCredential.getId()));
-        dcqlCapability.setupAuthenticationSession(processorSession, primarySdJwtVp, authContext);
-        processorSession.setAuthNote(
-                SdJwtAuthenticator.SDJWT_TOKENS_KEY, JsonSerialization.valueAsString(sdJwtVpTokens));
+        dcqlCapability.setupAuthenticationSession(processorSession, sdJwtVpTokens, authContext);
 
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");

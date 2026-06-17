@@ -61,14 +61,11 @@ public class SdJwtAuthenticator implements Authenticator {
     public static final String CHALLENGE_AUD_KEY = "aud";
 
     /**
-     * The authenticating party presents a non-replayable SD-JWT token for authentication.
-     */
-    public static final String SDJWT_TOKEN_KEY = "sdjwt_token";
-
-    /**
-     * Optional serialized map of DCQL credential IDs to presented SD-JWT VP tokens.
+     * Serialized map of DCQL credential IDs to presented SD-JWT VP tokens.
      */
     public static final String SDJWT_TOKENS_KEY = "sdjwt_tokens";
+
+    public static final String PROFILE_ID_KEY = "oid4vp_profile_id";
 
     public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY = "require_cryptographic_holder_binding";
 
@@ -91,7 +88,15 @@ public class SdJwtAuthenticator implements Authenticator {
         String aud = authSession.getAuthNote(CHALLENGE_AUD_KEY);
         boolean requireCryptographicHolderBinding = parseRequireCryptographicHolderBinding(
                 authSession.getAuthNote(REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY));
-        SdJwtVP sdJwt = SdJwtVP.of(authSession.getAuthNote(SDJWT_TOKEN_KEY));
+
+        Map<String, String> sdJwtVpTokens = getPresentedSdJwtTokens(authSession);
+        String primaryToken = sdJwtVpTokens.get(primaryCredential.getId());
+        if (StringUtil.isBlank(primaryToken)) {
+            failRejectingPresentedSdJwtToken(
+                    context, "Missing SD-JWT presentation for credential: " + primaryCredential.getId());
+            return;
+        }
+        SdJwtVP sdJwt = SdJwtVP.of(primaryToken);
 
         try {
             consumer.verifySdJwtPresentation(
@@ -137,7 +142,6 @@ public class SdJwtAuthenticator implements Authenticator {
         }
 
         try {
-            Map<String, String> sdJwtVpTokens = getPresentedSdJwtTokens(authSession);
             new SdJwtSupportingCredentialVerifier(context.getSession(), consumer, tokenStatusValidator)
                     .verify(
                             profile,
@@ -174,9 +178,16 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private AuthenticationProfile getAuthenticationProfile(AuthenticationFlowContext context) {
+        AuthenticationSessionModel authSession = context.getAuthenticationSession();
         OID4VPProfileConfig profileConfig =
                 new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig());
-        AuthenticationSessionStore store = new AuthenticationSessionStore(context.getAuthenticationSession());
+
+        String profileId = authSession.getAuthNote(PROFILE_ID_KEY);
+        if (!StringUtil.isBlank(profileId)) {
+            return profileConfig.getProfile(profileId);
+        }
+
+        AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
         if (!store.hasAuthorizationContext()) {
             return profileConfig.getProfile(AuthenticationProfile.DEFAULT_PROFILE_ID);
         }
