@@ -25,7 +25,7 @@ jobs:
     # No-op if the audience var isn't set (keeps unprepared forks/CI green).
     if: ${{ vars.OPENCODE_GATEWAY_AUDIENCE != '' }}
     # ADORSYS-GIS/ai-governance @ the opencode-review-reusable merge (PR #9).
-    uses: ADORSYS-GIS/ai-governance/.github/workflows/opencode-review.yml@c2c7501b1d6afe3fb2739a7bd7b9fa9792632dd8
+    uses: ADORSYS-GIS/ai-governance/.github/workflows/opencode-review.yml@a887e7622d0bec0acff4ce5975229845daa90767
     permissions:
       id-token: write # mint the GHA OIDC token (gateway auth)
       contents: write # checkout + the action's git ops
