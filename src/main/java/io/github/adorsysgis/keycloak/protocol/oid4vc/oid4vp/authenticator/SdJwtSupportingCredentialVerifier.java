@@ -110,10 +110,11 @@ class SdJwtSupportingCredentialVerifier {
         for (TrustPolicy trust : credential.getTrust()) {
             switch (trust.getType()) {
                 case TrustPolicy.SELF -> trustedIssuers.add(new SelfTrustedSdJwtIssuer(session));
-                case TrustPolicy.EUDI_PID_TRUST_LIST -> trustedIssuers.add(new EudiPidTrustedSdJwtIssuer(session, trust));
-                default -> throw new VerificationException(
-                        "Credential '%s' uses an unsupported trust policy: %s"
-                                .formatted(credential.getId(), trust.getType()));
+                case TrustPolicy.EUDI_PID_TRUST_LIST ->
+                    trustedIssuers.add(new EudiPidTrustedSdJwtIssuer(session, trust));
+                default ->
+                    throw new VerificationException("Credential '%s' uses an unsupported trust policy: %s"
+                            .formatted(credential.getId(), trust.getType()));
             }
         }
         return trustedIssuers;
