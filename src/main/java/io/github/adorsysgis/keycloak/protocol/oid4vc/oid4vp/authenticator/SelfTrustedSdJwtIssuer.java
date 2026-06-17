@@ -27,7 +27,11 @@ public class SelfTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
     private final KeycloakSession session;
 
     public SelfTrustedSdJwtIssuer(AuthenticationFlowContext context) {
-        this.session = context.getSession();
+        this(context.getSession());
+    }
+
+    public SelfTrustedSdJwtIssuer(KeycloakSession session) {
+        this.session = session;
     }
 
     @Override

@@ -41,7 +41,7 @@ import org.testcontainers.utility.MountableFile;
 @Testcontainers
 public abstract class BaseKeycloakTest {
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.6.1";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.6.3";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_HAIP_NAME = "test-haip";
@@ -136,12 +136,20 @@ public abstract class BaseKeycloakTest {
      * Exchange an authorization code for an access token at the token endpoint.
      */
     protected String requestAccessToken(String code, boolean enforceRedirectUri) throws IOException {
+        return requestAccessToken(code, enforceRedirectUri, null);
+    }
+
+    protected String requestAccessToken(String code, boolean enforceRedirectUri, String codeVerifier)
+            throws IOException {
         // Prepare form parameters for the token request
         var params = getDefaultHttpParams();
         params.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, OAuth2Constants.AUTHORIZATION_CODE));
         params.add(new BasicNameValuePair(OAuth2Constants.CODE, code));
         if (enforceRedirectUri) {
             params.add(new BasicNameValuePair(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI));
+        }
+        if (codeVerifier != null) {
+            params.add(new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, codeVerifier));
         }
 
         // Prepare the request

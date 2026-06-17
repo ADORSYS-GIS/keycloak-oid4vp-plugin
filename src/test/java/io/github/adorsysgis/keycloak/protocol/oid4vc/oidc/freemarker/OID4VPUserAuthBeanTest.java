@@ -5,19 +5,25 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.BaseKeycloakTest.TES
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +34,8 @@ import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakUriInfo;
 import org.keycloak.models.RealmModel;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,6 +60,12 @@ public class OID4VPUserAuthBeanTest {
     @Mock
     OID4VPUserAuthEndpoint oid4vp;
 
+    @Captor
+    ArgumentCaptor<OIDCAuthSession> oidcAuthSessionCaptor;
+
+    @Captor
+    ArgumentCaptor<CodeChallengeDetails> codeChallengeDetailsCaptor;
+
     @BeforeEach
     void setUp() {
         // session.getContext()
@@ -71,13 +85,22 @@ public class OID4VPUserAuthBeanTest {
                 .when(oid4vp)
                 .checkClient(anyString());
 
+        Mockito.lenient()
+                .when(oid4vp.getAuthenticationProfilesForClient(TEST_CLIENT_ID))
+                .thenReturn(List.of(new AuthenticationProfile()
+                        .setId(AuthenticationProfile.DEFAULT_PROFILE_ID)
+                        .setDisplayCta(Map.of("en", AuthenticationProfile.DEFAULT_CTA))));
+
         // oid4vp.startAuthentication()
         AuthorizationContext authContext = new AuthorizationContext();
         authContext.setAuthorizationRequest("openid4vp://authorize?client_id=<>&request_uri=<>");
         authContext.setTransactionId(UUID.randomUUID().toString());
         Mockito.lenient()
                 .when(oid4vp.startAuthentication(
-                        eq(TEST_CLIENT_ID), nullable(OIDCAuthSession.class), nullable(CodeChallengeDetails.class)))
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class)))
                 .thenReturn(authContext);
     }
 
@@ -86,7 +109,7 @@ public class OID4VPUserAuthBeanTest {
         OID4VPUserAuthBean bean = createTestBean();
 
         // Login URL should contain login_method=oid4vp
-        URI loginUrl = URI.create(bean.getLoginUrl());
+        URI loginUrl = URI.create(bean.getLoginProfiles().getFirst().getLoginUrl());
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(loginUrl);
         String loginMethod = uriInfo.getQueryParameters().getFirst(PARAM_LOGIN_METHOD);
         assertEquals(LOGIN_METHOD_OID4VP, loginMethod);
@@ -99,12 +122,46 @@ public class OID4VPUserAuthBeanTest {
         assertTrue(authContext.getAuthReqLink().startsWith("openid4vp://"));
         assertTrue(authContext.getAuthReqQrCode().startsWith("data:image/png;base64,"));
         assertNotNull(authContext.getAuthStatusUrl());
+        assertNotNull(authContext.getAuthCodeRedemptionUrl());
+        assertNotNull(authContext.getTransactionId());
+        assertNotNull(authContext.getCodeVerifier());
     }
 
     @Test
     public void shouldNotInjectLoginUrlIfInvalidClient() {
         OID4VPUserAuthBean bean = createTestBean("unknown-client", true);
-        assertNull(bean.getLoginUrl()); // Null because clientId is invalid
+        assertTrue(bean.getLoginProfiles().isEmpty()); // Empty because clientId is invalid
+    }
+
+    @Test
+    public void shouldExposeOneLoginProfilePerConfiguredAuthProfile() {
+        Mockito.when(oid4vp.getAuthenticationProfilesForClient(TEST_CLIENT_ID))
+                .thenReturn(List.of(
+                        new AuthenticationProfile()
+                                .setId(AuthenticationProfile.DEFAULT_PROFILE_ID)
+                                .setDisplayCta(Map.of("en", "Sign in with a wallet")),
+                        new AuthenticationProfile().setId("dual").setDisplayCta(Map.of("en", "Dual login"))));
+
+        OID4VPUserAuthBean bean = createTestBean();
+
+        var loginProfiles = bean.getLoginProfiles();
+        assertEquals(2, loginProfiles.size());
+        assertEquals(
+                AuthenticationProfile.DEFAULT_PROFILE_ID,
+                loginProfiles.getFirst().getId());
+        assertEquals("Sign in with a wallet", loginProfiles.getFirst().getDisplayName());
+        assertEquals("dual", loginProfiles.get(1).getId());
+        assertEquals("Dual login", loginProfiles.get(1).getDisplayName());
+
+        ResteasyUriInfo defaultLoginUri =
+                new ResteasyUriInfo(URI.create(loginProfiles.getFirst().getLoginUrl()));
+        assertEquals(
+                AuthenticationProfile.DEFAULT_PROFILE_ID,
+                defaultLoginUri.getQueryParameters().getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM));
+
+        ResteasyUriInfo dualLoginUri =
+                new ResteasyUriInfo(URI.create(loginProfiles.get(1).getLoginUrl()));
+        assertEquals("dual", dualLoginUri.getQueryParameters().getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM));
     }
 
     @Test
@@ -124,6 +181,33 @@ public class OID4VPUserAuthBeanTest {
         assertEquals(authContext1, authContext2);
     }
 
+    @Test
+    public void shouldPassGeneratedPkceToStartAuthentication() {
+        OID4VPUserAuthBean bean = createTestBeanWithPkce("test-code-challenge", OAuth2Constants.PKCE_METHOD_S256);
+
+        bean.getAuthContext();
+
+        verify(oid4vp, times(2))
+                .startAuthentication(
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        oidcAuthSessionCaptor.capture(),
+                        codeChallengeDetailsCaptor.capture());
+
+        OIDCAuthSession crossDeviceSession =
+                oidcAuthSessionCaptor.getAllValues().get(0);
+        OIDCAuthSession sameDeviceSession = oidcAuthSessionCaptor.getAllValues().get(1);
+        assertFalse(crossDeviceSession.enableSameDeviceResponse());
+        assertTrue(sameDeviceSession.enableSameDeviceResponse());
+
+        CodeChallengeDetails crossDevicePkce =
+                codeChallengeDetailsCaptor.getAllValues().get(0);
+        assertNotNull(crossDevicePkce);
+        assertNotNull(crossDevicePkce.codeChallenge());
+        assertEquals(OAuth2Constants.PKCE_METHOD_S256, crossDevicePkce.codeChallengeMethod());
+        assertNull(codeChallengeDetailsCaptor.getAllValues().get(1));
+    }
+
     private OID4VPUserAuthBean createTestBean() {
         return createTestBean(TEST_CLIENT_ID, true);
     }
@@ -139,6 +223,19 @@ public class OID4VPUserAuthBeanTest {
         URI uri = uriBuilder.build();
         mockContextUri(uri);
 
+        String authSessionId = UUID.randomUUID().toString();
+        return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
+    }
+
+    private OID4VPUserAuthBean createTestBeanWithPkce(String codeChallenge, String codeChallengeMethod) {
+        UriBuilder uriBuilder = UriBuilder.fromUri("https://keycloak.org/")
+                .queryParam(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
+                .queryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
+                .queryParam(OAuth2Constants.CODE_CHALLENGE, codeChallenge)
+                .queryParam(OAuth2Constants.CODE_CHALLENGE_METHOD, codeChallengeMethod);
+
+        URI uri = uriBuilder.build();
+        mockContextUri(uri);
         String authSessionId = UUID.randomUUID().toString();
         return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
     }

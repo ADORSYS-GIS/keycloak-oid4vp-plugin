@@ -66,6 +66,8 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
     public static final String REQUEST_URI_METHOD_CONFIG = "requestUriMethod";
     public static final String REQUEST_URI_METHOD_CONFIG_DEFAULT = RequestUriMethod.GET.getValue();
 
+    public static final String PROFILES_CONFIG = "profiles";
+
     static {
         ProviderConfigProperty property;
 
@@ -196,6 +198,14 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setHelpText(
                 "Optional JSON array of verifier_info objects ({format, data, credential_ids?}) merged with the registration certificate entry.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(PROFILES_CONFIG);
+        property.setLabel("OpenID4VP authentication profiles");
+        property.setType(ProviderConfigProperty.TEXT_TYPE);
+        property.setHelpText(
+                "Optional JSON array of authentication profiles. Leave empty to use the legacy single-credential profile.");
         configProperties.add(property);
     }
 

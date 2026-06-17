@@ -1,9 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils.EphemeralKey;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.X509HashUtils;
 import java.security.cert.X509Certificate;
 import java.util.List;
@@ -31,9 +31,15 @@ public class VerifierDiscoveryService {
     public static final List<String> SUPPORTED_ENC_ALGS = List.of(JWEConstants.A128GCM, JWEConstants.A256GCM);
 
     private final KeycloakSession session;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
 
     public VerifierDiscoveryService(KeycloakSession session) {
+        this(session, DcqlCredentialCapabilities.createDefault());
+    }
+
+    public VerifierDiscoveryService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
+        this.dcqlCapabilities = dcqlCapabilities;
     }
 
     /**
@@ -43,9 +49,11 @@ public class VerifierDiscoveryService {
         logger.debug("Discovering Keycloak's metadata as an OpenID4VP client");
         ClientMetadata metadata = new ClientMetadata();
 
-        // Only SD-JWT presentations are supported for now.
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
-        vpFormat.setDcSdJwt(getSdJwtVpFormat());
+        var signatureAlgorithms = getSupportedSignatureAlgorithms();
+        dcqlCapabilities
+                .all()
+                .forEach(capability -> capability.contributeVpFormatsSupported(vpFormat, signatureAlgorithms));
         metadata.setVpFormat(vpFormat);
 
         // Advertise ephemeral key if any
@@ -103,17 +111,6 @@ public class VerifierDiscoveryService {
 
         // Prefix with client identifier prefix as per spec requirements
         return String.join(":", clientIdentifierPrefix.getValue(), clientId);
-    }
-
-    private SdGenericFormat getSdJwtVpFormat() {
-        // This is about verification capabilities, so does not depend on current keys.
-        var supportedSignatureAlgorithms = getSupportedSignatureAlgorithms();
-
-        SdGenericFormat format = new SdGenericFormat();
-        format.setSdJwtAlgValues(supportedSignatureAlgorithms);
-        format.setKbJwtAlgValues(supportedSignatureAlgorithms);
-
-        return format;
     }
 
     private List<String> getSupportedSignatureAlgorithms() {

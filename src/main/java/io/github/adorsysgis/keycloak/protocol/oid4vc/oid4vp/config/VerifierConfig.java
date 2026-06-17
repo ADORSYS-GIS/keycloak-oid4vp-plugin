@@ -3,9 +3,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 import com.apicatalog.jsonld.StringUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
@@ -34,6 +36,7 @@ public class VerifierConfig {
     private final String authReqUrlScheme;
     private final X509Certificate accessCertificate;
     private final String registrationCertificate;
+    private final OID4VPProfileConfig profileConfig;
     private final boolean requireCryptographicHolderBinding;
     private final List<String> transactionDataRaw;
     private final String verifierInfoConfig;
@@ -84,6 +87,7 @@ public class VerifierConfig {
 
         // Collect authentication requirements
         this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
+        this.profileConfig = new OID4VPProfileConfig(context, authConfig);
     }
 
     private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
@@ -152,6 +156,15 @@ public class VerifierConfig {
         return authRequirements;
     }
 
+    /**
+     * Builds the DCQL SD-JWT query specification from authenticator requirements.
+     * Keep this as the single source of requested VCTs/claims to avoid drift between
+     * DCQL pre-validation and authenticator validation.
+     */
+    public QuerySpec buildSdJwtQuerySpec() {
+        return authRequirements.getSdJwtQuerySpec(effectiveRequireCryptographicHolderBinding());
+    }
+
     public ClientIdentifierPrefix getClientIdentifierPrefix() {
         return clientIdentifierPrefix;
     }
@@ -174,6 +187,10 @@ public class VerifierConfig {
 
     public String getRegistrationCertificate() {
         return registrationCertificate;
+    }
+
+    public OID4VPProfileConfig getProfileConfig() {
+        return profileConfig;
     }
 
     public boolean requireCryptographicHolderBinding() {
