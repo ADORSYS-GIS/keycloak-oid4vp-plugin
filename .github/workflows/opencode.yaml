@@ -1,19 +1,18 @@
-# opencode PR review / issue task — thin caller for the reusable workflow in
-# ADORSYS-GIS/ai-governance (ADR-0047 + ADR-0049). Auth to the AI gateway is the
-# repo's own GitHub-OIDC token validated by lightbridge-repo-auth (keyless); the
-# review is posted by github-actions[bot]. The whole job logic lives in the
-# reusable workflow — bump the pinned SHA deliberately to adopt a new version.
-#
-# Needs the org/repo variable OPENCODE_GATEWAY_AUDIENCE (set org-wide for
-# ADORSYS-GIS = this org's lightbridge-repo-auth Source URL).
+# opencode PR review — 
+# This workflow runs the opencode AI agent and uses it to post reviews to PRs in the form of comments submitted by the github bot 
+
 name: opencode
 
 on:
   pull_request:
+  # opened —  this runs when a PR is first created
+  # synchronized — this runs when a new commit is pushed to an already existing PR
     types: [opened, synchronize]
   issue_comment:
+  # created — this runs when an issue is created on this repo
     types: [created]
   pull_request_review_comment:
+  # created - when a PR review comment is created with /oc or /opencode
     types: [created]
 
 concurrency:
@@ -22,9 +21,9 @@ concurrency:
 
 jobs:
   review:
-    # No-op if the audience var isn't set (keeps unprepared forks/CI green).
+    # This workflow will not run if the OPENCODE_GATEWAY_AUDIENCE is not set
+    # This var is already set at the organization level in ADORSYS-GIS and so workflow typically have it defined
     if: ${{ vars.OPENCODE_GATEWAY_AUDIENCE != '' }}
-    # ADORSYS-GIS/ai-governance @ the opencode-review-reusable merge (PR #9).
     uses: ADORSYS-GIS/ai-governance/.github/workflows/opencode-review.yml@a887e7622d0bec0acff4ce5975229845daa90767
     permissions:
       id-token: write # mint the GHA OIDC token (gateway auth)
