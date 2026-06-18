@@ -38,6 +38,12 @@ public class OID4VPProfileConfig {
 
     public AuthenticationProfile getProfile(String profileId) {
         String requestedProfile = StringUtil.isBlank(profileId) ? AuthenticationProfile.DEFAULT_PROFILE_ID : profileId;
+        if (AuthenticationProfile.DEFAULT_PROFILE_ID.equals(requestedProfile)) {
+            return profiles.stream()
+                    .filter(AuthenticationProfile::isDefaultProfile)
+                    .findFirst()
+                    .orElseGet(() -> profiles.getFirst());
+        }
         return profiles.stream()
                 .filter(profile -> Objects.equals(profile.getId(), requestedProfile))
                 .findFirst()

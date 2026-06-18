@@ -54,6 +54,61 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldResolveDefaultToFirstConfiguredProfileWhenNoExplicitDefaultExists() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "pid-login",
+                    "credentials": [
+                      {
+                        "id": "pid",
+                        "role": "primary",
+                        "credentialTypes": ["urn:eudi:pid:1"],
+                        "claims": ["sub", "username"]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+
+        assertEquals("pid-login", profileConfig.getProfile(null).getId());
+        assertEquals(
+                "pid-login",
+                profileConfig
+                        .getProfile(AuthenticationProfile.DEFAULT_PROFILE_ID)
+                        .getId());
+    }
+
+    @Test
+    void shouldRejectUnknownConfiguredProfileId() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "pid-login",
+                    "credentials": [
+                      {
+                        "id": "pid",
+                        "role": "primary",
+                        "credentialTypes": ["urn:eudi:pid:1"],
+                        "claims": ["sub", "username"]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> profileConfig.getProfile("typo"));
+        assertEquals("Unknown OpenID4VP profile: typo", error.getMessage());
+    }
+
+    @Test
     void shouldParseEudiPidTrustListPolicy() {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """

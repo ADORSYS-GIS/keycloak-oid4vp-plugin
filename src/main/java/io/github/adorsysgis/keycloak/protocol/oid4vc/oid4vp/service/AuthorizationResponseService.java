@@ -281,7 +281,7 @@ public class AuthorizationResponseService {
         var httpErrorResponse = Response.status(status).entity(errorResponse).type(MediaType.APPLICATION_JSON);
 
         WebApplicationException exception = new WebApplicationException(
-                CorsService.forWebOrigins(store.authenticationSession()).add(httpErrorResponse));
+                CorsService.addForWebOrigins(session, store.authenticationSession(), httpErrorResponse));
 
         // Update the authorization context with error details
         if (!error.equals(ProcessingError.AUTH_CONTEXT_CLOSED)) {
