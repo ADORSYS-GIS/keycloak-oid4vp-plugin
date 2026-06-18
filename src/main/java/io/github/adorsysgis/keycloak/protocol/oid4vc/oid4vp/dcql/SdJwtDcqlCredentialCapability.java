@@ -13,7 +13,6 @@ import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
-import org.keycloak.utils.StringUtil;
 
 /** Production DCQL path for {@code dc+sd-jwt} user authentication. */
 public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapability {
@@ -48,9 +47,6 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
             AuthorizationContext authorizationContext) {
         authenticationSession.setAuthNote(
                 SdJwtAuthenticator.SDJWT_TOKENS_KEY, JsonSerialization.valueAsString(presentedTokens));
-        if (!StringUtil.isBlank(authorizationContext.getProfileId())) {
-            authenticationSession.setAuthNote(SdJwtAuthenticator.PROFILE_ID_KEY, authorizationContext.getProfileId());
-        }
         String nonce = authorizationContext.getRequestObject().getNonce();
         String aud = authorizationContext.getRequestObject().getClientId();
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);

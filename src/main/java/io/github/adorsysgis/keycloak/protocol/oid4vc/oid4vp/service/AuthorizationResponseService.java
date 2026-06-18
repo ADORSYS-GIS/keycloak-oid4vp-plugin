@@ -93,6 +93,7 @@ public class AuthorizationResponseService {
         var dcqlCapability =
                 dcqlCapabilities.resolveForPresentation(singleCredentialQuery(dcqlQuery, primaryCredential.getId()));
         dcqlCapability.setupAuthenticationSession(processorSession, sdJwtVpTokens, authContext);
+        new AuthenticationSessionStore(processorSession).storeAuthorizationContext(authContext);
 
         // Run authentication processor to validate the SD-JWT VP token
         logger.debug("Running authentication processor to validate SD-JWT VP token...");

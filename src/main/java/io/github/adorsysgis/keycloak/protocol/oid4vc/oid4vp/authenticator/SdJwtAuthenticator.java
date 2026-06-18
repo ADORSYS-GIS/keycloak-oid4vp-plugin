@@ -16,6 +16,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusList
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,8 +65,6 @@ public class SdJwtAuthenticator implements Authenticator {
      * Serialized map of DCQL credential IDs to presented SD-JWT VP tokens.
      */
     public static final String SDJWT_TOKENS_KEY = "sdjwt_tokens";
-
-    public static final String PROFILE_ID_KEY = "oid4vp_profile_id";
 
     public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY = "require_cryptographic_holder_binding";
 
@@ -145,7 +144,7 @@ public class SdJwtAuthenticator implements Authenticator {
             new SdJwtSupportingCredentialVerifier(context.getSession(), consumer, tokenStatusValidator)
                     .verify(
                             profile,
-                            sdJwtVpTokens,
+                            supportingSdJwtVpTokens(sdJwtVpTokens, primaryCredential.getId()),
                             sdJwt,
                             user,
                             context.getAuthenticatorConfig(),
@@ -178,16 +177,9 @@ public class SdJwtAuthenticator implements Authenticator {
     }
 
     private AuthenticationProfile getAuthenticationProfile(AuthenticationFlowContext context) {
-        AuthenticationSessionModel authSession = context.getAuthenticationSession();
         OID4VPProfileConfig profileConfig =
                 new OID4VPProfileConfig(context.getSession().getContext(), context.getAuthenticatorConfig());
-
-        String profileId = authSession.getAuthNote(PROFILE_ID_KEY);
-        if (!StringUtil.isBlank(profileId)) {
-            return profileConfig.getProfile(profileId);
-        }
-
-        AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
+        AuthenticationSessionStore store = new AuthenticationSessionStore(context.getAuthenticationSession());
         if (!store.hasAuthorizationContext()) {
             return profileConfig.getProfile(AuthenticationProfile.DEFAULT_PROFILE_ID);
         }
@@ -206,6 +198,17 @@ public class SdJwtAuthenticator implements Authenticator {
         } catch (IOException e) {
             throw new IllegalStateException("Invalid SD-JWT tokens auth note", e);
         }
+    }
+
+    private static Map<String, String> supportingSdJwtVpTokens(
+            Map<String, String> presentedTokens, String primaryCredentialId) {
+        Map<String, String> supportingTokens = new HashMap<>();
+        presentedTokens.forEach((credentialId, token) -> {
+            if (!primaryCredentialId.equals(credentialId)) {
+                supportingTokens.put(credentialId, token);
+            }
+        });
+        return supportingTokens;
     }
 
     private static boolean parseRequireCryptographicHolderBinding(String note) {
