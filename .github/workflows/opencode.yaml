@@ -1,5 +1,5 @@
-# opencode PR review — 
-# This workflow runs the opencode AI agent and uses it to post reviews to PRs in the form of comments submitted by the github bot 
+# opencode PR review
+# AI agent posts reviews to PRs as comments submitted by the GitHub bot
 
 name: opencode
 
