@@ -33,10 +33,13 @@ public final class ClaimPathResolver {
             return resolved;
         }
 
-        if (path.size() == 1 && path.getFirst() instanceof String claimName) {
+        if (path.getFirst() instanceof String claimName) {
             JsonNode disclosedClaim = findDisclosedClaim(sdJwt, claimName);
             if (isPresent(disclosedClaim)) {
-                return List.of(disclosedClaim);
+                if (path.size() == 1) {
+                    return List.of(disclosedClaim);
+                }
+                return resolveInJson(disclosedClaim, path.subList(1, path.size()));
             }
         }
 

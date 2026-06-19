@@ -146,6 +146,56 @@ class DcqlQueryValidatorTest {
     }
 
     @Test
+    void acceptsStringIntegerAndBooleanClaimValues() {
+        Claim claim = new Claim();
+        claim.setId("claim-1");
+        claim.setPath(path("age"));
+        claim.setValues(List.of("adult", 18, true));
+        Credential credential = sdJwtCredential("cred-1", List.of(claim));
+        assertDoesNotThrow(() -> DcqlQueryValidator.validateCredential(credential));
+    }
+
+    @Test
+    void rejectsEmptyClaimValues() {
+        Claim claim = new Claim();
+        claim.setId("claim-1");
+        claim.setPath(path("age"));
+        claim.setValues(List.of());
+        Credential credential = sdJwtCredential("cred-1", List.of(claim));
+        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+    }
+
+    @Test
+    void rejectsUnsupportedClaimValueTypes() {
+        Claim claim = new Claim();
+        claim.setId("claim-1");
+        claim.setPath(path("address"));
+        claim.setValues(List.of(List.of("street")));
+        Credential credential = sdJwtCredential("cred-1", List.of(claim));
+        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+    }
+
+    @Test
+    void rejectsNonIntegerNumberClaimValues() {
+        Claim claim = new Claim();
+        claim.setId("claim-1");
+        claim.setPath(path("score"));
+        claim.setValues(List.of(1.5));
+        Credential credential = sdJwtCredential("cred-1", List.of(claim));
+        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+    }
+
+    @Test
+    void rejectsNullClaimValues() {
+        Claim claim = new Claim();
+        claim.setId("claim-1");
+        claim.setPath(path("age"));
+        claim.setValues(Arrays.asList((Object) null));
+        Credential credential = sdJwtCredential("cred-1", List.of(claim));
+        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+    }
+
+    @Test
     void acceptsValidSdJwtCredentialQuery() {
         var query = new SdJwtCredentialConstrainer()
                 .buildQuery(

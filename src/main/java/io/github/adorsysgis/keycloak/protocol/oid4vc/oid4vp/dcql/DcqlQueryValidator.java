@@ -164,6 +164,7 @@ public final class DcqlQueryValidator {
             for (Object segment : path) {
                 validatePathSegment(segment);
             }
+            validateClaimValues(claim.getValues());
             if (isVpWrapperPath(path)) {
                 throw new IllegalArgumentException(credential.getFormat()
                         + " claim paths must be relative to the VC root, not the VP wrapper: "
@@ -195,6 +196,36 @@ public final class DcqlQueryValidator {
             return;
         }
         throw new IllegalArgumentException("dcql_query claim path segments must be string, integer, or null");
+    }
+
+    private static void validateClaimValues(List<Object> values) {
+        if (values == null) {
+            return;
+        }
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("dcql_query claim values must be non-empty when present");
+        }
+        for (Object value : values) {
+            validateClaimValue(value);
+        }
+    }
+
+    private static void validateClaimValue(Object value) {
+        if (value == null) {
+            throw new IllegalArgumentException("dcql_query claim values must be string, integer, or boolean literals");
+        }
+        if (value instanceof String || value instanceof Boolean) {
+            return;
+        }
+        if (value instanceof Integer) {
+            return;
+        }
+        if (value instanceof Number number) {
+            if (number.doubleValue() == Math.floor(number.doubleValue())) {
+                return;
+            }
+        }
+        throw new IllegalArgumentException("dcql_query claim values must be string, integer, or boolean literals");
     }
 
     private static boolean isVpWrapperPath(List<Object> path) {
