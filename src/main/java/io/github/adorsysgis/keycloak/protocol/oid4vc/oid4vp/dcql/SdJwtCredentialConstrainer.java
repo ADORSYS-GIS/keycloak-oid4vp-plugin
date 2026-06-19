@@ -2,7 +2,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.CredentialSet;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.util.List;
 import java.util.UUID;
 import org.keycloak.VCFormat;
@@ -23,6 +27,10 @@ public class SdJwtCredentialConstrainer implements CredentialConstrainer<SdJwtCr
 
     @Override
     public Credential buildCredential(QuerySpec spec) {
+        return buildCredential(UUID.randomUUID().toString(), spec);
+    }
+
+    public Credential buildCredential(String id, QuerySpec spec) {
         if (spec.vctValues() == null || spec.vctValues().isEmpty()) {
             throw new IllegalArgumentException("meta.vct_values must be non-empty for dc+sd-jwt credential queries");
         }
@@ -33,7 +41,7 @@ public class SdJwtCredentialConstrainer implements CredentialConstrainer<SdJwtCr
         List<Claim> claims = DcqlQueryBuilder.claimsFromPaths(spec.claimPaths());
 
         Credential credential = new Credential();
-        credential.setId(UUID.randomUUID().toString());
+        credential.setId(id);
         credential.setFormat(VCFormat.SD_JWT_VC);
         credential.setMeta(meta);
         credential.setClaims(claims);
@@ -42,6 +50,31 @@ public class SdJwtCredentialConstrainer implements CredentialConstrainer<SdJwtCr
                         ? spec.requireCryptographicHolderBinding()
                         : Boolean.TRUE);
         return credential;
+    }
+
+    /**
+     * Builds one DCQL credential query per configured authentication profile credential.
+     */
+    public DcqlQuery buildQuery(AuthenticationProfile profile, boolean requireCryptographicHolderBinding) {
+        List<Credential> credentials = profile.getCredentials().stream()
+                .map(requirement -> buildCredential(requirement, requireCryptographicHolderBinding))
+                .toList();
+
+        CredentialSet credentialSet = new CredentialSet();
+        credentialSet.setOptions(
+                List.of(credentials.stream().map(Credential::getId).toList()));
+
+        DcqlQuery query = new DcqlQuery();
+        query.setCredentials(credentials);
+        query.setCredentialSets(List.of(credentialSet));
+        return query;
+    }
+
+    private Credential buildCredential(CredentialRequirement requirement, boolean requireCryptographicHolderBinding) {
+        return buildCredential(
+                requirement.getId(),
+                QuerySpec.of(
+                        requirement.getCredentialTypes(), requirement.getClaims(), requireCryptographicHolderBinding));
     }
 
     /**

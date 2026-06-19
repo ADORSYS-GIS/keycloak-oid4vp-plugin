@@ -1,12 +1,16 @@
 <#macro show social>
 <div id = "kc-social-providers" class="${properties.kcFormSocialAccountSectionClass!}">
 
-    <#if oid4vp?? && oid4vp.loginUrl??>
-        <#assign providers = [{
-            "alias": "oid4vp-wallet",
-            "displayName": "${msg('oid4vpLoginBtnMessage')}",
-            "loginUrl": "${oid4vp.loginUrl}"
-        }] + social.providers>
+    <#if oid4vp?? && oid4vp.loginProfiles?? && (oid4vp.loginProfiles?size > 0)>
+        <#assign oid4vpProviders = []>
+        <#list oid4vp.loginProfiles as profile>
+            <#assign oid4vpProviders = oid4vpProviders + [{
+                "alias": "oid4vp-wallet-${profile.id}",
+                "displayName": "${profile.displayName}",
+                "loginUrl": "${profile.loginUrl}"
+            }]>
+        </#list>
+        <#assign providers = oid4vpProviders + social.providers>
     <#else>
         <#assign providers = social.providers>
     </#if>

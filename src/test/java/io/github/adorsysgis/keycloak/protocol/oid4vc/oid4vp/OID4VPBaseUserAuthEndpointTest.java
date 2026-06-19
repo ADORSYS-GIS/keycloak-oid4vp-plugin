@@ -24,6 +24,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -360,8 +361,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      */
     private Map<String, List<String>> prepareVpTokenMap(String sdJwtVpToken, RequestObject requestObject) {
         DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
-        Credential credentialQuery = dcqlQuery.getCredentials().getFirst();
-        return Map.of(credentialQuery.getId(), List.of(sdJwtVpToken));
+        return dcqlQuery.getCredentials().stream()
+                .collect(Collectors.toMap(Credential::getId, credential -> List.of(sdJwtVpToken)));
     }
 
     public record TestFlowData(

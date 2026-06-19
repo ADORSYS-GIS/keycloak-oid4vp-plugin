@@ -76,7 +76,7 @@
   ],
   "authenticatorConfig": [
     {
-      "id": "81d62be9-cf06-4718-8837-fdfb4727b20a",
+      "id": "sdjwt-auth-config-id",
       "alias": "sd-jwt-auth-config",
       "config": {
         "vct": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",

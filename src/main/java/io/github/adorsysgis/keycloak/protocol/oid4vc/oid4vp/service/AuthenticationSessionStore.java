@@ -82,7 +82,7 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
     /**
      * Retrieves authorization context from the authentication session.
      */
-    private AuthorizationContext getAuthorizationContext() {
+    public AuthorizationContext getAuthorizationContext() {
         String authContextJson = authenticationSession.getAuthNote(AUTH_CONTEXT_SESSION_KEY);
         if (authContextJson == null) {
             throw new IllegalArgumentException("No authorization context found in authentication session");
@@ -93,5 +93,9 @@ public record AuthenticationSessionStore(AuthenticationSessionModel authenticati
         } catch (IOException e) {
             throw new RuntimeException("Failed to deserialize authorization context", e);
         }
+    }
+
+    public boolean hasAuthorizationContext() {
+        return authenticationSession.getAuthNote(AUTH_CONTEXT_SESSION_KEY) != null;
     }
 }

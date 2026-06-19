@@ -1,0 +1,36 @@
+# opencode PR review
+# AI agent posts reviews to PRs as comments submitted by the GitHub bot
+
+name: opencode
+
+on:
+  pull_request:
+  # opened —  this runs when a PR is first created
+  # synchronized — this runs when a new commit is pushed to an already existing PR
+    types: [opened, synchronize]
+  issue_comment:
+  # created — this runs when an issue is created on this repo
+    types: [created]
+  pull_request_review_comment:
+  # created - when a PR review comment is created with /oc or /opencode
+    types: [created]
+
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # This workflow will not run if the OPENCODE_GATEWAY_AUDIENCE is not set
+    # This var is already set at the organization level in ADORSYS-GIS and so workflow typically have it defined
+    if: ${{ vars.OPENCODE_GATEWAY_AUDIENCE != '' }}
+    uses: ADORSYS-GIS/ai-governance/.github/workflows/opencode-review.yml@a887e7622d0bec0acff4ce5975229845daa90767
+    permissions:
+      id-token: write # mint the GHA OIDC token (gateway auth)
+      contents: write # checkout + the action's git ops
+      pull-requests: write # post the review
+      issues: write # post issue-task / failure comments
+    with:
+      audience: ${{ vars.OPENCODE_GATEWAY_AUDIENCE }}
+      # Models default in the reusable workflow: auto=adorsys-reviewer,
+      # manual+issue=adorsys-reviewer-pro. Override here only to diverge.
