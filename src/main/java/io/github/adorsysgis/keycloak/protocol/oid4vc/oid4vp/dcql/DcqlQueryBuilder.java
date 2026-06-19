@@ -21,7 +21,7 @@ public final class DcqlQueryBuilder {
     public static Claim claimFromPath(List<String> path) {
         Claim claim = new Claim();
         claim.setId(UUID.randomUUID().toString());
-        claim.setPath(path.stream().map(segment -> (Object) segment).toList());
+        claim.setPath(path);
         return claim;
     }
 

@@ -88,7 +88,7 @@ public final class DcqlQueryValidator {
         }
 
         Set<String> claimIds = new HashSet<>();
-        Set<List<Object>> claimPaths = new HashSet<>();
+        Set<List<String>> claimPaths = new HashSet<>();
         boolean claimSetsPresent = claimSets != null && !claimSets.isEmpty();
 
         for (Claim claim : claims) {
@@ -157,12 +157,16 @@ public final class DcqlQueryValidator {
             return;
         }
         for (Claim claim : credential.getClaims()) {
-            List<Object> path = claim.getPath();
+            List<String> path = claim.getPath();
             if (path == null || path.isEmpty()) {
                 throw new IllegalArgumentException("dcql_query claim path must be non-empty");
             }
-            for (Object segment : path) {
-                validatePathSegment(segment);
+            if (path.stream().anyMatch(StringUtil::isBlank)) {
+                throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
+            }
+            if (path.stream().anyMatch(DcqlQueryValidator::isUnsupportedPathSegment)) {
+                throw new IllegalArgumentException(
+                        "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
             }
             validateClaimValues(claim.getValues());
             if (isVpWrapperPath(path)) {
@@ -173,69 +177,27 @@ public final class DcqlQueryValidator {
         }
     }
 
-    private static void validatePathSegment(Object segment) {
-        if (segment == null) {
-            return;
+    private static boolean isUnsupportedPathSegment(String segment) {
+        if ("null".equals(segment)) {
+            return true;
         }
-        if (segment instanceof String propertyName) {
-            if (StringUtil.isBlank(propertyName)) {
-                throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
-            }
-            return;
-        }
-        if (segment instanceof Integer index) {
-            if (index < 0) {
-                throw new IllegalArgumentException("dcql_query claim path indexes must be non-negative");
-            }
-            return;
-        }
-        if (segment instanceof Number number) {
-            if (number.doubleValue() != Math.floor(number.doubleValue()) || number.longValue() < 0) {
-                throw new IllegalArgumentException("dcql_query claim path indexes must be non-negative integers");
-            }
-            return;
-        }
-        throw new IllegalArgumentException("dcql_query claim path segments must be string, integer, or null");
+        return !segment.isEmpty() && segment.chars().allMatch(Character::isDigit);
     }
 
-    private static void validateClaimValues(List<Object> values) {
+    private static void validateClaimValues(List<String> values) {
         if (values == null) {
             return;
         }
         if (values.isEmpty()) {
             throw new IllegalArgumentException("dcql_query claim values must be non-empty when present");
         }
-        for (Object value : values) {
-            validateClaimValue(value);
-        }
     }
 
-    private static void validateClaimValue(Object value) {
-        if (value == null) {
-            throw new IllegalArgumentException("dcql_query claim values must be string, integer, or boolean literals");
-        }
-        if (value instanceof String || value instanceof Boolean) {
-            return;
-        }
-        if (value instanceof Integer) {
-            return;
-        }
-        if (value instanceof Number number) {
-            if (number.doubleValue() == Math.floor(number.doubleValue())) {
-                return;
-            }
-        }
-        throw new IllegalArgumentException("dcql_query claim values must be string, integer, or boolean literals");
-    }
-
-    private static boolean isVpWrapperPath(List<Object> path) {
+    private static boolean isVpWrapperPath(List<String> path) {
         if (path.isEmpty()) {
             return false;
         }
-        Object firstSegment = path.getFirst();
-        if (!(firstSegment instanceof String first)) {
-            return false;
-        }
+        String first = path.getFirst();
         return "verifiableCredential".equals(first) || "vp".equals(first);
     }
 

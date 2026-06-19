@@ -8,11 +8,15 @@ public class Claim {
     @JsonProperty("id")
     private String id;
 
+    /**
+     * Object-key path segments (e.g. {@code credentialSubject}, {@code given_name}, {@code street_address}).
+     * Nested paths such as {@code ["address", "street_address"]} use multiple string segments.
+     */
     @JsonProperty("path")
-    private List<Object> path;
+    private List<String> path;
 
     @JsonProperty("values")
-    private List<Object> values;
+    private List<String> values;
 
     public String getId() {
         return id;
@@ -22,19 +26,19 @@ public class Claim {
         this.id = id;
     }
 
-    public List<Object> getPath() {
+    public List<String> getPath() {
         return path;
     }
 
-    public void setPath(List<Object> path) {
+    public void setPath(List<String> path) {
         this.path = path;
     }
 
-    public List<Object> getValues() {
+    public List<String> getValues() {
         return values;
     }
 
-    public void setValues(List<Object> values) {
+    public void setValues(List<String> values) {
         this.values = values;
     }
 }
