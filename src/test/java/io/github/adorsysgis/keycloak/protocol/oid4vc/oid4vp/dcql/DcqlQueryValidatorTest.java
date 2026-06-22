@@ -22,7 +22,10 @@ class DcqlQueryValidatorTest {
         meta.setVctValues(List.of());
         credential.setMeta(meta);
 
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject SD-JWT credential with empty vct_values");
     }
 
     @Test
@@ -39,7 +42,10 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("vp", "sub"));
         credential.setClaims(List.of(claim));
 
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject SD-JWT claim paths relative to the VP wrapper");
     }
 
     @Test
@@ -56,7 +62,10 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("addresses", "0", "street"));
         credential.setClaims(List.of(claim));
 
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject array index path segments");
     }
 
     @Test
@@ -73,27 +82,37 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("address", "street_address"));
         credential.setClaims(List.of(claim));
 
-        assertDoesNotThrow(() -> DcqlQueryValidator.validateCredential(credential));
+        assertDoesNotThrow(
+                () -> DcqlQueryValidator.validateCredential(credential), "Should accept nested object-key claim paths");
     }
 
     @Test
     void rejectsInvalidCredentialIdSyntax() {
         Credential credential = sdJwtCredential("cred.1", List.of());
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject credential ids with invalid characters");
     }
 
     @Test
     void rejectsDuplicateCredentialIds() {
         DcqlQuery query = new DcqlQuery();
         query.setCredentials(List.of(sdJwtCredential("cred-1", List.of()), sdJwtCredential("cred-1", List.of())));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateQuery(query));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateQuery(query),
+                "Should reject duplicate credential ids in dcql_query");
     }
 
     @Test
     void rejectsClaimSetsWithoutClaims() {
         Credential credential = sdJwtCredential("cred-1", List.of());
         credential.setClaimSets(List.of(List.of("claim-1")));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject claim_sets when claims are absent");
     }
 
     @Test
@@ -103,7 +122,10 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("given_name"));
         Credential credential = sdJwtCredential("cred-1", List.of(claim));
         credential.setClaimSets(List.of(List.of("family_name")));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject claim_sets that reference unknown claim ids");
     }
 
     @Test
@@ -116,7 +138,10 @@ class DcqlQueryValidatorTest {
         second.setPath(List.of("family_name"));
         Credential credential = sdJwtCredential("cred-1", List.of(first, second));
         credential.setClaimSets(List.of(List.of("claim-1")));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject duplicate claim ids within a credential");
     }
 
     @Test
@@ -128,7 +153,10 @@ class DcqlQueryValidatorTest {
         second.setId("claim-2");
         second.setPath(List.of("given_name"));
         Credential credential = sdJwtCredential("cred-1", List.of(first, second));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject duplicate claim paths within a credential");
     }
 
     @Test
@@ -141,7 +169,8 @@ class DcqlQueryValidatorTest {
         familyName.setPath(List.of("family_name"));
         Credential credential = sdJwtCredential("cred-1", List.of(givenName, familyName));
         credential.setClaimSets(List.of(List.of("given_name", "family_name"), List.of("given_name")));
-        assertDoesNotThrow(() -> DcqlQueryValidator.validateCredential(credential));
+        assertDoesNotThrow(
+                () -> DcqlQueryValidator.validateCredential(credential), "Should accept valid claim_sets options");
     }
 
     @Test
@@ -151,7 +180,8 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("age"));
         claim.setValues(List.of("adult", "verified"));
         Credential credential = sdJwtCredential("cred-1", List.of(claim));
-        assertDoesNotThrow(() -> DcqlQueryValidator.validateCredential(credential));
+        assertDoesNotThrow(
+                () -> DcqlQueryValidator.validateCredential(credential), "Should accept string claim values");
     }
 
     @Test
@@ -161,7 +191,10 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("age"));
         claim.setValues(List.of());
         Credential credential = sdJwtCredential("cred-1", List.of(claim));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject empty claim values arrays");
     }
 
     @Test
@@ -171,7 +204,10 @@ class DcqlQueryValidatorTest {
         claim.setPath(List.of("age"));
         claim.setValues(List.of(""));
         Credential credential = sdJwtCredential("cred-1", List.of(claim));
-        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DcqlQueryValidator.validateCredential(credential),
+                "Should reject blank claim values entries");
     }
 
     @Test
@@ -179,7 +215,8 @@ class DcqlQueryValidatorTest {
         var query = new SdJwtCredentialConstrainer()
                 .buildQuery(
                         SdJwtCredentialConstrainer.QuerySpec.of(List.of("https://example.com/vct"), List.of("sub")));
-        assertDoesNotThrow(() -> DcqlQueryValidator.validateQuery(query));
+        assertDoesNotThrow(
+                () -> DcqlQueryValidator.validateQuery(query), "Should accept a valid SD-JWT credential query");
     }
 
     private static Credential sdJwtCredential(String id, List<Claim> claims) {

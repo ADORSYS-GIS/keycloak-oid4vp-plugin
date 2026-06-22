@@ -69,6 +69,11 @@ public final class ClaimPathResolver {
         return selected;
     }
 
+    /**
+     * Returns the first selectively disclosed claim value matching {@code claimName} in presentation
+     * order. When multiple disclosures reuse the same claim name, only the first match is used for
+     * path resolution.
+     */
     private static JsonNode findDisclosedClaim(SdJwtVP sdJwt, String claimName) {
         for (String disclosure : sdJwt.getDisclosuresString()) {
             JsonNode disclosedValue = decodeDisclosedValue(disclosure, claimName);
