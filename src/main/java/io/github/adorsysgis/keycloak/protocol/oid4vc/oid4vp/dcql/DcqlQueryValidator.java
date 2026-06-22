@@ -191,6 +191,9 @@ public final class DcqlQueryValidator {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("dcql_query claim values must be non-empty when present");
         }
+        if (values.stream().anyMatch(StringUtil::isBlank)) {
+            throw new IllegalArgumentException("dcql_query claim values must not contain blank entries");
+        }
     }
 
     private static boolean isVpWrapperPath(List<String> path) {

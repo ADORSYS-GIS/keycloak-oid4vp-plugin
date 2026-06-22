@@ -165,6 +165,16 @@ class DcqlQueryValidatorTest {
     }
 
     @Test
+    void rejectsBlankStringClaimValues() {
+        Claim claim = new Claim();
+        claim.setId("claim-1");
+        claim.setPath(List.of("age"));
+        claim.setValues(List.of(""));
+        Credential credential = sdJwtCredential("cred-1", List.of(claim));
+        assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+    }
+
+    @Test
     void acceptsValidSdJwtCredentialQuery() {
         var query = new SdJwtCredentialConstrainer()
                 .buildQuery(
