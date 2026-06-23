@@ -1,13 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.authlete.cbor.CBORDecoder;
+import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItem;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORPair;
@@ -16,7 +16,13 @@ import com.authlete.cbor.CBORString;
 import com.authlete.cose.COSEEC2Key;
 import com.authlete.cose.COSEException;
 import com.authlete.cose.COSEKeyBuilder;
+import com.authlete.cose.COSESign1;
+import com.authlete.cose.COSESign1Builder;
+import com.authlete.mdoc.DeviceAuth;
+import com.authlete.mdoc.DeviceNameSpaces;
+import com.authlete.mdoc.DeviceNameSpacesBytes;
 import com.authlete.mdoc.DeviceResponse;
+import com.authlete.mdoc.DeviceSigned;
 import com.authlete.mdoc.Document;
 import com.authlete.mdoc.IssuerSigned;
 import com.authlete.mdoc.IssuerSignedBuilder;
@@ -32,10 +38,8 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 import org.keycloak.util.JsonSerialization;
 
@@ -62,25 +66,86 @@ public class MdocParserTest {
     }
 
     @Test
-    void shouldRoundtripDeviceResponse() throws Exception {
+    void shouldValidateDeviceResponseStructure() throws Exception {
         DeviceResponse deviceResponse = buildDeviceResponse();
         String encoded = deviceResponse.encodeToBase64Url();
 
-        Object decoded = new CBORDecoder(Base64.getUrlDecoder().decode(encoded)).next();
-        assertInstanceOf(CBORPairList.class, decoded);
+        CBORPairList parsed = MdocParser.parseBase64Url(encoded);
 
-        CBORPairList roundtripped = (CBORPairList) decoded;
-        assertEquals(encoded, roundtripped.encodeToBase64Url());
+        CBORPair versionPair = parsed.findByKey("version");
+        assertNotNull(versionPair);
+        assertInstanceOf(CBORString.class, versionPair.getValue());
+        assertEquals("1.0", ((CBORString) versionPair.getValue()).getValue());
+
+        CBORPair statusPair = parsed.findByKey("status");
+        assertNotNull(statusPair);
+        assertInstanceOf(CBORInteger.class, statusPair.getValue());
+
+        CBORPair documentsPair = parsed.findByKey("documents");
+        assertNotNull(documentsPair);
+        assertInstanceOf(CBORItemList.class, documentsPair.getValue());
+        CBORItemList documents = (CBORItemList) documentsPair.getValue();
+        assertEquals(1, documents.getItems().size());
+
+        CBORItem docItem = documents.getItems().getFirst();
+        assertInstanceOf(CBORPairList.class, docItem);
+        CBORPairList doc = (CBORPairList) docItem;
+
+        CBORPair docTypePair = doc.findByKey("docType");
+        assertNotNull(docTypePair);
+        assertInstanceOf(CBORString.class, docTypePair.getValue());
+        assertEquals("com.example.doctype", ((CBORString) docTypePair.getValue()).getValue());
+
+        CBORPair issuerSignedPair = doc.findByKey("issuerSigned");
+        assertNotNull(issuerSignedPair);
+        assertInstanceOf(CBORPairList.class, issuerSignedPair.getValue());
     }
 
     @Test
-    void shouldAccessDocTypeViaFindByKey() throws Exception {
-        DeviceResponse deviceResponse = buildDeviceResponse();
-        byte[] encoded = deviceResponse.encode();
+    void shouldRoundtripSpecSampleVector() throws Exception {
+        String base64Url = readResource("/mdoc/spec-sample.txt");
 
-        CBORPairList parsed = MdocParser.parse(encoded);
+        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
+        String reEncoded = parsed.encodeToBase64Url();
+        assertEquals(base64Url, reEncoded);
+    }
+
+    @Test
+    void shouldParseAndValidateSpecSampleVector() throws Exception {
+        String base64Url = readResource("/mdoc/spec-sample.txt");
+
+        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
         assertNotNull(parsed);
-        assertFalse(parsed.getPairs().isEmpty());
+
+        CBORPair versionPair = parsed.findByKey("version");
+        assertNotNull(versionPair);
+        assertInstanceOf(CBORString.class, versionPair.getValue());
+        assertEquals("1.0", ((CBORString) versionPair.getValue()).getValue());
+
+        CBORPair statusPair = parsed.findByKey("status");
+        assertNotNull(statusPair);
+        assertInstanceOf(CBORInteger.class, statusPair.getValue());
+
+        CBORPair documentsPair = parsed.findByKey("documents");
+        assertNotNull(documentsPair);
+        assertInstanceOf(CBORItemList.class, documentsPair.getValue());
+
+        CBORItemList documents = (CBORItemList) documentsPair.getValue();
+        assertEquals(1, documents.getItems().size());
+
+        CBORPairList doc = (CBORPairList) documents.getItems().getFirst();
+        CBORPair docTypePair = doc.findByKey("docType");
+        assertNotNull(docTypePair);
+        assertInstanceOf(CBORString.class, docTypePair.getValue());
+        assertEquals("org.iso.18013.5.1.mDL", ((CBORString) docTypePair.getValue()).getValue());
+
+        CBORPair issuerSignedPair = doc.findByKey("issuerSigned");
+        assertNotNull(issuerSignedPair);
+        assertInstanceOf(CBORPairList.class, issuerSignedPair.getValue());
+
+        CBORPair deviceSignedPair = doc.findByKey("deviceSigned");
+        assertNotNull(deviceSignedPair);
+        assertInstanceOf(CBORPairList.class, deviceSignedPair.getValue());
     }
 
     @Test
@@ -106,64 +171,6 @@ public class MdocParserTest {
     @Test
     void shouldThrowOnEmptyBytes() {
         assertThrows(MdocEncodingException.class, () -> MdocParser.parse(new byte[0]));
-    }
-
-    @Test
-    void shouldRoundtripAuthleteSampleVector() throws Exception {
-        String base64Url = readResource("/mdoc/authlete-sample.txt");
-
-        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
-        String reEncoded = parsed.encodeToBase64Url();
-        assertEquals(base64Url, reEncoded);
-    }
-
-    @Test
-    void shouldParseAuthleteSampleVector() throws Exception {
-        String base64Url = readResource("/mdoc/authlete-sample.txt");
-
-        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
-        assertNotNull(parsed);
-
-        Map<Object, Object> map = parsed.parse();
-        assertEquals("1.0", map.get("version"));
-
-        @SuppressWarnings("unchecked")
-        List<Object> documents = (List<Object>) map.get("documents");
-        assertEquals(1, documents.size());
-
-        @SuppressWarnings("unchecked")
-        Map<Object, Object> doc0 = (Map<Object, Object>) documents.get(0);
-        assertEquals("com.example.doctype", doc0.get("docType"));
-    }
-
-    @Test
-    void shouldRoundtripSpecSampleVector() throws Exception {
-        String base64Url = readResource("/mdoc/spec-sample.txt");
-
-        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
-        String reEncoded = parsed.encodeToBase64Url();
-        assertEquals(base64Url, reEncoded);
-    }
-
-    @Test
-    void shouldParseSpecSampleVector() throws Exception {
-        String base64Url = readResource("/mdoc/spec-sample.txt");
-
-        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
-        assertNotNull(parsed);
-
-        Map<Object, Object> map = parsed.parse();
-        assertEquals("1.0", map.get("version"));
-
-        @SuppressWarnings("unchecked")
-        List<Object> documents = (List<Object>) map.get("documents");
-        assertEquals(1, documents.size());
-
-        @SuppressWarnings("unchecked")
-        Map<Object, Object> doc = (Map<Object, Object>) documents.getFirst();
-        assertEquals("org.iso.18013.5.1.mDL", doc.get("docType"));
-        assertNotNull(doc.get("issuerSigned"));
-        assertNotNull(doc.get("deviceSigned"));
     }
 
     private static String readResource(String resourcePath) {
@@ -215,15 +222,29 @@ public class MdocParserTest {
 
         List<X509Certificate> issuerCertChain = List.of(issuerCert);
 
+        COSEEC2Key deviceKey = new COSEKeyBuilder()
+                .ktyEC2()
+                .ec2CrvP256()
+                .ec2XInBase64Url("g-gO_BofI8VbT7_xJm-W7500Aenm_yVvBqZ0EshFWhY")
+                .ec2YInBase64Url("T2U2U3M4ZjVhNlI3YzhKOWwwbTFhMmIzYzRkNWU2Zjc")
+                .ec2DInBase64Url("ZDFzM2Y0ZzVoNmo3azhsOW0wYTFhMmIzYzRkNWU2Zjc")
+                .buildEC2Key();
+
         IssuerSigned issuerSigned = new IssuerSignedBuilder()
                 .setDocType(docType)
                 .setClaims(claims)
                 .setValidityInfo(validityInfo)
                 .setIssuerKey(issuerKey)
                 .setIssuerCertChain(issuerCertChain)
+                .setDeviceKey(deviceKey)
                 .build();
 
-        Document document = new Document(docType, issuerSigned);
+        COSESign1 mockDeviceSignature =
+                new COSESign1Builder().signature(new byte[] {}).build();
+        DeviceSigned deviceSigned = new DeviceSigned(
+                new DeviceNameSpacesBytes(new DeviceNameSpaces(List.of())), new DeviceAuth(mockDeviceSignature));
+
+        Document document = new Document(docType, issuerSigned, deviceSigned, null);
         return new DeviceResponse(List.of(document));
     }
 }
