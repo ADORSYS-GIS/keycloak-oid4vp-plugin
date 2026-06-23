@@ -128,6 +128,11 @@
             <artifactId>caffeine</artifactId>
             <version>3.2.3</version>
         </dependency>
+        <dependency>
+            <groupId>com.authlete</groupId>
+            <artifactId>cbor</artifactId>
+            <version>1.21</version>
+        </dependency>
     </dependencies>
 
     <build>
