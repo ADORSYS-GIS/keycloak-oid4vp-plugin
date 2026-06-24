@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.dialect.Dialects;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.util.CBORUtil;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.util.CborUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
@@ -17,7 +17,7 @@ import org.keycloak.utils.StringUtil;
 
 public class MdocParser {
 
-    private static final String MDOC_SCHEMA_PATH = "/mdoc/mdoc-device-response-schema.json";
+    private static final String MDOC_SCHEMA_PATH = "/schema/mdoc-device-response-schema.json";
     private static final Schema schema;
 
     static {
@@ -65,7 +65,7 @@ public class MdocParser {
         JsonNode node;
 
         try {
-            CBORItem unwrapped = CBORUtil.unwrap(root);
+            CBORItem unwrapped = CborUtil.unwrap(root);
             Object object = new CBORParser(unwrapped.encode()).next();
             node = JsonSerialization.mapper.valueToTree(object);
         } catch (IOException | IllegalArgumentException e) {

@@ -15,7 +15,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CBORUtil {
+public class CborUtil {
+
+    public static final int CBOR_TAG_EMBEDDED = 24;
 
     /**
      * Deeply unwrap CBORItem tree for convenience.
@@ -24,9 +26,6 @@ public class CBORUtil {
         return unwrap(item, null, null);
     }
 
-    /**
-     * Deeply unwrap CBORItem tree for convenience.
-     */
     private static CBORItem unwrap(CBORItem item, String key, Number tagNumber) {
         return switch (item) {
             // Always untag tagged items
@@ -40,9 +39,9 @@ public class CBORUtil {
                     CBORItem decodedInnerItem = new CBORDecoder(nestedBytes).next();
 
                     if (decodedInnerItem == null
-                            || !numericEquals(24, tagNumber)
+                            || !numericEquals(CBOR_TAG_EMBEDDED, tagNumber)
                                     && !(decodedInnerItem instanceof CBORTaggedItem taggedItem
-                                            && numericEquals(24, taggedItem.getTagNumber()))) {
+                                            && numericEquals(CBOR_TAG_EMBEDDED, taggedItem.getTagNumber()))) {
                         yield byteArray;
                     }
 
@@ -73,7 +72,7 @@ public class CBORUtil {
                 List<CBORItem> unwrappedItems = new ArrayList<>();
                 for (CBORItem subItem : cborList.getItems()) {
                     // Force unwrapping for first three entries of known COSE_Sign1 arrays
-                    Number forceUnwrapping = likelyCoseArray && unwrappedItems.size() < 3 ? 24 : null;
+                    Number forceUnwrapping = likelyCoseArray && unwrappedItems.size() < 3 ? CBOR_TAG_EMBEDDED : null;
                     unwrappedItems.add(unwrap(subItem, null, forceUnwrapping));
                 }
 
@@ -90,7 +89,7 @@ public class CBORUtil {
         return n != null && n.longValue() == value;
     }
 
-    private static String asString(CBORItem item) {
+    public static String asString(CBORItem item) {
         if (item instanceof CBORString s) {
             return s.getValue();
         }
