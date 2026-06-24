@@ -1,11 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItem;
 import com.authlete.cbor.CBORItemList;
@@ -27,6 +21,10 @@ import com.authlete.mdoc.IssuerSigned;
 import com.authlete.mdoc.IssuerSignedBuilder;
 import com.authlete.mdoc.ValidityInfo;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.Test;
+import org.keycloak.util.JsonSerialization;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -39,8 +37,13 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
-import org.keycloak.util.JsonSerialization;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MdocParserTest {
 
@@ -50,7 +53,6 @@ public class MdocParserTest {
         String encoded = deviceResponse.encodeToBase64Url();
 
         CBORPairList parsed = MdocParser.parseBase64Url(encoded);
-        assertNotNull(parsed);
         assertEquals(encoded, parsed.encodeToBase64Url());
     }
 
@@ -60,8 +62,7 @@ public class MdocParserTest {
         byte[] encoded = deviceResponse.encode();
 
         CBORPairList parsed = MdocParser.parse(encoded);
-        assertNotNull(parsed);
-        assertTrue(parsed.encode().length > 0);
+        assertArrayEquals(encoded, parsed.encode());
     }
 
     @Test
@@ -158,27 +159,46 @@ public class MdocParserTest {
 
     @Test
     void shouldThrowOnNullBase64Input() {
-        assertThrows(MdocEncodingException.class, () -> MdocParser.parseBase64Url(null));
+        MdocEncodingException ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parseBase64Url(null));
+        assertEquals("Input string is null or blank", ex.getMessage());
     }
 
     @Test
     void shouldThrowOnBlankBase64Input() {
-        assertThrows(MdocEncodingException.class, () -> MdocParser.parseBase64Url("   "));
+        MdocEncodingException ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parseBase64Url("   "));
+        assertEquals("Input string is null or blank", ex.getMessage());
     }
 
     @Test
     void shouldThrowOnInvalidBase64Input() {
-        assertThrows(MdocEncodingException.class, () -> MdocParser.parseBase64Url("not-valid!!!"));
+        MdocEncodingException ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parseBase64Url("not-valid!!!"));
+        assertEquals("Invalid Base64url encoding", ex.getMessage());
     }
 
     @Test
     void shouldThrowOnNullBytes() {
-        assertThrows(MdocEncodingException.class, () -> MdocParser.parse(null));
+        MdocEncodingException ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parse(null));
+        assertEquals("Input bytes are null or empty", ex.getMessage());
     }
 
     @Test
     void shouldThrowOnEmptyBytes() {
-        assertThrows(MdocEncodingException.class, () -> MdocParser.parse(new byte[0]));
+        MdocEncodingException ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parse(new byte[0]));
+        assertEquals("Input bytes are null or empty", ex.getMessage());
+    }
+
+    @Test
+    void shouldThrowOnSchemaValidationError() {
+        // This mDoc is malformed because `documents` should be an array not a map
+        CBORPairList malformed = new CBORPairList(
+                new CBORPair(new CBORString("version"), new CBORInteger(1)),
+                new CBORPair(new CBORString("documents"), new CBORPairList(List.of())),
+                new CBORPair(new CBORString("status"), new CBORInteger(0)));
+
+        var ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parse(malformed.encode()));
+        assertTrue(ex.getMessage().startsWith("mDoc fails schema validation:"));
+        assertTrue(ex.getMessage()
+                .contains("\"instanceLocation\":\"/documents\",\"message\":\"object found, array expected\""));
     }
 
     private static String readResource(String resourcePath) {
