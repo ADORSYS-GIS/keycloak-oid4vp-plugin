@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.authlete.cbor.CBORDecoder;
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItem;
 import com.authlete.cbor.CBORItemList;
@@ -146,6 +145,15 @@ public class MdocParserTest {
         CBORPair deviceSignedPair = doc.findByKey("deviceSigned");
         assertNotNull(deviceSignedPair);
         assertInstanceOf(CBORPairList.class, deviceSignedPair.getValue());
+    }
+
+    @Test
+    void shouldRoundtripAuthleteSampleVector() throws Exception {
+        String base64Url = readResource("/mdoc/authlete-sample.txt");
+
+        CBORPairList parsed = MdocParser.parseBase64Url(base64Url);
+        String reEncoded = parsed.encodeToBase64Url();
+        assertEquals(base64Url, reEncoded);
     }
 
     @Test
