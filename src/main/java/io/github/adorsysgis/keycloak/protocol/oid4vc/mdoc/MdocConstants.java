@@ -12,7 +12,10 @@ public class MdocConstants {
     public static final String L_DIGEST_ID = "digestID";
     public static final String L_DIGEST_ALG = "digestAlgorithm";
     public static final String L_VALUE_DIGESTS = "valueDigests";
+    public static final String L_DEVICE_KEY_INFO = "deviceKeyInfo";
+    public static final String L_DEVICE_KEY = "deviceKey";
     public static final String L_DEVICE_AUTH = "deviceAuth";
     public static final String L_DEVICE_SIGNATURE = "deviceSignature";
-    public static final String L_DEVICE_MAC = "deviceMac";
+    public static final String L_DEVICE_AUTHENTICATION = "DeviceAuthentication";
+    public static final String L_OPENID4VP_HANDOVER = "OpenID4VPHandover";
 }
