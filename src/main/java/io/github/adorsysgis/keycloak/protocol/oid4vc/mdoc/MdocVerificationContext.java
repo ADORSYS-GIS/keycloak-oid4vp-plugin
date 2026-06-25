@@ -4,7 +4,6 @@ import com.authlete.cbor.CBORByteArray;
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItem;
 import com.authlete.cbor.CBORItemList;
-import com.authlete.cbor.CBORNull;
 import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
@@ -13,20 +12,17 @@ import com.authlete.cose.COSEException;
 import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.util.CborUtil;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.SignatureVerifierContext;
-import org.keycloak.jose.jws.crypto.HashUtils;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.vp.KeyBindingJwtVerificationOpts;
 import org.keycloak.util.JsonSerialization;
@@ -83,9 +79,7 @@ public class MdocVerificationContext {
         // TODO: Verify validity with mDocVerificationOpts
 
         // Verify device key binding
-        COSESign1 deviceSignature = extractDeviceSignature(document);
-        COSEKey deviceKey = extractDeviceKey(mso);
-        verifyDeviceKeyBinding(deviceSignature, deviceKey, document);
+        verifyDeviceKeyBinding(document, mso, mDocVerificationOpts);
     }
 
     /**
@@ -93,7 +87,7 @@ public class MdocVerificationContext {
      */
     private void verifyIssuerSignature(COSESign1 issuerAuth, List<X509Certificate> trustedCertificates)
             throws VerificationException {
-        List<X509Certificate> x5chain = extractX5Chain(issuerAuth);
+        List<X509Certificate> x5chain = CborUtil.extractX5Chain(issuerAuth);
         if (x5chain == null || x5chain.isEmpty()) {
             throw new VerificationException("No X5C certificate attached to issuer signature");
         }
@@ -114,19 +108,15 @@ public class MdocVerificationContext {
     /**
      * Verify device key binding
      */
-    private void verifyDeviceKeyBinding(COSESign1 deviceSignature, COSEKey deviceKey, CBORPairList document)
+    private void verifyDeviceKeyBinding(
+            CBORPairList document, CBORPairList mso, KeyBindingJwtVerificationOpts mDocVerificationOpts)
             throws VerificationException {
-        CBORItemList handoverInfo = new CBORItemList(
-                new CBORString("client_id"),
-                new CBORString("abcdefgh1234567890"),
-                new CBORByteArray("P8p0virRlh6fAkh5-YSeHt4EIv-hFGneYk14d8DF51w".getBytes()),
-                new CBORString("https://example.com/12345/response"));
+        COSESign1 deviceSignature = extractDeviceSignature(document);
+        COSEKey deviceKey = extractDeviceKey(mso);
 
-        byte[] handoverInfoHash = HashUtils.hash(JavaAlgorithm.SHA256, handoverInfo.encode());
-        CBORItemList handover = new CBORItemList(
-                new CBORString(MdocConstants.L_OPENID4VP_HANDOVER), new CBORByteArray(handoverInfoHash));
-
-        CBORItemList sessionTranscript = new CBORItemList(CBORNull.INSTANCE, CBORNull.INSTANCE, handover);
+        // TODO: Source from mDocVerificationOpts
+        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(
+                "1234567890abcdefgh", "example.com", "https://example.com/12345/response", "abcdefgh1234567890");
 
         CBORItemList deviceAuthentication = new CBORItemList(
                 new CBORString(MdocConstants.L_DEVICE_AUTHENTICATION),
@@ -135,15 +125,10 @@ public class MdocVerificationContext {
                 extractDeviceNamespaces(document));
 
         byte[] deviceAuthenticationBytes = deviceAuthentication.encode();
-        CBORTaggedItem payload = new CBORTaggedItem(24, new CBORByteArray(deviceAuthenticationBytes));
-        COSESign1 payloadedDeviceSignature = new COSESign1(
-                deviceSignature.getProtectedHeader(),
-                deviceSignature.getUnprotectedHeader(),
-                new CBORByteArray(payload.encode()),
-                deviceSignature.getSignature());
+        COSESign1 undetachedDeviceSignature = CborUtil.undetachCOSESign1(deviceSignature, deviceAuthenticationBytes);
 
         try {
-            if (!new COSEVerifier(deviceKey.createPublicKey()).verify(payloadedDeviceSignature)) {
+            if (!new COSEVerifier(deviceKey.createPublicKey()).verify(undetachedDeviceSignature)) {
                 throw new COSEException("COSE signature verification failed");
             }
         } catch (COSEException e) {
@@ -280,19 +265,5 @@ public class MdocVerificationContext {
         } catch (COSEException e) {
             throw new VerificationException("Failure parsing deviceSignature as COSE_Sign1", e);
         }
-    }
-
-    private List<X509Certificate> extractX5Chain(COSESign1 sign1) {
-        if (sign1.getUnprotectedHeader() != null) {
-            var chain = sign1.getUnprotectedHeader().getX5Chain();
-            if (chain != null && !chain.isEmpty()) return chain;
-        }
-
-        if (sign1.getProtectedHeader() != null) {
-            var chain = sign1.getProtectedHeader().getX5Chain();
-            if (chain != null && !chain.isEmpty()) return chain;
-        }
-
-        return null;
     }
 }

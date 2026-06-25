@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.dialect.Dialects;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.util.CborUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;

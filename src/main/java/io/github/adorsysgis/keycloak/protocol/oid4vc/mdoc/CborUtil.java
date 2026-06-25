@@ -1,4 +1,4 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.util;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants.L_DEVICE_SIGNATURE;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants.L_ISSUER_AUTH;
@@ -11,7 +11,9 @@ import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
 import com.authlete.cbor.CBORTaggedItem;
+import com.authlete.cose.COSESign1;
 import java.io.IOException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +28,13 @@ public class CborUtil {
         return unwrap(item, null, null);
     }
 
+    /**
+     * Deeply unwrap CBORItem tree for convenience.
+     *
+     * @param item      Root of CBOR tree to unwrap
+     * @param key       Optional. Pair key associated with `item` in case it was a value to a CBORPair
+     * @param tagNumber Optional. Tag number associated with `item` in case it was content of a CBORTaggedItem
+     */
     private static CBORItem unwrap(CBORItem item, String key, Number tagNumber) {
         return switch (item) {
             // Always untag tagged items
@@ -84,16 +93,50 @@ public class CborUtil {
         };
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private static boolean numericEquals(long value, Number n) {
-        return n != null && n.longValue() == value;
+    /**
+     * Extracts X5C chain from COSESign1.
+     */
+    public static List<X509Certificate> extractX5Chain(COSESign1 sign1) {
+        if (sign1.getUnprotectedHeader() != null) {
+            var chain = sign1.getUnprotectedHeader().getX5Chain();
+            if (chain != null && !chain.isEmpty()) return chain;
+        }
+
+        if (sign1.getProtectedHeader() != null) {
+            var chain = sign1.getProtectedHeader().getX5Chain();
+            if (chain != null && !chain.isEmpty()) return chain;
+        }
+
+        return null;
     }
 
+    /**
+     * Reattach payload to COSESign1 with detached payload.
+     */
+    public static COSESign1 undetachCOSESign1(COSESign1 sign1, byte[] payloadBytes) {
+        CBORTaggedItem payload = new CBORTaggedItem(CborUtil.CBOR_TAG_EMBEDDED, new CBORByteArray(payloadBytes));
+        return new COSESign1(
+                sign1.getProtectedHeader(),
+                sign1.getUnprotectedHeader(),
+                new CBORByteArray(payload.encode()),
+                sign1.getSignature());
+    }
+
+    /**
+     * Convert CBOR item to string, avoiding quoted string.
+     */
     public static String asString(CBORItem item) {
         if (item instanceof CBORString s) {
             return s.getValue();
         }
 
         return item.toString();
+    }
+
+    /**
+     * Safe equality check with type Number.
+     */
+    public static boolean numericEquals(long value, Number n) {
+        return n != null && n.longValue() == value;
     }
 }
