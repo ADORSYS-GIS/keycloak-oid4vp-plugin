@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -74,10 +75,22 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = queryWithClaims(claimWithValues("given-name", List.of("given_name"), List.of("Bob")));
 
-        assertThrows(
-                VerificationException.class,
-                () -> DcqlPresentationValidator.validatePresentation(query, token),
-                "Should reject presentation when claim values do not match");
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT does not satisfy DCQL claim values for path: [given_name]", error.getMessage());
+    }
+
+    @Test
+    void rejectsMissingRequestedClaimPath() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.put("given_name", "Alice"),
+                DisclosureSpec.builder().build());
+
+        DcqlQuery query = queryWithClaims(claim("family-name", List.of("family_name")));
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT does not satisfy DCQL claim path: [family_name]", error.getMessage());
     }
 
     @Test
@@ -114,10 +127,114 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
 
-        assertThrows(
-                VerificationException.class,
-                () -> DcqlPresentationValidator.validatePresentation(query, token),
-                "Should reject presentation when no claim_sets option is satisfied");
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT does not satisfy any DCQL claim_sets option", error.getMessage());
+    }
+
+    @Test
+    void rejectsMismatchedVct() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.put("given_name", "Alice"),
+                DisclosureSpec.builder().build());
+
+        DcqlQuery query = queryWithClaims(claim("given-name", List.of("given_name")));
+        query.getCredentials().getFirst().getMeta().setVctValues(List.of("https://credentials.example.com/other"));
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT vct does not match any value in meta.vct_values: " + VCT, error.getMessage());
+    }
+
+    @Test
+    void rejectsMissingVct() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.remove("vct"), DisclosureSpec.builder().build());
+
+        DcqlQuery query = queryWithClaims(claim("given-name", List.of("given_name")));
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT is missing required vct claim", error.getMessage());
+    }
+
+    @Test
+    void rejectsMultipleCredentialQueries() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.put("given_name", "Alice"),
+                DisclosureSpec.builder().build());
+
+        Credential first = credentialWithClaims(List.of(claim("given-name", List.of("given_name"))));
+        first.setId("cred-1");
+        Credential second = credentialWithClaims(List.of(claim("family-name", List.of("family_name"))));
+        second.setId("cred-2");
+        DcqlQuery query = new DcqlQuery();
+        query.setCredentials(List.of(first, second));
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals(
+                "Only single-credential DCQL queries are supported for presentation validation", error.getMessage());
+    }
+
+    @Test
+    void validatesPresentationWithNoRequestedClaims() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.put("given_name", "Alice"),
+                DisclosureSpec.builder().build());
+
+        Credential credential = credentialWithClaims(List.of());
+        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+
+        assertDoesNotThrow(() -> DcqlPresentationValidator.validatePresentation(query, token));
+    }
+
+    @Test
+    void rejectsClaimSetsWhenClaimValuesMismatch() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> {
+                    claimSet.put("given_name", "Alice");
+                    claimSet.put("family_name", "Smith");
+                },
+                DisclosureSpec.builder().build());
+
+        Claim givenName = claimWithValues("given-name", List.of("given_name"), List.of("Bob"));
+        Claim familyName = claim("family-name", List.of("family_name"));
+        Credential credential = credentialWithClaims(List.of(givenName, familyName));
+        credential.setClaimSets(List.of(List.of("given-name", "family-name")));
+
+        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT does not satisfy any DCQL claim_sets option", error.getMessage());
+    }
+
+    @Test
+    void rejectsMissingHolderBindingByDefault() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.put("given_name", "Alice"),
+                DisclosureSpec.builder().build());
+
+        Credential credential = credentialWithClaims(List.of(claim("given-name", List.of("given_name"))));
+        credential.setRequireCryptographicHolderBinding(null);
+        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("DCQL query requires cryptographic holder binding (Key Binding JWT)", error.getMessage());
+    }
+
+    @Test
+    void rejectsBlankVctInPresentation() throws Exception {
+        String token = buildSdJwtToken(
+                claimSet -> claimSet.put("vct", "  "), DisclosureSpec.builder().build());
+
+        DcqlQuery query = queryWithClaims(claim("given-name", List.of("given_name")));
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertEquals("Presented SD-JWT is missing required vct claim", error.getMessage());
     }
 
     private static DcqlQuery queryWithClaims(Claim... claims) {

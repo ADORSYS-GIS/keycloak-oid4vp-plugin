@@ -15,14 +15,6 @@ public final class ClaimPathResolver {
 
     private ClaimPathResolver() {}
 
-    public static boolean isPresentInJson(JsonNode root, List<String> path) {
-        return !resolveInJson(root, path).isEmpty();
-    }
-
-    public static boolean isPresentInSdJwt(SdJwtVP sdJwt, List<String> path) {
-        return !resolveInSdJwt(sdJwt, path).isEmpty();
-    }
-
     public static List<JsonNode> resolveInSdJwt(SdJwtVP sdJwt, List<String> path) {
         if (path == null || path.isEmpty()) {
             return List.of();
