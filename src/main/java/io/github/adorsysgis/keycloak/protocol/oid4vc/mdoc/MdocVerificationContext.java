@@ -16,6 +16,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -65,20 +67,35 @@ public class MdocVerificationContext {
             MdocVerificationOpts opts,
             PresentationRequirements presentationRequirements)
             throws VerificationException {
+        // Verify response status BAE
+        verifyResponseStatus(mdoc);
+
         // Verify issuer signature over Mobile Security Objects (MSO)
         CBORPairList document = extractDocument(mdoc);
         COSESign1 issuerAuth = extractIssuerAuth(document);
         verifyIssuerSignature(issuerAuth, List.of());
 
-        // Verify that presented claims are protected by digests in MSO
+        // Verify device key binding
         CBORPairList namespaces = extractNamespaces(document);
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
+        verifyDeviceKeyBinding(document, mso, opts);
+
+        // Verify that presented claims are protected by digests in MSO
         verifyMsoDigests(namespaces, mso);
 
-        // TODO: Verify validity with opts
+        // Verify validity info of presentation in MSO
+        verifyValidityInfo(mso, opts);
+    }
 
-        // Verify device key binding
-        verifyDeviceKeyBinding(document, mso, opts);
+    /**
+     * Verify device response status.
+     */
+    private static void verifyResponseStatus(CBORPairList mdoc) throws VerificationException {
+        var status = (CBORInteger) mdoc.findByKey(MdocConstants.L_STATUS).getValue();
+        if (!MdocConstants.V_STATUS_OK.equals(status.getValue())) {
+            throw new VerificationException(
+                    String.format("mDoc response status is not OK: status=%s", status.getValue()));
+        }
     }
 
     /**
@@ -205,6 +222,26 @@ public class MdocVerificationContext {
             return MessageDigest.getInstance(digestAlg);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Verify validity info of presentation in MSO.
+     */
+    private void verifyValidityInfo(CBORPairList mso, MdocVerificationOpts opts) throws VerificationException {
+        var info = (CBORPairList) mso.findByKey(MdocConstants.L_VALIDITY_INFO).getValue();
+        var signed = (CBORString) info.findByKey(MdocConstants.L_SIGNED).getValue();
+        var validFrom = (CBORString) info.findByKey(MdocConstants.L_VALID_FROM).getValue();
+        var validUntil =
+                (CBORString) info.findByKey(MdocConstants.L_VALID_UNTIL).getValue();
+
+        try {
+            opts.verifyValidityInfo(
+                    Instant.parse(signed.getValue()).getEpochSecond(),
+                    Instant.parse(validFrom.getValue()).getEpochSecond(),
+                    Instant.parse(validUntil.getValue()).getEpochSecond());
+        } catch (DateTimeParseException e) {
+            throw new VerificationException("Failure parsing validity information as datetime", e);
         }
     }
 

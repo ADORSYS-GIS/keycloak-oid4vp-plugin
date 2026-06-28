@@ -1,6 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
-import com.authlete.cbor.CBORPairList;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_EXP;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_IAT;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_NBF;
+
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import org.keycloak.common.VerificationException;
@@ -75,11 +78,30 @@ public class MdocVerificationOpts extends ClaimVerifier {
         return mdocGeneratedNonce;
     }
 
-    public void verifyValidityInfo(CBORPairList validityInfo) throws VerificationException {
+    /**
+     * Verifies validity information of mDoc device response
+     *
+     * @param signed     The timestamp at which the mDoc device response was signed
+     * @param validFrom  The timestamp from which the mDoc device response is valid
+     * @param validUntil The timestamp until which the mDoc device response is valid
+     */
+    public void verifyValidityInfo(long signed, long validFrom, long validUntil) throws VerificationException {
         var header = JsonSerialization.createObjectNode();
         var payload = JsonSerialization.createObjectNode();
 
-        super.verifyClaims(header, payload);
+        payload.put(CLAIM_NAME_IAT, signed);
+        payload.put(CLAIM_NAME_NBF, validFrom);
+        payload.put(CLAIM_NAME_EXP, validUntil);
+
+        try {
+            verifyClaims(header, payload);
+        } catch (VerificationException e) {
+            throw new VerificationException(
+                    String.format(
+                            "Validity information verification failed. signed=%d validFrom=%d validUntil=%d",
+                            signed, validFrom, validUntil),
+                    e);
+        }
     }
 
     public static Builder builder() {
@@ -98,7 +120,9 @@ public class MdocVerificationOpts extends ClaimVerifier {
         private String responseUri;
         private byte[] jwkThumbprint;
 
-        private Builder() {}
+        private Builder() {
+            super();
+        }
 
         private Builder(Integer clockSkew) {
             super(clockSkew);
@@ -129,32 +153,14 @@ public class MdocVerificationOpts extends ClaimVerifier {
             return this;
         }
 
-        public Builder withSignedAtCheck(boolean isCheckOptional) {
-            return (Builder) super.withIatCheck(isCheckOptional);
-        }
-
-        public Builder withSignedAtCheck(Integer allowedMaxAge, boolean isCheckOptional) {
-            return (Builder) super.withIatCheck(allowedMaxAge, isCheckOptional);
-        }
-
-        public Builder withValidFromCheck(boolean isCheckOptional) {
-            return (Builder) super.withNbfCheck(isCheckOptional);
-        }
-
-        public Builder withValidUntil(boolean isCheckOptional) {
-            return (Builder) super.withExpCheck(isCheckOptional);
+        public Builder withAllowedMaxAge(Integer allowedMaxAge) {
+            return (Builder) super.withIatCheck(allowedMaxAge, false);
         }
 
         @Override
         public MdocVerificationOpts build() {
             return new MdocVerificationOpts(
-                    headerVerifiers,
-                    contentVerifiers,
-                    clientId,
-                    oid4vpNonce,
-                    mdocGeneratedNonce,
-                    responseUri,
-                    jwkThumbprint);
+                    List.of(), contentVerifiers, clientId, oid4vpNonce, mdocGeneratedNonce, responseUri, jwkThumbprint);
         }
     }
 }
