@@ -30,11 +30,14 @@ class OID4VPSessionTranscriptTest {
                }
             """;
 
-        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(
-                "x509_san_dns:example.com",
-                "exc7gBkxjx1rdc9udRrveKvSsJIq80avlXeLHhGwqtA",
-                computeJwkThumbprint(respEncJwk),
-                "https://example.com/response");
+        MdocVerificationOpts opts = MdocVerificationOpts.builder()
+                .withClientId("x509_san_dns:example.com")
+                .withOid4vpNonce("exc7gBkxjx1rdc9udRrveKvSsJIq80avlXeLHhGwqtA")
+                .withResponseUri("https://example.com/response")
+                .withJwkThumbprint(computeJwkThumbprint(respEncJwk))
+                .build();
+
+        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(opts);
 
         assertEquals(str("""
             83f6f682714f70656e494434565048616e646f7665725820048bc053c00442af9b8e
@@ -50,8 +53,15 @@ class OID4VPSessionTranscriptTest {
         String apu = "MTIzNDU2Nzg5MGFiY2RlZmdo";
         String mdocGeneratedNonce = new String(Base64Url.decode(apu), StandardCharsets.UTF_8);
 
-        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(
-                mdocGeneratedNonce, "example.com", "https://example.com/12345/response", "abcdefgh1234567890");
+        MdocVerificationOpts opts = MdocVerificationOpts.builder()
+                .withClientId("example.com")
+                .withOid4vpNonce("abcdefgh1234567890")
+                .withMdocGeneratedNonce(mdocGeneratedNonce)
+                .withResponseUri("https://example.com/12345/response")
+                .withJwkThumbprint(null)
+                .build();
+
+        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(opts);
 
         assertEquals(str("""
             83f6f6835820da25c527e5fb75bc2dd31267c02237c4462ba0c1bf37071f692e7dd93b10ad0b5820f6ed8

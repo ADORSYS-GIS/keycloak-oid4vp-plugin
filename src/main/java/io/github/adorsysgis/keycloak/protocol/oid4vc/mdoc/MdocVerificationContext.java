@@ -24,7 +24,6 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
-import org.keycloak.sdjwt.vp.KeyBindingJwtVerificationOpts;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -56,14 +55,14 @@ public class MdocVerificationContext {
      *
      * @param issuerVerifyingKeys             Verifying keys for validating issuerSigned components. The caller
      *                                        is responsible for establishing trust in these keys.
-     * @param mDocVerificationOpts            Options to parameterize the mDoc verification.
+     * @param opts                            Options to parameterize the mDoc verification.
      * @param presentationRequirements        If set, the presentation requirements will be enforced on the claims
      *                                        in the mDoc upon verification.
      * @throws VerificationException if verification failed
      */
     public void verifyPresentation(
             List<SignatureVerifierContext> issuerVerifyingKeys,
-            KeyBindingJwtVerificationOpts mDocVerificationOpts,
+            MdocVerificationOpts opts,
             PresentationRequirements presentationRequirements)
             throws VerificationException {
         // Verify issuer signature over Mobile Security Objects (MSO)
@@ -76,10 +75,10 @@ public class MdocVerificationContext {
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
         verifyMsoDigests(namespaces, mso);
 
-        // TODO: Verify validity with mDocVerificationOpts
+        // TODO: Verify validity with opts
 
         // Verify device key binding
-        verifyDeviceKeyBinding(document, mso, mDocVerificationOpts);
+        verifyDeviceKeyBinding(document, mso, opts);
     }
 
     /**
@@ -108,16 +107,31 @@ public class MdocVerificationContext {
     /**
      * Verify device key binding
      */
-    private void verifyDeviceKeyBinding(
-            CBORPairList document, CBORPairList mso, KeyBindingJwtVerificationOpts mDocVerificationOpts)
+    private void verifyDeviceKeyBinding(CBORPairList document, CBORPairList mso, MdocVerificationOpts opts)
             throws VerificationException {
         COSESign1 deviceSignature = extractDeviceSignature(document);
         COSEKey deviceKey = extractDeviceKey(mso);
 
-        // TODO: Source from mDocVerificationOpts
-        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(
-                "1234567890abcdefgh", "example.com", "https://example.com/12345/response", "abcdefgh1234567890");
+        try {
+            // First attempt verification with session transcript computed as per OpenID4VP spec
+            CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(opts);
+            verifyDeviceKeyBinding(document, sessionTranscript, deviceSignature, deviceKey);
+        } catch (VerificationException e) {
+            // If that fails, attempt verification with session transcript computed as per ISO spec
+            logger.debugf(
+                    e,
+                    "Device key binding verification failed with OpenID4VP session transcript. Re-trying with ISO spec session transcript.");
+            CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(opts);
+            verifyDeviceKeyBinding(document, sessionTranscript, deviceSignature, deviceKey);
+        }
+    }
 
+    /**
+     * Verify device key binding (with session transcript).
+     */
+    private void verifyDeviceKeyBinding(
+            CBORPairList document, CBORItemList sessionTranscript, COSESign1 deviceSignature, COSEKey deviceKey)
+            throws VerificationException {
         CBORItemList deviceAuthentication = new CBORItemList(
                 new CBORString(MdocConstants.L_DEVICE_AUTHENTICATION),
                 sessionTranscript,
