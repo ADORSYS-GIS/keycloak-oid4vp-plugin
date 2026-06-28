@@ -6,12 +6,15 @@ import com.authlete.cbor.CBORItem;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
+import com.authlete.cbor.CBORParser;
 import com.authlete.cbor.CBORString;
 import com.authlete.cbor.CBORTaggedItem;
 import com.authlete.cose.COSEException;
 import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
@@ -19,7 +22,9 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
@@ -76,15 +81,21 @@ public class MdocVerificationContext {
         verifyIssuerSignature(issuerAuth, List.of());
 
         // Verify device key binding
-        CBORPairList namespaces = extractNamespaces(document);
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
         verifyDeviceKeyBinding(document, mso, opts);
 
         // Verify that presented claims are protected by digests in MSO
-        verifyMsoDigests(namespaces, mso);
+        CBORPairList namespaces = extractNamespaces(document);
+        NamespacedClaims claims = verifyMsoDigests(namespaces, mso);
 
         // Verify validity info of presentation in MSO
         verifyValidityInfo(mso, opts);
+
+        // Enforce presentation requirements if provided
+        if (presentationRequirements != null) {
+            JsonNode claimsJson = JsonSerialization.writeValueAsNode(claims.namespaces());
+            presentationRequirements.checkIfSatisfiedBy(claimsJson);
+        }
     }
 
     /**
@@ -170,17 +181,21 @@ public class MdocVerificationContext {
     /**
      * Verify that presented claims are protected by digests in MSO
      */
-    private void verifyMsoDigests(CBORPairList namespaces, CBORPairList mso) throws VerificationException {
+    private NamespacedClaims verifyMsoDigests(CBORPairList namespaces, CBORPairList mso) throws VerificationException {
         var digestAlgorithm =
                 (CBORString) mso.findByKey(MdocConstants.L_DIGEST_ALG).getValue();
         var valueDigests =
                 (CBORPairList) mso.findByKey(MdocConstants.L_VALUE_DIGESTS).getValue();
         MessageDigest digester = verifyDigestAlgorithm(digestAlgorithm.getValue());
 
+        // We'll also collect the claims in a map for subsequent presentation requirements verification
+        Map<String, Map<String, Object>> nsClaims = new HashMap<>();
+
         // Run digest integrity verification for each namespace
         for (CBORPair namespace : namespaces.getPairs()) {
+            var namespaceKey = CborUtil.asString(namespace.getKey());
             var elements = (CBORItemList) namespace.getValue();
-            var digests = Optional.ofNullable(valueDigests.findByKey(CborUtil.asString(namespace.getKey())))
+            var digests = Optional.ofNullable(valueDigests.findByKey(namespaceKey))
                     .map(p -> (CBORPairList) p.getValue())
                     .orElse(null);
 
@@ -190,6 +205,7 @@ public class MdocVerificationContext {
             }
 
             // Run digest integrity verification for each element under the namespace
+            Map<String, Object> claims = new HashMap<>();
             for (CBORItem element : elements.getItems()) {
                 var unwrapped = (CBORPairList) CborUtil.unwrap(element);
                 var digestId = (CBORInteger)
@@ -204,8 +220,25 @@ public class MdocVerificationContext {
                         || !Arrays.equals(digestArray.getValue(), digester.digest(element.encode()))) {
                     throw new VerificationException(String.format("Digest mismatch for digestId=%s", digestId));
                 }
+
+                // Collect the claim for subsequent enforcement of presentation requirements
+                try {
+                    var elementIdentifier = (CBORString) unwrapped
+                            .findByKey(MdocConstants.L_ELEMENT_IDENTIFIER)
+                            .getValue();
+                    var elementValue =
+                            unwrapped.findByKey(MdocConstants.L_ELEMENT_VALUE).getValue();
+                    claims.put(elementIdentifier.getValue(), new CBORParser(elementValue.encode()).next());
+                } catch (IOException e) {
+                    throw new VerificationException(
+                            String.format("Failed to parse value of element with digestId=%s", digestId), e);
+                }
             }
+            nsClaims.put(namespaceKey, claims);
         }
+
+        // Bubble up collected claims
+        return new NamespacedClaims(nsClaims);
     }
 
     /**

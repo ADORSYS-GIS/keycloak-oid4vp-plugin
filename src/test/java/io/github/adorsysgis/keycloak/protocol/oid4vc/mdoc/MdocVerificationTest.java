@@ -1,8 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.VerificationException;
+import org.keycloak.sdjwt.consumer.PresentationRequirements;
 
 public class MdocVerificationTest extends MdocBaseTest {
 
@@ -26,6 +31,23 @@ public class MdocVerificationTest extends MdocBaseTest {
                 .withResponseUri("https://example.com/12345/response")
                 .build();
 
-        new MdocVerificationContext(mdoc).verifyPresentation(null, opts, null);
+        PresentationRequirements reqs = (JsonNode nsClaims) -> {
+            assertEquals(1, nsClaims.size(), "There should be exactly one namespace");
+            JsonNode claims = nsClaims.get("org.iso.18013.5.1");
+            assertNotNull(claims, "The ISO node should exist");
+
+            assertEquals("USA", claims.get("un_distinguishing_sign").asText());
+            assertEquals("ABCD1234", claims.get("document_number").asText());
+            assertEquals("Alice", claims.get("given_name").asText());
+            assertEquals("Smith", claims.get("family_name").asText());
+
+            JsonNode privileges = claims.get("driving_privileges");
+            assertEquals(2, privileges.size(), "Should have exactly 2 driving privilege categories");
+            assertEquals("B", privileges.get(0).get("vehicle_category_code").asText());
+            assertEquals("BE", privileges.get(1).get("vehicle_category_code").asText());
+        };
+
+        // Act: Verify the presentation using the provided options and requirements.
+        new MdocVerificationContext(mdoc).verifyPresentation(null, opts, reqs);
     }
 }

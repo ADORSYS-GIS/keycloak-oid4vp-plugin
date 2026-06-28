@@ -11,6 +11,8 @@ public class MdocConstants {
     public static final String L_ISSUER_AUTH = "issuerAuth";
     public static final String L_NAME_SPACES = "nameSpaces";
     public static final String L_DIGEST_ID = "digestID";
+    public static final String L_ELEMENT_IDENTIFIER = "elementIdentifier";
+    public static final String L_ELEMENT_VALUE = "elementValue";
     public static final String L_DIGEST_ALG = "digestAlgorithm";
     public static final String L_VALUE_DIGESTS = "valueDigests";
     public static final String L_DEVICE_KEY_INFO = "deviceKeyInfo";
