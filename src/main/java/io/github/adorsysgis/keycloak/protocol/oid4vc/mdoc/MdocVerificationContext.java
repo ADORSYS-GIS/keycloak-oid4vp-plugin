@@ -14,10 +14,10 @@ import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -29,8 +29,8 @@ import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.JavaAlgorithm;
-import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
+import org.keycloak.truststore.TruststoreProvider;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -60,17 +60,16 @@ public class MdocVerificationContext {
     /**
      * Verifies mDoc presentation.
      *
-     * @param issuerVerifyingKeys             Verifying keys for validating issuerSigned components. The caller
-     *                                        is responsible for establishing trust in these keys.
      * @param opts                            Options to parameterize the mDoc verification.
      * @param presentationRequirements        If set, the presentation requirements will be enforced on the claims
      *                                        in the mDoc upon verification.
+     * @param truststoreProvider              Truststore for enforcing PKIX trust in the issuer's X.5C chain.
      * @throws VerificationException if verification failed
      */
     public void verifyPresentation(
-            List<SignatureVerifierContext> issuerVerifyingKeys,
             MdocVerificationOpts opts,
-            PresentationRequirements presentationRequirements)
+            PresentationRequirements presentationRequirements,
+            TruststoreProvider truststoreProvider)
             throws VerificationException {
         // Verify response status BAE
         verifyResponseStatus(mdoc);
@@ -78,7 +77,7 @@ public class MdocVerificationContext {
         // Verify issuer signature over Mobile Security Objects (MSO)
         CBORPairList document = extractDocument(mdoc);
         COSESign1 issuerAuth = extractIssuerAuth(document);
-        verifyIssuerSignature(issuerAuth, List.of());
+        verifyIssuerSignature(issuerAuth, truststoreProvider);
 
         // Verify device key binding
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
@@ -110,21 +109,19 @@ public class MdocVerificationContext {
     }
 
     /**
-     * Verify issuer signature over Mobile Security Objects
+     * Verify issuer signature over Mobile Security Objects.
+     *
+     * <p>The X.5C chain attached to the issuer signature is PKIX-validated against the
+     * provided truststore before its leaf public key is used to verify the COSE signature.
      */
-    private void verifyIssuerSignature(COSESign1 issuerAuth, List<X509Certificate> trustedCertificates)
+    private void verifyIssuerSignature(COSESign1 issuerAuth, TruststoreProvider truststoreProvider)
             throws VerificationException {
-        List<X509Certificate> x5chain = CborUtil.extractX5Chain(issuerAuth);
-        if (x5chain == null || x5chain.isEmpty()) {
-            throw new VerificationException("No X5C certificate attached to issuer signature");
-        }
-
-        // TODO: Enforce trust in X5C certificate chain
+        List<X509Certificate> x5cChain = CborUtil.extractX5Chain(issuerAuth);
+        X509Certificate[] validatedChain = PKIXVerificationUtil.validateChain(x5cChain, truststoreProvider);
 
         try {
-            X509Certificate verifier = x5chain.getLast();
-            PublicKey pubKey = verifier.getPublicKey();
-            if (!new COSEVerifier(pubKey).verify(issuerAuth)) {
+            X509Certificate leaf = validatedChain[0];
+            if (!new COSEVerifier(leaf.getPublicKey()).verify(issuerAuth)) {
                 throw new COSEException("COSE signature verification failed");
             }
         } catch (COSEException e) {

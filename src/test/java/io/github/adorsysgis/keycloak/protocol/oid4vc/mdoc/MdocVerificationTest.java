@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.VerificationException;
+import org.keycloak.common.util.Time;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
+import org.keycloak.truststore.TruststoreProvider;
 
 public class MdocVerificationTest extends MdocBaseTest {
 
@@ -22,9 +24,9 @@ public class MdocVerificationTest extends MdocBaseTest {
     public void shouldVerifyValidMdocSuccessfully_SpecSample() throws VerificationException {
         String mdoc = readResource("/mdoc/spec-sample.txt");
 
-        // The test vector dates back to 2024, so we use a 50-year clock skew to bypass expiration checks.
-        int clockSkew = 50 * 365 * 24 * 60 * 60; // 50 years in seconds
-        MdocVerificationOpts opts = MdocVerificationOpts.builder(clockSkew)
+        TruststoreProvider trust = new StaticTruststoreProvider(getSpecSampleCert());
+
+        MdocVerificationOpts opts = MdocVerificationOpts.builder()
                 .withClientId("example.com")
                 .withOid4vpNonce("abcdefgh1234567890")
                 .withMdocGeneratedNonce("1234567890abcdefgh")
@@ -47,7 +49,31 @@ public class MdocVerificationTest extends MdocBaseTest {
             assertEquals("BE", privileges.get(1).get("vehicle_category_code").asText());
         };
 
-        // Act: Verify the presentation using the provided options and requirements.
-        new MdocVerificationContext(mdoc).verifyPresentation(null, opts, reqs);
+        try {
+            // The test vector dates back to 2024, so we move back in time to bypass expiration checks.
+            Time.setOffset(1714338150 - Time.currentTime());
+            // Act: Verify the presentation using the provided options and requirements.
+            new MdocVerificationContext(mdoc).verifyPresentation(opts, reqs, trust);
+        } finally {
+            Time.setOffset(0); // Reset time offset after test
+        }
+    }
+
+    private static String getSpecSampleCert() {
+        return """
+            MIICXDCCAgGgAwIBAgIKR1IJyTwoAKFf/zAKBggqhkjOPQQDAjBFMQswCQYDVQQG
+            EwJVUzEpMCcGA1UEAwwgSVNPMTgwMTMtNSBUZXN0IENlcnRpZmljYXRlIElBQ0Ex
+            CzAJBgNVBAgMAk5ZMB4XDTI0MDQyODIxMDIyM1oXDTI1MDcyOTIxMDIyM1owRDEL
+            MAkGA1UEBhMCVVMxKDAmBgNVBAMMH0lTTzE4MDEzLTUgVGVzdCBDZXJ0aWZpY2F0
+            ZSBEU0MxCzAJBgNVBAgMAk5ZMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN04V
+            oqv1bGCkVaXMXxWZ9yEG9PALWgfUxo/rzmwcoaat5A9WyptKUcAEZNY+tyduGU9t
+            AusOxkfTeCCd1+PDvKOB2TCB1jAdBgNVHQ4EFgQUZSkNyyy+We9Wu99FbU/4pFp9
+            7lowHwYDVR0jBBgwFoAUTP+VJeBlm1DsHEMKWnKNxBtNOs8wDgYDVR0PAQH/BAQD
+            AgeAMB0GA1UdEQQWMBSBEmV4YW1wbGVAaXNvbWRsLmNvbTAdBgNVHRIEFjAUgRJl
+            eGFtcGxlQGlzb21kbC5jb20wLwYDVR0fBCgwJjAkoCKgIIYeaHR0cHM6Ly9leGFt
+            cGxlLmNvbS9JU09tREwuY3JsMBUGA1UdJQEB/wQLMAkGByiBjF0FAQIwCgYIKoZI
+            zj0EAwIDSQAwRgIhAK/DzBi2gOVCUHOoxgXpTQpcrV8ULl/Q0ROYqS3Gr6NZAiEA
+            o4i3TOyNcI7ZMm+0JrzUdAM6gM4K9zhOnmPOnitbtUM=
+        """;
     }
 }

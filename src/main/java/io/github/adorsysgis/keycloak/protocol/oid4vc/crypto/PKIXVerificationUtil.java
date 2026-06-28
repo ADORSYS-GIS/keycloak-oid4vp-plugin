@@ -1,9 +1,10 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
 import java.security.cert.CertStore;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.CollectionCertStoreParameters;
 import java.security.cert.PKIXParameters;
@@ -21,9 +22,31 @@ import org.keycloak.common.util.Time;
 import org.keycloak.truststore.TruststoreProvider;
 
 public class PKIXVerificationUtil {
+
     private static final int MAX_CHAIN_LENGTH = 5;
 
-    public static X509Certificate[] validateChain(List<String> x5c, TruststoreProvider truststoreProvider)
+    public static X509Certificate[] validateBase64Chain(List<String> base64Certs, TruststoreProvider truststoreProvider)
+            throws VerificationException {
+        if (base64Certs == null || base64Certs.isEmpty()) {
+            throw new VerificationException("Certificate chain is empty");
+        }
+
+        List<X509Certificate> certs = new ArrayList<>();
+
+        try {
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            for (String base64Cert : base64Certs) {
+                byte[] bytes = Base64.getDecoder().decode(base64Cert);
+                certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
+            }
+        } catch (CertificateException e) {
+            throw new VerificationException("Failed to parse X.5C certificate", e);
+        }
+
+        return validateChain(certs, truststoreProvider);
+    }
+
+    public static X509Certificate[] validateChain(List<X509Certificate> certs, TruststoreProvider truststoreProvider)
             throws VerificationException {
         List<X509Certificate> roots = truststoreProvider == null
                 ? List.of()
@@ -49,20 +72,13 @@ public class PKIXVerificationUtil {
             Collection<X509Certificate> intermediateCertificates)
             throws VerificationException {
         try {
-            if (x5c == null || x5c.isEmpty()) {
+            if (certs == null || certs.isEmpty()) {
                 throw new VerificationException("Certificate chain is empty");
             }
 
-            if (x5c.size() > MAX_CHAIN_LENGTH) {
+            if (certs.size() > MAX_CHAIN_LENGTH) {
                 throw new VerificationException(
-                        String.format("Certificate chain too long: %d (max %d)", x5c.size(), MAX_CHAIN_LENGTH));
-            }
-
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            List<X509Certificate> certs = new ArrayList<>();
-            for (String base64Cert : x5c) {
-                byte[] bytes = Base64.getDecoder().decode(base64Cert);
-                certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
+                        String.format("Certificate chain too long: %d (max %d)", certs.size(), MAX_CHAIN_LENGTH));
             }
 
             if (rootCertificates == null || rootCertificates.isEmpty()) {
@@ -97,8 +113,8 @@ public class PKIXVerificationUtil {
 
             // Validate the path. The CertPath should not include the trust anchor itself.
             List<X509Certificate> pathCerts = new ArrayList<>(certs);
-            X509Certificate leafCert = pathCerts.get(0);
-            X509Certificate lastCert = pathCerts.get(pathCerts.size() - 1);
+            X509Certificate leafCert = pathCerts.getFirst();
+            X509Certificate lastCert = pathCerts.getLast();
 
             boolean leafIsTrusted = trustAnchors.stream()
                     .anyMatch(anchor -> anchor.getTrustedCert().equals(leafCert));
@@ -113,9 +129,10 @@ public class PKIXVerificationUtil {
                     .anyMatch(anchor -> anchor.getTrustedCert().equals(lastCert));
 
             if (rootInPath && pathCerts.size() > 1) {
-                pathCerts.remove(pathCerts.size() - 1);
+                pathCerts.removeLast();
             }
 
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
             CertPath certPath = cf.generateCertPath(pathCerts);
             CertPathValidator validator = CertPathValidator.getInstance("PKIX");
             validator.validate(certPath, params);
