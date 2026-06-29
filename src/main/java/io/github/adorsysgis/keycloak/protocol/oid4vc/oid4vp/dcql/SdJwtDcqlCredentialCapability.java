@@ -8,6 +8,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.SdGenericFormat;
 import java.util.List;
+import java.util.Map;
 import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -42,11 +43,12 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
     @Override
     public void setupAuthenticationSession(
             AuthenticationSessionModel authenticationSession,
-            String presentedToken,
+            Map<String, String> presentedTokens,
             AuthorizationContext authorizationContext) {
+        authenticationSession.setAuthNote(
+                SdJwtAuthenticator.SDJWT_TOKENS_KEY, JsonSerialization.valueAsString(presentedTokens));
         String nonce = authorizationContext.getRequestObject().getNonce();
         String aud = authorizationContext.getRequestObject().getClientId();
-        authenticationSession.setAuthNote(SdJwtAuthenticator.SDJWT_TOKEN_KEY, presentedToken);
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_NONCE_KEY, nonce);
         authenticationSession.setAuthNote(SdJwtAuthenticator.CHALLENGE_AUD_KEY, aud);
 
