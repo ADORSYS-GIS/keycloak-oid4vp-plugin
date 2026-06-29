@@ -115,7 +115,8 @@ public class MdocVerificationTest extends MdocBaseTest {
                 mdoc,
                 opts,
                 new StaticTruststoreProvider(getIssuerCertRef1()),
-                "Issuer signature could not be verified");
+                "Issuer signature could not be verified",
+                "COSE signature verification failed");
     }
 
     @Test
@@ -137,7 +138,8 @@ public class MdocVerificationTest extends MdocBaseTest {
                 mdoc,
                 opts,
                 new StaticTruststoreProvider(toCert(getSpecSampleCert())),
-                "Certificate chain validation failed");
+                "Certificate chain validation failed",
+                "Path does not chain with any of the trust anchors");
     }
 
     @Test
@@ -153,7 +155,8 @@ public class MdocVerificationTest extends MdocBaseTest {
                 mdoc,
                 verifyingOpts,
                 new StaticTruststoreProvider(getIssuerCertRef1()),
-                "Device signature could not be verified");
+                "Device signature could not be verified",
+                "COSE signature verification failed");
     }
 
     @Test
@@ -201,7 +204,10 @@ public class MdocVerificationTest extends MdocBaseTest {
     public void shouldFail_OnDeviceMacInsteadOfDeviceSignature() throws Exception {
         MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
         String mdoc = withDeviceMac(buildDeviceResponse(opts)).encodeToBase64Url();
-        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()),
+        verifyFails(
+                mdoc,
+                opts,
+                new StaticTruststoreProvider(getIssuerCertRef1()),
                 "Device key binding verification failed: missing device signature");
     }
 
@@ -210,7 +216,7 @@ public class MdocVerificationTest extends MdocBaseTest {
      * contains {@code expectedMessageFragment}. When {@code expectedCauseMessageFragment} is
      * non-null, also asserts that the cause's message contains it.
      */
-    protected static void verifyFails(
+    private static void verifyFails(
             String mdoc,
             MdocVerificationOpts opts,
             TruststoreProvider trust,
@@ -224,7 +230,8 @@ public class MdocVerificationTest extends MdocBaseTest {
         }
     }
 
-    protected static void verifyFails(
+    /** Convenience overload that only checks the top-level exception message. */
+    private static void verifyFails(
             String mdoc, MdocVerificationOpts opts, TruststoreProvider trust, String expectedMessageFragment) {
         verifyFails(mdoc, opts, trust, expectedMessageFragment, null);
     }

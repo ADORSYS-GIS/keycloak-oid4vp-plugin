@@ -41,7 +41,6 @@ import com.authlete.mdoc.MobileSecurityObjectBytes;
 import com.authlete.mdoc.ValidityInfo;
 import com.authlete.mdoc.ValueDigests;
 import com.authlete.mdoc.ValueDigestsEntry;
-
 import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,7 +54,6 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
 import org.apache.commons.codec.digest.DigestUtils;
 import org.bouncycastle.util.encoders.Hex;
 import org.keycloak.crypto.JavaAlgorithm;
@@ -143,7 +141,8 @@ public class MdocBaseTest {
                 .setDeviceKey(getDeviceKeyRef1())
                 .build();
 
-        IssuerNameSpaces nameSpaces = (IssuerNameSpaces) baseline.findByKey(MdocConstants.L_NAME_SPACES).getValue();
+        IssuerNameSpaces nameSpaces = (IssuerNameSpaces)
+                baseline.findByKey(MdocConstants.L_NAME_SPACES).getValue();
 
         // Re-build an equivalent SHA-256 MSO from scratch; tests that need a different
         // digest algorithm or valueDigests simply swap ctx.mso before calling signMsoAndWrap.
@@ -166,7 +165,7 @@ public class MdocBaseTest {
         return new MobileSecurityObject("1.0", JavaAlgorithm.SHA256, standardDigests, dki, DOC_TYPE, validityInfo);
     }
 
-    private static ValueDigests buildValueDigests(IssuerNameSpaces nameSpaces) throws Exception {
+    private static ValueDigests buildValueDigests(IssuerNameSpaces nameSpaces) {
         // Compute SHA-256 over each IssuerSignedItemBytes under each namespace.
         List<ValueDigestsEntry> entries = new ArrayList<>();
         for (var nsPair : nameSpaces.getPairs()) {
@@ -291,7 +290,8 @@ public class MdocBaseTest {
     }
 
     protected static Document extractDocument(DeviceResponse dr) {
-        CBORItemList documents = (CBORItemList) dr.findByKey(MdocConstants.L_DOCUMENTS).getValue();
+        CBORItemList documents =
+                (CBORItemList) dr.findByKey(MdocConstants.L_DOCUMENTS).getValue();
         return (Document) documents.getItems().getFirst();
     }
 
@@ -323,9 +323,10 @@ public class MdocBaseTest {
         Document doc = extractDocument(baseline);
         DeviceSigned baselineSigned =
                 (DeviceSigned) doc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue();
-        DeviceNameSpacesBytes deviceNameSpaces =
-                (DeviceNameSpacesBytes) baselineSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue();
-        IssuerSigned issuerSigned = (IssuerSigned) doc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
+        DeviceNameSpacesBytes deviceNameSpaces = (DeviceNameSpacesBytes)
+                baselineSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue();
+        IssuerSigned issuerSigned =
+                (IssuerSigned) doc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
 
         COSEMac0 mac0 = new COSEMac0(
                 new COSEProtectedHeaderBuilder().alg(COSEAlgorithms.ES256).build(),
