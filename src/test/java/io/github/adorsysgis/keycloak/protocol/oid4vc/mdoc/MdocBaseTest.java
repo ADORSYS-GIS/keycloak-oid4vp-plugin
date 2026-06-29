@@ -42,6 +42,8 @@ import org.keycloak.util.JsonSerialization;
 
 public class MdocBaseTest {
 
+    public static final int DEFAULT_RESPONSE_VALIDITY_MINS = 10;
+
     protected static String readResource(String resourcePath) {
         try {
             var resource = MdocParserTest.class.getResource(resourcePath);
@@ -66,7 +68,7 @@ public class MdocBaseTest {
                 }""", new TypeReference<>() {});
 
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC).withNano(0);
-        ValidityInfo validityInfo = new ValidityInfo(now, now, now.plusYears(10));
+        ValidityInfo validityInfo = new ValidityInfo(now, now, now.plusMinutes(DEFAULT_RESPONSE_VALIDITY_MINS));
 
         COSEEC2Key issuerKey = getIssuerKeyRef1();
         X509Certificate issuerCert = getIssuerCertRef1();

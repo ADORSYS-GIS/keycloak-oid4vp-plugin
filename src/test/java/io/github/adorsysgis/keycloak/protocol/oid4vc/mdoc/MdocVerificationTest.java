@@ -2,6 +2,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,26 @@ public class MdocVerificationTest extends MdocBaseTest {
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
         TruststoreProvider trust = new StaticTruststoreProvider(getIssuerCertRef1());
         new MdocVerificationContext(mdoc).verifyPresentation(opts, null, trust);
+    }
+
+    @Test
+    public void shouldFail_OnExpiredResponses() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
+        TruststoreProvider trust = new StaticTruststoreProvider(getIssuerCertRef1());
+
+        try {
+            // Move ahead in the future so device response expires
+            Time.setOffset(DEFAULT_RESPONSE_VALIDITY_MINS * 60 + 300);
+
+            var exception = assertThrows(VerificationException.class, () -> new MdocVerificationContext(mdoc)
+                    .verifyPresentation(opts, null, trust));
+
+            assertTrue(exception.getMessage().contains("Validity information verification failed"));
+            assertTrue(exception.getCause().getMessage().contains("Token has expired"));
+        } finally {
+            Time.setOffset(0);
+        }
     }
 
     private static String getSpecSampleCert() {
