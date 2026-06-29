@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.authlete.mdoc.DeviceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Time;
+import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.truststore.TruststoreProvider;
 
@@ -17,7 +20,6 @@ public class MdocVerificationTest extends MdocBaseTest {
     @Test
     public void shouldVerifyValidMdocSuccessfully_SpecSample() throws VerificationException {
         String mdoc = readResource("/mdoc/spec-sample.txt");
-
         TruststoreProvider trust = new StaticTruststoreProvider(getSpecSampleCert());
 
         MdocVerificationOpts opts = MdocVerificationOpts.builder()
@@ -46,10 +48,9 @@ public class MdocVerificationTest extends MdocBaseTest {
         try {
             // The test vector dates back to 2024, so we move back in time to bypass expiration checks.
             Time.setOffset(1714338150 - Time.currentTime());
-            // Act: Verify the presentation using the provided options and requirements.
             new MdocVerificationContext(mdoc).verifyPresentation(opts, reqs, trust);
         } finally {
-            Time.setOffset(0); // Reset time offset after test
+            Time.setOffset(0);
         }
     }
 
@@ -68,34 +69,167 @@ public class MdocVerificationTest extends MdocBaseTest {
         TruststoreProvider trust = new StaticTruststoreProvider(getIssuerCertRef1());
 
         try {
-            // Move ahead in the future so device response expires
             Time.setOffset(DEFAULT_RESPONSE_VALIDITY_MINS * 60 + 300);
-
-            var exception = assertThrows(VerificationException.class, () -> new MdocVerificationContext(mdoc)
-                    .verifyPresentation(opts, null, trust));
-
-            assertTrue(exception.getMessage().contains("Validity information verification failed"));
-            assertTrue(exception.getCause().getMessage().contains("Token has expired"));
+            verifyFails(mdoc, opts, trust, "Validity information verification failed", "Token has expired");
         } finally {
             Time.setOffset(0);
         }
     }
 
-    private static String getSpecSampleCert() {
-        return """
-            MIICXDCCAgGgAwIBAgIKR1IJyTwoAKFf/zAKBggqhkjOPQQDAjBFMQswCQYDVQQG
-            EwJVUzEpMCcGA1UEAwwgSVNPMTgwMTMtNSBUZXN0IENlcnRpZmljYXRlIElBQ0Ex
-            CzAJBgNVBAgMAk5ZMB4XDTI0MDQyODIxMDIyM1oXDTI1MDcyOTIxMDIyM1owRDEL
-            MAkGA1UEBhMCVVMxKDAmBgNVBAMMH0lTTzE4MDEzLTUgVGVzdCBDZXJ0aWZpY2F0
-            ZSBEU0MxCzAJBgNVBAgMAk5ZMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN04V
-            oqv1bGCkVaXMXxWZ9yEG9PALWgfUxo/rzmwcoaat5A9WyptKUcAEZNY+tyduGU9t
-            AusOxkfTeCCd1+PDvKOB2TCB1jAdBgNVHQ4EFgQUZSkNyyy+We9Wu99FbU/4pFp9
-            7lowHwYDVR0jBBgwFoAUTP+VJeBlm1DsHEMKWnKNxBtNOs8wDgYDVR0PAQH/BAQD
-            AgeAMB0GA1UdEQQWMBSBEmV4YW1wbGVAaXNvbWRsLmNvbTAdBgNVHRIEFjAUgRJl
-            eGFtcGxlQGlzb21kbC5jb20wLwYDVR0fBCgwJjAkoCKgIIYeaHR0cHM6Ly9leGFt
-            cGxlLmNvbS9JU09tREwuY3JsMBUGA1UdJQEB/wQLMAkGByiBjF0FAQIwCgYIKoZI
-            zj0EAwIDSQAwRgIhAK/DzBi2gOVCUHOoxgXpTQpcrV8ULl/Q0ROYqS3Gr6NZAiEA
-            o4i3TOyNcI7ZMm+0JrzUdAM6gM4K9zhOnmPOnitbtUM=
-        """;
+    @Test
+    public void shouldFail_OnNonZeroStatus() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        DeviceResponse dr = buildDeviceResponse(opts);
+        String mdoc = new DeviceResponse("1.0", List.of(extractDocument(dr)), null, /*status*/ 10).encodeToBase64Url();
+        verifyFails(mdoc, opts, null, "mDoc response status is not OK: status=10");
+    }
+
+    @Test
+    public void shouldFail_OnMultipleDocuments() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        DeviceResponse dr = buildDeviceResponse(opts);
+        String mdoc = new DeviceResponse(List.of(extractDocument(dr), extractDocument(dr))).encodeToBase64Url();
+        verifyFails(mdoc, opts, null, "Expected 1 document but received 2");
+    }
+
+    @Test
+    public void shouldFail_OnZeroDocuments() {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = new DeviceResponse("1.0", List.of(), null, 0).encodeToBase64Url();
+        verifyFails(mdoc, opts, null, "Expected 1 document but received 0");
+    }
+
+    @Test
+    public void shouldFail_OnIssuerKeyNotMatchingAttachedCert() throws Exception {
+        // Sign with the device key (PKIX-acceptable against the ref1 cert), but attach the
+        // ref1 issuer cert in x5chain: PKIX validates, then the COSE signature check fails
+        // because the leaf's public key does not match the actual signer.
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts, ctx -> {
+                    ctx.signingKey = getDeviceKeyRef1();
+                    ctx.certChain = List.of(getIssuerCertRef1());
+                    return ctx.signMsoAndWrap();
+                })
+                .encodeToBase64Url();
+        verifyFails(
+                mdoc,
+                opts,
+                new StaticTruststoreProvider(getIssuerCertRef1()),
+                "Issuer signature could not be verified");
+    }
+
+    @Test
+    public void shouldFail_OnMissingIssuerCert() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts, ctx -> {
+                    ctx.certChain = List.of();
+                    return ctx.signMsoAndWrap();
+                })
+                .encodeToBase64Url();
+        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "Certificate chain is empty");
+    }
+
+    @Test
+    public void shouldFail_OnIssuerCertNotTrusted() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
+        verifyFails(
+                mdoc,
+                opts,
+                new StaticTruststoreProvider(toCert(getSpecSampleCert())),
+                "Certificate chain validation failed");
+    }
+
+    @Test
+    public void shouldFail_OnDeviceSignatureWithWrongSessionTranscript() throws Exception {
+        // Signed under optsA, verified under optsB - both session transcripts (OpenID4VP and
+        // ISO) will mismatch so device key binding fails.
+        MdocVerificationOpts signingOpts = getDefaultMdocVerificationOpts().build();
+        MdocVerificationOpts verifyingOpts = getDefaultMdocVerificationOpts()
+                .withClientId("x509_san_dns:other-relying-party.example.com")
+                .build();
+        String mdoc = buildDeviceResponse(signingOpts).encodeToBase64Url();
+        verifyFails(
+                mdoc,
+                verifyingOpts,
+                new StaticTruststoreProvider(getIssuerCertRef1()),
+                "Device signature could not be verified");
+    }
+
+    @Test
+    public void shouldFail_OnClaimNotProtectedByMsoDigest() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts, ctx -> {
+                    ctx.mso = rebuildMso(
+                            ctx.mso,
+                            withValueDigestsExcluding(extractValueDigests(ctx.mso), NAMESPACE),
+                            JavaAlgorithm.SHA256);
+                    return ctx.signMsoAndWrap();
+                })
+                .encodeToBase64Url();
+        verifyFails(
+                mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "No value digests matching namespace");
+    }
+
+    @Test
+    public void shouldFail_OnMismatchedMsoDigest() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts, ctx -> {
+                    ctx.mso = rebuildMso(
+                            ctx.mso, withTamperedDigest(extractValueDigests(ctx.mso), NAMESPACE), JavaAlgorithm.SHA256);
+                    return ctx.signMsoAndWrap();
+                })
+                .encodeToBase64Url();
+        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "Digest mismatch");
+    }
+
+    @Test
+    public void shouldFail_OnUnsupportedDigestAlgorithm() throws Exception {
+        // Re-build MSO with an algorithm not on the allow-list. The digests themselves are
+        // byte-identical to the standard SHA-256 digests so verification fails on the
+        // algorithm allow-list check, not on a digest mismatch.
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts, ctx -> {
+                    ctx.mso = rebuildMso(ctx.mso, extractValueDigests(ctx.mso), "MD5");
+                    return ctx.signMsoAndWrap();
+                })
+                .encodeToBase64Url();
+        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "Invalid digest algorithm: MD5");
+    }
+
+    @Test
+    public void shouldFail_OnDeviceMacInsteadOfDeviceSignature() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = withDeviceMac(buildDeviceResponse(opts)).encodeToBase64Url();
+        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()),
+                "Device key binding verification failed: missing device signature");
+    }
+
+    /**
+     * Asserts that verifying {@code mdoc} raises a {@link VerificationException} whose message
+     * contains {@code expectedMessageFragment}. When {@code expectedCauseMessageFragment} is
+     * non-null, also asserts that the cause's message contains it.
+     */
+    protected static void verifyFails(
+            String mdoc,
+            MdocVerificationOpts opts,
+            TruststoreProvider trust,
+            String expectedMessageFragment,
+            String expectedCauseMessageFragment) {
+        var exception = assertThrows(VerificationException.class, () -> new MdocVerificationContext(mdoc)
+                .verifyPresentation(opts, null, trust));
+        assertErrorFragment(exception.getMessage(), expectedMessageFragment);
+        if (expectedCauseMessageFragment != null) {
+            assertErrorFragment(exception.getCause().getMessage(), expectedCauseMessageFragment);
+        }
+    }
+
+    protected static void verifyFails(
+            String mdoc, MdocVerificationOpts opts, TruststoreProvider trust, String expectedMessageFragment) {
+        verifyFails(mdoc, opts, trust, expectedMessageFragment, null);
+    }
+
+    private static void assertErrorFragment(String actual, String expected) {
+        assertTrue(actual.contains(expected), () -> "Expected error fragment '" + expected + "' but was: " + actual);
     }
 }

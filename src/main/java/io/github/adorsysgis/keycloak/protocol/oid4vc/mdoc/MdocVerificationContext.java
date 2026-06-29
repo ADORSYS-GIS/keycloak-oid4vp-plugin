@@ -326,7 +326,7 @@ public class MdocVerificationContext {
         try {
             return COSEKey.build(deviceKey);
         } catch (COSEException e) {
-            throw new VerificationException("Failure parsing issuerAuth as COSE_Sign1", e);
+            throw new VerificationException("Failure parsing deviceKey as COSEKey", e);
         }
     }
 
