@@ -96,7 +96,7 @@ public class MdocBaseTest {
 
     protected static String readResource(String resourcePath) {
         try {
-            var resource = MdocParserTest.class.getResource(resourcePath);
+            var resource = MdocBaseTest.class.getResource(resourcePath);
             assertNotNull(resource);
             return Files.readString(Path.of(resource.toURI())).trim();
         } catch (Exception e) {
