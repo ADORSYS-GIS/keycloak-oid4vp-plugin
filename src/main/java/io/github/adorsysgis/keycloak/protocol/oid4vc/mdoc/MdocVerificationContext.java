@@ -163,8 +163,8 @@ public class MdocVerificationContext {
                 extractDocType(document),
                 extractDeviceNamespaces(document));
 
-        byte[] deviceAuthenticationBytes = deviceAuthentication.encode();
-        COSESign1 undetachedDeviceSignature = CborUtil.undetachCOSESign1(deviceSignature, deviceAuthenticationBytes);
+        CBORTaggedItem payload = CborUtil.wrap(deviceAuthentication.encode());
+        COSESign1 undetachedDeviceSignature = CborUtil.undetachCOSESign1(deviceSignature, payload);
 
         try {
             if (!new COSEVerifier(deviceKey.createPublicKey()).verify(undetachedDeviceSignature)) {

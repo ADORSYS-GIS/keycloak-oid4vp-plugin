@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest.str;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.authlete.cbor.CBORItemList;
@@ -70,13 +71,9 @@ class OID4VPSessionTranscriptTest {
             """), Hex.toHexString(sessionTranscript.encode()));
     }
 
-    private static byte[] computeJwkThumbprint(String jwkStr) {
+    public static byte[] computeJwkThumbprint(String jwkStr) {
         JWK jwk = JWKParser.create().parse(jwkStr).getJwk();
         String thumbprint = JWKSUtils.computeThumbprint(jwk);
         return Base64Url.decode(thumbprint);
-    }
-
-    private static String str(String input) {
-        return input.replaceAll("\\s+", "");
     }
 }

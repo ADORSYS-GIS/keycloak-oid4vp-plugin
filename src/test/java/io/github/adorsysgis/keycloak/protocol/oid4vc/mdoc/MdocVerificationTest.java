@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Time;
@@ -12,13 +11,6 @@ import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.truststore.TruststoreProvider;
 
 public class MdocVerificationTest extends MdocBaseTest {
-
-    @Test
-    @Disabled
-    public void shouldVerifyValidMdocSuccessfully() throws Exception {
-        String mdoc = buildDeviceResponse().encodeToBase64Url();
-        new MdocVerificationContext(mdoc).verifyPresentation(null, null, null);
-    }
 
     @Test
     public void shouldVerifyValidMdocSuccessfully_SpecSample() throws VerificationException {
@@ -57,6 +49,14 @@ public class MdocVerificationTest extends MdocBaseTest {
         } finally {
             Time.setOffset(0); // Reset time offset after test
         }
+    }
+
+    @Test
+    public void shouldVerifyValidMdocSuccessfully_OpenID4VPSpecTranscript() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
+        TruststoreProvider trust = new StaticTruststoreProvider(getIssuerCertRef1());
+        new MdocVerificationContext(mdoc).verifyPresentation(opts, null, trust);
     }
 
     private static String getSpecSampleCert() {

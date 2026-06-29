@@ -32,10 +32,10 @@ public class OID4VPSessionTranscript {
                 thumbprint != null && thumbprint.length > 0 ? new CBORByteArray(thumbprint) : CBORNull.INSTANCE;
 
         CBORItemList handoverInfo = new CBORItemList(
-                new CBORString(opts.getClientId()),
-                new CBORString(opts.getOid4vpNonce()),
+                toCBORString(opts.getClientId()),
+                toCBORString(opts.getOid4vpNonce()),
                 jwkThumbprintCbor,
-                new CBORString(opts.getResponseUri()));
+                toCBORString(opts.getResponseUri()));
 
         byte[] handoverInfoHash = DigestUtils.sha256(handoverInfo.encode());
 
@@ -52,19 +52,23 @@ public class OID4VPSessionTranscript {
      */
     public static CBORItemList computeSessionTranscript_ISOSpec(MdocVerificationOpts opts) {
         byte[] clientIdHash = DigestUtils.sha256(
-                new CBORItemList(new CBORString(opts.getClientId()), new CBORString(opts.getMdocGeneratedNonce()))
+                new CBORItemList(toCBORString(opts.getClientId()), toCBORString(opts.getMdocGeneratedNonce()))
                         .encode());
 
         byte[] responseUriHash = DigestUtils.sha256(
-                new CBORItemList(new CBORString(opts.getResponseUri()), new CBORString(opts.getMdocGeneratedNonce()))
+                new CBORItemList(toCBORString(opts.getResponseUri()), toCBORString(opts.getMdocGeneratedNonce()))
                         .encode());
 
         CBORItemList handover = new CBORItemList(
                 new CBORByteArray(clientIdHash),
                 new CBORByteArray(responseUriHash),
-                new CBORString(opts.getOid4vpNonce()));
+                toCBORString(opts.getOid4vpNonce()));
 
         return computeSessionTranscript(handover);
+    }
+
+    private static CBORItem toCBORString(String str) {
+        return str != null ? new CBORString(str) : CBORNull.INSTANCE;
     }
 
     private static CBORItemList computeSessionTranscript(CBORItemList handover) {

@@ -113,13 +113,19 @@ public class CborUtil {
     /**
      * Reattach payload to COSESign1 with detached payload.
      */
-    public static COSESign1 undetachCOSESign1(COSESign1 sign1, byte[] payloadBytes) {
-        CBORTaggedItem payload = new CBORTaggedItem(CborUtil.CBOR_TAG_EMBEDDED, new CBORByteArray(payloadBytes));
+    public static COSESign1 undetachCOSESign1(COSESign1 sign1, CBORTaggedItem payload) {
         return new COSESign1(
                 sign1.getProtectedHeader(),
                 sign1.getUnprotectedHeader(),
                 new CBORByteArray(payload.encode()),
                 sign1.getSignature());
+    }
+
+    /**
+     * Wrap bytes into embedded CBOR
+     */
+    public static CBORTaggedItem wrap(byte[] content) {
+        return new CBORTaggedItem(CborUtil.CBOR_TAG_EMBEDDED, new CBORByteArray(content));
     }
 
     /**
