@@ -1,11 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
 import java.io.ByteArrayInputStream;
-import java.security.MessageDigest;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.HexFormat;
+import org.keycloak.crypto.JavaAlgorithm;
+import org.keycloak.jose.jws.crypto.HashUtils;
 
 final class CertificateUtil {
 
@@ -23,12 +25,7 @@ final class CertificateUtil {
 
     static String sha256Fingerprint(X509Certificate certificate) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded());
-            StringBuilder out = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                out.append(String.format("%02x", b));
-            }
-            return out.toString();
+            return HexFormat.of().formatHex(HashUtils.hash(JavaAlgorithm.SHA256, certificate.getEncoded()));
         } catch (Exception e) {
             throw new IllegalStateException("Could not calculate certificate fingerprint", e);
         }

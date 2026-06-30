@@ -6,7 +6,6 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
-import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -40,8 +39,7 @@ public class OID4VPUserAuthBean {
     public static final String LOGIN_METHOD_OID4VP = "oid4vp";
 
     public static final String QR_CODE_IMAGE_FORMAT = "png";
-    public static final int QR_CODE_IMAGE_SIZE = 360;
-    public static final int QR_CODE_IMAGE_MARGIN = 4;
+    public static final int QR_CODE_IMAGE_SIZE = 300;
 
     private final KeycloakSession session;
     private final RealmModel realm;
@@ -199,13 +197,8 @@ public class OID4VPUserAuthBean {
                     BarcodeFormat.QR_CODE,
                     QR_CODE_IMAGE_SIZE,
                     QR_CODE_IMAGE_SIZE,
-                    Map.of(
-                            EncodeHintType.CHARACTER_SET,
-                            "UTF-8",
-                            EncodeHintType.ERROR_CORRECTION,
-                            ErrorCorrectionLevel.M,
-                            EncodeHintType.MARGIN,
-                            QR_CODE_IMAGE_MARGIN));
+                    // Set margin to 0 to remove default padding
+                    Map.of(EncodeHintType.MARGIN, 0));
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             MatrixToImageWriter.writeToStream(bitMatrix, QR_CODE_IMAGE_FORMAT, bos);

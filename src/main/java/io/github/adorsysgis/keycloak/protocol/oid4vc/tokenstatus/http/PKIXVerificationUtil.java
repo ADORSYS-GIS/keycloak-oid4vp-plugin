@@ -25,6 +25,29 @@ public class PKIXVerificationUtil {
 
     public static X509Certificate[] validateChain(List<String> x5c, TruststoreProvider truststoreProvider)
             throws VerificationException {
+        List<X509Certificate> roots = truststoreProvider == null
+                ? List.of()
+                : truststoreProvider.getRootCertificates().values().stream()
+                        .flatMap(List::stream)
+                        .toList();
+        List<X509Certificate> intermediates = truststoreProvider == null
+                ? List.of()
+                : truststoreProvider.getIntermediateCertificates().values().stream()
+                        .flatMap(List::stream)
+                        .toList();
+        return validateChain(x5c, roots, intermediates);
+    }
+
+    public static X509Certificate[] validateChain(List<String> x5c, Collection<X509Certificate> rootCertificates)
+            throws VerificationException {
+        return validateChain(x5c, rootCertificates, List.of());
+    }
+
+    public static X509Certificate[] validateChain(
+            List<String> x5c,
+            Collection<X509Certificate> rootCertificates,
+            Collection<X509Certificate> intermediateCertificates)
+            throws VerificationException {
         try {
             if (x5c == null || x5c.isEmpty()) {
                 throw new VerificationException("Certificate chain is empty");
@@ -42,14 +65,12 @@ public class PKIXVerificationUtil {
                 certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
             }
 
-            if (truststoreProvider == null
-                    || truststoreProvider.getRootCertificates().isEmpty()) {
+            if (rootCertificates == null || rootCertificates.isEmpty()) {
                 throw new VerificationException("No trusted root certificates available for validation");
             }
 
             // Build trust anchors from roots
-            Set<TrustAnchor> trustAnchors = truststoreProvider.getRootCertificates().values().stream()
-                    .flatMap(List::stream)
+            Set<TrustAnchor> trustAnchors = rootCertificates.stream()
                     .map(cert -> new TrustAnchor(cert, null))
                     .collect(Collectors.toSet());
 
@@ -67,10 +88,8 @@ public class PKIXVerificationUtil {
 
             // Add intermediate certificates from the truststore as a CertStore so PKIX
             // can bridge chains where the issuer CA is stored as an intermediate.
-            Collection<X509Certificate> intermediates = new ArrayList<>();
-            truststoreProvider.getIntermediateCertificates().values().stream()
-                    .flatMap(List::stream)
-                    .forEach(intermediates::add);
+            Collection<X509Certificate> intermediates =
+                    intermediateCertificates == null ? List.of() : intermediateCertificates;
             if (!intermediates.isEmpty()) {
                 params.addCertStore(
                         CertStore.getInstance("Collection", new CollectionCertStoreParameters(intermediates)));

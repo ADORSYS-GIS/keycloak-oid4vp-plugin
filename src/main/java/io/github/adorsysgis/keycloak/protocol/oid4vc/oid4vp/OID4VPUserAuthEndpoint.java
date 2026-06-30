@@ -134,7 +134,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         AuthenticationSessionModel authSession = recoverAuthenticationSession(authContext.getTransactionId());
-        return CorsService.addForWebOrigins(session, authSession, Response.ok(authContext));
+        return CorsService.forWebOrigins(authSession).add(Response.ok(authContext));
     }
 
     /**
@@ -414,7 +414,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 .setError(authorizationContext.getError())
                 .setErrorDescription(authorizationContext.getErrorDescription());
 
-        return CorsService.addForWebOrigins(session, authSession, Response.ok(reducedContext));
+        return CorsService.forWebOrigins(authSession).add(Response.ok(reducedContext));
     }
 
     /**
@@ -472,7 +472,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         AuthorizationContext responseContext =
                 new AuthorizationContext().setAuthorizationCode(authorizationContext.getAuthorizationCode());
-        return CorsService.addForWebOrigins(session, authSession, Response.ok(responseContext));
+        return CorsService.forWebOrigins(authSession).add(Response.ok(responseContext));
     }
 
     /**

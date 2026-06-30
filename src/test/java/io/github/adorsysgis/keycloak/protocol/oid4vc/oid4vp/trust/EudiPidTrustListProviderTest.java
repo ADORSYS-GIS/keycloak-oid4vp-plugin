@@ -1,16 +1,19 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.TestCryptoUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.VerificationException;
@@ -24,6 +27,18 @@ class EudiPidTrustListProviderTest {
     @BeforeAll
     static void setupCrypto() {
         CryptoIntegration.init(EudiPidTrustListProviderTest.class.getClassLoader());
+    }
+
+    @Test
+    void shouldParseStaticGermanSandboxPidProviderTrustList() throws Exception {
+        TrustPolicy policy = policy(resource("eudi/pid-trust-list/certificate.pem"));
+        EudiPidTrustListProvider provider = new StubTrustListProvider(
+                resource("eudi/pid-trust-list/pid-provider.jwt").trim(), true);
+
+        EudiPidTrustListProvider.TrustListSnapshot snapshot = provider.resolve(policy);
+
+        assertFalse(snapshot.isExpired());
+        assertEquals(2, snapshot.trustedIssuerCertificates().size());
     }
 
     @Test
@@ -81,11 +96,37 @@ class EudiPidTrustListProviderTest {
         assertEquals("EUDI trust list signer does not match configured LoTE signing certificate", error.getMessage());
     }
 
+    @Test
+    void shouldRejectUnsupportedSignatureAlgorithmsBeforeProviderLookup() throws Exception {
+        KeyPair signerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate signerCertificate = TestCryptoUtils.createSelfSignedCaCert(signerKeyPair);
+
+        EudiPidTrustException error = assertThrows(
+                EudiPidTrustException.class,
+                () -> new EudiTrustListJwtVerifier(mock(KeycloakSession.class)).verifier("none", signerCertificate));
+
+        assertEquals("Unsupported signature algorithm: none", error.getMessage());
+    }
+
     private TrustPolicy policy(X509Certificate signerCertificate) throws Exception {
         return new TrustPolicy()
                 .setType(TrustPolicy.EUDI_PID_TRUST_LIST)
                 .setTrustListUrl("https://example.test/pid-provider.jwt")
                 .setTrustListSigningCertificate(encodeCertificate(signerCertificate));
+    }
+
+    private TrustPolicy policy(String signerCertificate) {
+        return new TrustPolicy()
+                .setType(TrustPolicy.EUDI_PID_TRUST_LIST)
+                .setTrustListUrl("https://example.test/pid-provider.jwt")
+                .setTrustListSigningCertificate(signerCertificate);
+    }
+
+    private String resource(String name) throws Exception {
+        try (InputStream input = Objects.requireNonNull(
+                getClass().getClassLoader().getResourceAsStream(name), "Missing test resource: " + name)) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private String trustListJwt(
@@ -130,17 +171,25 @@ class EudiPidTrustListProviderTest {
     private static class StubTrustListProvider extends EudiPidTrustListProvider {
 
         private final String trustListJwt;
-        private final boolean signatureValid;
 
         StubTrustListProvider(String trustListJwt, boolean signatureValid) {
-            super(mock(KeycloakSession.class));
+            super(mock(KeycloakSession.class), new StubTrustListJwtVerifier(signatureValid));
             this.trustListJwt = trustListJwt;
-            this.signatureValid = signatureValid;
         }
 
         @Override
         protected String fetchTrustList(String url) {
             return trustListJwt;
+        }
+    }
+
+    private static class StubTrustListJwtVerifier extends EudiTrustListJwtVerifier {
+
+        private final boolean signatureValid;
+
+        StubTrustListJwtVerifier(boolean signatureValid) {
+            super(mock(KeycloakSession.class));
+            this.signatureValid = signatureValid;
         }
 
         @Override
