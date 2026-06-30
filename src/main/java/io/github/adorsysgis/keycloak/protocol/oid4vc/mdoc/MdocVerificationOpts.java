@@ -42,19 +42,28 @@ public class MdocVerificationOpts extends ClaimVerifier {
      */
     private final byte[] jwkThumbprint;
 
+    /**
+     * Whether to allow falling back to the ISO-spec session transcript
+     * (ISO/IEC TS 18013-7:2025 - B.4.4) when verification with the OpenID4VP-spec
+     * session transcript (OpenID4VP 1.0 - B.2.6) fails.
+     */
+    private final boolean fallbackToIsoSpecSessionTranscript;
+
     private MdocVerificationOpts(
             List<ClaimVerifier.Predicate<ObjectNode>> contentVerifiers,
             String clientId,
             String oid4vpNonce,
             String mdocGeneratedNonce,
             String responseUri,
-            byte[] jwkThumbprint) {
+            byte[] jwkThumbprint,
+            boolean fallbackToIsoSpecSessionTranscript) {
         super(List.of(), contentVerifiers);
         this.clientId = clientId;
         this.oid4vpNonce = oid4vpNonce;
         this.mdocGeneratedNonce = mdocGeneratedNonce;
         this.responseUri = responseUri;
         this.jwkThumbprint = jwkThumbprint;
+        this.fallbackToIsoSpecSessionTranscript = fallbackToIsoSpecSessionTranscript;
     }
 
     public String getClientId() {
@@ -75,6 +84,10 @@ public class MdocVerificationOpts extends ClaimVerifier {
 
     public String getMdocGeneratedNonce() {
         return mdocGeneratedNonce;
+    }
+
+    public boolean fallbackToIsoSpecSessionTranscript() {
+        return fallbackToIsoSpecSessionTranscript;
     }
 
     /**
@@ -118,6 +131,7 @@ public class MdocVerificationOpts extends ClaimVerifier {
         private String mdocGeneratedNonce;
         private String responseUri;
         private byte[] jwkThumbprint;
+        private boolean fallbackToIsoSpecSessionTranscript;
 
         private Builder() {
             super();
@@ -152,6 +166,11 @@ public class MdocVerificationOpts extends ClaimVerifier {
             return this;
         }
 
+        public Builder withFallbackToIsoSpecSessionTranscript(boolean fallbackToIsoSpecSessionTranscript) {
+            this.fallbackToIsoSpecSessionTranscript = fallbackToIsoSpecSessionTranscript;
+            return this;
+        }
+
         public Builder withAllowedMaxAge(Integer allowedMaxAge) {
             return (Builder) super.withIatCheck(allowedMaxAge, false);
         }
@@ -159,7 +178,13 @@ public class MdocVerificationOpts extends ClaimVerifier {
         @Override
         public MdocVerificationOpts build() {
             return new MdocVerificationOpts(
-                    contentVerifiers, clientId, oid4vpNonce, mdocGeneratedNonce, responseUri, jwkThumbprint);
+                    contentVerifiers,
+                    clientId,
+                    oid4vpNonce,
+                    mdocGeneratedNonce,
+                    responseUri,
+                    jwkThumbprint,
+                    fallbackToIsoSpecSessionTranscript);
         }
     }
 }

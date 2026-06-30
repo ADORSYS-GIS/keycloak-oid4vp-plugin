@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.JavaAlgorithm;
@@ -128,24 +129,50 @@ public class MdocVerificationContext {
     }
 
     /**
-     * Verify device key binding
+     * Verify device key binding. First computes session transcript as per OpenID4VP spec.
+     * If allowed by configuration, falls back to session transcript computed as per ISO spec,
+     * which is still in use.
      */
     private void verifyDeviceKeyBinding(CBORPairList document, CBORPairList mso, MdocVerificationOpts opts)
             throws VerificationException {
         COSESign1 deviceSignature = extractDeviceSignature(document);
         COSEKey deviceKey = extractDeviceKey(mso);
 
+        // First attempt verification with session transcript computed as per OpenID4VP spec
         try {
-            // First attempt verification with session transcript computed as per OpenID4VP spec
-            CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(opts);
-            verifyDeviceKeyBinding(document, sessionTranscript, deviceSignature, deviceKey);
+            CBORItemList oid4vpSessionTranscript =
+                    computeSessionTranscript(() -> OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(opts));
+            verifyDeviceKeyBinding(document, oid4vpSessionTranscript, deviceSignature, deviceKey);
+            return;
         } catch (VerificationException e) {
-            // If that fails, attempt verification with session transcript computed as per ISO spec
+            if (!opts.fallbackToIsoSpecSessionTranscript()) {
+                throw e;
+            }
+
+            // If ISO-spec fallback is explicitly allowed, log and retry with the ISO spec session transcript
             logger.debugf(
                     e,
-                    "Device key binding verification failed with OpenID4VP session transcript. Re-trying with ISO spec session transcript.");
-            CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(opts);
-            verifyDeviceKeyBinding(document, sessionTranscript, deviceSignature, deviceKey);
+                    "Device key binding verification failed with session transcript as per OpenID4VP spec."
+                            + " Re-trying with session transcript as per ISO spec");
+        }
+
+        // Re-attempt verification with session transcript computed as per ISO spec
+        CBORItemList isoSessionTranscript =
+                computeSessionTranscript(() -> OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(opts));
+        verifyDeviceKeyBinding(document, isoSessionTranscript, deviceSignature, deviceKey);
+    }
+
+    /**
+     * Runs a session-transcript computation and converts any {@link IllegalArgumentException}
+     * thrown by the underlying call (e.g. a missing required handover field) into a
+     * {@link VerificationException}.
+     */
+    private static CBORItemList computeSessionTranscript(Supplier<CBORItemList> computation)
+            throws VerificationException {
+        try {
+            return computation.get();
+        } catch (IllegalArgumentException e) {
+            throw new VerificationException("Failed to compute session transcript for device binding verification", e);
         }
     }
 
@@ -277,7 +304,12 @@ public class MdocVerificationContext {
     }
 
     private static CBORPairList extractDocument(CBORPairList root) throws VerificationException {
-        var documents = (CBORItemList) root.findByKey(MdocConstants.L_DOCUMENTS).getValue();
+        var documentsEntry = root.findByKey(MdocConstants.L_DOCUMENTS);
+        if (documentsEntry == null) {
+            throw new VerificationException("mDoc response is missing the 'documents' field");
+        }
+
+        var documents = (CBORItemList) documentsEntry.getValue();
         if (documents.getItems().size() != 1) {
             // A single document is expected.
             // Request for multiple documents are satisfiable by the OpenID4VP response map.

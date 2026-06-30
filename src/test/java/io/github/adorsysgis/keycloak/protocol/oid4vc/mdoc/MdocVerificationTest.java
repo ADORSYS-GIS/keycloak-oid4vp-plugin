@@ -27,6 +27,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                 .withOid4vpNonce("abcdefgh1234567890")
                 .withMdocGeneratedNonce("1234567890abcdefgh")
                 .withResponseUri("https://example.com/12345/response")
+                .withFallbackToIsoSpecSessionTranscript(true)
                 .build();
 
         PresentationRequirements reqs = (JsonNode payload) -> {
@@ -105,6 +106,13 @@ public class MdocVerificationTest extends MdocBaseTest {
     }
 
     @Test
+    public void shouldFail_OnMissingDocuments() {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = new DeviceResponse("1.0", null, null, 0).encodeToBase64Url();
+        verifyFails(mdoc, opts, null, "mDoc response is missing the 'documents' field");
+    }
+
+    @Test
     public void shouldFail_OnIssuerKeyNotMatchingAttachedCert() throws Exception {
         // Sign with the device key (PKIX-acceptable against the ref1 cert), but attach the
         // ref1 issuer cert in x5chain: PKIX validates, then the COSE signature check fails
@@ -162,6 +170,24 @@ public class MdocVerificationTest extends MdocBaseTest {
                 new StaticTruststoreProvider(getIssuerCertRef1()),
                 "Device signature could not be verified",
                 "COSE signature verification failed");
+    }
+
+    @Test
+    public void shouldFail_OnMissingMdocGeneratedNonceWithIsoFallbackEnabled() throws Exception {
+        MdocVerificationOpts signingOpts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(signingOpts).encodeToBase64Url();
+
+        MdocVerificationOpts verifyingOpts = getDefaultMdocVerificationOpts()
+                .withClientId(null) // so first attempt with OpenID4VP session transcript fail fast
+                .withFallbackToIsoSpecSessionTranscript(true)
+                .build();
+
+        verifyFails(
+                mdoc,
+                verifyingOpts,
+                new StaticTruststoreProvider(getIssuerCertRef1()),
+                "Failed to compute session transcript for device binding verification",
+                "Cannot compute handover: 'mdoc_generated_nonce' must not be null");
     }
 
     @Test

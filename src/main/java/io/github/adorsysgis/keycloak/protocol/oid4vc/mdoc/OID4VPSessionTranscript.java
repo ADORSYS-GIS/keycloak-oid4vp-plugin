@@ -6,6 +6,7 @@ import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORNull;
 import com.authlete.cbor.CBORString;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Computes OpenID4VP session transcript for replay protection in mDoc presentation.
@@ -27,15 +28,16 @@ public class OID4VPSessionTranscript {
      *     Handover and SessionTranscript Definitions</a>
      */
     public static CBORItemList computeSessionTranscript_OID4VPSpec(MdocVerificationOpts opts) {
+        String clientId = requireNonNull(opts.getClientId(), "client_id");
+        String nonce = requireNonNull(opts.getOid4vpNonce(), "nonce");
+        String responseUri = requireNonNull(opts.getResponseUri(), "response_uri");
+
         byte[] thumbprint = opts.getJwkThumbprint();
         CBORItem jwkThumbprintCbor =
                 thumbprint != null && thumbprint.length > 0 ? new CBORByteArray(thumbprint) : CBORNull.INSTANCE;
 
         CBORItemList handoverInfo = new CBORItemList(
-                toCBORString(opts.getClientId()),
-                toCBORString(opts.getOid4vpNonce()),
-                jwkThumbprintCbor,
-                toCBORString(opts.getResponseUri()));
+                new CBORString(clientId), new CBORString(nonce), jwkThumbprintCbor, new CBORString(responseUri));
 
         byte[] handoverInfoHash = DigestUtils.sha256(handoverInfo.encode());
 
@@ -51,27 +53,32 @@ public class OID4VPSessionTranscript {
      * @param opts Handover options for mDoc verification
      */
     public static CBORItemList computeSessionTranscript_ISOSpec(MdocVerificationOpts opts) {
+        String mdocGeneratedNonce = requireNonNull(opts.getMdocGeneratedNonce(), "mdoc_generated_nonce");
+        String clientId = requireNonNull(opts.getClientId(), "client_id");
+        String nonce = requireNonNull(opts.getOid4vpNonce(), "nonce");
+        String responseUri = requireNonNull(opts.getResponseUri(), "response_uri");
+
         byte[] clientIdHash = DigestUtils.sha256(
-                new CBORItemList(toCBORString(opts.getClientId()), toCBORString(opts.getMdocGeneratedNonce()))
-                        .encode());
+                new CBORItemList(new CBORString(clientId), new CBORString(mdocGeneratedNonce)).encode());
 
         byte[] responseUriHash = DigestUtils.sha256(
-                new CBORItemList(toCBORString(opts.getResponseUri()), toCBORString(opts.getMdocGeneratedNonce()))
-                        .encode());
+                new CBORItemList(new CBORString(responseUri), new CBORString(mdocGeneratedNonce)).encode());
 
         CBORItemList handover = new CBORItemList(
-                new CBORByteArray(clientIdHash),
-                new CBORByteArray(responseUriHash),
-                toCBORString(opts.getOid4vpNonce()));
+                new CBORByteArray(clientIdHash), new CBORByteArray(responseUriHash), new CBORString(nonce));
 
         return computeSessionTranscript(handover);
     }
 
-    private static CBORItem toCBORString(String str) {
-        return str != null ? new CBORString(str) : CBORNull.INSTANCE;
-    }
-
     private static CBORItemList computeSessionTranscript(CBORItemList handover) {
         return new CBORItemList(CBORNull.INSTANCE, CBORNull.INSTANCE, handover);
+    }
+
+    private static String requireNonNull(String value, String name) {
+        if (StringUtil.isBlank(value)) {
+            throw new IllegalArgumentException(String.format("Cannot compute handover: '%s' must not be null", name));
+        }
+
+        return value;
     }
 }
