@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
 import com.google.zxing.BinaryBitmap;
+import com.google.zxing.DecodeHintType;
 import com.google.zxing.LuminanceSource;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.Result;
@@ -9,6 +10,7 @@ import com.google.zxing.common.HybridBinarizer;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.util.Base64;
+import java.util.Map;
 import javax.imageio.ImageIO;
 
 public class QRCodeTestUtils {
@@ -30,7 +32,7 @@ public class QRCodeTestUtils {
             BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
 
             // Decode QR
-            Result result = new MultiFormatReader().decode(bitmap);
+            Result result = new MultiFormatReader().decode(bitmap, Map.of(DecodeHintType.PURE_BARCODE, Boolean.TRUE));
             return result.getText();
         } catch (Exception e) {
             throw new RuntimeException("QR code decoding failed", e);

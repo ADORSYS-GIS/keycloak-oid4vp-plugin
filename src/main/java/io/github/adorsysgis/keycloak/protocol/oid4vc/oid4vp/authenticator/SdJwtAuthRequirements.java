@@ -6,6 +6,7 @@ import static org.keycloak.sdjwt.ClaimVerifier.ClaimCheck;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -40,7 +41,7 @@ public class SdJwtAuthRequirements {
     private final int kbJwtMaxAllowedAge;
     private final boolean requireNotBeforeClaim;
     private final boolean requireExpirationClaim;
-    private final boolean verifyIssuerClaim;
+    private boolean verifyIssuerClaim;
     private final boolean enforceRevocationStatus;
     private final boolean requireCryptographicHolderBinding;
 
@@ -90,6 +91,9 @@ public class SdJwtAuthRequirements {
         this(context, authConfig);
         this.expectedVcts = credentialRequirement.getCredentialTypes();
         this.requiredClaims = credentialRequirement.getClaims();
+        if (usesExternalIssuerTrust(credentialRequirement)) {
+            this.verifyIssuerClaim = false;
+        }
         this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
     }
 
@@ -192,6 +196,12 @@ public class SdJwtAuthRequirements {
         return expectedVcts.stream()
                 .map(vct -> Pattern.quote("\"" + vct + "\""))
                 .collect(Collectors.joining("|", "(", ")"));
+    }
+
+    private boolean usesExternalIssuerTrust(CredentialRequirement credentialRequirement) {
+        return credentialRequirement.getTrust() != null
+                && credentialRequirement.getTrust().stream()
+                        .anyMatch(trust -> !TrustPolicy.SELF.equals(trust.getType()));
     }
 
     private List<String> parseMultiStr(String str) {

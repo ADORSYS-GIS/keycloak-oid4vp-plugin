@@ -50,7 +50,8 @@ public class CorsService {
      * @return CORS builder configured for client-specific origins
      */
     public static Cors forWebOrigins(AuthenticationSessionModel authSession) {
-        List<String> clientWebOrigins = Optional.ofNullable(authSession.getClient())
+        List<String> clientWebOrigins = Optional.ofNullable(authSession)
+                .map(AuthenticationSessionModel::getClient)
                 .map(ClientModel::getWebOrigins)
                 .map(Set::stream)
                 .map(Stream::toList)

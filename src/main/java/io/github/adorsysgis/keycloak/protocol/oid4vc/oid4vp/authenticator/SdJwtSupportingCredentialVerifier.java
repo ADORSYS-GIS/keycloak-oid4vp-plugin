@@ -5,7 +5,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
-import java.util.List;
 import java.util.Map;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -65,11 +64,6 @@ class SdJwtSupportingCredentialVerifier {
             String aud,
             boolean requireCryptographicHolderBinding)
             throws VerificationException {
-        if (!credential.isSelfTrusted()) {
-            // TODO: Route external trust policies to dedicated issuer validators when those profiles are enabled.
-            throw new VerificationException(
-                    "Credential '%s' uses an unsupported trust policy".formatted(credential.getId()));
-        }
         if (StringUtil.isBlank(sdJwtVpToken)) {
             throw new VerificationException(
                     "Supporting credential '%s' is missing from the presentation".formatted(credential.getId()));
@@ -87,7 +81,7 @@ class SdJwtSupportingCredentialVerifier {
         consumer.verifySdJwtPresentation(
                 sdJwt,
                 authReqs.getPresentationRequirements(),
-                List.of(new SelfTrustedSdJwtIssuer(session)),
+                SdJwtTrustedIssuerResolver.resolve(session, credential),
                 authReqs.getIssuerSignedJwtVerificationOpts(),
                 authReqs.getKeyBindingJwtVerificationOpts(nonce, aud, requireCryptographicHolderBinding));
 

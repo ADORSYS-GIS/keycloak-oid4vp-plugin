@@ -80,17 +80,22 @@ public class OID4VPUserAuthBean {
             return List.of();
         }
 
-        Locale locale = session.getContext().resolveLocale(null);
-        return oid4vp.getAuthenticationProfilesForClient(clientId).stream()
-                .map(profile -> new LoginProfileBean()
-                        .setId(profile.getId())
-                        .setDisplayName(profile.getDisplayCta(locale))
-                        .setLoginUrl(UriBuilder.fromUri(currentUri)
-                                .replaceQueryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
-                                .replaceQueryParam(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM, profile.getId())
-                                .build()
-                                .toString()))
-                .toList();
+        try {
+            Locale locale = session.getContext().resolveLocale(null);
+            return oid4vp.getAuthenticationProfilesForClient(clientId).stream()
+                    .map(profile -> new LoginProfileBean()
+                            .setId(profile.getId())
+                            .setDisplayName(profile.getDisplayCta(locale))
+                            .setLoginUrl(UriBuilder.fromUri(currentUri)
+                                    .replaceQueryParam(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP)
+                                    .replaceQueryParam(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM, profile.getId())
+                                    .build()
+                                    .toString()))
+                    .toList();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            logger.warnf(e, "Invalid OpenID4VP authentication profile configuration. Not offering wallet login");
+            return List.of();
+        }
     }
 
     /**
