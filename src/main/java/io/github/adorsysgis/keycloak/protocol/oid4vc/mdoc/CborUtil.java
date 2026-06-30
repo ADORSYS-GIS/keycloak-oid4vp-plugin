@@ -96,7 +96,7 @@ public class CborUtil {
     /**
      * Extracts X5C chain from COSESign1.
      */
-    public static List<X509Certificate> extractX5Chain(COSESign1 sign1) {
+    public static List<X509Certificate> extractX509Chain(COSESign1 sign1) {
         if (sign1.getUnprotectedHeader() != null) {
             var chain = sign1.getUnprotectedHeader().getX5Chain();
             if (chain != null && !chain.isEmpty()) return chain;

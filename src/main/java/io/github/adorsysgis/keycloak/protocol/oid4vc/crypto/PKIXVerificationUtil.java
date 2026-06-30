@@ -40,7 +40,7 @@ public class PKIXVerificationUtil {
                 certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
             }
         } catch (CertificateException e) {
-            throw new VerificationException("Failed to parse X.5C certificate", e);
+            throw new VerificationException("Failed to parse X.509 certificate", e);
         }
 
         return validateChain(certs, truststoreProvider);

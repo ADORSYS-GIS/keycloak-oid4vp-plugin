@@ -231,6 +231,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                 .verifyPresentation(opts, null, trust));
         assertErrorFragment(exception.getMessage(), expectedMessageFragment);
         if (expectedCauseMessageFragment != null) {
+            assertNotNull(exception.getCause(), "Main exception should have linked a cause");
             assertErrorFragment(exception.getCause().getMessage(), expectedCauseMessageFragment);
         }
     }

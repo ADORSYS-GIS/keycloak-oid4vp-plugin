@@ -43,14 +43,13 @@ public class MdocVerificationOpts extends ClaimVerifier {
     private final byte[] jwkThumbprint;
 
     private MdocVerificationOpts(
-            List<Predicate<ObjectNode>> headerVerifiers,
             List<ClaimVerifier.Predicate<ObjectNode>> contentVerifiers,
             String clientId,
             String oid4vpNonce,
             String mdocGeneratedNonce,
             String responseUri,
             byte[] jwkThumbprint) {
-        super(headerVerifiers, contentVerifiers);
+        super(List.of(), contentVerifiers);
         this.clientId = clientId;
         this.oid4vpNonce = oid4vpNonce;
         this.mdocGeneratedNonce = mdocGeneratedNonce;
@@ -160,7 +159,7 @@ public class MdocVerificationOpts extends ClaimVerifier {
         @Override
         public MdocVerificationOpts build() {
             return new MdocVerificationOpts(
-                    List.of(), contentVerifiers, clientId, oid4vpNonce, mdocGeneratedNonce, responseUri, jwkThumbprint);
+                    contentVerifiers, clientId, oid4vpNonce, mdocGeneratedNonce, responseUri, jwkThumbprint);
         }
     }
 }

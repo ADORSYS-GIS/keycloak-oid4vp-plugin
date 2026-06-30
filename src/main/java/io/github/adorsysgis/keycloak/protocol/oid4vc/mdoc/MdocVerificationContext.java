@@ -114,7 +114,7 @@ public class MdocVerificationContext {
      */
     private void verifyIssuerSignature(COSESign1 issuerAuth, TruststoreProvider truststoreProvider)
             throws VerificationException {
-        List<X509Certificate> x5cChain = CborUtil.extractX5Chain(issuerAuth);
+        List<X509Certificate> x5cChain = CborUtil.extractX509Chain(issuerAuth);
         X509Certificate[] validatedChain = PKIXVerificationUtil.validateChain(x5cChain, truststoreProvider);
 
         try {
