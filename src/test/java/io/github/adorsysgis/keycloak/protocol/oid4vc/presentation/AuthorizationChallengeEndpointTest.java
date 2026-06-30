@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import java.net.URI;
 import java.util.List;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -53,7 +54,7 @@ class AuthorizationChallengeEndpointTest extends OID4VPBaseUserAuthEndpointTest 
         RequestObject requestObject = new JWSInput(requestObjectJwt).readJsonContent(RequestObject.class);
 
         // §6.2.1.1/§6.2.1.5: request is bound to the challenge endpoint origin to prevent forwarding
-        var realmUri = java.net.URI.create(getTestRealmEndpoint());
+        var realmUri = URI.create(getTestRealmEndpoint());
         var challengeOrigin = realmUri.getScheme() + "://" + realmUri.getAuthority();
         assertEquals(List.of(challengeOrigin), requestObject.getExpectedOrigins());
 
