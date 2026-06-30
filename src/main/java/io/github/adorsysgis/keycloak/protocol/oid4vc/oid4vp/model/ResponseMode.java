@@ -14,6 +14,8 @@ public enum ResponseMode {
     FORM_POST("form_post"),
     DIRECT_POST("direct_post"),
     DIRECT_POST_JWT("direct_post.jwt"),
+    IA_POST("ia_post"),
+    IA_POST_JWT("ia_post.jwt"),
     QUERY("query");
 
     private final String value;
