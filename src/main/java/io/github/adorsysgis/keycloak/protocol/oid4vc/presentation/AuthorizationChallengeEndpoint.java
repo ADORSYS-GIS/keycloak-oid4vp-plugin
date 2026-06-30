@@ -10,6 +10,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.OPTIONS;
@@ -289,17 +290,17 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         return new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
     }
 
-    private jakarta.ws.rs.BadRequestException missingInteractionType() {
+    private BadRequestException missingInteractionType() {
         var error = new OAuth2ErrorRepresentation(
                 ERROR_MISSING_INTERACTION_TYPE,
                 "interaction_types_supported must include " + INTERACTION_OPENID4VP_PRESENTATION);
-        return new jakarta.ws.rs.BadRequestException(CorsService.open()
+        return new BadRequestException(CorsService.open()
                 .add(Response.status(Response.Status.BAD_REQUEST).entity(error).type(MediaType.APPLICATION_JSON)));
     }
 
-    private jakarta.ws.rs.BadRequestException badRequest(String description) {
+    private BadRequestException badRequest(String description) {
         var error = new OAuth2ErrorRepresentation(OAuthErrorException.INVALID_REQUEST, description);
-        return new jakarta.ws.rs.BadRequestException(CorsService.open()
+        return new BadRequestException(CorsService.open()
                 .add(Response.status(Response.Status.BAD_REQUEST).entity(error).type(MediaType.APPLICATION_JSON)));
     }
 
