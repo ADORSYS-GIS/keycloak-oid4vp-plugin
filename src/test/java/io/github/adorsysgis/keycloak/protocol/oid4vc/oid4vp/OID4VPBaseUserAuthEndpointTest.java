@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.interfaces.ECPublicKey;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -363,6 +364,29 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
         return dcqlQuery.getCredentials().stream()
                 .collect(Collectors.toMap(Credential::getId, credential -> List.of(sdJwtVpToken)));
+    }
+
+    /**
+     * Builds the JSON-encoded {@code openid4vp_response} object (vp_token + state) submitted to the
+     * Authorization Challenge Endpoint in the OID4VCI interactive authorization (ia_post) flow.
+     */
+    protected String buildOpenid4vpResponseJson(String sdJwt, RequestObject requestObject) throws Exception {
+        return buildOpenid4vpResponseJson(sdJwt, requestObject, requestObject.getClientId());
+    }
+
+    /**
+     * Variant that allows overriding the Key Binding JWT audience to exercise holder-binding
+     * verification (OID4VCI §6.2.1.1: the VP audience must be bound to the challenge endpoint).
+     */
+    protected String buildOpenid4vpResponseJson(String sdJwt, RequestObject requestObject, String aud)
+            throws Exception {
+        String sdJwtVpToken =
+                sdJwtVPTestUtils.presentSdJwt(sdJwt, requestObject.getNonce(), aud, SdJwtVPTestUtils.getUserJwk());
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put(ResponseObject.VP_TOKEN_KEY, prepareVpTokenMap(sdJwtVpToken, requestObject));
+        response.put(ResponseObject.STATE_KEY, requestObject.getState());
+        return JsonSerialization.writeValueAsString(response);
     }
 
     public record TestFlowData(
