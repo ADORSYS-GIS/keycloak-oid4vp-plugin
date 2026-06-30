@@ -29,7 +29,12 @@ public class MdocVerificationTest extends MdocBaseTest {
                 .withResponseUri("https://example.com/12345/response")
                 .build();
 
-        PresentationRequirements reqs = (JsonNode nsClaims) -> {
+        PresentationRequirements reqs = (JsonNode payload) -> {
+            assertEquals(
+                    "org.iso.18013.5.1.mDL",
+                    payload.get(MdocConstants.L_DOC_TYPE).asText());
+
+            JsonNode nsClaims = payload.get(MdocConstants.L_NAME_SPACES);
             assertEquals(1, nsClaims.size(), "There should be exactly one namespace");
             JsonNode claims = nsClaims.get("org.iso.18013.5.1");
             assertNotNull(claims, "The ISO node should exist");

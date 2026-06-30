@@ -13,7 +13,6 @@ import com.authlete.cose.COSEException;
 import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import java.io.IOException;
 import java.security.MessageDigest;
@@ -92,8 +91,7 @@ public class MdocVerificationContext {
 
         // Enforce presentation requirements if provided
         if (presentationRequirements != null) {
-            JsonNode claimsJson = JsonSerialization.writeValueAsNode(claims.namespaces());
-            presentationRequirements.checkIfSatisfiedBy(claimsJson);
+            presentationRequirements.checkIfSatisfiedBy(claims.toJson());
         }
     }
 
@@ -177,6 +175,8 @@ public class MdocVerificationContext {
 
     /**
      * Verify that presented claims are protected by digests in MSO
+     *
+     * @return All presented claims along with docType
      */
     private NamespacedClaims verifyMsoDigests(CBORPairList namespaces, CBORPairList mso) throws VerificationException {
         var digestAlgorithm =
@@ -185,7 +185,7 @@ public class MdocVerificationContext {
                 (CBORPairList) mso.findByKey(MdocConstants.L_VALUE_DIGESTS).getValue();
         MessageDigest digester = verifyDigestAlgorithm(digestAlgorithm.getValue());
 
-        // We'll also collect the claims in a map for subsequent presentation requirements verification
+        // We'll also collect the claims in a map for subsequent enforcement of presentation requirements
         Map<String, Map<String, Object>> nsClaims = new HashMap<>();
 
         // Run digest integrity verification for each namespace
@@ -235,14 +235,15 @@ public class MdocVerificationContext {
         }
 
         // Bubble up collected claims
-        return new NamespacedClaims(nsClaims);
+        String docType = extractDocType(mso).getValue();
+        return new NamespacedClaims(docType, nsClaims);
     }
 
     /**
      * Verify digest algorithm is one of the allowed options.
      */
     private MessageDigest verifyDigestAlgorithm(String digestAlg) throws VerificationException {
-        if (!allowedDigestAlgs.contains(digestAlg.toUpperCase())) {
+        if (allowedDigestAlgs.stream().noneMatch(a -> a.equalsIgnoreCase(digestAlg))) {
             throw new VerificationException(String.format(
                     "Invalid digest algorithm: %s. Must be one of %s",
                     digestAlg, JsonSerialization.valueAsString(allowedDigestAlgs)));
