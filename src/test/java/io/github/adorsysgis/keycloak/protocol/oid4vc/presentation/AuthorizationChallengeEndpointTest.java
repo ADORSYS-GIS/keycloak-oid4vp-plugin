@@ -138,6 +138,35 @@ class AuthorizationChallengeEndpointTest extends OID4VPBaseUserAuthEndpointTest 
         assertNotEquals(HttpStatus.SC_OK, resume.getStatusLine().getStatusCode());
     }
 
+    @Test
+    @DisplayName("should reject openid4vp_response that contains neither vp_token, response nor error")
+    void should_RejectEmptyResponse_When_NoVpTokenResponseOrError() throws Exception {
+        var codeVerifier = PkceUtils.generateCodeVerifier();
+        var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+
+        var initiate = postChallenge(List.of(
+                new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(
+                        AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
+                        AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)));
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, initiate.getStatusLine().getStatusCode());
+        var challenge = parseHttpResponse(initiate, AuthorizationChallengeResponse.class);
+
+        // openid4vp_response with only a state value (no vp_token, response or error)
+        var emptyResponse = "{\"state\":\"irrelevant\"}";
+
+        var resume = postChallenge(List.of(
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, emptyResponse)));
+
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resume.getStatusLine().getStatusCode());
+        var error = parseHttpResponse(resume, OAuth2ErrorRepresentation.class);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
+    }
+
     private HttpResponse postChallenge(List<BasicNameValuePair> form) throws Exception {
         var url = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
                 .path(AuthorizationChallengeEndpointFactory.PROVIDER_ID)
