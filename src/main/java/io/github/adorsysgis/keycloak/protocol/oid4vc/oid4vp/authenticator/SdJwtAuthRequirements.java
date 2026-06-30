@@ -167,8 +167,29 @@ public class SdJwtAuthRequirements {
     }
 
     private static ClaimCheck buildAudClaimCheck(String expectedKbJwtAud) {
+        // TODO: Strict matching is disabled for compatibility with the German wallet
         // Final 1.0 requires using the full Client Identifier, including prefix, in proof bindings.
-        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, String::equals);
+        // return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, String::equals);
+
+        // Regex matching for aud claim check.
+        // Tolerates prefix duplication for compatibility with German wallet.
+
+        int colonIndex = expectedKbJwtAud.indexOf(':');
+        String regex;
+        if (colonIndex > 0) {
+            String prefix = expectedKbJwtAud.substring(0, colonIndex);
+            // Accept: prefix:aud or prefix:prefix:aud
+            regex = String.format("(%s:)?%s", Pattern.quote(prefix), Pattern.quote(expectedKbJwtAud));
+        } else {
+            // No prefix, accept as is
+            regex = Pattern.quote(expectedKbJwtAud);
+        }
+
+        Pattern expectedPattern = Pattern.compile(regex);
+
+        return new ClaimCheck(JsonWebToken.AUD, expectedKbJwtAud, (expectedAud, aud) -> expectedPattern
+                .matcher(aud)
+                .matches());
     }
 
     private String buildExpectedVctsPattern(List<String> expectedVcts) {
