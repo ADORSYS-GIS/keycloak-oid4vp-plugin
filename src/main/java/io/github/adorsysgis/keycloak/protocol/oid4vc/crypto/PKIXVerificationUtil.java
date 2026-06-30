@@ -25,25 +25,16 @@ public class PKIXVerificationUtil {
 
     private static final int MAX_CHAIN_LENGTH = 5;
 
-    public static X509Certificate[] validateBase64Chain(List<String> base64Certs, TruststoreProvider truststoreProvider)
+    private PKIXVerificationUtil() {}
+
+    public static X509Certificate[] validateBase64Chain(List<String> certs, TruststoreProvider truststoreProvider)
             throws VerificationException {
-        if (base64Certs == null || base64Certs.isEmpty()) {
-            throw new VerificationException("Certificate chain is empty");
-        }
+        return validateChain(parseX509Certificates(certs), truststoreProvider);
+    }
 
-        List<X509Certificate> certs = new ArrayList<>();
-
-        try {
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            for (String base64Cert : base64Certs) {
-                byte[] bytes = Base64.getDecoder().decode(base64Cert);
-                certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
-            }
-        } catch (CertificateException e) {
-            throw new VerificationException("Failed to parse X.509 certificate", e);
-        }
-
-        return validateChain(certs, truststoreProvider);
+    public static X509Certificate[] validateBase64Chain(
+            List<String> certs, Collection<X509Certificate> rootCertificates) throws VerificationException {
+        return validateChain(parseX509Certificates(certs), rootCertificates, List.of());
     }
 
     public static X509Certificate[] validateChain(List<X509Certificate> certs, TruststoreProvider truststoreProvider)
@@ -58,16 +49,11 @@ public class PKIXVerificationUtil {
                 : truststoreProvider.getIntermediateCertificates().values().stream()
                         .flatMap(List::stream)
                         .toList();
-        return validateChain(x5c, roots, intermediates);
+        return validateChain(certs, roots, intermediates);
     }
 
-    public static X509Certificate[] validateChain(List<String> x5c, Collection<X509Certificate> rootCertificates)
-            throws VerificationException {
-        return validateChain(x5c, rootCertificates, List.of());
-    }
-
-    public static X509Certificate[] validateChain(
-            List<String> x5c,
+    private static X509Certificate[] validateChain(
+            List<X509Certificate> certs,
             Collection<X509Certificate> rootCertificates,
             Collection<X509Certificate> intermediateCertificates)
             throws VerificationException {
@@ -143,6 +129,24 @@ public class PKIXVerificationUtil {
             throw e;
         } catch (Exception e) {
             throw new VerificationException("Certificate chain validation failed", e);
+        }
+    }
+
+    private static List<X509Certificate> parseX509Certificates(List<String> base64Certs) throws VerificationException {
+        if (base64Certs == null || base64Certs.isEmpty()) {
+            throw new VerificationException("Certificate chain is empty");
+        }
+
+        try {
+            List<X509Certificate> certs = new ArrayList<>();
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            for (String base64Cert : base64Certs) {
+                byte[] bytes = Base64.getDecoder().decode(base64Cert);
+                certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
+            }
+            return certs;
+        } catch (CertificateException e) {
+            throw new VerificationException("Failed to parse X.509 certificate", e);
         }
     }
 }
