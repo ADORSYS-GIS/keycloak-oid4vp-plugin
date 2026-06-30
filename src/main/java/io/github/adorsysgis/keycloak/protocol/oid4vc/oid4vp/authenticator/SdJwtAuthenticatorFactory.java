@@ -68,6 +68,21 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
 
     public static final String PROFILES_CONFIG = "profiles";
 
+    public static final String PID_MATCH_REQUIRED_CONFIG = "pidMatchRequired";
+    public static final boolean PID_MATCH_REQUIRED_CONFIG_DEFAULT = false;
+
+    public static final String PID_MATCH_GIVEN_NAME_CLAIM_CONFIG = "pidMatchGivenNameClaim";
+    public static final String PID_MATCH_GIVEN_NAME_CLAIM_CONFIG_DEFAULT = "given_name";
+
+    public static final String PID_MATCH_FAMILY_NAME_CLAIM_CONFIG = "pidMatchFamilyNameClaim";
+    public static final String PID_MATCH_FAMILY_NAME_CLAIM_CONFIG_DEFAULT = "family_name";
+
+    public static final String PID_MATCH_BIRTH_DATE_CLAIM_CONFIG = "pidMatchBirthDateClaim";
+    public static final String PID_MATCH_BIRTH_DATE_CLAIM_CONFIG_DEFAULT = "birthdate";
+
+    public static final String PID_MATCH_BIRTH_DATE_ATTRIBUTE_CONFIG = "pidMatchBirthDateAttribute";
+    public static final String PID_MATCH_BIRTH_DATE_ATTRIBUTE_CONFIG_DEFAULT = "birthdate";
+
     static {
         ProviderConfigProperty property;
 
@@ -206,6 +221,48 @@ public class SdJwtAuthenticatorFactory implements AuthenticatorFactory, OID4VPEn
         property.setType(ProviderConfigProperty.TEXT_TYPE);
         property.setHelpText(
                 "Optional JSON array of authentication profiles. Leave empty to use the legacy single-credential profile.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(PID_MATCH_REQUIRED_CONFIG);
+        property.setLabel("Require PID match during issuance");
+        property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+        property.setDefaultValue(PID_MATCH_REQUIRED_CONFIG_DEFAULT);
+        property.setHelpText(
+                "Only affects the OID4VCI presentation-during-issuance flow. When true and no PID matcher provider is deployed, issuance fails closed instead of silently skipping the identity check (guards against a misconfigured deployment missing the matcher plugin).");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(PID_MATCH_GIVEN_NAME_CLAIM_CONFIG);
+        property.setLabel("PID match: given name claim");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setDefaultValue(PID_MATCH_GIVEN_NAME_CLAIM_CONFIG_DEFAULT);
+        property.setHelpText("Name of the presented PID claim holding the given name(s) used for PID matching.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(PID_MATCH_FAMILY_NAME_CLAIM_CONFIG);
+        property.setLabel("PID match: family name claim");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setDefaultValue(PID_MATCH_FAMILY_NAME_CLAIM_CONFIG_DEFAULT);
+        property.setHelpText("Name of the presented PID claim holding the family name used for PID matching.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(PID_MATCH_BIRTH_DATE_CLAIM_CONFIG);
+        property.setLabel("PID match: birth date claim");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setDefaultValue(PID_MATCH_BIRTH_DATE_CLAIM_CONFIG_DEFAULT);
+        property.setHelpText("Name of the presented PID claim holding the birth date used for PID matching.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(PID_MATCH_BIRTH_DATE_ATTRIBUTE_CONFIG);
+        property.setLabel("PID match: user birth date attribute");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setDefaultValue(PID_MATCH_BIRTH_DATE_ATTRIBUTE_CONFIG_DEFAULT);
+        property.setHelpText(
+                "Name of the user attribute holding the registered birth date compared during PID matching.");
         configProperties.add(property);
     }
 

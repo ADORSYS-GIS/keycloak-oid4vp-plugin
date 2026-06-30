@@ -6,6 +6,7 @@ import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -588,6 +589,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
+        // Mark the session so the authenticator enforces PID matching only for this issuance flow.
+        authSession.setAuthNote(SdJwtAuthenticator.PRESENTATION_DURING_ISSUANCE_KEY, Boolean.TRUE.toString());
         AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
         VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
