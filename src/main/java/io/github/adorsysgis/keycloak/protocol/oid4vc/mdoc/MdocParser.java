@@ -1,0 +1,82 @@
+package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
+
+import com.authlete.cbor.CBORDecoder;
+import com.authlete.cbor.CBORItem;
+import com.authlete.cbor.CBORPairList;
+import com.authlete.cbor.CBORParser;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.dialect.Dialects;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Base64;
+import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
+
+public class MdocParser {
+
+    private static final String MDOC_SCHEMA_PATH = "/schema/mdoc-device-response-schema.json";
+    private static final Schema schema;
+
+    static {
+        InputStream schemaStream = MdocParser.class.getResourceAsStream(MDOC_SCHEMA_PATH);
+        if (schemaStream == null) {
+            throw new IllegalStateException("Schema file not found in classpath.");
+        }
+
+        SchemaRegistry schemaRegistry = SchemaRegistry.withDialect(Dialects.getDraft7());
+        schema = schemaRegistry.getSchema(schemaStream);
+    }
+
+    private MdocParser() {}
+
+    public static CBORPairList parseBase64Url(String base64Url) throws MdocEncodingException {
+        if (StringUtil.isBlank(base64Url)) {
+            throw new MdocEncodingException("Input string is null or blank");
+        }
+
+        try {
+            byte[] decoded = Base64.getUrlDecoder().decode(base64Url.trim());
+            return parse(decoded);
+        } catch (IllegalArgumentException e) {
+            throw new MdocEncodingException("Invalid Base64url encoding", e);
+        }
+    }
+
+    public static CBORPairList parse(byte[] cborData) throws MdocEncodingException {
+        if (cborData == null || cborData.length == 0) {
+            throw new MdocEncodingException("Input bytes are null or empty");
+        }
+
+        CBORItem root;
+
+        try {
+            root = new CBORDecoder(cborData).next();
+        } catch (IOException e) {
+            throw new MdocEncodingException("Failed to parse CBOR data", e);
+        }
+
+        if (!(root instanceof CBORPairList pairs)) {
+            throw new MdocEncodingException("CBOR data is not a CBOR map");
+        }
+
+        JsonNode node;
+
+        try {
+            CBORItem unwrapped = CborUtil.unwrap(root);
+            Object object = new CBORParser(unwrapped.encode()).next();
+            node = JsonSerialization.mapper.valueToTree(object);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new MdocEncodingException("Invalid mDoc device response", e);
+        }
+
+        var errors = schema.validate(node);
+        if (!errors.isEmpty()) {
+            String formattedErrors = JsonSerialization.valueAsString(errors);
+            throw new MdocEncodingException("mDoc fails schema validation: " + formattedErrors);
+        }
+
+        return pairs;
+    }
+}

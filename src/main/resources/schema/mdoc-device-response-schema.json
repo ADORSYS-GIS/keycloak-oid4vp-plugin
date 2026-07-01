@@ -1,0 +1,250 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ISO-IEC-18013-5-DeviceResponse",
+  "description": "JSON Schema matching the flattened CBOR layout for mdoc device response validation.",
+  "type": "object",
+  "required": [
+    "version",
+    "status"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Version of the DeviceResponse structure"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Status code of the response"
+    },
+    "documents": {
+      "type": "array",
+      "description": "Array of returned compliant documents",
+      "items": {
+        "type": "object",
+        "required": [
+          "docType",
+          "issuerSigned",
+          "deviceSigned"
+        ],
+        "properties": {
+          "docType": {
+            "type": "string",
+            "description": "Standardized document type identifier string"
+          },
+          "issuerSigned": {
+            "type": "object",
+            "required": [
+              "issuerAuth"
+            ],
+            "properties": {
+              "nameSpaces": {
+                "type": "object",
+                "description": "Returned namespaces containing issuer-signed elements",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "digestID",
+                      "random",
+                      "elementIdentifier",
+                      "elementValue"
+                    ],
+                    "properties": {
+                      "digestID": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "random": {
+                        "type": "string",
+                        "description": "Base64 or Hex payload string"
+                      },
+                      "elementIdentifier": {
+                        "type": "string"
+                      },
+                      "elementValue": {
+                        "description": "Can be any valid JSON type payload"
+                      }
+                    }
+                  }
+                }
+              },
+              "issuerAuth": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "description": "COSE_Sign1 structure housing the Mobile Security Object",
+                "items": [
+                  {
+                    "type": "object",
+                    "description": "COSE Protected Headers"
+                  },
+                  {
+                    "type": "object",
+                    "description": "COSE Unprotected Headers"
+                  },
+                  {
+                    "type": "object",
+                    "description": "Mobile Security Object (MSO)",
+                    "required": [
+                      "version",
+                      "digestAlgorithm",
+                      "valueDigests",
+                      "deviceKeyInfo",
+                      "docType",
+                      "validityInfo"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string"
+                      },
+                      "digestAlgorithm": {
+                        "type": "string"
+                      },
+                      "docType": {
+                        "type": "string"
+                      },
+                      "valueDigests": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "deviceKeyInfo": {
+                        "type": "object",
+                        "required": [
+                          "deviceKey"
+                        ],
+                        "properties": {
+                          "deviceKey": {
+                            "type": "object",
+                            "required": [
+                              "1"
+                            ],
+                            "properties": {
+                              "1": {
+                                "type": "integer",
+                                "description": "kty map parameter"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          "keyAuthorizations": {
+                            "type": "object"
+                          },
+                          "keyInfo": {
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "validityInfo": {
+                        "type": "object",
+                        "required": [
+                          "signed",
+                          "validFrom",
+                          "validUntil"
+                        ],
+                        "properties": {
+                          "signed": {
+                            "type": "string"
+                          },
+                          "validFrom": {
+                            "type": "string"
+                          },
+                          "validUntil": {
+                            "type": "string"
+                          },
+                          "expectedUpdate": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "description": "Raw signature target content"
+                  }
+                ]
+              }
+            }
+          },
+          "deviceSigned": {
+            "type": "object",
+            "required": [
+              "nameSpaces",
+              "deviceAuth"
+            ],
+            "properties": {
+              "nameSpaces": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "deviceAuth": {
+                "type": "object",
+                "oneOf": [
+                  {
+                    "required": [
+                      "deviceSignature"
+                    ],
+                    "properties": {
+                      "deviceSignature": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "description": "COSE_Sign1 formatted device parameters array"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "required": [
+                      "deviceMac"
+                    ],
+                    "properties": {
+                      "deviceMac": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "description": "COSE_Mac0 formatted device parameters array"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "errors": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "documentErrors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "docType",
+          "errors"
+        ],
+        "properties": {
+          "docType": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}
