@@ -9,8 +9,8 @@ public class Claim {
     private String id;
 
     /**
-     * Object-key path segments only (e.g. {@code credentialSubject}, {@code given_name}). Does not
-     * support {@code null} array wildcards or integer indexes from OpenID4VP Claims Path Pointers.
+     * Object-key path segments (e.g. {@code credentialSubject}, {@code given_name}, {@code street_address}).
+     * Nested paths such as {@code ["address", "street_address"]} use multiple string segments.
      */
     @JsonProperty("path")
     private List<String> path;

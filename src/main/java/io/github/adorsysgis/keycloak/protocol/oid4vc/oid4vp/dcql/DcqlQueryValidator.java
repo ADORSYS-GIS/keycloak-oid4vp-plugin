@@ -10,12 +10,7 @@ import java.util.Set;
 import org.keycloak.VCFormat;
 import org.keycloak.utils.StringUtil;
 
-/**
- * Validates DCQL queries at build time per OpenID4VP 1.0 format-specific rules.
- *
- * <p>Claim {@code path} validation is limited to non-empty object property name segments; array
- * indexes and {@code null} wildcards from Claims Path Pointers are not supported yet.
- */
+/** Validates DCQL queries at build time per OpenID4VP 1.0 format-specific rules. */
 public final class DcqlQueryValidator {
 
     private DcqlQueryValidator() {}
@@ -162,20 +157,22 @@ public final class DcqlQueryValidator {
             return;
         }
         for (Claim claim : credential.getClaims()) {
-            if (claim.getPath() == null || claim.getPath().isEmpty()) {
+            List<String> path = claim.getPath();
+            if (path == null || path.isEmpty()) {
                 throw new IllegalArgumentException("dcql_query claim path must be non-empty");
             }
-            if (claim.getPath().stream().anyMatch(StringUtil::isBlank)) {
+            if (path.stream().anyMatch(StringUtil::isBlank)) {
                 throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
             }
-            if (claim.getPath().stream().anyMatch(DcqlQueryValidator::isUnsupportedPathSegment)) {
+            if (path.stream().anyMatch(DcqlQueryValidator::isUnsupportedPathSegment)) {
                 throw new IllegalArgumentException(
                         "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
             }
-            if (isVpWrapperPath(claim.getPath())) {
+            validateClaimValues(claim.getValues());
+            if (isVpWrapperPath(path)) {
                 throw new IllegalArgumentException(credential.getFormat()
                         + " claim paths must be relative to the VC root, not the VP wrapper: "
-                        + claim.getPath());
+                        + path);
             }
         }
     }
@@ -185,6 +182,18 @@ public final class DcqlQueryValidator {
             return true;
         }
         return !segment.isEmpty() && segment.chars().allMatch(Character::isDigit);
+    }
+
+    private static void validateClaimValues(List<String> values) {
+        if (values == null) {
+            return;
+        }
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("dcql_query claim values must be non-empty when present");
+        }
+        if (values.stream().anyMatch(StringUtil::isBlank)) {
+            throw new IllegalArgumentException("dcql_query claim values must not contain blank entries");
+        }
     }
 
     private static boolean isVpWrapperPath(List<String> path) {
