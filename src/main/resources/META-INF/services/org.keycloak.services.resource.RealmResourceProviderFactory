@@ -1,2 +1,3 @@
 io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory
 io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory
+io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory

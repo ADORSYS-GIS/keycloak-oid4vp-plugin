@@ -58,6 +58,9 @@ public class RequestObject extends JsonWebToken {
     @JsonProperty("transaction_data")
     private List<String> transactionData;
 
+    @JsonProperty("expected_origins")
+    private List<String> expectedOrigins;
+
     public String getState() {
         return state;
     }
@@ -172,6 +175,15 @@ public class RequestObject extends JsonWebToken {
 
     public RequestObject setTransactionData(List<String> transactionData) {
         this.transactionData = transactionData;
+        return this;
+    }
+
+    public List<String> getExpectedOrigins() {
+        return expectedOrigins;
+    }
+
+    public RequestObject setExpectedOrigins(List<String> expectedOrigins) {
+        this.expectedOrigins = expectedOrigins;
         return this;
     }
 

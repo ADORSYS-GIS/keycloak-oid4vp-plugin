@@ -24,6 +24,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.VerifierInfoSupport;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -101,7 +102,24 @@ public class AuthorizationRequestService {
             AuthenticationSessionModel authSession,
             OIDCAuthSession oidcAuthSession,
             CodeChallengeDetails codeChallengeParams) {
+        return createAuthorizationRequest(config, profile, authSession, oidcAuthSession, codeChallengeParams, null);
+    }
+
+    /**
+     * Creates a fresh authorization request for user authentication, optionally overriding the
+     * response mode and response URI for the OID4VCI interactive authorization (ia_post) flow.
+     */
+    public AuthorizationContext createAuthorizationRequest(
+            VerifierConfig config,
+            AuthenticationProfile profile,
+            AuthenticationSessionModel authSession,
+            OIDCAuthSession oidcAuthSession,
+            CodeChallengeDetails codeChallengeParams,
+            InteractiveResponseConfig interactive) {
         logger.debug("Creating a fresh authorization request for user authentication...");
+
+        ResponseMode effectiveResponseMode =
+                interactive != null ? interactive.responseMode() : config.getResponseMode();
 
         // Generate random request and transaction IDs.
         // Different IDs are used to prevent unintended access to the status of this request.
@@ -114,7 +132,7 @@ public class AuthorizationRequestService {
 
         // Generate ephemeral encryption keys if direct_post.jwt. Must be done before creating
         // the request object, so updated client metadata are picked up as intended.
-        EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(config.getResponseMode());
+        EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(effectiveResponseMode);
 
         // Discover signing key
         KeyWrapper signingKey = discoverSigningKey(config);
@@ -127,11 +145,13 @@ public class AuthorizationRequestService {
         ClientMetadata clientMetadata = discoveryService.getClientMetadata(encryptionKey);
 
         // Build request object with DCQL query from the selected authentication profile.
-        RequestObject requestObject = buildRequestObject(clientId, clientMetadata, config, profile, requestId);
+        RequestObject requestObject =
+                buildRequestObject(clientId, clientMetadata, config, profile, requestId, interactive);
 
-        // Sign request object initially, unless we know request_uri_method = post
+        // Sign request object initially, unless we know request_uri_method = post.
+        // The interactive (ia_post) flow always embeds the signed request object inline.
         String requestObjectJwt = null;
-        if (!RequestUriMethod.POST.equals(config.getRequestUriMethod())) {
+        if (interactive != null || !RequestUriMethod.POST.equals(config.getRequestUriMethod())) {
             requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
         }
 
@@ -233,12 +253,17 @@ public class AuthorizationRequestService {
             ClientMetadata clientMetadata,
             VerifierConfig config,
             AuthenticationProfile profile,
-            String requestId) {
-        String responseUri = KeycloakUriBuilder.fromUri(openID4VPRootUrl)
-                .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
-                .path(requestId)
-                .build()
-                .toString();
+            String requestId,
+            InteractiveResponseConfig interactive) {
+        String responseUri = interactive != null
+                ? interactive.responseUri()
+                : KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                        .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
+                        .path(requestId)
+                        .build()
+                        .toString();
+
+        ResponseMode responseMode = interactive != null ? interactive.responseMode() : config.getResponseMode();
 
         // Generate nonce
         String nonce = Stream.generate(AuthorizationRequestService::generateRandomString)
@@ -264,7 +289,7 @@ public class AuthorizationRequestService {
         // Aggregate properties
         RequestObject requestObject = new RequestObject()
                 .setIssuer(clientId)
-                .setResponseMode(config.getResponseMode())
+                .setResponseMode(responseMode)
                 .setResponseUri(responseUri)
                 .setResponseType(ResponseType.VP_TOKEN)
                 .setClientId(clientId)
@@ -275,9 +300,30 @@ public class AuthorizationRequestService {
                 .setVerifierInfo(verifierInfo)
                 .setTransactionData(transactionData);
 
+        // OID4VCI §6.2.1.1/§6.2.1.5: bind the request to the Authorization Challenge Endpoint
+        // origin to prevent forwarding of the presentation request to another Authorization Server.
+        if (interactive != null) {
+            requestObject.setExpectedOrigins(List.of(deriveOrigin(responseUri)));
+        }
+
         requestObject.setDcqlQuery(dcqlQuery);
 
         return requestObject;
+    }
+
+    /**
+     * Derives the Origin of the given endpoint URL as defined in Section 4 of RFC 6454
+     * (scheme, host and non-default port), e.g. {@code https://example.com/authorize-challenge}
+     * yields {@code https://example.com}.
+     */
+    private static String deriveOrigin(String endpointUrl) {
+        URI uri = URI.create(endpointUrl);
+        StringBuilder origin =
+                new StringBuilder().append(uri.getScheme()).append("://").append(uri.getHost());
+        if (uri.getPort() != -1) {
+            origin.append(':').append(uri.getPort());
+        }
+        return origin.toString();
     }
 
     private String buildAuthorizationRequestLink(
@@ -396,4 +442,10 @@ public class AuthorizationRequestService {
      * Record to hold PKCE parameters for passing around concisely.
      */
     public record CodeChallengeDetails(String codeChallenge, String codeChallengeMethod) {}
+
+    /**
+     * Overrides for the OID4VCI interactive authorization (ia_post) flow, where the OpenID4VP
+     * Authorization Response is submitted back to the Authorization Challenge Endpoint.
+     */
+    public record InteractiveResponseConfig(ResponseMode responseMode, String responseUri) {}
 }
