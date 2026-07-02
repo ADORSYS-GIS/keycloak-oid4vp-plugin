@@ -60,6 +60,13 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
     public static final String ERROR_MISSING_INTERACTION_TYPE = "missing_interaction_type";
     public static final String INTERACTION_OPENID4VP_PRESENTATION = "urn:openid:dcp:ia:openid4vp_presentation";
     public static final String PROFILE_ID_PARAM = "profile_id";
+
+    /**
+     * OID4VCI {@code auth_session} handle. Its value <em>is</em> the interactive-authorization
+     * transaction id of the {@link io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext}
+     * created by {@link #initiateChallenge}: the wallet echoes it back on resume/submit and it is used to
+     * recover that context by transaction id. Hence the private routing helpers name it {@code transactionId}.
+     */
     public static final String AUTH_SESSION_PARAM = "auth_session";
     public static final String OPENID4VP_RESPONSE_PARAM = "openid4vp_response";
     public static final String INTERACTION_TYPES_SUPPORTED_PARAM = "interaction_types_supported";
@@ -78,6 +85,18 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         return CorsService.openPreflight().add(Response.ok());
     }
 
+    /**
+     * Single OID4VCI Authorization Challenge Endpoint (OID4VCI §6), routed by request content:
+     *
+     * <ul>
+     *   <li>an {@code openid4vp_response} submits the wallet's presentation (response_mode=ia_post),
+     *   <li>otherwise a present {@code auth_session} resumes/polls an in-progress challenge,
+     *   <li>otherwise a fresh challenge is initiated.
+     * </ul>
+     *
+     * <p>The wire-level {@code auth_session} handle equals the {@code AuthorizationContext} transaction
+     * id, so the internal resume/submit helpers take it as {@code transactionId}.
+     */
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
@@ -338,19 +357,20 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
     }
 
     /**
-     * Binds the wallet's presentation to the challenge session. Presentation
+     * Resumes/polls an in-progress challenge identified by the {@code auth_session} handle — which is the
+     * {@code AuthorizationContext} transaction id, hence the {@code transactionId} parameter. Presentation
      * processing itself runs over the existing OID4VP response routes.
      */
-    private Response resumeChallenge(String authSession) {
+    private Response resumeChallenge(String transactionId) {
         logger.debug("Resuming authorization challenge for presentation during issuance...");
 
-        AuthorizationContext context = lookupContext(authSession);
+        AuthorizationContext context = lookupContext(transactionId);
         AuthorizationContextStatus status = context.getStatus();
         if (AuthorizationContextStatus.ERROR.equals(status)) {
             throw badRequest("Presentation during issuance failed");
         }
         if (!AuthorizationContextStatus.SUCCESS.equals(status)) {
-            return reChallenge(authSession);
+            return reChallenge(transactionId);
         }
 
         // SUCCESS: presentation bound, issue the authorization_code.
@@ -370,9 +390,9 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
      * wallet already holds. The stable {@code auth_session} therefore preserves the nonce binding
      * across polls, and a re-initiation is neither required by the spec nor desirable.
      */
-    private Response reChallenge(String authSession) {
+    private Response reChallenge(String transactionId) {
         AuthorizationChallengeResponse body = new AuthorizationChallengeResponse(
-                        ERROR_INSUFFICIENT_AUTHORIZATION, authSession)
+                        ERROR_INSUFFICIENT_AUTHORIZATION, transactionId)
                 .setInteractionTypeRequired(INTERACTION_OPENID4VP_PRESENTATION);
         return challengeResponse(body);
     }
@@ -381,16 +401,16 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
      * Processes the wallet's OpenID4VP Authorization Response submitted natively to this endpoint
      * (response_mode=ia_post) and issues the authorization_code on success.
      */
-    private Response submitPresentation(String authSession, String openid4vpResponse) {
+    private Response submitPresentation(String transactionId, String openid4vpResponse) {
         logger.debug("Processing OpenID4VP response submitted to the authorization challenge endpoint...");
 
-        if (StringUtil.isBlank(authSession)) {
+        if (StringUtil.isBlank(transactionId)) {
             throw badRequest("auth_session is required when submitting openid4vp_response");
         }
 
         OpenID4VPResponse response = parseOpenid4vpResponse(openid4vpResponse);
         String authorizationCode = oid4vpAuth.submitInteractiveAuthorizationResponse(
-                authSession,
+                transactionId,
                 response.encryptedResponse(),
                 response.error(),
                 response.errorDescription(),
