@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.PROFILES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -195,5 +196,87 @@ public class OID4VPProfileConfigTest {
         IllegalStateException error =
                 assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
         assertEquals("OpenID4VP credential ids must be unique in profile: broken", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectCredentialIdentityPrimaryWithoutSubAndUsername() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      { "id": "primary", "role": "primary", "credentialTypes": ["main-vct"], "claims": ["given_name"] }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        assertEquals("OpenID4VP primary credential must request sub and username: login/primary", error.getMessage());
+    }
+
+    @Test
+    void shouldAcceptSessionIdentityPrimaryWithoutSubUsernameWhenBindingRulesPresent() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "stb-issuance",
+                    "credentials": [
+                      {
+                        "id": "pid",
+                        "role": "primary",
+                        "identitySource": "session",
+                        "credentialTypes": ["urn:eudi:pid:de:1"],
+                        "claims": ["given_name", "family_name", "birth_date"],
+                        "binding": [
+                          {
+                            "type": "claim_equals_user_attribute",
+                            "credentialClaim": "family_name",
+                            "userAttribute": "lastName"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+
+        AuthenticationProfile profile = profileConfig.getProfile("stb-issuance");
+        assertEquals(
+                "urn:eudi:pid:de:1",
+                profile.getPrimaryCredential().getCredentialTypes().getFirst());
+        assertTrue(profile.getPrimaryCredential().isSessionIdentity());
+    }
+
+    @Test
+    void shouldRejectSessionIdentityPrimaryWithoutBindingRules() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "stb-issuance",
+                    "credentials": [
+                      {
+                        "id": "pid",
+                        "role": "primary",
+                        "identitySource": "session",
+                        "credentialTypes": ["urn:eudi:pid:de:1"],
+                        "claims": ["given_name", "family_name", "birth_date"]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        assertEquals(
+                "OpenID4VP session-identity primary credential must define binding rules: stb-issuance/pid",
+                error.getMessage());
     }
 }

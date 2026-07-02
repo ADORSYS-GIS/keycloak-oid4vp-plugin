@@ -6,11 +6,23 @@ import org.keycloak.VCFormat;
 
 public class CredentialRequirement {
 
+    /** Identity is derived from the presented credential's {@code sub}/{@code username} claims (login). */
+    public static final String IDENTITY_SOURCE_CREDENTIAL = "credential";
+
+    /**
+     * Identity is taken from the session-bound brokered user (OID4VCI presentation during issuance): the
+     * presented credential (e.g. a PID) is only matched against that user's attributes via binding rules.
+     */
+    public static final String IDENTITY_SOURCE_SESSION = "session";
+
     @JsonProperty("id")
     private String id;
 
     @JsonProperty("role")
     private CredentialRole role = CredentialRole.SUPPORTING;
+
+    @JsonProperty("identitySource")
+    private String identitySource = IDENTITY_SOURCE_CREDENTIAL;
 
     @JsonProperty("formats")
     private List<String> formats = List.of(VCFormat.SD_JWT_VC);
@@ -43,6 +55,19 @@ public class CredentialRequirement {
     public CredentialRequirement setRole(CredentialRole role) {
         this.role = role;
         return this;
+    }
+
+    public String getIdentitySource() {
+        return identitySource;
+    }
+
+    public CredentialRequirement setIdentitySource(String identitySource) {
+        this.identitySource = identitySource;
+        return this;
+    }
+
+    public boolean isSessionIdentity() {
+        return IDENTITY_SOURCE_SESSION.equals(identitySource);
     }
 
     public List<String> getFormats() {

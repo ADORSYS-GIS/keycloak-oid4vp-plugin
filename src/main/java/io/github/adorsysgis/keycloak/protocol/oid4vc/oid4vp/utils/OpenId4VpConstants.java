@@ -23,5 +23,13 @@ public final class OpenId4VpConstants {
      */
     public static final String VC_REQUIRES_PRESENTATION_ATTR = "vc.requires_presentation";
 
+    /**
+     * Credential-configuration (client-scope) attribute naming the OpenID4VP authentication profile that
+     * MUST be enforced when a presentation is requested during issuance of this credential. When present,
+     * it overrides any client-supplied {@code profile_id} at the Authorization Challenge Endpoint so the
+     * wallet cannot pick a profile without binding rules and thereby bypass the identity match.
+     */
+    public static final String VC_PRESENTATION_PROFILE_ID_ATTR = "vc.presentation_profile_id";
+
     private OpenId4VpConstants() {}
 }

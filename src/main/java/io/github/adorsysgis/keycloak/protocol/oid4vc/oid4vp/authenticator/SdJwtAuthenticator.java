@@ -243,6 +243,15 @@ public class SdJwtAuthenticator implements Authenticator {
     private UserModel recoverAuthenticatingUser(AuthenticationFlowContext context, SdJwtVP sdJwt) {
         logger.info("Recovering authenticating user");
 
+        // OID4VCI presentation during issuance: the authenticating identity is the brokered user bound
+        // to the credential offer (issuer_state), not derived from the presented PID (which carries no
+        // Keycloak username). The presented credential is only matched against this user's attributes by
+        // the profile's binding rules.
+        String subjectUserId = presentationSubjectUserId(context);
+        if (StringUtil.isNotBlank(subjectUserId)) {
+            return recoverPresentationSubject(context, subjectUserId);
+        }
+
         String subject = readSubjectFromCredential(sdJwt);
         if (StringUtil.isBlank(subject)) {
             logger.warn("Presented SD-JWT is missing subject claim");
@@ -286,6 +295,35 @@ public class SdJwtAuthenticator implements Authenticator {
         }
 
         return user;
+    }
+
+    /**
+     * Resolves the brokered credential-offer user for the presentation-during-issuance flow. The
+     * identity is authoritative from the offer (later re-checked by the issuer endpoint against the
+     * access-token user), so no username claim is required from the presented credential.
+     */
+    private UserModel recoverPresentationSubject(AuthenticationFlowContext context, String subjectUserId) {
+        UserModel user = context.getSession().users().getUserById(context.getRealm(), subjectUserId);
+        if (user == null) {
+            logger.warnf("Credential offer subject '%s' did not resolve to a user", subjectUserId);
+            failDenyingAuthenticatingUser(context);
+            return null;
+        }
+        logger.debugf("Resolved presentation-during-issuance subject user id: %s", user.getId());
+        return user;
+    }
+
+    private String presentationSubjectUserId(AuthenticationFlowContext context) {
+        AuthenticationSessionStore store = new AuthenticationSessionStore(context.getAuthenticationSession());
+        if (!store.hasAuthorizationContext()) {
+            return null;
+        }
+        try {
+            return store.getAuthorizationContext().getSubjectUserId();
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not read authorization context for presentation subject");
+            return null;
+        }
     }
 
     private String readSubjectFromCredential(SdJwtVP sdJwt) {

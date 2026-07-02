@@ -122,11 +122,8 @@ public class OID4VPProfileConfig {
                     throw new IllegalStateException("OpenID4VP credential must request at least one claim: "
                             + profile.getId() + "/" + credential.getId());
                 }
-                if (credential.isPrimary()
-                        && (!credential.getClaims().contains(JsonWebToken.SUBJECT)
-                                || !credential.getClaims().contains(OAuth2Constants.USERNAME))) {
-                    throw new IllegalStateException("OpenID4VP primary credential must request sub and username: "
-                            + profile.getId() + "/" + credential.getId());
+                if (credential.isPrimary()) {
+                    validatePrimaryCredential(profile, credential);
                 }
             }
 
@@ -138,6 +135,34 @@ public class OID4VPProfileConfig {
                 throw new IllegalStateException(
                         "OpenID4VP credential ids must be unique in profile: " + profile.getId());
             }
+        }
+    }
+
+    /**
+     * Validates the primary credential based on its identity source.
+     *
+     * <ul>
+     *   <li>{@code credential} (login): the identity is derived from the presented credential, so it must
+     *       request {@code sub} and {@code username}.
+     *   <li>{@code session} (presentation during issuance): the identity comes from the brokered offer
+     *       user, so {@code sub}/{@code username} are not required; instead binding rules are mandatory so
+     *       the presented credential is actually matched against the user (otherwise the presentation
+     *       requirement would be security-wise meaningless).
+     * </ul>
+     */
+    private static void validatePrimaryCredential(AuthenticationProfile profile, CredentialRequirement credential) {
+        if (credential.isSessionIdentity()) {
+            if (credential.getBinding() == null || credential.getBinding().isEmpty()) {
+                throw new IllegalStateException(
+                        "OpenID4VP session-identity primary credential must define binding rules: " + profile.getId()
+                                + "/" + credential.getId());
+            }
+            return;
+        }
+        if (!credential.getClaims().contains(JsonWebToken.SUBJECT)
+                || !credential.getClaims().contains(OAuth2Constants.USERNAME)) {
+            throw new IllegalStateException("OpenID4VP primary credential must request sub and username: "
+                    + profile.getId() + "/" + credential.getId());
         }
     }
 }

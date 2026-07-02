@@ -10,6 +10,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -26,7 +27,14 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferState;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
+import org.keycloak.protocol.oid4vc.model.IssuerState;
+import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
+import org.keycloak.protocol.oid4vc.utils.CredentialScopeModelUtils;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.Urls;
@@ -117,11 +125,17 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             throw missingInteractionType();
         }
 
+        // Authoritative profile selection: for an issuance-gated credential the profile is derived from the
+        // requested credential configuration, not from the client-supplied profile_id. This prevents a
+        // wallet from selecting a profile without binding rules and bypassing the identity match.
+        String enforcedProfileId = resolveEnforcedProfileId(clientId, scope, authorizationDetails, issuerState);
+        String effectiveProfileId = effectiveProfileId(profileId, enforcedProfileId);
+
         AuthorizationContext authContext;
         try {
             authContext = oid4vpAuth.startInteractiveAuthentication(
                     clientId,
-                    profileId,
+                    effectiveProfileId,
                     new CodeChallengeDetails(codeChallenge, codeChallengeMethod),
                     challengeResponseUri());
         } catch (IllegalArgumentException e) {
@@ -168,6 +182,103 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         return false;
     }
 
+    /**
+     * Pure decision: the credential-derived profile takes precedence over a client-supplied one. When no
+     * profile is enforced by the requested credential (e.g. login or a non-gated credential), the
+     * client-supplied {@code profile_id} is used, preserving backward-compatible behaviour.
+     */
+    static String effectiveProfileId(String requestedProfileId, String enforcedProfileId) {
+        return StringUtil.isNotBlank(enforcedProfileId) ? enforcedProfileId : requestedProfileId;
+    }
+
+    /**
+     * Resolves the OpenID4VP profile that the requested credential mandates via its
+     * {@link OpenId4VpConstants#VC_PRESENTATION_PROFILE_ID_ATTR} scope attribute. The requested credential
+     * configuration is derived, in order of preference, from {@code issuer_state} (credential offer),
+     * {@code authorization_details}, or the {@code scope} name. Returns {@code null} when nothing can be
+     * resolved, so the caller falls back to the client-supplied profile.
+     */
+    private String resolveEnforcedProfileId(
+            String clientId, String scope, String authorizationDetails, String issuerState) {
+        try {
+            ClientModel client = realm.getClientByClientId(clientId);
+            if (client == null) {
+                return null;
+            }
+            CredentialScopeModel credentialScope =
+                    resolveRequestedCredentialScope(client, scope, authorizationDetails, issuerState);
+            if (credentialScope == null) {
+                return null;
+            }
+            String enforcedProfileId = credentialScope.getAttribute(OpenId4VpConstants.VC_PRESENTATION_PROFILE_ID_ATTR);
+            return StringUtil.isBlank(enforcedProfileId) ? null : enforcedProfileId;
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not resolve an enforced OpenID4VP profile for the requested credential");
+            return null;
+        }
+    }
+
+    private CredentialScopeModel resolveRequestedCredentialScope(
+            ClientModel client, String scope, String authorizationDetails, String issuerState) {
+        String credentialConfigurationId = credentialConfigurationIdFromIssuerState(issuerState);
+        if (StringUtil.isBlank(credentialConfigurationId)) {
+            credentialConfigurationId = credentialConfigurationIdFromAuthorizationDetails(authorizationDetails);
+        }
+        if (StringUtil.isNotBlank(credentialConfigurationId)) {
+            CredentialScopeModel byConfigId = CredentialScopeModelUtils.findCredentialScopeModelByConfigurationId(
+                    realm, () -> client.getClientScopes(false).values().stream(), credentialConfigurationId);
+            if (byConfigId != null) {
+                return byConfigId;
+            }
+        }
+        return CredentialScopeModelUtils.findCredentialScopeModelByName(
+                realm, () -> client.getClientScopes(false).values().stream(), scope);
+    }
+
+    private String credentialConfigurationIdFromIssuerState(String issuerState) {
+        if (StringUtil.isBlank(issuerState)) {
+            return null;
+        }
+        try {
+            String offerId = IssuerState.fromEncodedString(issuerState).getCredentialsOfferId();
+            if (StringUtil.isBlank(offerId)) {
+                return null;
+            }
+            CredentialOfferState offerState =
+                    session.getProvider(CredentialOfferStorage.class).getOfferStateById(offerId);
+            if (offerState == null) {
+                return null;
+            }
+            return offerState.getAuthorizationDetails().stream()
+                    .map(OID4VCAuthorizationDetail::getCredentialConfigurationId)
+                    .filter(StringUtil::isNotBlank)
+                    .findFirst()
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not resolve credential_configuration_id from issuer_state");
+            return null;
+        }
+    }
+
+    private String credentialConfigurationIdFromAuthorizationDetails(String authorizationDetails) {
+        if (StringUtil.isBlank(authorizationDetails)) {
+            return null;
+        }
+        try {
+            OID4VCAuthorizationDetail[] details =
+                    JsonSerialization.mapper.readValue(authorizationDetails, OID4VCAuthorizationDetail[].class);
+            for (OID4VCAuthorizationDetail detail : details) {
+                if (detail != null && StringUtil.isNotBlank(detail.getCredentialConfigurationId())) {
+                    return detail.getCredentialConfigurationId();
+                }
+            }
+            return null;
+        } catch (IOException | RuntimeException e) {
+            logger.debugf(e, "Could not resolve credential_configuration_id from authorization_details");
+            return null;
+        }
+    }
+
     private void bindCredentialAuthorization(
             String transactionId, String scope, String authorizationDetails, String issuerState) {
         if (StringUtil.isBlank(scope) && StringUtil.isBlank(authorizationDetails) && StringUtil.isBlank(issuerState)) {
@@ -188,6 +299,41 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
                     AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX
                             + OAuth2Constants.ISSUER_STATE,
                     issuerState);
+            bindPresentationSubject(authSession, transactionId, issuerState);
+        }
+    }
+
+    /**
+     * Binds the brokered offer user to the authorization context so the OpenID4VP authenticator can take
+     * the authenticating identity from the credential offer (issuer_state) instead of the presented PID,
+     * which carries no Keycloak username. The presented PID is then only matched against this user's
+     * attributes by the profile's binding rules.
+     */
+    private void bindPresentationSubject(
+            AuthenticationSessionModel authSession, String transactionId, String issuerState) {
+        String subjectUserId = resolveOfferTargetUserId(issuerState);
+        if (subjectUserId == null) {
+            return;
+        }
+        AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
+        AuthorizationContext context = store.getAuthorizationContextByTransactionId(transactionId);
+        context.setSubjectUserId(subjectUserId);
+        store.storeAuthorizationContext(context);
+    }
+
+    /** Resolves the target user id of the credential offer referenced by {@code issuer_state}, if any. */
+    private String resolveOfferTargetUserId(String issuerState) {
+        try {
+            String offerId = IssuerState.fromEncodedString(issuerState).getCredentialsOfferId();
+            if (StringUtil.isBlank(offerId)) {
+                return null;
+            }
+            CredentialOfferState offerState =
+                    session.getProvider(CredentialOfferStorage.class).getOfferStateById(offerId);
+            return offerState != null ? offerState.getTargetUserId() : null;
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not resolve credential offer target user from issuer_state");
+            return null;
         }
     }
 
