@@ -1,13 +1,13 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.matcher;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding;
 
 import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.provider.Spi;
 
-/** Registers the PID matcher SPI so external matcher providers can be discovered at runtime. */
-public class PidMatcherSpi implements Spi {
+/** SPI wiring for pluggable {@link BindingValueComparator} strategies. */
+public class BindingValueComparatorSpi implements Spi {
 
-    public static final String SPI_NAME = "pid-matcher";
+    public static final String NAME = "oid4vp-binding-value-comparator";
 
     @Override
     public boolean isInternal() {
@@ -16,17 +16,17 @@ public class PidMatcherSpi implements Spi {
 
     @Override
     public String getName() {
-        return SPI_NAME;
+        return NAME;
     }
 
     @Override
     public Class<? extends Provider> getProviderClass() {
-        return PidMatcherProvider.class;
+        return BindingValueComparator.class;
     }
 
     @Override
     @SuppressWarnings("rawtypes")
     public Class<? extends ProviderFactory> getProviderFactoryClass() {
-        return PidMatcherProviderFactory.class;
+        return BindingValueComparatorFactory.class;
     }
 }

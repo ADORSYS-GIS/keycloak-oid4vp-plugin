@@ -1,1 +1,1 @@
-io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.matcher.PidMatcherSpi
+io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparatorSpi

@@ -22,6 +22,14 @@ public class BindingRule {
     @JsonProperty("userAttribute")
     private String userAttribute;
 
+    /**
+     * Optional id of the {@code oid4vp-binding-value-comparator} strategy used to compare the claim
+     * value against the expected value. Defaults to the strict, schema-neutral {@code exact} strategy
+     * when omitted. Deployments may reference a custom (e.g. locale-tolerant) comparator here.
+     */
+    @JsonProperty("comparison")
+    private String comparison;
+
     public String getType() {
         return type;
     }
@@ -55,6 +63,15 @@ public class BindingRule {
 
     public BindingRule setUserAttribute(String userAttribute) {
         this.userAttribute = userAttribute;
+        return this;
+    }
+
+    public String getComparison() {
+        return comparison;
+    }
+
+    public BindingRule setComparison(String comparison) {
+        this.comparison = comparison;
         return this;
     }
 }

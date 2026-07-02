@@ -4,8 +4,6 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.Referenc
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.matcher.PidData;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.matcher.PidMatcherProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -165,10 +163,6 @@ public class SdJwtAuthenticator implements Authenticator {
             return;
         }
 
-        if (!enforcePidMatch(context, sdJwt, user)) {
-            return;
-        }
-
         context.setUser(user);
         context.success(); // Mark authentication as successful
         logger.debugf("User '%s' successfully authenticated", user.getUsername());
@@ -206,7 +200,8 @@ public class SdJwtAuthenticator implements Authenticator {
             return Map.of();
         }
         try {
-            return JsonSerialization.readValue(tokensJson, new TypeReference<Map<String, String>>() {});
+            return JsonSerialization.readValue(tokensJson, new TypeReference<>() {
+            });
         } catch (IOException e) {
             throw new IllegalStateException("Invalid SD-JWT tokens auth note", e);
         }
@@ -238,7 +233,8 @@ public class SdJwtAuthenticator implements Authenticator {
 
         List<String> transactionDataWire;
         try {
-            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<List<String>>() {});
+            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<>() {
+            });
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid transaction_data session state", e);
         }
@@ -318,88 +314,6 @@ public class SdJwtAuthenticator implements Authenticator {
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason) {
         failRejectingPresentedSdJwtToken(context, reason, null);
-    }
-
-    /**
-     * Identity gate for "presentation during issuance": when a {@link PidMatcherProvider} is
-     * deployed, the presented PID is matched against the brokered user's registration data and the
-     * flow only continues on a full match.
-     *
-     * <p>Matching applies exclusively to the presentation-during-issuance flow (marked via
-     * {@link #PRESENTATION_DURING_ISSUANCE_KEY}); standalone OID4VP logins are never gated.
-     *
-     * <p>When no matcher is installed, behaviour depends on the {@code pidMatchRequired} authenticator
-     * config flag: if {@code true}, the flow fails closed (guards against a misconfigured deployment
-     * that is missing the matcher plugin); if {@code false} (default), matching is skipped.
-     *
-     * @return {@code true} to continue; {@code false} when the flow has already been failed
-     */
-    boolean enforcePidMatch(AuthenticationFlowContext context, SdJwtVP sdJwt, UserModel user) {
-        if (!Boolean.parseBoolean(context.getAuthenticationSession().getAuthNote(PRESENTATION_DURING_ISSUANCE_KEY))) {
-            return true;
-        }
-
-        PidMatcherProvider matcher = context.getSession().getProvider(PidMatcherProvider.class);
-        if (matcher == null) {
-            if (Boolean.parseBoolean(config(
-                    context,
-                    SdJwtAuthenticatorFactory.PID_MATCH_REQUIRED_CONFIG,
-                    String.valueOf(SdJwtAuthenticatorFactory.PID_MATCH_REQUIRED_CONFIG_DEFAULT)))) {
-                logger.errorf(
-                        "PID matching is required but no matcher provider is deployed (authSession = %s)",
-                        correlationId(context));
-                failRejectingPresentedSdJwtToken(context, "PID matching is required but not available");
-                return false;
-            }
-            return true;
-        }
-
-        PidData presented = new PidData(
-                SdJwtCredentialClaims.readClaim(
-                        sdJwt,
-                        config(
-                                context,
-                                SdJwtAuthenticatorFactory.PID_MATCH_GIVEN_NAME_CLAIM_CONFIG,
-                                SdJwtAuthenticatorFactory.PID_MATCH_GIVEN_NAME_CLAIM_CONFIG_DEFAULT)),
-                SdJwtCredentialClaims.readClaim(
-                        sdJwt,
-                        config(
-                                context,
-                                SdJwtAuthenticatorFactory.PID_MATCH_FAMILY_NAME_CLAIM_CONFIG,
-                                SdJwtAuthenticatorFactory.PID_MATCH_FAMILY_NAME_CLAIM_CONFIG_DEFAULT)),
-                SdJwtCredentialClaims.readClaim(
-                        sdJwt,
-                        config(
-                                context,
-                                SdJwtAuthenticatorFactory.PID_MATCH_BIRTH_DATE_CLAIM_CONFIG,
-                                SdJwtAuthenticatorFactory.PID_MATCH_BIRTH_DATE_CLAIM_CONFIG_DEFAULT)));
-        PidData registered = new PidData(
-                user.getFirstName(),
-                user.getLastName(),
-                user.getFirstAttribute(config(
-                        context,
-                        SdJwtAuthenticatorFactory.PID_MATCH_BIRTH_DATE_ATTRIBUTE_CONFIG,
-                        SdJwtAuthenticatorFactory.PID_MATCH_BIRTH_DATE_ATTRIBUTE_CONFIG_DEFAULT)));
-
-        List<String> mismatches = matcher.findMismatchedAttributes(presented, registered);
-        if (!mismatches.isEmpty()) {
-            // Only attribute identifiers are logged, never the personal values (PII).
-            logger.errorf(
-                    "PID match failed (authSession = %s): mismatching attributes %s",
-                    correlationId(context), mismatches);
-            failRejectingPresentedSdJwtToken(context, "PID does not match the registered user");
-            return false;
-        }
-        return true;
-    }
-
-    private static String config(AuthenticationFlowContext context, String key, String defaultValue) {
-        var config = context.getAuthenticatorConfig();
-        if (config == null || config.getConfig() == null) {
-            return defaultValue;
-        }
-        String value = config.getConfig().get(key);
-        return value != null && !value.isBlank() ? value : defaultValue;
     }
 
     private void failRejectingPresentedSdJwtToken(AuthenticationFlowContext context, String reason, Throwable cause) {

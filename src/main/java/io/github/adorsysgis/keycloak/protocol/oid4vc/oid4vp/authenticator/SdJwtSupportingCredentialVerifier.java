@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -40,6 +42,9 @@ class SdJwtSupportingCredentialVerifier {
             boolean requireCryptographicHolderBinding)
             throws VerificationException {
         CredentialRequirement primaryCredential = profile.getPrimaryCredential();
+
+        verifyPrimaryBinding(primaryCredential, primarySdJwt, user);
+
         for (CredentialRequirement credential : profile.getCredentials()) {
             if (credential.getId().equals(primaryCredential.getId())) {
                 continue;
@@ -54,6 +59,11 @@ class SdJwtSupportingCredentialVerifier {
                     requireCryptographicHolderBinding);
             applyBindingRules(credential, supportingSdJwt, primarySdJwt, user);
         }
+    }
+
+    void verifyPrimaryBinding(CredentialRequirement primaryCredential, SdJwtVP primarySdJwt, UserModel user)
+            throws VerificationException {
+        applyBindingRules(primaryCredential, primarySdJwt, null, user);
     }
 
     private SdJwtVP verifySupportingCredential(
@@ -103,18 +113,40 @@ class SdJwtSupportingCredentialVerifier {
             String supportingValue = SdJwtCredentialClaims.readClaim(supportingSdJwt, rule.getCredentialClaim());
             String expectedValue =
                     switch (rule.getType()) {
-                        case BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM ->
-                            SdJwtCredentialClaims.readClaim(primarySdJwt, rule.getPrimaryCredentialClaim());
+                        case BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM -> {
+                            if (primarySdJwt == null) {
+                                throw new VerificationException(
+                                        "Binding rule '%s' is not applicable to the primary credential '%s'"
+                                                .formatted(rule.getType(), credential.getId()));
+                            }
+                            yield SdJwtCredentialClaims.readClaim(primarySdJwt, rule.getPrimaryCredentialClaim());
+                        }
                         case BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE ->
                             readUserAttribute(user, rule.getUserAttribute());
                         default -> throw new IllegalStateException("Unsupported binding rule type: " + rule.getType());
                     };
 
-            if (StringUtil.isBlank(supportingValue) || !supportingValue.equals(expectedValue)) {
+            if (!resolveComparator(rule).matches(supportingValue, expectedValue)) {
                 throw new VerificationException("Supporting credential '%s' failed binding rule '%s'"
                         .formatted(credential.getId(), rule.getType()));
             }
         }
+    }
+
+    /**
+     * Resolves the {@link BindingValueComparator} strategy referenced by the rule, defaulting to the
+     * strict {@code exact} strategy. Keeping comparison pluggable allows deployments to supply
+     * tolerant, locale-specific matching.
+     */
+    private BindingValueComparator resolveComparator(BindingRule rule) throws VerificationException {
+        String comparisonId = StringUtil.isBlank(rule.getComparison())
+                ? ExactBindingValueComparatorFactory.PROVIDER_ID
+                : rule.getComparison();
+        BindingValueComparator comparator = session.getProvider(BindingValueComparator.class, comparisonId);
+        if (comparator == null) {
+            throw new VerificationException("Unknown binding comparison strategy '%s'".formatted(comparisonId));
+        }
+        return comparator;
     }
 
     private String readUserAttribute(UserModel user, String userAttribute) {
