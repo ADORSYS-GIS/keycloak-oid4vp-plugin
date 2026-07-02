@@ -2,16 +2,17 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -20,6 +21,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -27,6 +29,7 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
+import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -66,6 +69,40 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
      * during issuance and matched against the brokered user.
      */
     private static final String OFFERED_CREDENTIAL_CONFIG_ID = "kma_credential";
+
+    /**
+     * Registers the OID4VCI credential scope for the offered (KMA) credential at runtime via the Admin
+     * API. This is done programmatically rather than in the realm import so the realm keeps Keycloak's
+     * built-in default client scopes (e.g. {@code profile} → {@code preferred_username}); a bare
+     * {@code clientScopes} block in a realm import would suppress those built-ins. The operation is
+     * idempotent so it is safe with the reused (singleton) container.
+     */
+    @BeforeAll
+    static void ensureOfferedCredentialScope() {
+        var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
+        boolean exists = realm.clientScopes().findAll().stream()
+                .anyMatch(scope -> OFFERED_CREDENTIAL_CONFIG_ID.equals(scope.getName()));
+        if (exists) {
+            return;
+        }
+
+        ClientScopeRepresentation scope = new ClientScopeRepresentation();
+        scope.setName(OFFERED_CREDENTIAL_CONFIG_ID);
+        scope.setProtocol("oid4vc");
+        scope.setAttributes(Map.of(
+                "vc.credential_configuration_id", OFFERED_CREDENTIAL_CONFIG_ID,
+                "vc.verifiable_credential_type", "https://credentials.example.com/kma_credential",
+                "vc.format", "dc+sd-jwt",
+                "vc.presentation_profile_id", STB_ISSUANCE_PROFILE_ID,
+                "vc.requires_presentation", "true"));
+
+        try (Response response = realm.clientScopes().create(scope)) {
+            int status = response.getStatus();
+            if (status != HttpStatus.SC_CREATED && status != HttpStatus.SC_CONFLICT) {
+                throw new IllegalStateException("Failed to create offered credential scope: HTTP " + status);
+            }
+        }
+    }
 
     @Test
     @DisplayName("should reject the challenge with missing_interaction_type when presentation is unsupported")
@@ -133,8 +170,8 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var challenge = initiateIssuanceChallenge(issuerState);
         var resume = submitPresentation(pidSdJwt, challenge);
 
-        // Identity gate failed (PID did not match) -> no authorization_code issued.
-        assertNotEquals(HttpStatus.SC_OK, resume.getStatusLine().getStatusCode());
+        // Identity gate failed (PID did not match) -> the presentation is rejected (401), no code issued.
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, resume.getStatusLine().getStatusCode());
     }
 
     @Test
@@ -242,8 +279,8 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, tamperedResponse)));
 
-        // -> rejected, no authorization_code issued
-        assertNotEquals(HttpStatus.SC_OK, resume.getStatusLine().getStatusCode());
+        // -> rejected with 401 (invalid presentation / holder binding), no authorization_code issued
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, resume.getStatusLine().getStatusCode());
     }
 
     @Test

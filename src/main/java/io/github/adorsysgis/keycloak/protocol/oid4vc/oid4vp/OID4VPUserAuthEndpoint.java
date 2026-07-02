@@ -292,6 +292,11 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 vpToken,
                 state);
 
+        // processAuthorizationResponse mutates authorizationContext in-place. A wallet-submitted
+        // OpenID4VP error sets the ERROR status here (persistWalletErrorResponse); a successful
+        // presentation sets SUCCESS. A failed VP verification instead propagates a 401 from the auth
+        // processor and never reaches this point, so if we are here getStatus() already reflects the
+        // terminal outcome without re-fetching from the session store.
         // OID4VCI §6.2.1.1/§6.2.2: a wallet-submitted OpenID4VP error response must surface as an
         // Authorization Challenge Error Response, not as an empty successful response without a code.
         if (AuthorizationContextStatus.ERROR.equals(authorizationContext.getStatus())) {

@@ -55,22 +55,6 @@
       "publicClient": true
     }
   ],
-  "clientScopes": [
-    {
-      "name": "kma_credential",
-      "description": "Steuerberater (KMA) verifiable credential, issued after PID presentation",
-      "protocol": "oid4vc",
-      "attributes": {
-        "vc.credential_configuration_id": "kma_credential",
-        "vc.verifiable_credential_type": "https://credentials.example.com/kma_credential",
-        "vc.format": "dc+sd-jwt",
-        "vc.presentation_profile_id": "stb-issuance",
-        "vc.requires_presentation": "true",
-        "include.in.token.scope": "true",
-        "display.on.consent.screen": "false"
-      }
-    }
-  ],
   "authenticationFlows": [
     {
       "id": "a971a9b9-e766-4438-b989-103991b31f44",

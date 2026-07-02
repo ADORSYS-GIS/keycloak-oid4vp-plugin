@@ -28,17 +28,19 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.util.JsonSerialization;
-import org.testcontainers.images.PullPolicy;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 /**
  * Base Keycloak test class for leveraging the TestContainers infrastructure.
  *
+ * <p>The Keycloak container is a JVM-wide <strong>singleton</strong>: it is started once (lazily, on
+ * first class load) and reused across all test classes in the same Surefire fork, instead of being
+ * restarted per test class. It is never stopped explicitly; the Testcontainers Ryuk reaper tears it
+ * down at JVM shutdown. This drastically reduces the total test time (one Quarkus augmentation +
+ * bootstrap instead of one per test class).
+ *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-@Testcontainers
 public abstract class BaseKeycloakTest {
 
     public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.6.3";
@@ -56,13 +58,15 @@ public abstract class BaseKeycloakTest {
 
     protected static CloseableHttpClient httpClient;
 
-    @Container
     protected static final KeycloakContainer keycloak = createKeycloak();
+
+    static {
+        keycloak.start();
+    }
 
     private static KeycloakContainer createKeycloak() {
         KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
         container
-                .withImagePullPolicy(PullPolicy.alwaysPull())
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci")
                 .withRealmImportFile("/realms/test-realm.json")

@@ -359,6 +359,17 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         return CorsService.open().add(Response.ok(body));
     }
 
+    /**
+     * Re-signals {@code insufficient_authorization} for an in-progress challenge that the wallet polls
+     * before it has presented (status still {@code STARTED}).
+     *
+     * <p>Deliberately no fresh {@code openid4vp_request} (and thus no new nonce) is emitted here: the
+     * signed request object returned by {@link #initiateChallenge} is still valid and its nonce stays
+     * bound to this {@code auth_session} (OID4VCI §6.2.1.4). The wallet reuses that original inline
+     * request to present; re-issuing a new nonce/transaction would only invalidate the request the
+     * wallet already holds. The stable {@code auth_session} therefore preserves the nonce binding
+     * across polls, and a re-initiation is neither required by the spec nor desirable.
+     */
     private Response reChallenge(String authSession) {
         AuthorizationChallengeResponse body = new AuthorizationChallengeResponse(
                         ERROR_INSUFFICIENT_AUTHORIZATION, authSession)
