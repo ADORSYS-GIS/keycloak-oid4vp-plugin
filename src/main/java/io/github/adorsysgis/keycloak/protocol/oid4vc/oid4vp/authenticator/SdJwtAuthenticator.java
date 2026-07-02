@@ -70,12 +70,6 @@ public class SdJwtAuthenticator implements Authenticator {
 
     public static final String TRANSACTION_DATA_WIRE_KEY = "transaction_data_wire";
 
-    /**
-     * Marks the authentication session as an OID4VCI "presentation during issuance" flow. Only set by
-     * the Authorization Challenge Endpoint; PID matching is enforced exclusively when this is present.
-     */
-    public static final String PRESENTATION_DURING_ISSUANCE_KEY = "presentation_during_issuance";
-
     public SdJwtAuthenticator(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
@@ -200,8 +194,7 @@ public class SdJwtAuthenticator implements Authenticator {
             return Map.of();
         }
         try {
-            return JsonSerialization.readValue(tokensJson, new TypeReference<>() {
-            });
+            return JsonSerialization.readValue(tokensJson, new TypeReference<>() {});
         } catch (IOException e) {
             throw new IllegalStateException("Invalid SD-JWT tokens auth note", e);
         }
@@ -233,8 +226,7 @@ public class SdJwtAuthenticator implements Authenticator {
 
         List<String> transactionDataWire;
         try {
-            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<>() {
-            });
+            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<>() {});
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid transaction_data session state", e);
         }

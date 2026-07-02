@@ -121,8 +121,8 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
             @SuppressWarnings("unchecked")
             AuthorizationDetailsProcessor<OID4VCAuthorizationDetail> processor =
                     keycloakSession.getProvider(AuthorizationDetailsProcessor.class, OPENID_CREDENTIAL);
-            List<OID4VCAuthorizationDetail> details =
-                    processor.getSupportedAuthorizationDetails(authResult.token().getAuthorizationDetails());
+            List<OID4VCAuthorizationDetail> details = processor.getSupportedAuthorizationDetails(
+                    authResult.token().getAuthorizationDetails());
             if (details == null || details.isEmpty()) {
                 return null;
             }
