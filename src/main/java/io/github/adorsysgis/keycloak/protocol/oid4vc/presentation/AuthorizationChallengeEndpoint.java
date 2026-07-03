@@ -68,6 +68,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
      * recover that context by transaction id. Hence the private routing helpers name it {@code transactionId}.
      */
     public static final String AUTH_SESSION_PARAM = "auth_session";
+
     public static final String OPENID4VP_RESPONSE_PARAM = "openid4vp_response";
     public static final String INTERACTION_TYPES_SUPPORTED_PARAM = "interaction_types_supported";
     public static final String WWW_AUTHENTICATE_CHALLENGE = "Bearer error=\"insufficient_authorization\"";
