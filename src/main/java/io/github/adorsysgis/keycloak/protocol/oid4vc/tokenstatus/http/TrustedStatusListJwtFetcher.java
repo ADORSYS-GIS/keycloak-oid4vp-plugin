@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
@@ -128,7 +129,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         }
 
         try {
-            return PKIXVerificationUtil.validateChain(x5c, truststoreProvider);
+            return PKIXVerificationUtil.validateBase64Chain(x5c, truststoreProvider);
         } catch (VerificationException e) {
             throw new ReferencedTokenValidationException(e.getMessage(), e);
         }
