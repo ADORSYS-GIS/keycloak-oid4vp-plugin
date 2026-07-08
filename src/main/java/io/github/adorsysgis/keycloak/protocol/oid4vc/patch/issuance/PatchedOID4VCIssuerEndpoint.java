@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
+import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.BadRequestException;
@@ -16,7 +17,6 @@ import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint;
 import org.keycloak.protocol.oid4vc.model.CredentialRequest;
 import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
-import org.keycloak.protocol.oid4vc.utils.CredentialScopeModelUtils;
 import org.keycloak.protocol.oidc.rar.AuthorizationDetailsProcessor;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.managers.AppAuthManager;
@@ -81,7 +81,7 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
 
         ClientModel client = authResult.client();
         RealmModel realm = keycloakSession.getContext().getRealm();
-        CredentialScopeModel credentialScope = CredentialScopeModelUtils.findCredentialScopeModelByConfigurationId(
+        CredentialScopeModel credentialScope = findCredentialScopeModelByConfigurationId(
                 realm, () -> client.getClientScopes(false).values().stream(), credentialConfigurationId);
         if (credentialScope == null) {
             return; // Unknown configuration: core endpoint rejects independently.

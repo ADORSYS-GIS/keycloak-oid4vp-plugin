@@ -238,7 +238,7 @@ public class AuthorizationRequestService {
      * Generates ephemeral key for response encryption.
      */
     private EphemeralKey generateEncryptionKeyIfNeeded(ResponseMode responseMode) {
-        if (!ResponseMode.DIRECT_POST_JWT.equals(responseMode)) {
+        if (!responseMode.isEncrypted()) {
             return null;
         }
 

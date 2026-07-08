@@ -389,6 +389,25 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return JsonSerialization.writeValueAsString(response);
     }
 
+    /**
+     * Builds the JSON-encoded {@code openid4vp_response} object carrying an <em>encrypted</em> OpenID4VP
+     * Authorization Response ({@code {"response": "<jwe>"}}) submitted to the Authorization Challenge
+     * Endpoint in the OID4VCI interactive authorization {@code ia_post.jwt} flow (OID4VCI §6.2.1.1). The
+     * response is encrypted for the ephemeral key advertised in the request's {@code client_metadata.jwks}.
+     */
+    protected String buildEncryptedOpenid4vpResponseJson(String sdJwt, RequestObject requestObject) throws Exception {
+        String sdJwtVpToken = sdJwtVPTestUtils.presentSdJwt(
+                sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+        Map<String, List<String>> vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
+        String plaintext = JsonSerialization.writeValueAsString(Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap));
+
+        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
+        ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        String encResp = ECTestUtils.encryptMessage(plaintext, encKey, encJwk.getKeyId());
+
+        return JsonSerialization.writeValueAsString(Map.of("response", encResp));
+    }
+
     public record TestFlowData(
             AuthorizationContext authContext,
             RequestObject requestObject,

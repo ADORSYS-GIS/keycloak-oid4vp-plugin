@@ -1,5 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
+import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
+import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByName;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
@@ -34,7 +37,6 @@ import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStat
 import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
 import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
-import org.keycloak.protocol.oid4vc.utils.CredentialScopeModelUtils;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.Urls;
@@ -60,6 +62,9 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
     public static final String ERROR_MISSING_INTERACTION_TYPE = "missing_interaction_type";
     public static final String INTERACTION_OPENID4VP_PRESENTATION = "urn:openid:dcp:ia:openid4vp_presentation";
     public static final String PROFILE_ID_PARAM = "profile_id";
+
+    /** Realm attribute toggling mandatory Wallet Attestation on the Authorization Challenge Request. */
+    public static final String ATTR_REQUIRE_WALLET_ATTESTATION = "oid4vci.require_wallet_attestation";
 
     /**
      * OID4VCI {@code auth_session} handle. Its value <em>is</em> the interactive-authorization
@@ -145,6 +150,12 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             throw missingInteractionType();
         }
 
+        // When the Authorization Server requires a Wallet Attestation, it MUST be included on the
+        // Authorization Challenge Request (OID4VCI §6.1, Note). Validate it before starting the challenge.
+        if (isWalletAttestationRequired()) {
+            WalletAttestationValidator.validate(session, clientId);
+        }
+
         // Authoritative profile selection: for an issuance-gated credential the profile is derived from the
         // requested credential configuration, not from the client-supplied profile_id. This prevents a
         // wallet from selecting a profile without binding rules and bypassing the identity match.
@@ -202,6 +213,11 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         return false;
     }
 
+    /** Whether this Authorization Server requires a Wallet Attestation on the challenge request. */
+    private boolean isWalletAttestationRequired() {
+        return Boolean.parseBoolean(realm.getAttribute(ATTR_REQUIRE_WALLET_ATTESTATION));
+    }
+
     /**
      * Pure decision: the credential-derived profile takes precedence over a client-supplied one. When no
      * profile is enforced by the requested credential (e.g. login or a non-gated credential), the
@@ -245,14 +261,13 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             credentialConfigurationId = credentialConfigurationIdFromAuthorizationDetails(authorizationDetails);
         }
         if (StringUtil.isNotBlank(credentialConfigurationId)) {
-            CredentialScopeModel byConfigId = CredentialScopeModelUtils.findCredentialScopeModelByConfigurationId(
+            CredentialScopeModel byConfigId = findCredentialScopeModelByConfigurationId(
                     realm, () -> client.getClientScopes(false).values().stream(), credentialConfigurationId);
             if (byConfigId != null) {
                 return byConfigId;
             }
         }
-        return CredentialScopeModelUtils.findCredentialScopeModelByName(
-                realm, () -> client.getClientScopes(false).values().stream(), scope);
+        return findCredentialScopeModelByName(realm, () -> client.getClientScopes(false).values().stream(), scope);
     }
 
     private String credentialConfigurationIdFromIssuerState(String issuerState) {

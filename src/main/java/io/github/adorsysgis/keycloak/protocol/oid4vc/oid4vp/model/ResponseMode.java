@@ -29,6 +29,14 @@ public enum ResponseMode {
         return value;
     }
 
+    /**
+     * Whether this response mode requires the OpenID4VP Authorization Response to be encrypted
+     * (the {@code .jwt} variants {@code direct_post.jwt} and {@code ia_post.jwt}).
+     */
+    public boolean isEncrypted() {
+        return this == DIRECT_POST_JWT || this == IA_POST_JWT;
+    }
+
     public static ResponseMode fromValue(String value) {
         for (ResponseMode mode : ResponseMode.values()) {
             if (mode.value.equalsIgnoreCase(value)) {

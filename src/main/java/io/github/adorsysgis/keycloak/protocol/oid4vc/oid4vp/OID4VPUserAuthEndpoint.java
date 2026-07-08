@@ -597,13 +597,19 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
 
+        // Honor the configured response mode: an encrypted verifier configuration (direct_post.jwt)
+        // maps to the encrypted interactive mode ia_post.jwt, otherwise the unencrypted ia_post
+        // is used (OID4VCI §6.2.1.1).
+        ResponseMode interactiveResponseMode =
+                config.getResponseMode().isEncrypted() ? ResponseMode.IA_POST_JWT : ResponseMode.IA_POST;
+
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
                 config,
                 profile,
                 authSession,
                 null,
                 codeChallengeDetails,
-                new InteractiveResponseConfig(ResponseMode.IA_POST, responseUri));
+                new InteractiveResponseConfig(interactiveResponseMode, responseUri));
 
         return new AuthorizationContext()
                 .setTransactionId(authorizationContext.getTransactionId())
