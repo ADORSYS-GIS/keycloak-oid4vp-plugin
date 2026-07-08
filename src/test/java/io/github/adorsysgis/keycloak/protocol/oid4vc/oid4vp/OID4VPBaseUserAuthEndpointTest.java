@@ -31,6 +31,7 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
+import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
 import org.keycloak.jose.jwk.JWK;
@@ -156,11 +157,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
-     * Helper for flows that should fail at authorization code redemption.
+     * Helper for flows that should fail at authorization code redemption because the PKCE
+     * {@code code_verifier} is missing or invalid.
      */
-    protected void testFailingCodeRedemption(
-            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
-            throws Exception {
+    protected void testFailingCodeRedemption(String sdJwt, TestOpts opts) throws Exception {
         ApiFlowData apiFlow = resolveApiFlow(opts);
         RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
 
@@ -170,11 +170,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         HttpResponse redemptionResponse =
                 redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+        assertEquals(
+                HttpStatus.SC_BAD_REQUEST, redemptionResponse.getStatusLine().getStatusCode());
 
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
-        assertEquals(expectedError, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
+        assertEquals(OAuthErrorException.INVALID_GRANT, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Authorization code verifier not valid"));
     }
 
     /**
@@ -213,14 +214,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return apiFlow;
     }
 
-    private AuthorizationContext assertSuccessfulAuthorizationStatus(ApiFlowData apiFlow) throws Exception {
+    private void assertSuccessfulAuthorizationStatus(ApiFlowData apiFlow) throws Exception {
         HttpResponse statusResponse =
                 fetchAuthenticationStatus(apiFlow.authContext().getTransactionId());
         AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
         assertNull(statusPayload.getAuthorizationCode(), "authorization_code must not be exposed in status responses");
-
-        return statusPayload;
     }
 
     /**

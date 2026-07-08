@@ -72,19 +72,13 @@ public class AuthorizationRequestService {
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
     private final KeycloakSession session;
-    private final DcqlCredentialCapabilities dcqlCapabilities;
     private final VerifierDiscoveryService discoveryService;
 
     private final String openID4VPRootUrl;
     private final int authSessionLifespanSecs;
 
-    public AuthorizationRequestService(KeycloakSession session) {
-        this(session, DcqlCredentialCapabilities.createDefault());
-    }
-
     public AuthorizationRequestService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
-        this.dcqlCapabilities = dcqlCapabilities;
         this.discoveryService = new VerifierDiscoveryService(session, dcqlCapabilities);
         this.openID4VPRootUrl = OID4VPUserAuthEndpointBase.getOpenID4VPRootUrl(session);
 
