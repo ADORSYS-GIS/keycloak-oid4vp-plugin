@@ -17,8 +17,13 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.BeforeAll;
@@ -101,6 +106,42 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
             if (status != HttpStatus.SC_CREATED && status != HttpStatus.SC_CONFLICT) {
                 throw new IllegalStateException("Failed to create offered credential scope: HTTP " + status);
             }
+        }
+
+        grantOfferedCredentialToBrokeredUser();
+    }
+
+    /**
+     * Grants the offered (KMA) verifiable credential to {@code test-user} via the Admin API. Since Keycloak now
+     * validates on offer creation that the {@code target_user} actually holds the offered credential
+     * ({@code OID4VCUtil.hasVerifiableCredential}), the brokered user must be granted the credential before a
+     * credential offer can be created for it. The operation is idempotent (a duplicate grant returns HTTP 409),
+     * so it is safe with the reused (singleton) container.
+     */
+    private static void grantOfferedCredentialToBrokeredUser() {
+        String adminToken =
+                keycloak.getKeycloakAdminClient().tokenManager().getAccessTokenString();
+        String url = KeycloakUriBuilder.fromUri(keycloak.getAuthServerUrl())
+                .path("admin/realms/{realm}/users/{userId}/vc/credentials")
+                .build(TEST_REALM_NAME, TEST_USER_ID)
+                .toString();
+
+        HttpPost post = new HttpPost(url);
+        post.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken);
+        post.setEntity(new StringEntity(
+                "{\"credentialScopeName\":\"" + OFFERED_CREDENTIAL_CONFIG_ID + "\"}", ContentType.APPLICATION_JSON));
+
+        try (CloseableHttpClient client = HttpClientBuilder.create().build();
+                CloseableHttpResponse response = client.execute(post)) {
+            int status = response.getStatusLine().getStatusCode();
+            // On success the admin endpoint returns the created representation as a POJO, which JAX-RS maps
+            // to HTTP 200 (not a 201 Response); a duplicate grant yields HTTP 409. Either way the brokered
+            // user holds the credential afterwards.
+            if (status != HttpStatus.SC_OK && status != HttpStatus.SC_CONFLICT) {
+                throw new IllegalStateException("Failed to grant offered credential to brokered user: HTTP " + status);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to grant offered credential to brokered user", e);
         }
     }
 
