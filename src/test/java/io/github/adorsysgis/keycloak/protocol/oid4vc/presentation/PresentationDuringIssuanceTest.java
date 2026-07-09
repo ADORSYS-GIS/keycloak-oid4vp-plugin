@@ -299,7 +299,8 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var finalPoll = postChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession())));
         assertEquals(HttpStatus.SC_OK, finalPoll.getStatusLine().getStatusCode());
-        assertNotNull(parseHttpResponse(finalPoll, AuthorizationChallengeResponse.class).getAuthorizationCode());
+        assertNotNull(parseHttpResponse(finalPoll, AuthorizationChallengeResponse.class)
+                .getAuthorizationCode());
     }
 
     @Test
@@ -318,16 +319,16 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
                 new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
                 new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)));
         assertEquals(HttpStatus.SC_UNAUTHORIZED, initiate.getStatusLine().getStatusCode());
-        String authSession =
-                parseHttpResponse(initiate, AuthorizationChallengeResponse.class).getAuthSession();
+        String authSession = parseHttpResponse(initiate, AuthorizationChallengeResponse.class)
+                .getAuthSession();
         assertNotNull(authSession);
 
         // Simulate the session expiring/being evicted mid-interactive: keep the valid "root.tab" shape but
         // point the root segment at a session that no longer exists. The handle can no longer be resolved.
         String expiredAuthSession = UUID.randomUUID() + authSession.substring(authSession.indexOf('.'));
 
-        var resume = postChallenge(List.of(
-                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, expiredAuthSession)));
+        var resume = postChallenge(
+                List.of(new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, expiredAuthSession)));
 
         // The wallet's poll after expiry is rejected with a defined error, not silently accepted.
         assertEquals(HttpStatus.SC_BAD_REQUEST, resume.getStatusLine().getStatusCode());
