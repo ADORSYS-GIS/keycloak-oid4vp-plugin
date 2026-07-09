@@ -68,8 +68,7 @@ public abstract class BaseKeycloakTest {
         KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
         container
                 .withProviderClassesFrom("target/classes", "target/test-classes")
-                .withFeaturesEnabled(
-                        "oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
+                .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
                 .withRealmImportFile("/realms/test-realm.json")
                 .withRealmImportFile("/realms/test-realm-haip.json")
                 .withRealmImportFile("/realms/test-realm-v2.json")

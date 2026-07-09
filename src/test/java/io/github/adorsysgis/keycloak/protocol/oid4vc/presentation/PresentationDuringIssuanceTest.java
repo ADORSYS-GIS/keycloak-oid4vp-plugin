@@ -134,7 +134,6 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         realm.clients().get(clients.getFirst().getId()).addOptionalClientScope(scopeId);
     }
 
-
     /**
      * Grants the offered (KMA) verifiable credential to {@code test-user} via the Admin API. Since Keycloak now
      * validates on offer creation that the {@code target_user} actually holds the offered credential
@@ -143,8 +142,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
      * so it is safe with the reused (singleton) container.
      */
     private static void grantOfferedCredentialToBrokeredUser() {
-        String adminToken =
-                keycloak.getKeycloakAdminClient().tokenManager().getAccessTokenString();
+        String adminToken = keycloak.getKeycloakAdminClient().tokenManager().getAccessTokenString();
         String url = KeycloakUriBuilder.fromUri(keycloak.getAuthServerUrl())
                 .path("admin/realms/{realm}/users/{userId}/vc/credentials")
                 .build(TEST_REALM_NAME, TEST_USER_ID)

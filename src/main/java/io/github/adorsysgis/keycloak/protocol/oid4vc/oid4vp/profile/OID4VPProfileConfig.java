@@ -42,7 +42,7 @@ public class OID4VPProfileConfig {
             return profiles.stream()
                     .filter(AuthenticationProfile::isDefaultProfile)
                     .findFirst()
-                    .orElseGet(() -> profiles.getFirst());
+                    .orElseGet(profiles::getFirst);
         }
         return profiles.stream()
                 .filter(profile -> Objects.equals(profile.getId(), requestedProfile))
