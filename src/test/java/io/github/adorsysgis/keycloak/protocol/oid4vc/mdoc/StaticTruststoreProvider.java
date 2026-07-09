@@ -52,5 +52,20 @@ public class StaticTruststoreProvider implements TruststoreProvider {
     }
 
     @Override
+    public KeyStore getHttpsTruststore() {
+        return null;
+    }
+
+    @Override
+    public Map<X500Principal, List<X509Certificate>> getHttpsRootCertificates() {
+        return getRootCertificates();
+    }
+
+    @Override
+    public Map<X500Principal, List<X509Certificate>> getHttpsIntermediateCertificates() {
+        return Map.of();
+    }
+
+    @Override
     public void close() {}
 }

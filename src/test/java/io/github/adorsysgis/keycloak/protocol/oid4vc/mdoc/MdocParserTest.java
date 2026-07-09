@@ -170,7 +170,7 @@ public class MdocParserTest extends MdocBaseTest {
 
         var ex = assertThrows(MdocEncodingException.class, () -> MdocParser.parse(malformed.encode()));
         assertTrue(ex.getMessage().startsWith("mDoc fails schema validation:"));
-        assertTrue(ex.getMessage()
-                .contains("\"instanceLocation\":\"/documents\",\"message\":\"object found, array expected\""));
+        assertTrue(ex.getMessage().contains("\"instanceLocation\":\"/documents\""));
+        assertTrue(ex.getMessage().contains("\"arguments\":[\"object\",\"array\"]"));
     }
 }

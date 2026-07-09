@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
@@ -13,6 +14,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -249,6 +251,88 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
                 HttpStatus.SC_BAD_REQUEST, credentialResponse.getStatusLine().getStatusCode());
         var error = parseHttpResponse(credentialResponse, OAuth2ErrorRepresentation.class);
         assertEquals("invalid_credential_request", error.getError());
+    }
+
+    @Test
+    @DisplayName("should re-challenge without a fresh request while cross-device polling before presentation")
+    void should_ReChallenge_When_CrossDevicePollingBeforePresentation() throws Exception {
+        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        var codeVerifier = PkceUtils.generateCodeVerifier();
+        var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+
+        // 1. Initiate -> 401 insufficient_authorization with the inline OpenID4VP request and an auth_session.
+        var initiate = postChallenge(List.of(
+                new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(
+                        AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
+                        AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)));
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, initiate.getStatusLine().getStatusCode());
+        var challenge = parseHttpResponse(initiate, AuthorizationChallengeResponse.class);
+        assertNotNull(challenge.getAuthSession());
+        assertNotNull(challenge.getOpenid4vpRequest());
+
+        // 2. Cross-device poll before presenting (auth_session only) -> 401 re-challenge WITHOUT a fresh request.
+        var poll = postChallenge(List.of(
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession())));
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, poll.getStatusLine().getStatusCode());
+        var pollBody = parseHttpResponse(poll, AuthorizationChallengeResponse.class);
+        assertEquals(AuthorizationChallengeEndpoint.ERROR_INSUFFICIENT_AUTHORIZATION, pollBody.getError());
+        assertEquals(
+                AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION,
+                pollBody.getInteractionTypeRequired());
+        assertEquals(challenge.getAuthSession(), pollBody.getAuthSession());
+        // §6.2.1.4: no new nonce/request is emitted; the wallet keeps using the original inline request.
+        assertNull(pollBody.getOpenid4vpRequest());
+
+        // 3. Present, then poll again -> the completed challenge yields the authorization_code.
+        var requestObjectJwt = challenge.getOpenid4vpRequest().get("request").asText();
+        RequestObject requestObject = new JWSInput(requestObjectJwt).readJsonContent(RequestObject.class);
+        var openid4vpResponse = buildOpenid4vpResponseJson(sdJwt, requestObject);
+        var submit = postChallenge(List.of(
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, openid4vpResponse)));
+        assertEquals(HttpStatus.SC_OK, submit.getStatusLine().getStatusCode());
+
+        var finalPoll = postChallenge(List.of(
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession())));
+        assertEquals(HttpStatus.SC_OK, finalPoll.getStatusLine().getStatusCode());
+        assertNotNull(parseHttpResponse(finalPoll, AuthorizationChallengeResponse.class).getAuthorizationCode());
+    }
+
+    @Test
+    @DisplayName("should reject polling/resume when the auth_session expired or was evicted mid-interactive")
+    void should_RejectResume_When_AuthSessionExpiredMidInteractive() throws Exception {
+        var codeVerifier = PkceUtils.generateCodeVerifier();
+        var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+
+        // Start a real challenge to obtain a genuinely-formatted auth_session handle.
+        var initiate = postChallenge(List.of(
+                new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(
+                        AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
+                        AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)));
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, initiate.getStatusLine().getStatusCode());
+        String authSession =
+                parseHttpResponse(initiate, AuthorizationChallengeResponse.class).getAuthSession();
+        assertNotNull(authSession);
+
+        // Simulate the session expiring/being evicted mid-interactive: keep the valid "root.tab" shape but
+        // point the root segment at a session that no longer exists. The handle can no longer be resolved.
+        String expiredAuthSession = UUID.randomUUID() + authSession.substring(authSession.indexOf('.'));
+
+        var resume = postChallenge(List.of(
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, expiredAuthSession)));
+
+        // The wallet's poll after expiry is rejected with a defined error, not silently accepted.
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resume.getStatusLine().getStatusCode());
+        var error = parseHttpResponse(resume, OAuth2ErrorRepresentation.class);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
     }
 
     @Test
