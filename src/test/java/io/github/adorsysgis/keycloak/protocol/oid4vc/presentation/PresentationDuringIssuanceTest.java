@@ -33,6 +33,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.protocol.oid4vc.model.PreAuthorizedCodeGrant;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
@@ -108,8 +109,31 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
             }
         }
 
+        assignOfferedCredentialScopeToTestClient();
         grantOfferedCredentialToBrokeredUser();
     }
+
+    /**
+     * Assigns the offered (KMA) credential scope to the {@code test-app} client as an <em>optional</em> client
+     * scope. The issuance gate ({@code PatchedOID4VCIssuerEndpoint#enforcePresentationDuringIssuance}) resolves
+     * the credential configuration among the client's optional scopes ({@code client.getClientScopes(false)}),
+     * so without this assignment the gate cannot see that the credential requires a presentation.
+     */
+    private static void assignOfferedCredentialScopeToTestClient() {
+        var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
+        String scopeId = realm.clientScopes().findAll().stream()
+                .filter(scope -> OFFERED_CREDENTIAL_CONFIG_ID.equals(scope.getName()))
+                .map(ClientScopeRepresentation::getId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Offered credential scope not found for assignment"));
+
+        var clients = realm.clients().findByClientId(TEST_CLIENT_ID);
+        if (clients.isEmpty()) {
+            throw new IllegalStateException("Test client not found: " + TEST_CLIENT_ID);
+        }
+        realm.clients().get(clients.getFirst().getId()).addOptionalClientScope(scopeId);
+    }
+
 
     /**
      * Grants the offered (KMA) verifiable credential to {@code test-user} via the Admin API. Since Keycloak now
@@ -213,6 +237,20 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
 
         // Identity gate failed (PID did not match) -> the presentation is rejected (401), no code issued.
         assertEquals(HttpStatus.SC_UNAUTHORIZED, resume.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    @DisplayName("should refuse issuance via the pre-authorized code flow for a presentation-gated credential")
+    void should_RefuseIssuance_When_PreAuthorizedCodeFlowForGatedCredential() throws Exception {
+        String preAuthorizedCode = createRealPreAuthorizedCredentialOffer();
+
+        String accessToken = redeemPreAuthorizedCode(preAuthorizedCode);
+
+        HttpResponse credentialResponse = requestOfferedCredential(accessToken);
+        assertEquals(
+                HttpStatus.SC_BAD_REQUEST, credentialResponse.getStatusLine().getStatusCode());
+        var error = parseHttpResponse(credentialResponse, OAuth2ErrorRepresentation.class);
+        assertEquals("invalid_credential_request", error.getError());
     }
 
     @Test
@@ -404,13 +442,46 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
      * </ol>
      */
     private String createRealCredentialOffer() throws Exception {
+        JsonNode offer = fetchCredentialOffer(false);
+        JsonNode issuerStateNode =
+                offer.path("grants").path(OAuth2Constants.AUTHORIZATION_CODE).path(OAuth2Constants.ISSUER_STATE);
+        assertNotNull(issuerStateNode, "credential offer must carry an authorization_code grant issuer_state");
+        String issuerState = issuerStateNode.asText(null);
+        assertNotNull(issuerState, "issuer_state must be present in the credential offer");
+        return issuerState;
+    }
+
+    /**
+     * Creates a real <em>pre-authorized</em> OID4VCI credential offer bound to {@code test-user} through
+     * Keycloak's own {@code create-credential-offer} endpoint and returns the {@code pre-authorized_code}
+     * from the resulting credential offer.
+     */
+    private String createRealPreAuthorizedCredentialOffer() throws Exception {
+        JsonNode offer = fetchCredentialOffer(true);
+        JsonNode preAuthCodeNode = offer.path("grants")
+                .path(PreAuthorizedCodeGrant.PRE_AUTH_GRANT_TYPE)
+                .path(PreAuthorizedCodeGrant.CODE_REQUEST_PARAM);
+        assertNotNull(preAuthCodeNode, "credential offer must carry a pre-authorized_code grant");
+        String preAuthorizedCode = preAuthCodeNode.asText(null);
+        assertNotNull(preAuthorizedCode, "pre-authorized_code must be present in the credential offer");
+        return preAuthorizedCode;
+    }
+
+    /**
+     * Authenticates as {@code test-user}, creates a credential offer for the offered (gated) credential via
+     * {@code create-credential-offer} and dereferences it to the full credential offer JSON.
+     *
+     * @param preAuthorized whether to request a {@code pre-authorized_code} grant instead of the
+     *                      {@code authorization_code} grant
+     */
+    private JsonNode fetchCredentialOffer(boolean preAuthorized) throws Exception {
         String authCode = getFreshAuthorizationCode();
         String accessToken = requestAccessToken(authCode, true);
 
         String createOfferUrl = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
                 .path("protocol/oid4vc/create-credential-offer")
                 .queryParam("credential_configuration_id", OFFERED_CREDENTIAL_CONFIG_ID)
-                .queryParam("pre_authorized", "false")
+                .queryParam("pre_authorized", Boolean.toString(preAuthorized))
                 .queryParam("target_user", TEST_USER)
                 .build()
                 .toString();
@@ -424,13 +495,43 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
 
         HttpResponse offerResp = httpClient.execute(new HttpGet(issuer + "/" + nonce));
         assertEquals(HttpStatus.SC_OK, offerResp.getStatusLine().getStatusCode());
-        JsonNode offer = readJson(offerResp);
-        JsonNode issuerStateNode =
-                offer.path("grants").path(OAuth2Constants.AUTHORIZATION_CODE).path(OAuth2Constants.ISSUER_STATE);
-        assertNotNull(issuerStateNode, "credential offer must carry an authorization_code grant issuer_state");
-        String issuerState = issuerStateNode.asText(null);
-        assertNotNull(issuerState, "issuer_state must be present in the credential offer");
-        return issuerState;
+        return readJson(offerResp);
+    }
+
+    /**
+     * Redeems a {@code pre-authorized_code} at the token endpoint and returns the issued access token
+     * (bound to the credential endpoint audience).
+     */
+    private String redeemPreAuthorizedCode(String preAuthorizedCode) throws Exception {
+        var params = getDefaultHttpParams();
+        params.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, PreAuthorizedCodeGrant.PRE_AUTH_GRANT_TYPE));
+        params.add(new BasicNameValuePair(PreAuthorizedCodeGrant.CODE_REQUEST_PARAM, preAuthorizedCode));
+
+        HttpPost tokenReq = new HttpPost(getTestTokenEndpoint());
+        tokenReq.setEntity(new UrlEncodedFormEntity(params));
+        HttpResponse tokenResp = httpClient.execute(tokenReq);
+        assertEquals(HttpStatus.SC_OK, tokenResp.getStatusLine().getStatusCode());
+        JsonNode token = readJson(tokenResp);
+        String accessToken = token.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
+        assertNotNull(accessToken, "pre-authorized code redemption must yield an access token");
+        return accessToken;
+    }
+
+    /**
+     * Requests the offered (presentation-gated) credential at the OID4VCI credential endpoint using the
+     * given access token.
+     */
+    private HttpResponse requestOfferedCredential(String accessToken) throws Exception {
+        String credentialUrl = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
+                .path("protocol/oid4vc/credential")
+                .build()
+                .toString();
+        HttpPost credentialReq = new HttpPost(credentialUrl);
+        credentialReq.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        credentialReq.setEntity(new StringEntity(
+                "{\"credential_configuration_id\":\"" + OFFERED_CREDENTIAL_CONFIG_ID + "\"}",
+                ContentType.APPLICATION_JSON));
+        return httpClient.execute(credentialReq);
     }
 
     private JsonNode readJson(HttpResponse response) throws IOException {

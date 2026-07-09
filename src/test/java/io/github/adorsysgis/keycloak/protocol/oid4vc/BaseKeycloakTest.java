@@ -43,7 +43,7 @@ import org.testcontainers.utility.MountableFile;
  */
 public abstract class BaseKeycloakTest {
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.6.3";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.0";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_HAIP_NAME = "test-haip";
@@ -68,7 +68,8 @@ public abstract class BaseKeycloakTest {
         KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
         container
                 .withProviderClassesFrom("target/classes", "target/test-classes")
-                .withFeaturesEnabled("oid4vc-vci")
+                .withFeaturesEnabled(
+                        "oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
                 .withRealmImportFile("/realms/test-realm.json")
                 .withRealmImportFile("/realms/test-realm-haip.json")
                 .withRealmImportFile("/realms/test-realm-v2.json")
