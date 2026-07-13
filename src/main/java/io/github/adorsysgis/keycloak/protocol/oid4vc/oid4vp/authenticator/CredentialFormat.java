@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
+import com.fasterxml.jackson.annotation.JsonValue;
 import org.keycloak.VCFormat;
 
 /**
@@ -16,29 +17,30 @@ public enum CredentialFormat {
     /** ISO/IEC 18013-5 mDoc — {@code mso_mdoc}. */
     MSO_MDOC("mso_mdoc");
 
-    private final String identifier;
+    private final String value;
 
-    CredentialFormat(String identifier) {
-        this.identifier = identifier;
+    CredentialFormat(String value) {
+        this.value = value;
     }
 
-    public String getIdentifier() {
-        return identifier;
+    @JsonValue
+    public String getValue() {
+        return value;
     }
 
     /**
      * Resolves the enum constant for the given wire-format identifier.
      *
-     * @param identifier the format string (e.g. {@code "dc+sd-jwt"}, {@code "mso_mdoc"})
+     * @param value the format string (e.g. {@code "dc+sd-jwt"}, {@code "mso_mdoc"})
      * @return the matching constant
      * @throws IllegalArgumentException if no constant matches
      */
-    public static CredentialFormat fromIdentifier(String identifier) {
+    public static CredentialFormat fromValue(String value) {
         for (CredentialFormat format : values()) {
-            if (format.identifier.equals(identifier)) {
+            if (format.value.equals(value)) {
                 return format;
             }
         }
-        throw new IllegalArgumentException(String.format("Unsupported credential format: %s", identifier));
+        throw new IllegalArgumentException(String.format("Unsupported credential format: %s", value));
     }
 }

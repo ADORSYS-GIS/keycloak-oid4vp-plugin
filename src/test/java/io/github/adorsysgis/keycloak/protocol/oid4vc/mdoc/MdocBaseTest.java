@@ -147,8 +147,34 @@ public class MdocBaseTest {
             String mdocGeneratedNonce,
             boolean fallbackToIso)
             throws Exception {
+        MdocVerificationOpts opts = buildOpts(requestObject, mdocGeneratedNonce, fallbackToIso);
+        return buildDeviceResponse(opts, claims, docType).encodeToBase64Url();
+    }
+
+    /**
+     * Builds an mDoc device response (Base64URL-encoded) whose MSO {@code validityInfo} uses the
+     * given {@code signed}, {@code validFrom} and {@code validUntil} timestamps rather than the
+     * default {@code now .. now+10min} window. Intended for end-to-end tests that need to drive
+     * the response into an expired or aged-iat state — the container clock cannot be manipulated
+     * via {@code Time.setOffset}, so the MSO itself must carry the forged validity window.
+     */
+    public static String buildMdocVpToken(
+            RequestObject requestObject,
+            Map<String, Object> claims,
+            String docType,
+            ZonedDateTime signed,
+            ZonedDateTime validFrom,
+            ZonedDateTime validUntil)
+            throws Exception {
+        MdocVerificationOpts opts = buildOpts(requestObject, null, false);
+        return buildDeviceResponse(opts, claims, docType, signed, validFrom, validUntil)
+                .encodeToBase64Url();
+    }
+
+    private static MdocVerificationOpts buildOpts(
+            RequestObject requestObject, String mdocGeneratedNonce, boolean fallbackToIso) {
         byte[] jwkThumbprint = MdocCredentialVerifier.computeJwkThumbprint(requestObject);
-        MdocVerificationOpts opts = MdocVerificationOpts.builder()
+        return MdocVerificationOpts.builder()
                 .withClientId(requestObject.getClientId())
                 .withOid4vpNonce(requestObject.getNonce())
                 .withResponseUri(requestObject.getResponseUri())
@@ -156,7 +182,6 @@ public class MdocBaseTest {
                 .withMdocGeneratedNonce(mdocGeneratedNonce)
                 .withFallbackToIsoSpecSessionTranscript(fallbackToIso)
                 .build();
-        return buildDeviceResponse(opts, claims, docType).encodeToBase64Url();
     }
 
     /**
@@ -166,6 +191,26 @@ public class MdocBaseTest {
     public static DeviceResponse buildDeviceResponse(
             MdocVerificationOpts opts, Map<String, Object> claims, String docType) throws Exception {
         return buildDeviceResponse(opts, claims, docType, null);
+    }
+
+    /**
+     * Builds a device response whose MSO {@code validityInfo} uses the given timestamps. Intended
+     * for end-to-end tests that need an expired or aged-iat response (the container clock cannot
+     * be shifted via {@code Time.setOffset}).
+     */
+    public static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts,
+            Map<String, Object> claims,
+            String docType,
+            ZonedDateTime signed,
+            ZonedDateTime validFrom,
+            ZonedDateTime validUntil)
+            throws Exception {
+        ValidityInfo validityInfo = new ValidityInfo(signed, validFrom, validUntil);
+        return buildDeviceResponse(opts, claims, docType, ctx -> {
+            ctx.mso = buildStandardMSO(ctx.nameSpaces, validityInfo, docType);
+            return ctx.signMsoAndWrap();
+        });
     }
 
     private static DeviceResponse buildDeviceResponse(
@@ -211,7 +256,7 @@ public class MdocBaseTest {
      * different MSO when they need a non-default algorithm or valueDigests.
      */
     private static MobileSecurityObject buildStandardMSO(
-            IssuerNameSpaces nameSpaces, ValidityInfo validityInfo, String docType) throws Exception {
+            IssuerNameSpaces nameSpaces, ValidityInfo validityInfo, String docType) {
         ValueDigests standardDigests = buildValueDigests(nameSpaces);
         // Authorize every namespace present in the claims so the device key can access them.
         List<CBORString> authorizedNamespaces = nameSpaces.getPairs().stream()
@@ -443,7 +488,7 @@ public class MdocBaseTest {
     /**
      * X.509 certificate from the ISO 18013-5 spec sample
      */
-    protected static String getSpecSampleCert() {
+    public static String getSpecSampleCert() {
         return str("""
             MIICXDCCAgGgAwIBAgIKR1IJyTwoAKFf/zAKBggqhkjOPQQDAjBFMQswCQYDVQQG
             EwJVUzEpMCcGA1UEAwwgSVNPMTgwMTMtNSBUZXN0IENlcnRpZmljYXRlIElBQ0Ex

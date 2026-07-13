@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.LOGIN_METHOD_OID4VP;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
@@ -25,7 +26,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.VCFormat;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.SecretGenerator;
@@ -199,8 +199,12 @@ public class AuthorizationResponseService {
             String rawToken = credentialTokens.getFirst();
             // mDoc tokens are base64url-encoded CBOR — decoding as UTF-8 would corrupt
             // the binary data, so keep the wire form for mDoc.
+            CredentialFormat format = CredentialFormat.fromValue(credential.getFormat());
             String presentedToken =
-                    VCFormat.SD_JWT_VC.equals(credential.getFormat()) ? decodeIfBase64Url(rawToken) : rawToken;
+                    switch (format) {
+                        case SD_JWT_VC -> decodeIfBase64Url(rawToken);
+                        case MSO_MDOC -> rawToken;
+                    };
 
             validatePresentedToken(presentedToken, credential.getId(), authContext, store);
             tokens.put(credential.getId(), presentedToken);
@@ -222,8 +226,8 @@ public class AuthorizationResponseService {
 
         // TODO: Implement DCQL presentation pre-validation for mDoc.
         //  For now, only SD-JWT VC has a registered DcqlCredentialCapability.
-        if (!VCFormat.SD_JWT_VC.equals(
-                credentialQuery.getCredentials().getFirst().getFormat())) {
+        if (CredentialFormat.MSO_MDOC.equals(CredentialFormat.fromValue(
+                credentialQuery.getCredentials().getFirst().getFormat()))) {
             logger.debugf(
                     "Skipping DCQL pre-validation for credential '%s' (format: %s); "
                             + "full verification is delegated to the authenticator",

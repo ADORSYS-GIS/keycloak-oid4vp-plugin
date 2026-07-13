@@ -7,10 +7,7 @@ import java.util.List;
 import org.keycloak.VCFormat;
 import org.keycloak.common.VerificationException;
 
-/**
- * Production DCQL path for user authentication. Owns presentation validation, presentation
- * session setup and VP format metadata advertisement for SD-JWT VC responses.
- */
+/** Production DCQL path for {@code dc+sd-jwt} user authentication. */
 public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapability {
 
     @Override

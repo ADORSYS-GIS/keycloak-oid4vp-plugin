@@ -10,10 +10,10 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.truststore.TruststoreProvider;
-import org.keycloak.utils.StringUtil;
 
 /**
  * Resolves the trust policy configured on a {@link CredentialRequirement} into a
@@ -33,6 +33,8 @@ import org.keycloak.utils.StringUtil;
  * </ul>
  */
 public final class TrustedProviderResolver {
+
+    private static final Logger logger = Logger.getLogger(TrustedProviderResolver.class);
 
     private TrustedProviderResolver() {}
 
@@ -65,26 +67,29 @@ public final class TrustedProviderResolver {
             throw new VerificationException(
                     String.format("Credential '%s' uses x5c trust but declares no anchors.", credentialId));
         }
+
         List<X509Certificate> certs = new ArrayList<>();
         List<String> invalid = new ArrayList<>();
         for (String anchor : trust.getAnchors()) {
-            if (StringUtil.isBlank(anchor)) {
-                continue;
-            }
             try {
                 certs.add(CertificateUtil.parseCertificate(anchor));
             } catch (CertificateException e) {
                 invalid.add(anchor);
+                logger.warnf(e, "Failed to parse x5c trust anchor: (credential '%s') %s", credentialId, anchor);
             }
         }
+
         if (!invalid.isEmpty()) {
-            throw new VerificationException(
-                    String.format("Credential '%s' has unparsable x5c anchors: %s", credentialId, invalid));
+            throw new VerificationException(String.format(
+                    "Credential '%s' has %d unparsable x5c trust anchor(s). See server logs for details.",
+                    credentialId, invalid.size()));
         }
+
         if (certs.isEmpty()) {
             throw new VerificationException(
                     String.format("Credential '%s' declares x5c trust but no anchor could be parsed.", credentialId));
         }
+
         return certs;
     }
 
@@ -94,9 +99,7 @@ public final class TrustedProviderResolver {
             return new EudiPidTrustListProvider(session).resolve(trust).trustedIssuerCertificates();
         } catch (EudiPidTrustException e) {
             throw new VerificationException(
-                    String.format(
-                            "Credential '%s' could not resolve EUDI PID trust list: %s", credentialId, e.getMessage()),
-                    e);
+                    String.format("Credential '%s' could not resolve EUDI PID trust list", credentialId), e);
         }
     }
 }

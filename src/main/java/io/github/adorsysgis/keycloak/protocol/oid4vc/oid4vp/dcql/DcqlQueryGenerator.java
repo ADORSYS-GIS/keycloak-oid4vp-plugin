@@ -12,15 +12,13 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRe
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.keycloak.VCFormat;
 import org.keycloak.utils.StringUtil;
 
 /**
  * Builds a DCQL query from an {@link AuthenticationProfile}.
  *
  * <p>Each {@link CredentialRequirement} becomes one DCQL credential query. All credentials
- * are required and grouped into a single {@link CredentialSet}. Format dispatch is local:
- * {@code mso_mdoc} builds an mDoc credential, everything else falls back to SD-JWT VC.
+ * are required and grouped into a single {@link CredentialSet}.
  */
 public final class DcqlQueryGenerator {
 
@@ -59,7 +57,7 @@ public final class DcqlQueryGenerator {
     }
 
     private Credential buildCredential(CredentialRequirement requirement, boolean requireHolderBinding) {
-        CredentialFormat format = CredentialFormat.fromIdentifier(requirement.getFormat());
+        CredentialFormat format = CredentialFormat.fromValue(requirement.getFormat());
         return switch (format) {
             case MSO_MDOC -> buildMdocCredential(requirement, requireHolderBinding);
             case SD_JWT_VC -> buildSdJwtCredential(requirement, requireHolderBinding);
@@ -69,7 +67,7 @@ public final class DcqlQueryGenerator {
     private Credential buildSdJwtCredential(CredentialRequirement requirement, boolean requireHolderBinding) {
         Credential credential = new Credential();
         credential.setId(requirement.getId());
-        credential.setFormat(VCFormat.SD_JWT_VC);
+        credential.setFormat(CredentialFormat.SD_JWT_VC.getValue());
         Meta meta = new Meta();
         meta.setVctValues(requirement.getCredentialTypes());
         credential.setMeta(meta);
@@ -81,13 +79,12 @@ public final class DcqlQueryGenerator {
     private Credential buildMdocCredential(CredentialRequirement requirement, boolean requireHolderBinding) {
         Credential credential = new Credential();
         credential.setId(requirement.getId());
-        credential.setFormat(CredentialFormat.MSO_MDOC.getIdentifier());
+        credential.setFormat(CredentialFormat.MSO_MDOC.getValue());
         Meta meta = new Meta();
-        List<String> types = requirement.getCredentialTypes();
-        meta.setDoctypeValue(types == null || types.isEmpty() ? null : types.getFirst());
+        meta.setDoctypeValue(requirement.getCredentialTypes().getFirst());
         credential.setMeta(meta);
         credential.setClaims(requirement.getClaimReferences().stream()
-                .map(DcqlQueryGenerator::mdocClaim)
+                .map(DcqlQueryGenerator::buildClaim)
                 .toList());
         credential.setRequireCryptographicHolderBinding(requireHolderBinding);
         return credential;
@@ -97,29 +94,18 @@ public final class DcqlQueryGenerator {
         if (names == null || names.isEmpty()) {
             return List.of();
         }
-        List<Claim> claims = new ArrayList<>(names.size());
-        int index = 0;
-        for (String name : names) {
-            if (StringUtil.isBlank(name)) {
-                continue;
-            }
-            Claim claim = new Claim();
-            claim.setId("claim_" + index++);
-            claim.setPath(List.of(name));
-            claims.add(claim);
-        }
-        return claims;
+
+        return names.stream()
+                .filter(name -> !StringUtil.isBlank(name))
+                .map(ClaimReference::parse)
+                .map(DcqlQueryGenerator::buildClaim)
+                .toList();
     }
 
-    private static Claim mdocClaim(ClaimReference ref) {
-        if (!ref.isNamespaced()) {
-            throw new IllegalArgumentException(
-                    String.format("mDoc claims must be namespaced (\"namespace/name\"), got: %s", ref.name()));
-        }
-
+    private static Claim buildClaim(ClaimReference ref) {
         Claim claim = new Claim();
         claim.setId(UUID.randomUUID().toString());
-        claim.setPath(List.of(ref.namespace(), ref.name()));
+        claim.setPath(ref.isNamespaced() ? List.of(ref.namespace(), ref.name()) : List.of(ref.name()));
         return claim;
     }
 }

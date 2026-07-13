@@ -76,7 +76,7 @@ public class OID4VPProfileConfig {
         CredentialRequirement credential = new CredentialRequirement()
                 .setId("identity")
                 .setRole(CredentialRole.PRIMARY)
-                .setFormat(CredentialFormat.SD_JWT_VC.getIdentifier())
+                .setFormat(CredentialFormat.SD_JWT_VC.getValue())
                 .setCredentialTypes(authRequirements.getCredentialTypes())
                 .setClaims(List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
 
@@ -128,7 +128,7 @@ public class OID4VPProfileConfig {
                             "OpenID4VP credential must request at least one claim: %s/%s", profileId, credentialId));
                 }
 
-                if (CredentialFormat.MSO_MDOC.getIdentifier().equals(credential.getFormat())) {
+                if (CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat())) {
                     if (credential.getCredentialTypes().size() != 1) {
                         throw new IllegalStateException(String.format(
                                 "mDoc credential must define exactly one credentialType (the docType): %s/%s",

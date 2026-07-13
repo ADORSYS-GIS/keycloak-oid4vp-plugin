@@ -22,51 +22,39 @@ public class MdocGenericFormat {
     @JsonProperty("deviceauth_alg_values")
     private List<Integer> deviceAuthAlgValues = new ArrayList<>();
 
-    @JsonProperty("issuerauth_alg_values")
     public List<Integer> getIssuerAuthAlgValues() {
         return issuerAuthAlgValues;
     }
 
-    @JsonProperty("issuerauth_alg_values")
     public void setIssuerAuthAlgValues(List<Integer> issuerAuthAlgValues) {
         this.issuerAuthAlgValues = issuerAuthAlgValues;
     }
 
-    @JsonProperty("deviceauth_alg_values")
     public List<Integer> getDeviceAuthAlgValues() {
         return deviceAuthAlgValues;
     }
 
-    @JsonProperty("deviceauth_alg_values")
     public void setDeviceAuthAlgValues(List<Integer> deviceAuthAlgValues) {
         this.deviceAuthAlgValues = deviceAuthAlgValues;
     }
 
     @Override
     public String toString() {
-        return "MdocGenericFormat{"
-                + "issuerAuthAlgValues=" + issuerAuthAlgValues
-                + ", deviceAuthAlgValues=" + deviceAuthAlgValues
-                + '}';
+        return "MdocGenericFormat{" + "issuerAuthAlgValues="
+                + issuerAuthAlgValues + ", deviceAuthAlgValues="
+                + deviceAuthAlgValues + '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        MdocGenericFormat that = (MdocGenericFormat) o;
+        return Objects.equals(getIssuerAuthAlgValues(), that.getIssuerAuthAlgValues())
+                && Objects.equals(getDeviceAuthAlgValues(), that.getDeviceAuthAlgValues());
     }
 
     @Override
     public int hashCode() {
-        int result = 1;
-        result = ((result * 31) + ((this.issuerAuthAlgValues == null) ? 0 : this.issuerAuthAlgValues.hashCode()));
-        result = ((result * 31) + ((this.deviceAuthAlgValues == null) ? 0 : this.deviceAuthAlgValues.hashCode()));
-        return result;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-        if (other == this) {
-            return true;
-        }
-        if (!(other instanceof MdocGenericFormat rhs)) {
-            return false;
-        }
-        return ((Objects.equals(this.issuerAuthAlgValues, rhs.issuerAuthAlgValues))
-                && (Objects.equals(this.deviceAuthAlgValues, rhs.deviceAuthAlgValues)));
+        return Objects.hash(getIssuerAuthAlgValues(), getDeviceAuthAlgValues());
     }
 }

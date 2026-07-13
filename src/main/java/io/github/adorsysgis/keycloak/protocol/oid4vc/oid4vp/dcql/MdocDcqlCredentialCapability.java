@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import com.authlete.cose.constants.COSEAlgorithms;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.MdocGenericFormat;
@@ -16,23 +17,26 @@ import org.keycloak.common.VerificationException;
  */
 public final class MdocDcqlCredentialCapability implements DcqlCredentialCapability {
 
-    static final String FORMAT = "mso_mdoc";
-
     @Override
     public String format() {
-        return FORMAT;
+        return CredentialFormat.MSO_MDOC.getValue();
     }
 
     @Override
     public void validatePresentation(DcqlQuery query, String presentedToken) throws VerificationException {
-        throw new VerificationException("DCQL presentation validation is not yet supported for mso_mdoc credentials");
+        throw new UnsupportedOperationException(
+                "DCQL presentation validation is not yet supported for mso_mdoc credentials");
     }
 
     @Override
     public void contributeVpFormatsSupported(ClientMetadata.VpFormat vpFormat, List<String> signatureAlgorithms) {
         MdocGenericFormat format = new MdocGenericFormat();
-        List<Integer> coseAlgorithms =
-                signatureAlgorithms.stream().map(COSEAlgorithms::getValueByName).toList();
+        // `COSEAlgorithms.getValueByName` returns 0 (the reserved COSE algorithm) for JOSE names
+        // it cannot map; advertising a reserved algorithm is misleading to wallets, so drop them.
+        List<Integer> coseAlgorithms = signatureAlgorithms.stream()
+                .map(COSEAlgorithms::getValueByName)
+                .filter(value -> value != 0)
+                .toList();
         format.setIssuerAuthAlgValues(coseAlgorithms);
         format.setDeviceAuthAlgValues(coseAlgorithms);
         vpFormat.setMsoMdoc(format);

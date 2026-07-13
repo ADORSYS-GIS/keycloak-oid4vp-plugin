@@ -10,7 +10,7 @@ import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 
 /**
- * Configured presentation requirements on the mDoc device response for authentication.
+ * Configured presentation requirements on mDoc device responses for authentication.
  */
 public class MdocAuthRequirements {
 

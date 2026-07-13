@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.SUPPORTING_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
@@ -27,6 +29,8 @@ import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
@@ -56,7 +60,7 @@ import org.keycloak.util.JsonSerialization;
  */
 public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
-    private static final String VCT_CONFIG_ALT = AuthenticationProfileSamples.VCT_CONFIG_ALT;
+    public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
 
     @Test
     public void shouldProduceAuthorizationRequests() throws Exception {
@@ -330,50 +334,43 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     @Test
     public void shouldAuthenticateSuccessfully_WithDualCredentialProfile() throws Exception {
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.dualProfile(),
-                AuthenticationProfileSamples.DUAL_PROFILE_ID,
-                (apiFlow, requestObject) -> {
-                    assertNull(apiFlow.authContext().getProfileId(), "Profile id must not be leaked to the wallet");
-                    assertEquals(
-                            2, requestObject.getDcqlQuery().getCredentials().size());
-                    assertEquals(
-                            List.of("primary", "supporting"),
-                            requestObject.getDcqlQuery().getCredentials().stream()
-                                    .map(Credential::getId)
-                                    .toList());
+        withAuthenticationProfile(AuthenticationProfileSamples.dualProfile(), (apiFlow, requestObject) -> {
+            assertNull(apiFlow.authContext().getProfileId(), "Profile id must not be leaked to the wallet");
+            assertEquals(2, requestObject.getDcqlQuery().getCredentials().size());
+            assertEquals(
+                    List.of(PRIMARY_CREDENTIAL_ID, SUPPORTING_CREDENTIAL_ID),
+                    requestObject.getDcqlQuery().getCredentials().stream()
+                            .map(Credential::getId)
+                            .toList());
 
-                    String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier());
+            String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+            TestOpts opts =
+                    TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
 
-                    testSuccessfulAuthentication(sdJwt, opts);
-                });
+            testSuccessfulAuthentication(sdJwt, opts);
+        });
     }
 
     @Test
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential() throws Exception {
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.mdocPrimary(),
-                AuthenticationProfileSamples.MDOC_PRIMARY_PROFILE_ID,
-                (apiFlow, requestObject) -> {
-                    Credential mdocCredential =
-                            requestObject.getDcqlQuery().getCredentials().getFirst();
-                    assertEquals("mso_mdoc", mdocCredential.getFormat());
-                    assertEquals(MdocBaseTest.DOC_TYPE, mdocCredential.getMeta().getDoctypeValue());
+        withAuthenticationProfile(AuthenticationProfileSamples.mdocPrimary(), (apiFlow, requestObject) -> {
+            Credential mdocCredential =
+                    requestObject.getDcqlQuery().getCredentials().getFirst();
+            assertEquals("mso_mdoc", mdocCredential.getFormat());
+            assertEquals(MdocBaseTest.DOC_TYPE, mdocCredential.getMeta().getDoctypeValue());
 
-                    Map<String, Object> mdocClaims =
-                            Map.of(MdocBaseTest.NAMESPACE, Map.of("sub", TEST_USER_ID, "username", TEST_USER));
-                    String mdocToken = MdocBaseTest.buildMdocVpToken(requestObject, mdocClaims, MdocBaseTest.DOC_TYPE);
+            Map<String, Object> mdocClaims = Map.of(
+                    MdocBaseTest.NAMESPACE,
+                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+            String mdocToken = presentMdoc(requestObject, mdocClaims);
 
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier())
-                            .setShouldForceUnencryptedResponse(true);
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
 
-                    testSuccessfulAuthenticationWithVPTokenMap(Map.of("primary", mdocToken), opts);
-                });
+            testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+        });
     }
 
     @Test
@@ -385,7 +382,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
         withAuthenticationProfile(
                 AuthenticationProfileSamples.mdocPrimary(),
-                AuthenticationProfileSamples.MDOC_PRIMARY_PROFILE_ID,
                 Map.of(
                         RESPONSE_MODE_CONFIG,
                         ResponseMode.DIRECT_POST_JWT.getValue(),
@@ -395,8 +391,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     // Encrypted responses advertise an ephemeral JWK set for response encryption.
                     assertNotNull(requestObject.getClientMetadata().getJwks());
 
-                    Map<String, Object> mdocClaims =
-                            Map.of(MdocBaseTest.NAMESPACE, Map.of("sub", TEST_USER_ID, "username", TEST_USER));
+                    Map<String, Object> mdocClaims = Map.of(
+                            MdocBaseTest.NAMESPACE,
+                            Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
                     String mdocToken = MdocBaseTest.buildMdocVpToken(
                             requestObject, mdocClaims, MdocBaseTest.DOC_TYPE, mdocGeneratedNonce, true);
 
@@ -407,69 +404,87 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                             // the mdocGeneratedNonce into the JWE `apu` header.
                             .setResponseApu(mdocGeneratedNonce);
 
-                    testSuccessfulAuthenticationWithVPTokenMap(Map.of("primary", mdocToken), opts);
+                    testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
                 });
     }
 
     @Test
     public void shouldAuthenticateSuccessfully_WithSdJwtPrimaryAndMdocSupporting() throws Exception {
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.sdjwtMdocDual(),
-                AuthenticationProfileSamples.SDJWT_MDOC_DUAL_PROFILE_ID,
-                (apiFlow, requestObject) -> {
-                    assertEquals(
-                            2, requestObject.getDcqlQuery().getCredentials().size());
-                    assertEquals(
-                            List.of("primary", "supporting"),
-                            requestObject.getDcqlQuery().getCredentials().stream()
-                                    .map(Credential::getId)
-                                    .toList());
+        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
+            assertEquals(2, requestObject.getDcqlQuery().getCredentials().size());
+            assertEquals(
+                    List.of(PRIMARY_CREDENTIAL_ID, SUPPORTING_CREDENTIAL_ID),
+                    requestObject.getDcqlQuery().getCredentials().stream()
+                            .map(Credential::getId)
+                            .toList());
 
-                    String sdJwtVpToken = presentSdJwt(requestObject);
-                    Map<String, Object> mdocClaims = Map.of(MdocBaseTest.NAMESPACE, Map.of("username", TEST_USER));
-                    String mdocToken = MdocBaseTest.buildMdocVpToken(requestObject, mdocClaims, MdocBaseTest.DOC_TYPE);
+            String sdJwtVpToken = presentSdJwt(requestObject);
+            Map<String, Object> mdocClaims =
+                    Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, TEST_USER));
+            String mdocToken = presentMdoc(requestObject, mdocClaims);
 
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier())
-                            .setShouldForceUnencryptedResponse(true);
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
 
-                    testSuccessfulAuthenticationWithVPTokenMap(
-                            Map.of("primary", sdJwtVpToken, "supporting", mdocToken), opts);
-                });
+            testSuccessfulAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken, SUPPORTING_CREDENTIAL_ID, mdocToken), opts);
+        });
     }
 
     @Test
     public void shouldFailAuthentication_IfMdocSupportingCredentialMissing() throws Exception {
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.sdjwtMdocDual(),
-                AuthenticationProfileSamples.SDJWT_MDOC_DUAL_PROFILE_ID,
-                (apiFlow, requestObject) -> {
-                    String sdJwtVpToken = presentSdJwt(requestObject);
+        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
+            String sdJwtVpToken = presentSdJwt(requestObject);
 
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier())
-                            .setShouldForceUnencryptedResponse(true);
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
 
-                    testFailingAuthenticationWithVPTokenMap(
-                            Map.of("primary", sdJwtVpToken),
-                            opts,
-                            HttpStatus.SC_BAD_REQUEST,
-                            ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                            "Presented vp_token map must contain exactly one token for credential 'supporting'");
-                });
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken),
+                    opts,
+                    HttpStatus.SC_BAD_REQUEST,
+                    ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                    "Presented vp_token map must contain exactly one token for credential 'supporting'");
+        });
     }
 
     @Test
     public void shouldFailAuthentication_IfMdocSupportingBindingRuleFails() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
+            String sdJwtVpToken = presentSdJwt(requestObject);
+            Map<String, Object> mdocClaims =
+                    Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, "other-user"));
+            String mdocToken = presentMdoc(requestObject, mdocClaims);
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken, SUPPORTING_CREDENTIAL_ID, mdocToken),
+                    opts,
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "Supporting credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
+        });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocIssuerCertNotTrusted() throws Exception {
+        // Configure the primary mDoc credential with a trust anchor that does NOT match the
+        // issuer certificate used to sign the device response (ISO 18013-5 spec sample cert).
         withAuthenticationProfile(
-                AuthenticationProfileSamples.sdjwtMdocDual(),
-                AuthenticationProfileSamples.SDJWT_MDOC_DUAL_PROFILE_ID,
+                AuthenticationProfileSamples.mdocPrimaryWithAnchor(MdocBaseTest.getSpecSampleCert()),
                 (apiFlow, requestObject) -> {
-                    String sdJwtVpToken = presentSdJwt(requestObject);
-                    Map<String, Object> mdocClaims = Map.of(MdocBaseTest.NAMESPACE, Map.of("username", "other-user"));
-                    String mdocToken = MdocBaseTest.buildMdocVpToken(requestObject, mdocClaims, MdocBaseTest.DOC_TYPE);
+                    Map<String, Object> mdocClaims = Map.of(
+                            MdocBaseTest.NAMESPACE,
+                            Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+                    String mdocToken = presentMdoc(requestObject, mdocClaims);
 
                     TestOpts opts = TestOpts.getDefault()
                             .setAuthContext(apiFlow.authContext())
@@ -477,12 +492,44 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                             .setShouldForceUnencryptedResponse(true);
 
                     testFailingAuthenticationWithVPTokenMap(
-                            Map.of("primary", sdJwtVpToken, "supporting", mdocToken),
+                            Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
                             opts,
                             HttpStatus.SC_UNAUTHORIZED,
                             ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                            "Supporting credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
+                            "Certificate chain validation failed");
                 });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocResponseExpired() throws Exception {
+        // Present an mDoc device response whose MSO validityInfo.validUntil lies in the past,
+        // so verification fails the exp check. The container clock cannot be shifted, so the
+        // forged validity window must be baked into the MSO itself.
+        withAuthenticationProfile(AuthenticationProfileSamples.mdocPrimary(), (apiFlow, requestObject) -> {
+            ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC).withNano(0);
+            Map<String, Object> mdocClaims = Map.of(
+                    MdocBaseTest.NAMESPACE,
+                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+            String mdocToken = MdocBaseTest.buildMdocVpToken(
+                    requestObject,
+                    mdocClaims,
+                    MdocBaseTest.DOC_TYPE,
+                    now.minusMinutes(30),
+                    now.minusMinutes(30),
+                    now.minusMinutes(5));
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
+                    opts,
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "Validity information verification failed");
+        });
     }
 
     @Test
@@ -818,5 +865,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
         return sdJwtVPTestUtils.presentSdJwt(
                 sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+    }
+
+    private String presentMdoc(RequestObject requestObject, Map<String, Object> claims) throws Exception {
+        return MdocBaseTest.buildMdocVpToken(requestObject, claims, MdocBaseTest.DOC_TYPE);
     }
 }

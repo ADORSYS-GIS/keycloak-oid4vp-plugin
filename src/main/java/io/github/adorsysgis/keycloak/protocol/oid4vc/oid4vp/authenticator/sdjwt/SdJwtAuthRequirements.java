@@ -8,6 +8,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequireme
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
@@ -22,7 +23,7 @@ import org.keycloak.sdjwt.vp.KeyBindingJwtVerificationOpts;
 import org.keycloak.services.Urls;
 
 /**
- * Presentation requirements on for SD-JWT VP token authentication
+ * Presentation requirements on SD-JWT VP tokens for authentication
  */
 public class SdJwtAuthRequirements {
 
@@ -148,8 +149,9 @@ public class SdJwtAuthRequirements {
     }
 
     private boolean usesExternalIssuerTrust(CredentialRequirement credentialRequirement) {
-        return credentialRequirement.getTrust() != null
-                && credentialRequirement.getTrust().stream()
-                        .anyMatch(trust -> !TrustPolicy.SELF.equals(trust.getType()));
+        return Optional.ofNullable(credentialRequirement)
+                .map(CredentialRequirement::getTrust)
+                .map(trusts -> trusts.stream().anyMatch(t -> !TrustPolicy.SELF.equals(t.getType())))
+                .orElse(false);
     }
 }

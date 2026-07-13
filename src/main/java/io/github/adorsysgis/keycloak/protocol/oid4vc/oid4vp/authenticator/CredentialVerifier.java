@@ -10,9 +10,8 @@ import org.keycloak.common.VerificationException;
  * Format-specific verification entry point for credentials presented via OpenID4VP.
  *
  * <p>An authenticator orchestrator consults the registered verifiers to verify presented
- * credentials, read identifying claims, validate transaction data, and apply supporting
- * credential binding rules. Verifiers are keyed by their supported {@link #format() format
- * identifier} (e.g. {@code dc+sd-jwt}, {@code mso_mdoc}).
+ * credentials, read identifying claims, and apply supporting credential binding rules.
+ * Verifiers are keyed by their supported {@link #format() format identifier}.
  */
 public interface CredentialVerifier {
 

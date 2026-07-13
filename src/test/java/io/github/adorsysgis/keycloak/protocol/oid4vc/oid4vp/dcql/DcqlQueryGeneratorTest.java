@@ -1,13 +1,18 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.keycloak.VCFormat;
 
@@ -56,6 +61,43 @@ public class DcqlQueryGeneratorTest {
         assertEquals(
                 List.of("main", "supporting"),
                 query.getCredentialSets().getFirst().getOptions().getFirst());
+    }
+
+    @Test
+    void testGenerateMdocDcqlQuery() {
+        List<String> docTypes = List.of("org.iso.18013.5.1.mDL");
+        List<String> claims = List.of("org.iso.18013.5.1/given_name", "org.iso.18013.5.1/family_name");
+        AuthenticationProfile profile = new AuthenticationProfile()
+                .setId("mdoc")
+                .setCredentials(List.of(new CredentialRequirement()
+                        .setId("mdoc-credential")
+                        .setRole(CredentialRole.PRIMARY)
+                        .setFormat(CredentialFormat.MSO_MDOC.getValue())
+                        .setCredentialTypes(docTypes)
+                        .setClaims(claims)));
+
+        DcqlQuery query = generator.buildQuery(profile, true);
+        assertEquals(1, query.getCredentials().size());
+        Credential credential = query.getCredentials().getFirst();
+
+        assertEquals(CredentialFormat.MSO_MDOC.getValue(), credential.getFormat());
+        assertEquals(docTypes.getFirst(), credential.getMeta().getDoctypeValue());
+
+        List<Claim> generatedClaims = credential.getClaims();
+        assertEquals(claims.size(), generatedClaims.size());
+
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < claims.size(); i++) {
+            Claim claim = generatedClaims.get(i);
+            // claim ids are random UUIDs — unique and non-blank (one scheme for all formats)
+            assertTrue(claim.getId() != null && !claim.getId().isBlank(), "claim id must not be blank");
+            assertTrue(ids.add(claim.getId()), "claim ids must be unique: " + claim.getId());
+            // path is [namespace, name] derived from the namespaced claim spec
+            assertEquals(2, claim.getPath().size());
+            var parts = claims.get(i).split(CredentialRequirement.ClaimReference.SEPARATOR);
+            assertEquals(parts[0], claim.getPath().getFirst());
+            assertEquals(parts[1], claim.getPath().get(1));
+        }
     }
 
     public static void assertDcqlQuery(DcqlQuery query, List<String> vctValues, List<String> claims) {

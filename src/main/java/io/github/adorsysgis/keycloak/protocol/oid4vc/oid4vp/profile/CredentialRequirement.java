@@ -126,6 +126,8 @@ public class CredentialRequirement {
      */
     public record ClaimReference(String namespace, String name) {
 
+        public static final String SEPARATOR = "/";
+
         public ClaimReference {
             if (StringUtil.isBlank(name)) {
                 throw new IllegalArgumentException("Claim name must not be blank");
@@ -133,11 +135,11 @@ public class CredentialRequirement {
         }
 
         public boolean isNamespaced() {
-            return namespace != null && !namespace.isBlank();
+            return StringUtil.isNotBlank(namespace);
         }
 
         public static ClaimReference parse(String spec) {
-            int slash = spec.indexOf('/');
+            int slash = spec.indexOf(SEPARATOR);
             if (slash < 0) {
                 return new ClaimReference(null, spec);
             }

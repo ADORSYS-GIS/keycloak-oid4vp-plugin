@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -72,13 +71,32 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      * @return contextual data for further assertions
      */
     protected TestFlowData testSuccessfulAuthenticationVerbose(String sdJwt, TestOpts opts) throws Exception {
+        return testSuccessfulAuthenticationVerboseCore(opts, (req, o) -> sendAuthorizationResponse(sdJwt, req, o));
+    }
+
+    /**
+     * Sends the authorization response to Keycloak. Used by the shared successful/failing test
+     * cores so that the single-credential and VP-token-map variants only differ in this step.
+     */
+    @FunctionalInterface
+    protected interface ResponseSender {
+        HttpResponse send(RequestObject requestObject, TestOpts opts) throws Exception;
+    }
+
+    /**
+     * Shared core of the verbose successful-flow helpers: resolves the API flow, sends the
+     * response via {@code sendResponse}, asserts a successful JSON reply and redeems the
+     * authorization code.
+     */
+    private TestFlowData testSuccessfulAuthenticationVerboseCore(TestOpts opts, ResponseSender sendResponse)
+            throws Exception {
         // Retrieve an authorization request
         ApiFlowData apiFlow = resolveApiFlow(opts);
         AuthorizationContext authContext = apiFlow.authContext();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
         // Prepare and send the OpenID4VP response to Keycloak
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
+        HttpResponse response = sendResponse.send(requestObject, opts);
         ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
         assertTrue(
@@ -127,18 +145,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     protected void testFailingAuthentication(
             String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
             throws Exception {
-        // Retrieve an authorization request
-        AuthorizationContext authContext =
-                Optional.ofNullable(opts.getAuthContext()).orElseGet(this::requestAuthorizationRequest);
-
-        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-
-        // Prepare and send the OpenID4VP response to Keycloak
-        HttpResponse response = sendAuthorizationResponse(sdJwt, requestObject, opts);
-
-        // Run assertions
-        assertFailingAuthentication(
-                response, authContext.getTransactionId(), httpStatus, expectedError, expectedErrorDescription);
+        testFailingAuthenticationCore(
+                opts,
+                httpStatus,
+                expectedError,
+                expectedErrorDescription,
+                (req, o) -> sendAuthorizationResponse(sdJwt, req, o));
     }
 
     /**
@@ -224,31 +236,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      */
     protected TestFlowData testSuccessfulAuthenticationWithVPTokenMapVerbose(
             Map<String, String> vpTokensByCredentialId, TestOpts opts) throws Exception {
-        ApiFlowData apiFlow = resolveApiFlow(opts);
-        AuthorizationContext authContext = apiFlow.authContext();
-        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
-
-        HttpResponse response = sendAuthorizationResponseWithVPTokenMap(vpTokensByCredentialId, requestObject, opts);
-        ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        assertTrue(
-                response.getEntity().getContentType().getValue().startsWith("application/json"),
-                "response_uri endpoint should reply with application/json");
-
-        if (opts.getAuthContext() == null) {
-            assertNull(
-                    responseToWallet.getRedirectUri(),
-                    "Response to wallet should not contain a redirect URI in cross-device flow");
-        }
-
-        String authCode = null;
-        if (authContext.getTransactionId() != null) {
-            assertSuccessfulAuthorizationStatus(apiFlow);
-            assertNotNull(apiFlow.codeVerifier(), "Code verifier required for PKCE-protected code redemption");
-            authCode = redeemAuthorizationCode(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        }
-
-        return new TestFlowData(authContext, requestObject, responseToWallet, authCode);
+        return testSuccessfulAuthenticationVerboseCore(
+                opts, (req, o) -> sendAuthorizationResponseWithVPTokenFlatMap(vpTokensByCredentialId, req, o));
     }
 
     /**
@@ -261,11 +250,30 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             String expectedError,
             String expectedErrorDescription)
             throws Exception {
+        testFailingAuthenticationCore(
+                opts,
+                httpStatus,
+                expectedError,
+                expectedErrorDescription,
+                (req, o) -> sendAuthorizationResponseWithVPTokenFlatMap(vpTokensByCredentialId, req, o));
+    }
+
+    /**
+     * Shared core of the failing-flow helpers: resolves the API flow, sends the response via
+     * {@code sendResponse} and asserts the expected failure.
+     */
+    private void testFailingAuthenticationCore(
+            TestOpts opts,
+            int httpStatus,
+            String expectedError,
+            String expectedErrorDescription,
+            ResponseSender sendResponse)
+            throws Exception {
         ApiFlowData apiFlow = resolveApiFlow(opts);
         AuthorizationContext authContext = apiFlow.authContext();
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
-        HttpResponse response = sendAuthorizationResponseWithVPTokenMap(vpTokensByCredentialId, requestObject, opts);
+        HttpResponse response = sendResponse.send(requestObject, opts);
 
         assertFailingAuthentication(
                 response, authContext.getTransactionId(), httpStatus, expectedError, expectedErrorDescription);
@@ -354,25 +362,24 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
      */
     protected HttpResponse sendAuthorizationResponseWithVPToken(
             String sdJwtVpToken, RequestObject requestObject, TestOpts opts) throws Exception {
-        return sendAuthorizationResponseWithVPTokenListMap(
+        return sendAuthorizationResponseWithVPTokenMap(
                 prepareVpTokenMap(sdJwtVpToken, requestObject), requestObject, opts);
+    }
+
+    /**
+     * Sends an OpenID4VP response to Keycloak with a pre-built vp_token map (flattened).
+     */
+    protected HttpResponse sendAuthorizationResponseWithVPTokenFlatMap(
+            Map<String, String> vpTokensByCredentialId, RequestObject requestObject, TestOpts opts) throws Exception {
+        Map<String, List<String>> vpTokenMap = vpTokensByCredentialId.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> List.of(e.getValue())));
+        return sendAuthorizationResponseWithVPTokenMap(vpTokenMap, requestObject, opts);
     }
 
     /**
      * Sends an OpenID4VP response to Keycloak with a pre-built vp_token map.
      */
     protected HttpResponse sendAuthorizationResponseWithVPTokenMap(
-            Map<String, String> vpTokensByCredentialId, RequestObject requestObject, TestOpts opts) throws Exception {
-        Map<String, List<String>> vpTokenMap = vpTokensByCredentialId.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> List.of(e.getValue())));
-        return sendAuthorizationResponseWithVPTokenListMap(vpTokenMap, requestObject, opts);
-    }
-
-    /**
-     * Sends an OpenID4VP response to Keycloak with a pre-built vp_token map
-     * where each credential id maps to a list of tokens.
-     */
-    protected HttpResponse sendAuthorizationResponseWithVPTokenListMap(
             Map<String, List<String>> vpTokenMap, RequestObject requestObject, TestOpts opts) throws Exception {
         List<BasicNameValuePair> oid4vpResponse;
         if (!opts.shouldForceUnencryptedResponse()
@@ -406,18 +413,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
-     * Prepare the OpenID4VP response object to be sent to Keycloak.
-     *
-     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the DCQL query
-     */
-    private List<BasicNameValuePair> prepareOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
-            throws IOException {
-        // Build final-spec vp_token map keyed by DCQL credential query ID
-        return prepareOpenID4VPResponse(prepareVpTokenMap(sdJwtVpToken, requestObject), requestObject);
-    }
-
-    /**
      * Prepare the OpenID4VP response object from a pre-built vp_token map.
      */
     private List<BasicNameValuePair> prepareOpenID4VPResponse(
@@ -426,26 +421,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         return new ArrayList<>(List.of(
                 new BasicNameValuePair(ResponseObject.VP_TOKEN_KEY, JsonSerialization.writeValueAsString(vpTokenMap)),
                 new BasicNameValuePair(ResponseObject.STATE_KEY, requestObject.getState())));
-    }
-
-    /**
-     * Prepare an encrypted OpenID4VP response object to be sent to Keycloak.
-     *
-     * @param sdJwtVpToken  the SD-JWT verifiable presentation token
-     * @param requestObject the request object containing the DCQL query
-     */
-    private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(String sdJwtVpToken, RequestObject requestObject)
-            throws IOException {
-        // Build final-spec vp_token map keyed by DCQL credential query ID
-        return prepareEncryptedOpenID4VPResponse(prepareVpTokenMap(sdJwtVpToken, requestObject), requestObject);
-    }
-
-    /**
-     * Prepare an encrypted OpenID4VP response object from a pre-built vp_token map.
-     */
-    private List<BasicNameValuePair> prepareEncryptedOpenID4VPResponse(
-            Map<String, List<String>> vpTokenMap, RequestObject requestObject) throws IOException {
-        return prepareEncryptedOpenID4VPResponse(vpTokenMap, requestObject, null);
     }
 
     /**
@@ -493,6 +468,25 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     protected void withAuthenticationProfile(String profilesJson, String profileId, ProfiledTest test)
             throws Exception {
         withAuthenticationProfile(profilesJson, profileId, Map.of(), test);
+    }
+
+    /**
+     * Convenience overload that reads the profile JSON and id from a single
+     * {@link AuthenticationProfileSamples.ProfileSample}.
+     */
+    protected void withAuthenticationProfile(AuthenticationProfileSamples.ProfileSample profile, ProfiledTest test)
+            throws Exception {
+        withAuthenticationProfile(profile.json(), profile.profileId(), test);
+    }
+
+    /**
+     * Convenience overload that reads the profile JSON and id from a single
+     * {@link AuthenticationProfileSamples.ProfileSample}, alongside extra config overrides.
+     */
+    protected void withAuthenticationProfile(
+            AuthenticationProfileSamples.ProfileSample profile, Map<String, String> extraConfig, ProfiledTest test)
+            throws Exception {
+        withAuthenticationProfile(profile.json(), profile.profileId(), extraConfig, test);
     }
 
     /**

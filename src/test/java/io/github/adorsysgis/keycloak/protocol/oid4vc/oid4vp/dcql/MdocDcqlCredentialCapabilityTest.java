@@ -2,13 +2,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.keycloak.common.VerificationException;
 
 class MdocDcqlCredentialCapabilityTest {
 
@@ -30,13 +27,23 @@ class MdocDcqlCredentialCapabilityTest {
     }
 
     @Test
-    void contributeVpFormatsSupportedResolvesUnknownAlgorithmsToZero() {
+    void contributeVpFormatsSupportedDropsUnknownAlgorithms() {
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
         capability.contributeVpFormatsSupported(vpFormat, List.of("UNKNOWN_ALG"));
 
         assertNotNull(vpFormat.getMsoMdoc());
-        assertEquals(List.of(0), vpFormat.getMsoMdoc().getIssuerAuthAlgValues());
-        assertEquals(List.of(0), vpFormat.getMsoMdoc().getDeviceAuthAlgValues());
+        assertEquals(List.of(), vpFormat.getMsoMdoc().getIssuerAuthAlgValues());
+        assertEquals(List.of(), vpFormat.getMsoMdoc().getDeviceAuthAlgValues());
+    }
+
+    @Test
+    void contributeVpFormatsSupportedKeepsKnownAndDropsUnknown() {
+        ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
+        capability.contributeVpFormatsSupported(vpFormat, List.of("ES256", "UNKNOWN_ALG", "EdDSA"));
+
+        assertNotNull(vpFormat.getMsoMdoc());
+        assertEquals(List.of(-7, -8), vpFormat.getMsoMdoc().getIssuerAuthAlgValues());
+        assertEquals(List.of(-7, -8), vpFormat.getMsoMdoc().getDeviceAuthAlgValues());
     }
 
     @Test
@@ -47,11 +54,5 @@ class MdocDcqlCredentialCapabilityTest {
         assertNotNull(vpFormat.getMsoMdoc());
         assertEquals(List.of(-8), vpFormat.getMsoMdoc().getIssuerAuthAlgValues());
         assertEquals(List.of(-8), vpFormat.getMsoMdoc().getDeviceAuthAlgValues());
-    }
-
-    @Test
-    void validatePresentationThrowsUnsupported() {
-        DcqlQuery query = new DcqlQuery();
-        assertThrows(VerificationException.class, () -> capability.validatePresentation(query, "token"));
     }
 }

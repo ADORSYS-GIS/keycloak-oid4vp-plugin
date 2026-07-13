@@ -247,8 +247,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     protected Map<String, CredentialVerifier> defaultHandlers(KeycloakSession session) {
         StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);
         Map<String, CredentialVerifier> handlers = new LinkedHashMap<>();
-        handlers.put(CredentialFormat.SD_JWT_VC.getIdentifier(), new SdJwtCredentialVerifier(httpFetcher));
-        handlers.put(CredentialFormat.MSO_MDOC.getIdentifier(), new MdocCredentialVerifier());
+        handlers.put(CredentialFormat.SD_JWT_VC.getValue(), new SdJwtCredentialVerifier(httpFetcher));
+        handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier());
         return handlers;
     }
 

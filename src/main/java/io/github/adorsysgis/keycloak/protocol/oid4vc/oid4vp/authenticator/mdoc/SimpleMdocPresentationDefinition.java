@@ -29,8 +29,7 @@ public class SimpleMdocPresentationDefinition implements PresentationRequirement
 
     @Override
     public void checkIfSatisfiedBy(JsonNode payload) throws VerificationException {
-        String docType =
-                payload.get(L_DOC_TYPE) != null ? payload.get(L_DOC_TYPE).asText() : null;
+        String docType = payload.path(L_DOC_TYPE).asText(null);
         if (docType == null || !expectedDocTypes.contains(docType)) {
             throw new VerificationException(
                     String.format("Unexpected docType: expected one of %s but got '%s'", expectedDocTypes, docType));
