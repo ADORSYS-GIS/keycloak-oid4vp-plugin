@@ -4,6 +4,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.keycloak.jose.jwe.JWE;
 import org.keycloak.jose.jwe.JWEConstants;
@@ -22,12 +23,15 @@ public final class AuthorizationResponseJweValidator {
      * Ensures the encrypted response uses allowed algorithms and a {@code kid} that matches keys the verifier
      * advertised in the request object.
      *
+     * @return Parsed `encryptedResponse` as JWE
      * @throws IllegalArgumentException with a human-readable message when validation fails
      */
-    public static void validate(String encryptedResponse, AuthorizationContext authorizationContext) {
+    public static JWE validate(String encryptedResponse, AuthorizationContext authorizationContext) {
+        final JWE parsed;
         final JWEHeader header;
+
         try {
-            JWE parsed = new JWE(encryptedResponse);
+            parsed = new JWE(encryptedResponse);
             header = (JWEHeader) parsed.getHeader();
         } catch (RuntimeException e) {
             throw new IllegalArgumentException("Encrypted response is not a compact JWE", e);
@@ -48,7 +52,7 @@ public final class AuthorizationResponseJweValidator {
         }
 
         var clientMetadata = authorizationContext.getRequestObject().getClientMetadata();
-        if (!List.of(JWEConstants.ECDH_ES).contains(alg)) {
+        if (!Objects.equals(JWEConstants.ECDH_ES, alg)) {
             throw new IllegalArgumentException(String.format(
                     "Unsupported JWE key management algorithm `%s` (this verifier supports ECDH-ES only).", alg));
         }
@@ -85,6 +89,8 @@ public final class AuthorizationResponseJweValidator {
                     "JWE `alg` (`%s`) does not match the `alg` parameter declared on the advertised JWK (`%s`).",
                     alg, keyAlg));
         }
+
+        return parsed;
     }
 
     /**

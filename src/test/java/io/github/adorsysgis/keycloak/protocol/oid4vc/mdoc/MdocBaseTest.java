@@ -41,6 +41,8 @@ import com.authlete.mdoc.MobileSecurityObjectBytes;
 import com.authlete.mdoc.ValidityInfo;
 import com.authlete.mdoc.ValueDigests;
 import com.authlete.mdoc.ValueDigestsEntry;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc.MdocCredentialVerifier;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -114,26 +116,79 @@ public class MdocBaseTest {
 
     protected DeviceResponse buildDeviceResponse(MdocVerificationOpts opts, IssuerSignedCustomizer customizer)
             throws Exception {
-        BuiltStandard built = buildStandardComponents();
-        DeviceSigned deviceSigned = buildDeviceSigned(opts);
+        return buildDeviceResponse(opts, Map.of(NAMESPACE, Map.of("claimName1", "claimValue1")), DOC_TYPE, customizer);
+    }
+
+    /**
+     * Builds an mDoc device response (Base64URL-encoded) matching the OpenID4VP session
+     * transcript parameters of the given request object. Used for end-to-end mDoc tests.
+     *
+     * <p>Uses the OpenID4VP-spec session transcript (no {@code mdocGeneratedNonce}).
+     */
+    public static String buildMdocVpToken(RequestObject requestObject, Map<String, Object> claims, String docType)
+            throws Exception {
+        return buildMdocVpToken(requestObject, claims, docType, null, false);
+    }
+
+    /**
+     * Builds an mDoc device response (Base64URL-encoded) matching the OpenID4VP session
+     * transcript parameters of the given request object, optionally binding the device
+     * signature to the ISO-spec session transcript using {@code mdocGeneratedNonce}.
+     *
+     * @param mdocGeneratedNonce the wallet-generated nonce carried in the JWE {@code apu}
+     *                            header; when non-null and {@code fallbackToIso} is true,
+     *                            the ISO-spec transcript is used instead of the OpenID4VP one
+     * @param fallbackToIso       whether to fall back to the ISO-spec transcript
+     */
+    public static String buildMdocVpToken(
+            RequestObject requestObject,
+            Map<String, Object> claims,
+            String docType,
+            String mdocGeneratedNonce,
+            boolean fallbackToIso)
+            throws Exception {
+        byte[] jwkThumbprint = MdocCredentialVerifier.computeJwkThumbprint(requestObject);
+        MdocVerificationOpts opts = MdocVerificationOpts.builder()
+                .withClientId(requestObject.getClientId())
+                .withOid4vpNonce(requestObject.getNonce())
+                .withResponseUri(requestObject.getResponseUri())
+                .withJwkThumbprint(jwkThumbprint)
+                .withMdocGeneratedNonce(mdocGeneratedNonce)
+                .withFallbackToIsoSpecSessionTranscript(fallbackToIso)
+                .build();
+        return buildDeviceResponse(opts, claims, docType).encodeToBase64Url();
+    }
+
+    /**
+     * Builds a device response with custom claims and docType. Intended for end-to-end tests that
+     * need mDoc credentials carrying arbitrary claim values (e.g. username, sub).
+     */
+    public static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts, Map<String, Object> claims, String docType) throws Exception {
+        return buildDeviceResponse(opts, claims, docType, null);
+    }
+
+    private static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts, Map<String, Object> claims, String docType, IssuerSignedCustomizer customizer)
+            throws Exception {
+        BuiltStandard built = buildStandardComponents(claims, docType);
+        DeviceSigned deviceSigned = buildDeviceSigned(opts, docType);
 
         IssueContext ctx =
                 new IssueContext(built.nameSpaces, built.mso, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
         IssuerSigned issuerSigned = (customizer == null) ? ctx.signMsoAndWrap() : customizer.customize(ctx);
 
-        return new DeviceResponse(List.of(new Document(DOC_TYPE, issuerSigned, deviceSigned, null)));
+        return new DeviceResponse(List.of(new Document(docType, issuerSigned, deviceSigned, null)));
     }
 
     private record BuiltStandard(IssuerNameSpaces nameSpaces, MobileSecurityObject mso) {}
 
-    private static BuiltStandard buildStandardComponents() throws Exception {
-        Map<String, Object> claims = Map.of(NAMESPACE, Map.of("claimName1", "claimValue1"));
-
+    private static BuiltStandard buildStandardComponents(Map<String, Object> claims, String docType) throws Exception {
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC).withNano(0);
         ValidityInfo validityInfo = new ValidityInfo(now, now, now.plusMinutes(DEFAULT_RESPONSE_VALIDITY_MINS));
 
         IssuerSigned baseline = new IssuerSignedBuilder()
-                .setDocType(DOC_TYPE)
+                .setDocType(docType)
                 .setClaims(claims)
                 .setValidityInfo(validityInfo)
                 .setIssuerKey(getIssuerKeyRef1())
@@ -146,7 +201,7 @@ public class MdocBaseTest {
 
         // Re-build an equivalent SHA-256 MSO from scratch; tests that need a different
         // digest algorithm or valueDigests simply swap ctx.mso before calling signMsoAndWrap.
-        MobileSecurityObject mso = buildStandardMSO(nameSpaces, validityInfo);
+        MobileSecurityObject mso = buildStandardMSO(nameSpaces, validityInfo, docType);
         return new BuiltStandard(nameSpaces, mso);
     }
 
@@ -155,14 +210,16 @@ public class MdocBaseTest {
      * SHA-256 over the standard claims. Tests can replace {@link IssueContext#mso} with a
      * different MSO when they need a non-default algorithm or valueDigests.
      */
-    private static MobileSecurityObject buildStandardMSO(IssuerNameSpaces nameSpaces, ValidityInfo validityInfo)
-            throws Exception {
+    private static MobileSecurityObject buildStandardMSO(
+            IssuerNameSpaces nameSpaces, ValidityInfo validityInfo, String docType) throws Exception {
         ValueDigests standardDigests = buildValueDigests(nameSpaces);
+        // Authorize every namespace present in the claims so the device key can access them.
+        List<CBORString> authorizedNamespaces = nameSpaces.getPairs().stream()
+                .map(pair -> (CBORString) pair.getKey())
+                .toList();
         DeviceKeyInfo dki = new DeviceKeyInfo(
-                getDeviceKeyRef1(),
-                new KeyAuthorizations(new AuthorizedNameSpaces(List.of(new CBORString(NAMESPACE))), null),
-                null);
-        return new MobileSecurityObject("1.0", JavaAlgorithm.SHA256, standardDigests, dki, DOC_TYPE, validityInfo);
+                getDeviceKeyRef1(), new KeyAuthorizations(new AuthorizedNameSpaces(authorizedNamespaces), null), null);
+        return new MobileSecurityObject("1.0", JavaAlgorithm.SHA256, standardDigests, dki, docType, validityInfo);
     }
 
     private static ValueDigests buildValueDigests(IssuerNameSpaces nameSpaces) {
@@ -182,13 +239,18 @@ public class MdocBaseTest {
         return new ValueDigests(entries);
     }
 
-    private static DeviceSigned buildDeviceSigned(MdocVerificationOpts opts) throws COSEException {
+    private static DeviceSigned buildDeviceSigned(MdocVerificationOpts opts, String docType) throws COSEException {
         DeviceNameSpacesBytes deviceNameSpaces = new DeviceNameSpacesBytes(new DeviceNameSpaces(List.of()));
-        CBORItemList sessionTranscript = OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(opts);
+        // Use the ISO-spec transcript when a mdocGeneratedNonce is supplied and the fallback
+        // is enabled; otherwise default to the OpenID4VP-spec transcript.
+        boolean useIsoTranscript = opts.getMdocGeneratedNonce() != null && opts.fallbackToIsoSpecSessionTranscript();
+        CBORItemList sessionTranscript = useIsoTranscript
+                ? OID4VPSessionTranscript.computeSessionTranscript_ISOSpec(opts)
+                : OID4VPSessionTranscript.computeSessionTranscript_OID4VPSpec(opts);
         CBORItemList deviceAuthentication = new CBORItemList(
                 new CBORString(MdocConstants.L_DEVICE_AUTHENTICATION),
                 sessionTranscript,
-                new CBORString(DOC_TYPE),
+                new CBORString(docType),
                 deviceNameSpaces);
 
         var deviceSignature = signDeviceSignature(CborUtil.wrap(deviceAuthentication.encode()), getDeviceKeyRef1());
@@ -338,7 +400,7 @@ public class MdocBaseTest {
                 new Document(DOC_TYPE, issuerSigned, new DeviceSigned(deviceNameSpaces, new DeviceAuth(mac0)), null)));
     }
 
-    protected static MdocVerificationOpts.Builder getDefaultMdocVerificationOpts() {
+    public static MdocVerificationOpts.Builder getDefaultMdocVerificationOpts() {
         return MdocVerificationOpts.builder()
                 .withClientId("x509_san_dns:example.com")
                 .withOid4vpNonce("exc7gBkxjx1rdc9udRrveKvSsJIq80avlXeLHhGwqtA")
@@ -346,7 +408,7 @@ public class MdocBaseTest {
                 .withJwkThumbprint(Hex.decode("4283ec927ae0f208daaa2d026a814f2b22dca52cf85ffa8f3f8626c6bd669047"));
     }
 
-    protected static COSEEC2Key getIssuerKeyRef1() {
+    public static COSEEC2Key getIssuerKeyRef1() {
         return new COSEKeyBuilder()
                 .ktyEC2()
                 .ec2CrvP256()
@@ -356,18 +418,26 @@ public class MdocBaseTest {
                 .buildEC2Key();
     }
 
-    protected static X509Certificate getIssuerCertRef1() {
-        return toCert(str("""
-            MIIBlzCCAT2gAwIBAgIUNPf1jk/kxePsVn/ntNMpN3IHqGMwCgYIKoZIzj0EAwIw
-            IDEeMBwGA1UEAwwVQ09TRSBJc3N1ZXIgMTAwIFllYXJzMCAXDTI2MDYyOTEwMjcz
-            MFoYDzIxMjYwNjA1MTAyNzMwWjAgMR4wHAYDVQQDDBVDT1NFIElzc3VlciAxMDAg
-            WWVhcnMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASqJzAzB+33cMUJ0nHA8UEu
-            2CFXK6xPmoeWdLJZpGWcLYSwdzYB4dGwyWX/4HS4JZGR+eulSAcgRgeXl43vK8Zo
-            o1MwUTAdBgNVHQ4EFgQUl8hm4O6VpuB0A5yhQe/zJxAJr54wHwYDVR0jBBgwFoAU
-            l8hm4O6VpuB0A5yhQe/zJxAJr54wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
-            AgNIADBFAiA0LGtfjdKY+1wxDzozcOTP+xB5Zcqf0GhCONvabiMRiAIhANR38jES
-            b7jxK0rLtDSKKWvzHBx3ChgwKq7o+N+fqp4t
-            """));
+    /**
+     * Returns the Base64-encoded DER certificate of the test mDoc issuer. Suitable for use as an
+     * x5c trust anchor in authenticator profile configuration.
+     */
+    public static String getIssuerCertBase64() {
+        return str("""
+                MIIBlzCCAT2gAwIBAgIUNPf1jk/kxePsVn/ntNMpN3IHqGMwCgYIKoZIzj0EAwIw
+                IDEeMBwGA1UEAwwVQ09TRSBJc3N1ZXIgMTAwIFllYXJzMCAXDTI2MDYyOTEwMjcz
+                MFoYDzIxMjYwNjA1MTAyNzMwWjAgMR4wHAYDVQQDDBVDT1NFIElzc3VlciAxMDAg
+                WWVhcnMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASqJzAzB+33cMUJ0nHA8UEu
+                2CFXK6xPmoeWdLJZpGWcLYSwdzYB4dGwyWX/4HS4JZGR+eulSAcgRgeXl43vK8Zo
+                o1MwUTAdBgNVHQ4EFgQUl8hm4O6VpuB0A5yhQe/zJxAJr54wHwYDVR0jBBgwFoAU
+                l8hm4O6VpuB0A5yhQe/zJxAJr54wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
+                AgNIADBFAiA0LGtfjdKY+1wxDzozcOTP+xB5Zcqf0GhCONvabiMRiAIhANR38jES
+                b7jxK0rLtDSKKWvzHBx3ChgwKq7o+N+fqp4t
+                """);
+    }
+
+    public static X509Certificate getIssuerCertRef1() {
+        return toCert(getIssuerCertBase64());
     }
 
     /**
@@ -391,7 +461,7 @@ public class MdocBaseTest {
             """);
     }
 
-    protected static COSEEC2Key getDeviceKeyRef1() {
+    public static COSEEC2Key getDeviceKeyRef1() {
         return new COSEKeyBuilder()
                 .ktyEC2()
                 .ec2CrvP256()

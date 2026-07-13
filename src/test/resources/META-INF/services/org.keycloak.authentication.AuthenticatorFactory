@@ -1,1 +1,1 @@
-io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.stub.CustomSdJwtAuthenticatorFactory
+io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.stub.CustomOID4VPAuthenticatorFactory

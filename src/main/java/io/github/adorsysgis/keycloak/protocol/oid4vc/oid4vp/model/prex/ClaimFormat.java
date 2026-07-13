@@ -10,7 +10,7 @@ import javax.annotation.processing.Generated;
  * <p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"dc+sd-jwt", "jwt", "jwt_vc_json", "jwt_vp", "ldp", "ldp_vc", "ldp_vp"})
+@JsonPropertyOrder({"dc+sd-jwt", "mso_mdoc", "jwt", "jwt_vc_json", "jwt_vp", "ldp", "ldp_vc", "ldp_vp"})
 @Generated("jsonschema2pojo")
 public class ClaimFormat {
 
@@ -34,6 +34,9 @@ public class ClaimFormat {
 
     @JsonProperty("dc+sd-jwt")
     private SdGenericFormat dcSdJwt;
+
+    @JsonProperty("mso_mdoc")
+    private MdocGenericFormat msoMdoc;
 
     @JsonProperty("jwt")
     public GenericFormat getJwt() {
@@ -105,6 +108,16 @@ public class ClaimFormat {
         this.dcSdJwt = dcSdJwt;
     }
 
+    @JsonProperty("mso_mdoc")
+    public MdocGenericFormat getMsoMdoc() {
+        return msoMdoc;
+    }
+
+    @JsonProperty("mso_mdoc")
+    public void setMsoMdoc(MdocGenericFormat msoMdoc) {
+        this.msoMdoc = msoMdoc;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -136,9 +149,13 @@ public class ClaimFormat {
         sb.append('=');
         sb.append(((this.ldpVp == null) ? "<null>" : this.ldpVp));
         sb.append(',');
-        sb.append("vcSdJwt");
+        sb.append("dcSdJwt");
         sb.append('=');
         sb.append(((this.dcSdJwt == null) ? "<null>" : this.dcSdJwt));
+        sb.append(',');
+        sb.append("msoMdoc");
+        sb.append('=');
+        sb.append(((this.msoMdoc == null) ? "<null>" : this.msoMdoc));
         sb.append(',');
         if (sb.charAt((sb.length() - 1)) == ',') {
             sb.setCharAt((sb.length() - 1), ']');
@@ -155,6 +172,7 @@ public class ClaimFormat {
         result = ((result * 31) + ((this.ldpVc == null) ? 0 : this.ldpVc.hashCode()));
         result = ((result * 31) + ((this.jwt == null) ? 0 : this.jwt.hashCode()));
         result = ((result * 31) + ((this.dcSdJwt == null) ? 0 : this.dcSdJwt.hashCode()));
+        result = ((result * 31) + ((this.msoMdoc == null) ? 0 : this.msoMdoc.hashCode()));
         result = ((result * 31) + ((this.jwtVcJson == null) ? 0 : this.jwtVcJson.hashCode()));
         result = ((result * 31) + ((this.ldp == null) ? 0 : this.ldp.hashCode()));
         result = ((result * 31) + ((this.jwtVp == null) ? 0 : this.jwtVp.hashCode()));
@@ -170,17 +188,13 @@ public class ClaimFormat {
             return false;
         }
         ClaimFormat rhs = ((ClaimFormat) other);
-        return ((((((((this.ldpVp == rhs.ldpVp) || ((this.ldpVp != null) && this.ldpVp.equals(rhs.ldpVp)))
-                                                        && ((this.ldpVc == rhs.ldpVc)
-                                                                || ((this.ldpVc != null)
-                                                                        && this.ldpVc.equals(rhs.ldpVc))))
-                                                && ((this.jwt == rhs.jwt)
-                                                        || ((this.jwt != null) && this.jwt.equals(rhs.jwt))))
-                                        && ((this.dcSdJwt == rhs.dcSdJwt)
-                                                || ((this.dcSdJwt != null) && this.dcSdJwt.equals(rhs.dcSdJwt))))
-                                && ((this.jwtVcJson == rhs.jwtVcJson)
-                                        || ((this.jwtVcJson != null) && this.jwtVcJson.equals(rhs.jwtVcJson))))
-                        && ((this.ldp == rhs.ldp) || ((this.ldp != null) && this.ldp.equals(rhs.ldp))))
-                && ((this.jwtVp == rhs.jwtVp) || ((this.jwtVp != null) && this.jwtVp.equals(rhs.jwtVp))));
+        return java.util.Objects.equals(this.ldpVp, rhs.ldpVp)
+                && java.util.Objects.equals(this.ldpVc, rhs.ldpVc)
+                && java.util.Objects.equals(this.jwt, rhs.jwt)
+                && java.util.Objects.equals(this.dcSdJwt, rhs.dcSdJwt)
+                && java.util.Objects.equals(this.msoMdoc, rhs.msoMdoc)
+                && java.util.Objects.equals(this.jwtVcJson, rhs.jwtVcJson)
+                && java.util.Objects.equals(this.ldp, rhs.ldp)
+                && java.util.Objects.equals(this.jwtVp, rhs.jwtVp);
     }
 }

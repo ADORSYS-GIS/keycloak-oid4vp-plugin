@@ -1,6 +1,7 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import org.keycloak.Config;
 
 /**

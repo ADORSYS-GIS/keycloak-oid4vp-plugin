@@ -11,6 +11,11 @@ public class AuthenticationProfile {
     public static final String DEFAULT_PROFILE_ID = "default";
     public static final String DEFAULT_CTA = "Sign in with a wallet";
 
+    // TODO: support groups of credential requirements so the wallet only has to satisfy one
+    //  member per group (e.g. accept a passport OR a national-ID as primary). Today every
+    //  requirement is its own required CredentialSet in the DCQL query, so the wallet must
+    //  present all of them.
+
     @JsonProperty("id")
     private String id;
 

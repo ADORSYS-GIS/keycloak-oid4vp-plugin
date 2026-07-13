@@ -2,8 +2,9 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec.of;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.RESPONSE_MODE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,9 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainerTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGeneratorTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -27,6 +30,7 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -42,20 +46,17 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
-import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 /**
- * Testing OpenID4VP user authentication via presentation of SD-JWT identity credentials.
+ * Testing OpenID4VP user authentication via presentation of identity credentials.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
-    public static final String VCT_CONFIG_ALT = "https://example.com/vct-alt";
-    public static final String DUAL_PROFILE_ID = "dual";
-    private static final String TEST_REALM_SD_JWT_AUTH_CONFIG_ID = "sdjwt-auth-config-id";
+    private static final String VCT_CONFIG_ALT = AuthenticationProfileSamples.VCT_CONFIG_ALT;
 
     @Test
     public void shouldProduceAuthorizationRequests() throws Exception {
@@ -101,9 +102,10 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals(expectedSessionId, actualSessionId);
 
         // Assert: Ensure the request object contains a final-spec DCQL query.
-        var querySpec = of(
-                List.of(VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
-        SdJwtCredentialConstrainerTest.assertDcqlQuery(requestObject.getDcqlQuery(), querySpec);
+        DcqlQueryGeneratorTest.assertDcqlQuery(
+                requestObject.getDcqlQuery(),
+                List.of(CREDENTIAL_TYPES_CONFIG_DEFAULT, VCT_CONFIG_ALT),
+                List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
 
         // Client Identifier Prefix is conveyed through client_id.
         String schemedClientId = "x509_san_dns:" + getVerifierClientId();
@@ -232,7 +234,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldRejectAuthorizationCodeRedemptionWithMissingVerifier() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Start a valid API authorization flow which generates a code_challenge.
         ApiFlowData apiFlow = startApiAuthorizationRequest();
@@ -255,7 +257,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldRejectAuthorizationCodeRedemptionWithInvalidVerifier() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         ApiFlowData apiFlow = startApiAuthorizationRequest();
         TestOpts opts =
@@ -272,7 +274,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldAuthenticateSuccessfully_SdJwtWithKid() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Proceed to authentication
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
@@ -281,7 +283,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldAuthenticateSuccessfully_SdJwtWithoutKid() throws Exception {
         // Request a valid SD-JWT credential from Keycloak without explicit kid
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER, false, true);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER, false, true);
 
         // Proceed to authentication
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
@@ -290,7 +292,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldAuthenticateSuccessfully_NewDcSdJwtFormat() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Proceed to authentication and assert final-spec DCQL format usage.
         TestOpts opts = TestOpts.getDefault();
@@ -308,7 +310,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldAuthenticateSuccessfully_Base64EncodedVpToken() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Proceed to authentication (Base64-encoded VP token)
         TestOpts opts = TestOpts.getDefault().setShouldBase64EncodeVpToken(true);
@@ -318,7 +320,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldAuthenticateSuccessfully_SchemedAud() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Proceed to authentication (Prefix aud with scheme)
         String aud = "x509_san_dns:%s".formatted(getVerifierClientId());
@@ -328,38 +330,165 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     @Test
     public void shouldAuthenticateSuccessfully_WithDualCredentialProfile() throws Exception {
-        AuthenticatorConfigRepresentation originalConfig = getAuthenticatorConfig();
-        try {
-            AuthenticatorConfigRepresentation updatedConfig = getAuthenticatorConfig();
-            updatedConfig.getConfig().put("profiles", dualProfileConfigJson());
-            updatedConfig.getConfig().put("enforceRevocationStatus", "false");
-            updateAuthenticatorConfig(updatedConfig);
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.dualProfile(),
+                AuthenticationProfileSamples.DUAL_PROFILE_ID,
+                (apiFlow, requestObject) -> {
+                    assertNull(apiFlow.authContext().getProfileId(), "Profile id must not be leaked to the wallet");
+                    assertEquals(
+                            2, requestObject.getDcqlQuery().getCredentials().size());
+                    assertEquals(
+                            List.of("primary", "supporting"),
+                            requestObject.getDcqlQuery().getCredentials().stream()
+                                    .map(Credential::getId)
+                                    .toList());
 
-            ApiFlowData apiFlow = startApiAuthorizationRequest(DUAL_PROFILE_ID);
-            assertNull(apiFlow.authContext().getProfileId(), "Profile id must not be leaked to the wallet");
+                    String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier());
 
-            RequestObject requestObject =
-                    resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
-            assertEquals(2, requestObject.getDcqlQuery().getCredentials().size());
-            assertEquals(
-                    List.of("primary", "supporting"),
-                    requestObject.getDcqlQuery().getCredentials().stream()
-                            .map(credential -> credential.getId())
-                            .toList());
-
-            String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
-            TestOpts opts =
-                    TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
-
-            testSuccessfulAuthentication(sdJwt, opts);
-        } finally {
-            updateAuthenticatorConfig(originalConfig);
-        }
+                    testSuccessfulAuthentication(sdJwt, opts);
+                });
     }
 
+    @Test
+    public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential() throws Exception {
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.mdocPrimary(),
+                AuthenticationProfileSamples.MDOC_PRIMARY_PROFILE_ID,
+                (apiFlow, requestObject) -> {
+                    Credential mdocCredential =
+                            requestObject.getDcqlQuery().getCredentials().getFirst();
+                    assertEquals("mso_mdoc", mdocCredential.getFormat());
+                    assertEquals(MdocBaseTest.DOC_TYPE, mdocCredential.getMeta().getDoctypeValue());
+
+                    Map<String, Object> mdocClaims =
+                            Map.of(MdocBaseTest.NAMESPACE, Map.of("sub", TEST_USER_ID, "username", TEST_USER));
+                    String mdocToken = MdocBaseTest.buildMdocVpToken(requestObject, mdocClaims, MdocBaseTest.DOC_TYPE);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+
+                    testSuccessfulAuthenticationWithVPTokenMap(Map.of("primary", mdocToken), opts);
+                });
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential_EncryptedResponse_IsoTranscript()
+            throws Exception {
+        // Wallet-generated nonce, conveyed Base64URL-encoded in the JWE `apu` header. The server
+        // extracts it and binds the mDoc device signature to the ISO-spec session transcript.
+        String mdocGeneratedNonce = "mdoc-generated-nonce-9f3a7c";
+
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.mdocPrimary(),
+                AuthenticationProfileSamples.MDOC_PRIMARY_PROFILE_ID,
+                Map.of(
+                        RESPONSE_MODE_CONFIG,
+                        ResponseMode.DIRECT_POST_JWT.getValue(),
+                        FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG,
+                        "true"),
+                (apiFlow, requestObject) -> {
+                    // Encrypted responses advertise an ephemeral JWK set for response encryption.
+                    assertNotNull(requestObject.getClientMetadata().getJwks());
+
+                    Map<String, Object> mdocClaims =
+                            Map.of(MdocBaseTest.NAMESPACE, Map.of("sub", TEST_USER_ID, "username", TEST_USER));
+                    String mdocToken = MdocBaseTest.buildMdocVpToken(
+                            requestObject, mdocClaims, MdocBaseTest.DOC_TYPE, mdocGeneratedNonce, true);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            // Let the framework encrypt the response (direct_post.jwt) and inject
+                            // the mdocGeneratedNonce into the JWE `apu` header.
+                            .setResponseApu(mdocGeneratedNonce);
+
+                    testSuccessfulAuthenticationWithVPTokenMap(Map.of("primary", mdocToken), opts);
+                });
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_WithSdJwtPrimaryAndMdocSupporting() throws Exception {
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.sdjwtMdocDual(),
+                AuthenticationProfileSamples.SDJWT_MDOC_DUAL_PROFILE_ID,
+                (apiFlow, requestObject) -> {
+                    assertEquals(
+                            2, requestObject.getDcqlQuery().getCredentials().size());
+                    assertEquals(
+                            List.of("primary", "supporting"),
+                            requestObject.getDcqlQuery().getCredentials().stream()
+                                    .map(Credential::getId)
+                                    .toList());
+
+                    String sdJwtVpToken = presentSdJwt(requestObject);
+                    Map<String, Object> mdocClaims = Map.of(MdocBaseTest.NAMESPACE, Map.of("username", TEST_USER));
+                    String mdocToken = MdocBaseTest.buildMdocVpToken(requestObject, mdocClaims, MdocBaseTest.DOC_TYPE);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+
+                    testSuccessfulAuthenticationWithVPTokenMap(
+                            Map.of("primary", sdJwtVpToken, "supporting", mdocToken), opts);
+                });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocSupportingCredentialMissing() throws Exception {
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.sdjwtMdocDual(),
+                AuthenticationProfileSamples.SDJWT_MDOC_DUAL_PROFILE_ID,
+                (apiFlow, requestObject) -> {
+                    String sdJwtVpToken = presentSdJwt(requestObject);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+
+                    testFailingAuthenticationWithVPTokenMap(
+                            Map.of("primary", sdJwtVpToken),
+                            opts,
+                            HttpStatus.SC_BAD_REQUEST,
+                            ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                            "Presented vp_token map must contain exactly one token for credential 'supporting'");
+                });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocSupportingBindingRuleFails() throws Exception {
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.sdjwtMdocDual(),
+                AuthenticationProfileSamples.SDJWT_MDOC_DUAL_PROFILE_ID,
+                (apiFlow, requestObject) -> {
+                    String sdJwtVpToken = presentSdJwt(requestObject);
+                    Map<String, Object> mdocClaims = Map.of(MdocBaseTest.NAMESPACE, Map.of("username", "other-user"));
+                    String mdocToken = MdocBaseTest.buildMdocVpToken(requestObject, mdocClaims, MdocBaseTest.DOC_TYPE);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+
+                    testFailingAuthenticationWithVPTokenMap(
+                            Map.of("primary", sdJwtVpToken, "supporting", mdocToken),
+                            opts,
+                            HttpStatus.SC_UNAUTHORIZED,
+                            ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                            "Supporting credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
+                });
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_DoubleSchemedAud() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Proceed to authentication (Prefix aud with scheme twice)
         String aud = "x509_san_dns:x509_san_dns:%s".formatted(getVerifierClientId());
@@ -393,7 +522,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldFailAuthentication_IfRepeatedAfterSuccess() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
@@ -451,7 +580,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Assert error response
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
         assertEquals(ProcessingError.INVALID_VP_TOKEN.getErrorString(), errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains("Could not parse SD-JWT VP token contained in `vp_token`"));
+        assertTrue(errorRep.getErrorDescription().contains("Could not parse credential token contained in `vp_token`"));
     }
 
     @Test
@@ -484,13 +613,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Could not parse SD-JWT VP token contained in `vp_token`");
+                "Could not parse credential token contained in `vp_token`");
     }
 
     @Test
     public void shouldFailAuthentication_NonMatchingDcqlCredentialId() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Retrieve an authorization request and deliberately respond under a non-matching DCQL credential query ID.
         AuthorizationContext authContext = requestAuthorizationRequest();
@@ -523,7 +652,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldFailAuthentication_SdJwtWithNoSubject() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, null, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, null, TEST_USER);
 
         // DCQL presentation validation rejects missing requested claims before the authenticator runs
         testFailingAuthentication(
@@ -537,7 +666,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldRespectHolderBindingRequirementForSdJwtWithoutKeyBindingJwt() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Build an auth request to inspect holder-binding requirement used by runtime DCQL.
         AuthorizationContext authContext = requestAuthorizationRequest();
@@ -566,7 +695,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Request a SD-JWT credential from Keycloak to use for authentication.
         String testSubject = "unknown-user-id";
         String testUsername = "unknown-user";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testSubject, testUsername);
+        String sdJwt =
+                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, testSubject, testUsername);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -574,14 +704,14 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "User with presented SD-JWT is unknown");
+                "User with presented OID4VP credential is unknown");
     }
 
     @Test
     public void shouldAuthenticateSuccessfully_WithUsernameFallback() throws Exception {
         // Request SD-JWT credentials with an unknown subject but valid username
         String testSubject = "unknown-user-id";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, testSubject, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, testSubject, TEST_USER);
 
         testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
     }
@@ -589,7 +719,8 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldFailAuthentication_SdJwtWithMismatchedUsername() throws Exception {
         // Request SD-JWT credentials from Keycloak with a correct subject but mismatched username
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
+        String sdJwt =
+                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -603,21 +734,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldFailAuthentication_IfUserDisabled() throws Exception {
         String disabledUser = "disabled-user";
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, disabledUser);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, disabledUser);
 
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "User with presented SD-JWT is disabled");
+                "User with presented OID4VP credential is disabled");
     }
 
     @Test
     public void shouldFailAuthentication_SdJwtWithoutStatusClaim() throws Exception {
         // Request SD-JWT credentials from Keycloak to use for authentication
         // Token status is enforced, but we omit the status claim, causing authentication to fail
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER, false, false);
+        String sdJwt =
+                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER, false, false);
 
         // Proceed to authentication
         testFailingAuthentication(
@@ -625,13 +757,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid SD-JWT presentation (Token status verification failed)");
+                "Invalid OID4VP credential presentation (Token status verification failed for credential to requirement 'identity')");
     }
 
     @Test
     public void shouldFailAuthentication_SdJwtSignedWithDisabledKey() throws Exception {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(
-                VCT_CONFIG_DEFAULT, TEST_USER, true, true, SdJwtVPTestUtils.getDisabledKeycloakJwk());
+                CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER, true, true, SdJwtVPTestUtils.getDisabledKeycloakJwk());
 
         testFailingAuthentication(
                 sdJwt,
@@ -682,57 +814,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         }
     }
 
-    private AuthenticatorConfigRepresentation getAuthenticatorConfig() {
-        return getActiveTestRealmResource().flows().getAuthenticatorConfig(TEST_REALM_SD_JWT_AUTH_CONFIG_ID);
-    }
-
-    private void updateAuthenticatorConfig(AuthenticatorConfigRepresentation config) {
-        getActiveTestRealmResource().flows().updateAuthenticatorConfig(config.getId(), config);
-    }
-
-    private String dualProfileConfigJson() {
-        return """
-                [
-                  {
-                    "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
-                    "credentials": [
-                      {
-                        "id": "identity",
-                        "role": "primary",
-                        "credentialTypes": ["%s", "%s"],
-                        "claims": ["sub", "username"]
-                      }
-                    ]
-                  },
-                  {
-                    "id": "%s",
-                    "displayCta": { "en": "Sign in with two credentials" },
-                    "credentials": [
-                      {
-                        "id": "primary",
-                        "role": "primary",
-                        "credentialTypes": ["%s"],
-                        "claims": ["sub", "username"]
-                      },
-                      {
-                        "id": "supporting",
-                        "role": "supporting",
-                        "credentialTypes": ["%s"],
-                        "claims": ["username"],
-                        "trust": [{ "type": "self" }],
-                        "binding": [
-                          {
-                            "type": "claim_equals_primary_claim",
-                            "credentialClaim": "username",
-                            "primaryCredentialClaim": "username"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-                """.formatted(
-                        VCT_CONFIG_DEFAULT, VCT_CONFIG_ALT, DUAL_PROFILE_ID, VCT_CONFIG_DEFAULT, VCT_CONFIG_DEFAULT);
+    private String presentSdJwt(RequestObject requestObject) throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+        return sdJwtVPTestUtils.presentSdJwt(
+                sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
     }
 }

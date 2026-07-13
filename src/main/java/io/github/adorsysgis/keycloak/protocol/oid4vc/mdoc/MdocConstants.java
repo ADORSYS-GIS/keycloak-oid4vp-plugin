@@ -1,6 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc;
 
-public class MdocConstants {
+public final class MdocConstants {
+
+    private MdocConstants() {}
 
     public static final String L_DOCUMENTS = "documents";
     public static final String L_STATUS = "status";

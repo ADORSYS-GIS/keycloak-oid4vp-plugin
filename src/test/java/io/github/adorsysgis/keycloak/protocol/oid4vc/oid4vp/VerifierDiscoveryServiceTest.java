@@ -21,13 +21,14 @@ import org.keycloak.util.JsonSerialization;
 public class VerifierDiscoveryServiceTest {
 
     @Test
-    void shouldAdvertiseOnlyDcSdJwtWithDefaultCapabilities() throws Exception {
+    void shouldAdvertiseBothDcSdJwtAndMdocWithDefaultCapabilities() {
         VerifierDiscoveryService discoveryService =
                 new VerifierDiscoveryService(null, DcqlCredentialCapabilities.createDefault());
 
         JsonNode metadata = JsonSerialization.mapper.valueToTree(discoveryService.getClientMetadata(null));
         JsonNode vpFormats = metadata.get("vp_formats_supported");
         assertTrue(vpFormats.has("dc+sd-jwt"));
+        assertTrue(vpFormats.has("mso_mdoc"));
         assertFalse(vpFormats.has("jwt_vc_json"));
     }
 
@@ -40,7 +41,7 @@ public class VerifierDiscoveryServiceTest {
         }
 
         @Test
-        public void shoudPreferECKey() throws Exception {
+        public void shouldPreferECKey() throws Exception {
             // Retrieve an authorization request
             AuthorizationContext authContext = requestAuthorizationRequest();
             String authRequest = authContext.getAuthorizationRequest();
@@ -63,7 +64,7 @@ public class VerifierDiscoveryServiceTest {
         }
 
         @Test
-        public void shoudDefaultToRSAKeyIfNoECKeyWithCertificate() throws Exception {
+        public void shouldDefaultToRSAKeyIfNoECKeyWithCertificate() throws Exception {
             // Retrieve an authorization request
             AuthorizationContext authContext = requestAuthorizationRequest();
             String authRequest = authContext.getAuthorizationRequest();

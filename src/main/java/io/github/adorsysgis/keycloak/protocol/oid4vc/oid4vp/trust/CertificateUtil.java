@@ -9,11 +9,11 @@ import java.util.HexFormat;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.jose.jws.crypto.HashUtils;
 
-final class CertificateUtil {
+public final class CertificateUtil {
 
     private CertificateUtil() {}
 
-    static X509Certificate parseCertificate(String base64OrPem) throws CertificateException {
+    public static X509Certificate parseCertificate(String base64OrPem) throws CertificateException {
         String normalized = base64OrPem
                 .replace("-----BEGIN CERTIFICATE-----", "")
                 .replace("-----END CERTIFICATE-----", "")

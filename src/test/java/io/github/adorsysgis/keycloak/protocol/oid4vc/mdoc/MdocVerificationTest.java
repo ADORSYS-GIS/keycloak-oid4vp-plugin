@@ -20,7 +20,7 @@ public class MdocVerificationTest extends MdocBaseTest {
     @Test
     public void shouldVerifyValidMdocSuccessfully_SpecSample() throws VerificationException {
         String mdoc = readResource("/mdoc/spec-sample.txt");
-        TruststoreProvider trust = new StaticTruststoreProvider(getSpecSampleCert());
+        TruststoreProvider trust = new TestTruststoreProvider(getSpecSampleCert());
 
         MdocVerificationOpts opts = MdocVerificationOpts.builder()
                 .withClientId("example.com")
@@ -64,19 +64,40 @@ public class MdocVerificationTest extends MdocBaseTest {
     public void shouldVerifyValidMdocSuccessfully_OpenID4VPSpecTranscript() throws Exception {
         MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        TruststoreProvider trust = new StaticTruststoreProvider(getIssuerCertRef1());
+        TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
         new MdocVerificationContext(mdoc).verifyPresentation(opts, null, trust);
     }
 
     @Test
     public void shouldFail_OnExpiredResponses() throws Exception {
-        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts()
+                .withAllowedMaxAge(Integer.MAX_VALUE)
+                .build();
+
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        TruststoreProvider trust = new StaticTruststoreProvider(getIssuerCertRef1());
+        TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
 
         try {
             Time.setOffset(DEFAULT_RESPONSE_VALIDITY_MINS * 60 + 300);
-            verifyFails(mdoc, opts, trust, "Validity information verification failed", "Token has expired");
+            verifyFails(mdoc, opts, trust, "Validity information verification failed", "Token has expired by exp");
+        } finally {
+            Time.setOffset(0);
+        }
+    }
+
+    @Test
+    public void shouldFail_OnAgedResponses() throws Exception {
+        int allowedMaxAge = 10;
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts()
+                .withAllowedMaxAge(allowedMaxAge)
+                .build();
+
+        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
+        TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
+
+        try {
+            Time.setOffset(allowedMaxAge + 20);
+            verifyFails(mdoc, opts, trust, "Validity information verification failed", "Token has expired by iat");
         } finally {
             Time.setOffset(0);
         }
@@ -127,7 +148,7 @@ public class MdocVerificationTest extends MdocBaseTest {
         verifyFails(
                 mdoc,
                 opts,
-                new StaticTruststoreProvider(getIssuerCertRef1()),
+                new TestTruststoreProvider(getIssuerCertRef1()),
                 "Issuer signature could not be verified",
                 "COSE signature verification failed");
     }
@@ -140,7 +161,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                     return ctx.signMsoAndWrap();
                 })
                 .encodeToBase64Url();
-        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "Certificate chain is empty");
+        verifyFails(mdoc, opts, new TestTruststoreProvider(getIssuerCertRef1()), "Certificate chain is empty");
     }
 
     @Test
@@ -150,7 +171,7 @@ public class MdocVerificationTest extends MdocBaseTest {
         verifyFails(
                 mdoc,
                 opts,
-                new StaticTruststoreProvider(toCert(getSpecSampleCert())),
+                new TestTruststoreProvider(toCert(getSpecSampleCert())),
                 "Certificate chain validation failed",
                 "Path does not chain with any of the trust anchors");
     }
@@ -167,7 +188,7 @@ public class MdocVerificationTest extends MdocBaseTest {
         verifyFails(
                 mdoc,
                 verifyingOpts,
-                new StaticTruststoreProvider(getIssuerCertRef1()),
+                new TestTruststoreProvider(getIssuerCertRef1()),
                 "Device signature could not be verified",
                 "COSE signature verification failed");
     }
@@ -185,7 +206,7 @@ public class MdocVerificationTest extends MdocBaseTest {
         verifyFails(
                 mdoc,
                 verifyingOpts,
-                new StaticTruststoreProvider(getIssuerCertRef1()),
+                new TestTruststoreProvider(getIssuerCertRef1()),
                 "Failed to compute session transcript for device binding verification",
                 "Cannot compute handover: 'mdoc_generated_nonce' must not be null");
     }
@@ -201,8 +222,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                     return ctx.signMsoAndWrap();
                 })
                 .encodeToBase64Url();
-        verifyFails(
-                mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "No value digests matching namespace");
+        verifyFails(mdoc, opts, new TestTruststoreProvider(getIssuerCertRef1()), "No value digests matching namespace");
     }
 
     @Test
@@ -214,7 +234,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                     return ctx.signMsoAndWrap();
                 })
                 .encodeToBase64Url();
-        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "Digest mismatch");
+        verifyFails(mdoc, opts, new TestTruststoreProvider(getIssuerCertRef1()), "Digest mismatch");
     }
 
     @Test
@@ -228,7 +248,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                     return ctx.signMsoAndWrap();
                 })
                 .encodeToBase64Url();
-        verifyFails(mdoc, opts, new StaticTruststoreProvider(getIssuerCertRef1()), "Invalid digest algorithm: MD5");
+        verifyFails(mdoc, opts, new TestTruststoreProvider(getIssuerCertRef1()), "Invalid digest algorithm: MD5");
     }
 
     @Test
@@ -238,7 +258,7 @@ public class MdocVerificationTest extends MdocBaseTest {
         verifyFails(
                 mdoc,
                 opts,
-                new StaticTruststoreProvider(getIssuerCertRef1()),
+                new TestTruststoreProvider(getIssuerCertRef1()),
                 "Device key binding verification failed: missing device signature");
     }
 

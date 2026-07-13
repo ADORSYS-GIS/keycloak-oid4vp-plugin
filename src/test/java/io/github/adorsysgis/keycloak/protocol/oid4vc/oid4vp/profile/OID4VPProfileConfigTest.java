@@ -1,6 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -43,7 +43,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         AuthenticationProfile profile = profileConfig.getProfile("dual");
         assertEquals("dual", profile.getId());
@@ -72,7 +72,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         assertEquals("pid-login", profileConfig.getProfile(null).getId());
         assertEquals(
@@ -101,7 +101,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         IllegalArgumentException error =
                 assertThrows(IllegalArgumentException.class, () -> profileConfig.getProfile("typo"));
@@ -142,7 +142,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         TrustPolicy trustPolicy = profileConfig
                 .getProfile("dual-pid")
@@ -172,8 +172,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        IllegalStateException error =
-                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals("OpenID4VP profile must have exactly one primary credential: broken", error.getMessage());
     }
 
@@ -192,8 +191,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        IllegalStateException error =
-                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals("OpenID4VP credential ids must be unique in profile: broken", error.getMessage());
     }
 }

@@ -107,7 +107,7 @@ class DcqlPresentationValidatorTest {
         Credential credential = credentialWithClaims(List.of(givenName, familyName));
         credential.setClaimSets(List.of(List.of("given-name", "family-name"), List.of("given-name")));
 
-        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+        DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
         assertDoesNotThrow(
                 () -> DcqlPresentationValidator.validatePresentation(query, token),
@@ -125,7 +125,7 @@ class DcqlPresentationValidatorTest {
         Credential credential = credentialWithClaims(List.of(givenName, familyName));
         credential.setClaimSets(List.of(List.of("given-name", "family-name")));
 
-        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+        DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
         VerificationException error = assertThrows(
                 VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
@@ -184,7 +184,7 @@ class DcqlPresentationValidatorTest {
                 DisclosureSpec.builder().build());
 
         Credential credential = credentialWithClaims(List.of());
-        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+        DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
         assertDoesNotThrow(() -> DcqlPresentationValidator.validatePresentation(query, token));
     }
@@ -203,7 +203,7 @@ class DcqlPresentationValidatorTest {
         Credential credential = credentialWithClaims(List.of(givenName, familyName));
         credential.setClaimSets(List.of(List.of("given-name", "family-name")));
 
-        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+        DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
         VerificationException error = assertThrows(
                 VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
@@ -218,7 +218,7 @@ class DcqlPresentationValidatorTest {
 
         Credential credential = credentialWithClaims(List.of(claim("given-name", List.of("given_name"))));
         credential.setRequireCryptographicHolderBinding(null);
-        DcqlQuery query = DcqlQueryBuilder.singleCredentialQuery(credential);
+        DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
         VerificationException error = assertThrows(
                 VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
@@ -238,7 +238,7 @@ class DcqlPresentationValidatorTest {
     }
 
     private static DcqlQuery queryWithClaims(Claim... claims) {
-        return DcqlQueryBuilder.singleCredentialQuery(credentialWithClaims(List.of(claims)));
+        return DcqlQueryGenerator.singleCredentialQuery(credentialWithClaims(List.of(claims)));
     }
 
     private static Credential credentialWithClaims(List<Claim> claims) {

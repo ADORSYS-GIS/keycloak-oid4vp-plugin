@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +21,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +43,10 @@ import org.testcontainers.utility.MountableFile;
 @Testcontainers
 public abstract class BaseKeycloakTest {
 
+    private static final Logger logger = Logger.getLogger(BaseKeycloakTest.class);
+
     public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.6.3";
+    public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT-all.jar";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_HAIP_NAME = "test-haip";
@@ -63,6 +68,7 @@ public abstract class BaseKeycloakTest {
         KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
         container
                 .withImagePullPolicy(PullPolicy.alwaysPull())
+                .withProviderLibsFrom(List.of(loadShadedPluginJar()))
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci")
                 .withRealmImportFile("/realms/test-realm.json")
@@ -77,6 +83,21 @@ public abstract class BaseKeycloakTest {
                 .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
                 .withEnv("KC_TLS_HOSTNAME_VERIFIER", "ANY");
         return container;
+    }
+
+    private static File loadShadedPluginJar() {
+        File shadedJar = new File(TEST_SHADED_PLUGIN_JAR);
+
+        if (!shadedJar.exists()) {
+            String msg = String.format(
+                    "Shaded plugin jar not found: %s. Run './mvnw package -DskipTests' to generate it.",
+                    TEST_SHADED_PLUGIN_JAR);
+
+            logger.error(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        return shadedJar;
     }
 
     @BeforeAll

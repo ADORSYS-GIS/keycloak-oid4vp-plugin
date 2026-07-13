@@ -1,16 +1,16 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.PROFILES_CONFIG;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
-import org.keycloak.models.KeycloakContext;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
@@ -22,12 +22,12 @@ public class OID4VPProfileConfig {
 
     private final List<AuthenticationProfile> profiles;
 
-    public OID4VPProfileConfig(KeycloakContext context, AuthenticatorConfigModel authConfig) {
+    public OID4VPProfileConfig(AuthenticatorConfigModel authConfig) {
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
         String configuredProfiles = config.get(PROFILES_CONFIG);
         this.profiles = StringUtil.isBlank(configuredProfiles)
-                ? List.of(defaultProfile(context, authConfig))
+                ? List.of(defaultProfile(authConfig))
                 : parseProfiles(configuredProfiles);
         validateProfiles(this.profiles);
     }
@@ -42,12 +42,13 @@ public class OID4VPProfileConfig {
             return profiles.stream()
                     .filter(AuthenticationProfile::isDefaultProfile)
                     .findFirst()
-                    .orElseGet(() -> profiles.getFirst());
+                    .orElseGet(profiles::getFirst);
         }
         return profiles.stream()
                 .filter(profile -> Objects.equals(profile.getId(), requestedProfile))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unknown OpenID4VP profile: " + requestedProfile));
+                .orElseThrow(() ->
+                        new IllegalArgumentException(String.format("Unknown OpenID4VP profile: %s", requestedProfile)));
     }
 
     public List<AuthenticationProfile> getProfilesForClient(String clientId) {
@@ -70,15 +71,13 @@ public class OID4VPProfileConfig {
         }
     }
 
-    private static AuthenticationProfile defaultProfile(KeycloakContext context, AuthenticatorConfigModel authConfig) {
-        SdJwtAuthRequirements authRequirements = new SdJwtAuthRequirements(context, authConfig);
+    private static AuthenticationProfile defaultProfile(AuthenticatorConfigModel authConfig) {
+        AuthRequirements authRequirements = new AuthRequirements(authConfig);
         CredentialRequirement credential = new CredentialRequirement()
                 .setId("identity")
                 .setRole(CredentialRole.PRIMARY)
-                .setCredentialTypes(
-                        authRequirements.getExpectedVcts().isEmpty()
-                                ? List.of(VCT_CONFIG_DEFAULT)
-                                : authRequirements.getExpectedVcts())
+                .setFormat(CredentialFormat.SD_JWT_VC.getIdentifier())
+                .setCredentialTypes(authRequirements.getCredentialTypes())
                 .setClaims(List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
 
         return new AuthenticationProfile()
@@ -93,40 +92,68 @@ public class OID4VPProfileConfig {
         }
 
         for (AuthenticationProfile profile : profiles) {
-            if (StringUtil.isBlank(profile.getId())) {
+            String profileId = profile.getId();
+            if (StringUtil.isBlank(profileId)) {
                 throw new IllegalStateException("OpenID4VP profile id must not be blank");
             }
+
             if (profile.getCredentials() == null || profile.getCredentials().isEmpty()) {
                 throw new IllegalStateException(
-                        "OpenID4VP profile must request at least one credential: " + profile.getId());
+                        String.format("OpenID4VP profile must request at least one credential: %s", profileId));
             }
+
             long primaryCount = profile.getCredentials().stream()
                     .filter(CredentialRequirement::isPrimary)
                     .count();
             if (primaryCount != 1) {
                 throw new IllegalStateException(
-                        "OpenID4VP profile must have exactly one primary credential: " + profile.getId());
+                        String.format("OpenID4VP profile must have exactly one primary credential: %s", profileId));
             }
 
             for (CredentialRequirement credential : profile.getCredentials()) {
-                if (StringUtil.isBlank(credential.getId())) {
+                String credentialId = credential.getId();
+                if (StringUtil.isBlank(credentialId)) {
                     throw new IllegalStateException(
-                            "OpenID4VP credential id must not be blank in profile: " + profile.getId());
+                            String.format("OpenID4VP credential id must not be blank in profile: %s", profileId));
                 }
+
                 if (credential.getCredentialTypes() == null
                         || credential.getCredentialTypes().isEmpty()) {
-                    throw new IllegalStateException("OpenID4VP credential must define credentialTypes values: "
-                            + profile.getId() + "/" + credential.getId());
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP credential must define credentialTypes values: %s/%s", profileId, credentialId));
                 }
+
                 if (credential.getClaims() == null || credential.getClaims().isEmpty()) {
-                    throw new IllegalStateException("OpenID4VP credential must request at least one claim: "
-                            + profile.getId() + "/" + credential.getId());
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP credential must request at least one claim: %s/%s", profileId, credentialId));
                 }
-                if (credential.isPrimary()
-                        && (!credential.getClaims().contains(JsonWebToken.SUBJECT)
-                                || !credential.getClaims().contains(OAuth2Constants.USERNAME))) {
-                    throw new IllegalStateException("OpenID4VP primary credential must request sub and username: "
-                            + profile.getId() + "/" + credential.getId());
+
+                if (CredentialFormat.MSO_MDOC.getIdentifier().equals(credential.getFormat())) {
+                    if (credential.getCredentialTypes().size() != 1) {
+                        throw new IllegalStateException(String.format(
+                                "mDoc credential must define exactly one credentialType (the docType): %s/%s",
+                                profileId, credentialId));
+                    }
+
+                    for (ClaimReference ref : credential.getClaimReferences()) {
+                        if (!ref.isNamespaced()) {
+                            throw new IllegalStateException(String.format(
+                                    "mDoc claims must be namespaced (\"namespace/name\"), got: %s in profile: %s/%s",
+                                    ref.name(), profileId, credentialId));
+                        }
+                    }
+                }
+
+                if (credential.isPrimary()) {
+                    List<ClaimReference> primaryRefs = credential.getClaimReferences();
+                    boolean hasSubject = primaryRefs.stream().anyMatch(ref -> JsonWebToken.SUBJECT.equals(ref.name()));
+                    boolean hasUsername =
+                            primaryRefs.stream().anyMatch(ref -> OAuth2Constants.USERNAME.equals(ref.name()));
+                    if (!hasSubject || !hasUsername) {
+                        throw new IllegalStateException(String.format(
+                                "OpenID4VP primary credential must request sub and username: %s/%s",
+                                profileId, credentialId));
+                    }
                 }
             }
 
@@ -136,7 +163,7 @@ public class OID4VPProfileConfig {
                     .count();
             if (credentialIdCount != profile.getCredentials().size()) {
                 throw new IllegalStateException(
-                        "OpenID4VP credential ids must be unique in profile: " + profile.getId());
+                        String.format("OpenID4VP credential ids must be unique in profile: %s", profileId));
             }
         }
     }

@@ -5,10 +5,10 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.Referenc
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_CNF;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_EXP;
 import static org.keycloak.OID4VCConstants.CLAIM_NAME_JWK;
+import static org.keycloak.OID4VCConstants.CLAIM_NAME_VCT;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import java.io.IOException;
 import java.io.InputStream;
@@ -158,7 +158,7 @@ public class SdJwtVPTestUtils {
         if (subject != null) {
             claimSet.put(JsonWebToken.SUBJECT, subject);
         }
-        claimSet.put(SdJwtAuthenticatorFactory.VCT_CONFIG, vct);
+        claimSet.put(CLAIM_NAME_VCT, vct);
         claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
 
         // Add status list claim (Token Status List)
