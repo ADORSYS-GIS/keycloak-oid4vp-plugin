@@ -70,10 +70,13 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             authReqs.getPresentationRequirements().checkIfSatisfiedBy(payload);
         };
 
-        new MdocVerificationContext(token).verifyPresentation(opts, requirements, truststore);
-
         // TODO: Implement revocation status check for mDoc credentials
-        // if (authReqs.shouldEnforceRevocationStatus()) {}
+        if (authReqs.shouldEnforceRevocationStatus()) {
+            throw new VerificationException(
+                    "Revocation status enforcement is not yet implemented for mso_mdoc credentials");
+        }
+
+        new MdocVerificationContext(token).verifyPresentation(opts, requirements, truststore);
 
         return payloadRef.get().get(L_NAME_SPACES);
     }
