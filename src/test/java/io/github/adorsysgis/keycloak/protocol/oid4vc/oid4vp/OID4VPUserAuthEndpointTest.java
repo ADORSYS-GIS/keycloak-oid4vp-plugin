@@ -434,105 +434,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
-    public void shouldFailAuthentication_IfMdocSupportingCredentialMissing() throws Exception {
-        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
-            String sdJwtVpToken = presentSdJwt(requestObject);
-
-            TestOpts opts = TestOpts.getDefault()
-                    .setAuthContext(apiFlow.authContext())
-                    .setCodeVerifier(apiFlow.codeVerifier())
-                    .setShouldForceUnencryptedResponse(true);
-
-            testFailingAuthenticationWithVPTokenMap(
-                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken),
-                    opts,
-                    HttpStatus.SC_BAD_REQUEST,
-                    ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                    "Presented vp_token map must contain exactly one token for credential 'supporting'");
-        });
-    }
-
-    @Test
-    public void shouldFailAuthentication_IfMdocSupportingBindingRuleFails() throws Exception {
-        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
-            String sdJwtVpToken = presentSdJwt(requestObject);
-            Map<String, Object> mdocClaims =
-                    Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, "other-user"));
-            String mdocToken = presentMdoc(requestObject, mdocClaims);
-
-            TestOpts opts = TestOpts.getDefault()
-                    .setAuthContext(apiFlow.authContext())
-                    .setCodeVerifier(apiFlow.codeVerifier())
-                    .setShouldForceUnencryptedResponse(true);
-
-            testFailingAuthenticationWithVPTokenMap(
-                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken, SUPPORTING_CREDENTIAL_ID, mdocToken),
-                    opts,
-                    HttpStatus.SC_UNAUTHORIZED,
-                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                    "Supporting credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
-        });
-    }
-
-    @Test
-    public void shouldFailAuthentication_IfMdocIssuerCertNotTrusted() throws Exception {
-        // Configure the primary mDoc credential with a trust anchor that does NOT match the
-        // issuer certificate used to sign the device response (ISO 18013-5 spec sample cert).
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.mdocPrimaryWithAnchor(MdocBaseTest.getSpecSampleCert()),
-                (apiFlow, requestObject) -> {
-                    Map<String, Object> mdocClaims = Map.of(
-                            MdocBaseTest.NAMESPACE,
-                            Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
-                    String mdocToken = presentMdoc(requestObject, mdocClaims);
-
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier())
-                            .setShouldForceUnencryptedResponse(true);
-
-                    testFailingAuthenticationWithVPTokenMap(
-                            Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
-                            opts,
-                            HttpStatus.SC_UNAUTHORIZED,
-                            ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                            "Certificate chain validation failed");
-                });
-    }
-
-    @Test
-    public void shouldFailAuthentication_IfMdocResponseExpired() throws Exception {
-        // Present an mDoc device response whose MSO validityInfo.validUntil lies in the past,
-        // so verification fails the exp check. The container clock cannot be shifted, so the
-        // forged validity window must be baked into the MSO itself.
-        withAuthenticationProfile(AuthenticationProfileSamples.mdocPrimary(), (apiFlow, requestObject) -> {
-            ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC).withNano(0);
-            Map<String, Object> mdocClaims = Map.of(
-                    MdocBaseTest.NAMESPACE,
-                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
-            String mdocToken = MdocBaseTest.buildMdocVpToken(
-                    requestObject,
-                    mdocClaims,
-                    MdocBaseTest.DOC_TYPE,
-                    now.minusMinutes(30),
-                    now.minusMinutes(30),
-                    now.minusMinutes(5));
-
-            TestOpts opts = TestOpts.getDefault()
-                    .setAuthContext(apiFlow.authContext())
-                    .setCodeVerifier(apiFlow.codeVerifier())
-                    .setShouldForceUnencryptedResponse(true);
-
-            testFailingAuthenticationWithVPTokenMap(
-                    Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
-                    opts,
-                    HttpStatus.SC_UNAUTHORIZED,
-                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                    "Validity information verification failed");
-        });
-    }
-
-    @Test
     public void shouldAuthenticateSuccessfully_DoubleSchemedAud() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
@@ -859,6 +760,136 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
             testFailAuthentication_InvalidKbJwt(
                     null, invalidAud, null, null, "claim 'aud' does not match actual value");
         }
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocSupportingCredentialMissing() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
+            String sdJwtVpToken = presentSdJwt(requestObject);
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken),
+                    opts,
+                    HttpStatus.SC_BAD_REQUEST,
+                    ProcessingError.INVALID_VP_TOKEN.getErrorString(),
+                    "Presented vp_token map must contain exactly one token for credential 'supporting'");
+        });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocRequiredClaimsMissingOrBlank() throws Exception {
+        Map<Map<String, Object>, String> cases = Map.of(
+                Map.of(MdocBaseTest.NAMESPACE, Map.of()),
+                "Missing required claim: com.example.namespace1/username",
+                Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, "")),
+                "Required claim is blank: com.example.namespace1/username");
+
+        for (var entry : cases.entrySet()) {
+            Map<String, Object> mdocClaims = entry.getKey();
+            String expectedError = entry.getValue();
+
+            withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
+                String sdJwtVpToken = presentSdJwt(requestObject);
+                String mdocToken = presentMdoc(requestObject, mdocClaims);
+
+                TestOpts opts = TestOpts.getDefault()
+                        .setAuthContext(apiFlow.authContext())
+                        .setCodeVerifier(apiFlow.codeVerifier())
+                        .setShouldForceUnencryptedResponse(true);
+
+                testFailingAuthenticationWithVPTokenMap(
+                        Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken, SUPPORTING_CREDENTIAL_ID, mdocToken),
+                        opts,
+                        HttpStatus.SC_UNAUTHORIZED,
+                        ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                        expectedError);
+            });
+        }
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocSupportingBindingRuleFails() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
+            String sdJwtVpToken = presentSdJwt(requestObject);
+            Map<String, Object> mdocClaims =
+                    Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, "other-user"));
+            String mdocToken = presentMdoc(requestObject, mdocClaims);
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken, SUPPORTING_CREDENTIAL_ID, mdocToken),
+                    opts,
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "Supporting credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
+        });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocIssuerCertNotTrusted() throws Exception {
+        // Configure the primary mDoc credential with a trust anchor that does NOT match the
+        // issuer certificate used to sign the device response (ISO 18013-5 spec sample cert).
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.mdocPrimaryWithAnchor(MdocBaseTest.getSpecSampleCert()),
+                (apiFlow, requestObject) -> {
+                    Map<String, Object> mdocClaims = Map.of(
+                            MdocBaseTest.NAMESPACE,
+                            Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+                    String mdocToken = presentMdoc(requestObject, mdocClaims);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+
+                    testFailingAuthenticationWithVPTokenMap(
+                            Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
+                            opts,
+                            HttpStatus.SC_UNAUTHORIZED,
+                            ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                            "Certificate chain validation failed");
+                });
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfMdocResponseExpired() throws Exception {
+        // Present an mDoc device response whose MSO validityInfo.validUntil lies in the past,
+        // so verification fails the exp check. The container clock cannot be shifted, so the
+        // forged validity window must be baked into the MSO itself.
+        withAuthenticationProfile(AuthenticationProfileSamples.mdocPrimary(), (apiFlow, requestObject) -> {
+            ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC).withNano(0);
+            Map<String, Object> mdocClaims = Map.of(
+                    MdocBaseTest.NAMESPACE,
+                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+            String mdocToken = MdocBaseTest.buildMdocVpToken(
+                    requestObject,
+                    mdocClaims,
+                    MdocBaseTest.DOC_TYPE,
+                    now.minusMinutes(30),
+                    now.minusMinutes(30),
+                    now.minusMinutes(5));
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
+                    opts,
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "Validity information verification failed");
+        });
     }
 
     private String presentSdJwt(RequestObject requestObject) throws Exception {

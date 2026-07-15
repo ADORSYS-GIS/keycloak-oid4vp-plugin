@@ -2,11 +2,9 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.CertificateUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.StaticTruststoreProvider;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +39,7 @@ public final class TrustedProviderResolver {
     public static TruststoreProvider resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
-            throw new VerificationException(String.format(
+            throw new IllegalStateException(String.format(
                     "Credential '%s' does not configure any trust policy. Self-trust is not supported for mDoc.",
                     credential.getId()));
         }
@@ -53,7 +51,7 @@ public final class TrustedProviderResolver {
                 case TrustPolicy.EUDI_PID_TRUST_LIST ->
                     trustAnchors.addAll(resolveEudiPidTrustList(session, trust, credential.getId()));
                 default ->
-                    throw new VerificationException(String.format(
+                    throw new IllegalStateException(String.format(
                             "Credential '%s' uses an unsupported trust policy: %s",
                             credential.getId(), trust.getType()));
             }
@@ -61,36 +59,13 @@ public final class TrustedProviderResolver {
         return new StaticTruststoreProvider(trustAnchors);
     }
 
-    private static List<X509Certificate> resolveX5cAnchors(TrustPolicy trust, String credentialId)
-            throws VerificationException {
+    private static List<X509Certificate> resolveX5cAnchors(TrustPolicy trust, String credentialId) {
         if (trust.getAnchors() == null || trust.getAnchors().isEmpty()) {
-            throw new VerificationException(
+            throw new IllegalStateException(
                     String.format("Credential '%s' uses x5c trust but declares no anchors.", credentialId));
         }
 
-        List<X509Certificate> certs = new ArrayList<>();
-        List<String> invalid = new ArrayList<>();
-        for (String anchor : trust.getAnchors()) {
-            try {
-                certs.add(CertificateUtil.parseCertificate(anchor));
-            } catch (CertificateException e) {
-                invalid.add(anchor);
-                logger.warnf(e, "Failed to parse x5c trust anchor: (credential '%s') %s", credentialId, anchor);
-            }
-        }
-
-        if (!invalid.isEmpty()) {
-            throw new VerificationException(String.format(
-                    "Credential '%s' has %d unparsable x5c trust anchor(s). See server logs for details.",
-                    credentialId, invalid.size()));
-        }
-
-        if (certs.isEmpty()) {
-            throw new VerificationException(
-                    String.format("Credential '%s' declares x5c trust but no anchor could be parsed.", credentialId));
-        }
-
-        return certs;
+        return trust.getAnchors();
     }
 
     private static List<X509Certificate> resolveEudiPidTrustList(

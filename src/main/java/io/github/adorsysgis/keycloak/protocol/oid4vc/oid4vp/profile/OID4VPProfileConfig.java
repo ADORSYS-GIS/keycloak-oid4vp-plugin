@@ -6,9 +6,11 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.Creden
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import java.io.IOException;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.representations.JsonWebToken;
@@ -144,6 +146,8 @@ public class OID4VPProfileConfig {
                     }
                 }
 
+                validateTrustPolicy(credential, profileId);
+
                 if (credential.isPrimary()) {
                     List<ClaimReference> primaryRefs = credential.getClaimReferences();
                     boolean hasSubject = primaryRefs.stream().anyMatch(ref -> JsonWebToken.SUBJECT.equals(ref.name()));
@@ -164,6 +168,111 @@ public class OID4VPProfileConfig {
             if (credentialIdCount != profile.getCredentials().size()) {
                 throw new IllegalStateException(
                         String.format("OpenID4VP credential ids must be unique in profile: %s", profileId));
+            }
+
+            validateBindingRules(profile);
+        }
+    }
+
+    private static void validateTrustPolicy(CredentialRequirement credential, String profileId) {
+        List<TrustPolicy> trustPolicies = credential.getTrust();
+        if (trustPolicies == null || trustPolicies.isEmpty()) {
+            throw new IllegalStateException(String.format(
+                    "Credential '%s/%s' must configure at least one trust policy", profileId, credential.getId()));
+        }
+
+        for (TrustPolicy trust : trustPolicies) {
+            String type = trust.getType();
+            if (StringUtil.isBlank(type)) {
+                throw new IllegalStateException(
+                        String.format("Trust policy type must not be blank: %s/%s", profileId, credential.getId()));
+            }
+
+            if (TrustPolicy.SELF.equals(type)) {
+                if (CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat())) {
+                    throw new IllegalStateException(String.format(
+                            "Self-trust is not supported for mDoc credentials: %s/%s", profileId, credential.getId()));
+                }
+                continue;
+            }
+
+            if (!TrustPolicy.X5C.equals(type) && !TrustPolicy.EUDI_PID_TRUST_LIST.equals(type)) {
+                throw new IllegalStateException(String.format(
+                        "Unsupported trust policy type '%s': %s/%s", type, profileId, credential.getId()));
+            }
+
+            if (TrustPolicy.X5C.equals(type)) {
+                List<X509Certificate> anchors = trust.getAnchors();
+                if (anchors == null || anchors.isEmpty()) {
+                    throw new IllegalStateException(String.format(
+                            "x5c trust policy must declare at least one anchor: %s/%s", profileId, credential.getId()));
+                }
+            }
+        }
+    }
+
+    private static void validateBindingRules(AuthenticationProfile profile) {
+        String profileId = profile.getId();
+        CredentialRequirement primary = profile.getPrimaryCredential();
+        Set<String> primaryClaimNames = Set.copyOf(primary.getClaims());
+
+        for (CredentialRequirement credential : profile.getCredentials()) {
+            if (credential.isPrimary()) {
+                continue;
+            }
+
+            Set<String> supportingClaimNames = Set.copyOf(credential.getClaims());
+
+            for (BindingRule rule : credential.getBinding()) {
+                if (StringUtil.isBlank(rule.getType())) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP binding rule type must not be blank: %s/%s", profileId, credential.getId()));
+                }
+
+                if (!BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM.equals(rule.getType())
+                        && !BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE.equals(rule.getType())) {
+                    throw new IllegalStateException(String.format(
+                            "Unsupported OpenID4VP binding rule type '%s': %s/%s",
+                            rule.getType(), profileId, credential.getId()));
+                }
+
+                if (StringUtil.isBlank(rule.getCredentialClaim())) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP binding rule credentialClaim must not be blank: %s/%s",
+                            profileId, credential.getId()));
+                }
+
+                if (!supportingClaimNames.contains(rule.getCredentialClaim())) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP binding rule credentialClaim '%s' must be among the supporting"
+                                    + " credential's requested claims: %s/%s",
+                            rule.getCredentialClaim(), profileId, credential.getId()));
+                }
+
+                if (BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM.equals(rule.getType())) {
+                    if (StringUtil.isBlank(rule.getPrimaryCredentialClaim())) {
+                        throw new IllegalStateException(String.format(
+                                "OpenID4VP binding rule primaryCredentialClaim must not be blank for"
+                                        + " type 'claim_equals_primary_claim': %s/%s",
+                                profileId, credential.getId()));
+                    }
+
+                    if (!primaryClaimNames.contains(rule.getPrimaryCredentialClaim())) {
+                        throw new IllegalStateException(String.format(
+                                "OpenID4VP binding rule primaryCredentialClaim '%s' must be among the"
+                                        + " primary credential's requested claims: %s/%s",
+                                rule.getPrimaryCredentialClaim(), profileId, credential.getId()));
+                    }
+                }
+
+                if (BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE.equals(rule.getType())) {
+                    if (StringUtil.isBlank(rule.getUserAttribute())) {
+                        throw new IllegalStateException(String.format(
+                                "OpenID4VP binding rule userAttribute must not be blank for"
+                                        + " type 'claim_equals_user_attribute': %s/%s",
+                                profileId, credential.getId()));
+                    }
+                }
             }
         }
     }

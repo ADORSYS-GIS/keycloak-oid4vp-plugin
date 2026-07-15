@@ -145,5 +145,10 @@ public class CredentialRequirement {
             }
             return new ClaimReference(spec.substring(0, slash), spec.substring(slash + 1));
         }
+
+        @Override
+        public String toString() {
+            return isNamespaced() ? namespace + SEPARATOR + name : name;
+        }
     }
 }

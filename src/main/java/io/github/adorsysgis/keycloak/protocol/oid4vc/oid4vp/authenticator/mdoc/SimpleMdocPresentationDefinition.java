@@ -8,6 +8,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRe
 import java.util.List;
 import org.keycloak.common.VerificationException;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Express simple presentation requirements for an mDoc device response.
@@ -38,14 +39,14 @@ public class SimpleMdocPresentationDefinition implements PresentationRequirement
         JsonNode nameSpaces = payload.get(L_NAME_SPACES);
 
         for (ClaimReference claim : requiredClaims) {
-            if (!isClaimSatisfied(claim, nameSpaces)) {
+            JsonNode node = findClaim(claim, nameSpaces);
+            if (node == null || node.isNull()) {
                 throw new VerificationException(String.format("Missing required claim: %s", claim));
             }
+            if (StringUtil.isBlank(node.asText(null))) {
+                throw new VerificationException(String.format("Required claim is blank: %s", claim));
+            }
         }
-    }
-
-    private static boolean isClaimSatisfied(ClaimReference claim, JsonNode nameSpaces) {
-        return findClaim(claim, nameSpaces) != null;
     }
 
     static JsonNode findClaim(ClaimReference claim, JsonNode nameSpaces) {

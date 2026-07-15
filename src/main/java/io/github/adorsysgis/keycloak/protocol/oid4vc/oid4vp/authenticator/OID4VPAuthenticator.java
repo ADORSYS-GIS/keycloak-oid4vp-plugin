@@ -209,6 +209,12 @@ public class OID4VPAuthenticator implements Authenticator {
                                     String.format("Unsupported binding rule type: %s", rule.getType()));
                     };
 
+            if (StringUtil.isBlank(supportingValue) || StringUtil.isBlank(expectedValue)) {
+                throw new VerificationException(String.format(
+                        "Supporting credential '%s' failed binding rule '%s': missing or blank binding value",
+                        credential.getId(), rule.getType()));
+            }
+
             if (!Objects.equals(expectedValue, supportingValue)) {
                 throw new VerificationException(String.format(
                         "Supporting credential '%s' failed binding rule '%s'", credential.getId(), rule.getType()));
