@@ -179,8 +179,10 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property.setLabel("Maximum age (in seconds) of presented holder-binding proof");
         property.setType(ProviderConfigProperty.INTEGER_TYPE);
         property.setDefaultValue(HOLDER_BINDING_PROOF_MAX_AGE_CONFIG_DEFAULT);
-        property.setHelpText("Define a maximum age of accepted holder-binding proofs (e.g. KB-JWT for SD-JWT VC, "
-                + "device authentication for mDoc) as part of measures to protect against replay.");
+        property.setHelpText("Define a maximum age of accepted holder-binding proofs (e.g. KB-JWT for SD-JWT VC) "
+                + "as part of measures to protect against replay. Currently only applies to SD-JWT VC; "
+                + "mDoc does not specify a device-signed timestamp in DeviceSigned that would allow "
+                + "a holder-binding age check.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();

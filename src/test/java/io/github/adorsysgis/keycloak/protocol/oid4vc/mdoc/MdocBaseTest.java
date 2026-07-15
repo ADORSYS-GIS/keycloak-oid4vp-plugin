@@ -155,7 +155,7 @@ public class MdocBaseTest {
      * Builds an mDoc device response (Base64URL-encoded) whose MSO {@code validityInfo} uses the
      * given {@code signed}, {@code validFrom} and {@code validUntil} timestamps rather than the
      * default {@code now .. now+10min} window. Intended for end-to-end tests that need to drive
-     * the response into an expired or aged-iat state — the container clock cannot be manipulated
+     * the response into an expired state — the container clock cannot be manipulated
      * via {@code Time.setOffset}, so the MSO itself must carry the forged validity window.
      */
     public static String buildMdocVpToken(
@@ -195,7 +195,7 @@ public class MdocBaseTest {
 
     /**
      * Builds a device response whose MSO {@code validityInfo} uses the given timestamps. Intended
-     * for end-to-end tests that need an expired or aged-iat response (the container clock cannot
+     * for end-to-end tests that need an expired response (the container clock cannot
      * be shifted via {@code Time.setOffset}).
      */
     public static DeviceResponse buildDeviceResponse(

@@ -1,9 +1,12 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -193,5 +196,33 @@ public class OID4VPProfileConfigTest {
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals("OpenID4VP credential ids must be unique in profile: broken", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectTransactionDataWhenPrimaryCredentialIsMdoc() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "default",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["com.example.doctype"],
+                        "claims": ["com.example.namespace1/sub", "com.example.namespace1/username"]
+                      }
+                    ]
+                  }
+                ]
+                """);
+        configMap.put(TRANSACTION_DATA_CONFIG, "{\"type\":\"qrat\",\"credential_ids\":[\"primary\"]}");
+
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(configMap);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new VerifierConfig(config));
+        assertEquals("transactionData is not yet supported for mso_mdoc primary credentials", error.getMessage());
     }
 }

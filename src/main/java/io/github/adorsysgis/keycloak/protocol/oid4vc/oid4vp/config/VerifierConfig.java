@@ -1,10 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
 import com.apicatalog.jsonld.StringUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
@@ -42,6 +45,8 @@ public class VerifierConfig {
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
 
+        this.profileConfig = new OID4VPProfileConfig(authConfig);
+
         this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
                 OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,
                 OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT));
@@ -67,18 +72,12 @@ public class VerifierConfig {
                 OID4VPAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
                 String.valueOf(OID4VPAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
 
-        this.transactionDataRaw =
-                TransactionDataSupport.parseConfigValue(config.get(OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG));
+        this.transactionDataRaw = validateTransactionData(
+                TransactionDataSupport.parseConfigValue(config.get(OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG)),
+                requireCryptographicHolderBinding,
+                profileConfig);
 
         this.verifierInfoConfig = config.get(OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG);
-
-        if (!transactionDataRaw.isEmpty() && !requireCryptographicHolderBinding) {
-            throw new IllegalStateException(
-                    "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
-        }
-
-        // Collect authentication requirements
-        this.profileConfig = new OID4VPProfileConfig(authConfig);
     }
 
     private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
@@ -141,6 +140,37 @@ public class VerifierConfig {
         } catch (Exception e) {
             throw new IllegalStateException(String.format("Invalid X5C certificate '%s'", certificate), e);
         }
+    }
+
+    private static List<String> validateTransactionData(
+            List<String> transactionDataRaw,
+            boolean requireCryptographicHolderBinding,
+            OID4VPProfileConfig profileConfig) {
+        if (transactionDataRaw.isEmpty()) {
+            return transactionDataRaw;
+        }
+
+        if (!requireCryptographicHolderBinding) {
+            throw new IllegalStateException(
+                    "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
+        }
+
+        // TODO: Implement transaction_data binding verification for mso_mdoc credentials
+        // (follow-up ticket). Until then, transaction_data must not be requested when the
+        // primary credential of any profile is mso_mdoc — the mDoc equivalent of KB-JWT
+        // transaction_data_hashes binding is not yet enforced.
+        if (anyProfileHasMdocPrimary(profileConfig)) {
+            throw new IllegalStateException("transactionData is not yet supported for mso_mdoc primary credentials");
+        }
+
+        return transactionDataRaw;
+    }
+
+    private static boolean anyProfileHasMdocPrimary(OID4VPProfileConfig profileConfig) {
+        return profileConfig.getProfiles().stream()
+                .map(AuthenticationProfile::getPrimaryCredential)
+                .map(CredentialRequirement::getFormat)
+                .anyMatch(CredentialFormat.MSO_MDOC.getValue()::equals);
     }
 
     public ClientIdentifierPrefix getClientIdentifierPrefix() {

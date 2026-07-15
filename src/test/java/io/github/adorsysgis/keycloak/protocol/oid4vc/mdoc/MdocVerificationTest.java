@@ -70,34 +70,13 @@ public class MdocVerificationTest extends MdocBaseTest {
 
     @Test
     public void shouldFail_OnExpiredResponses() throws Exception {
-        MdocVerificationOpts opts = getDefaultMdocVerificationOpts()
-                .withAllowedMaxAge(Integer.MAX_VALUE)
-                .build();
-
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
         TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
 
         try {
             Time.setOffset(DEFAULT_RESPONSE_VALIDITY_MINS * 60 + 300);
             verifyFails(mdoc, opts, trust, "Validity information verification failed", "Token has expired by exp");
-        } finally {
-            Time.setOffset(0);
-        }
-    }
-
-    @Test
-    public void shouldFail_OnAgedResponses() throws Exception {
-        int allowedMaxAge = 10;
-        MdocVerificationOpts opts = getDefaultMdocVerificationOpts()
-                .withAllowedMaxAge(allowedMaxAge)
-                .build();
-
-        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
-
-        try {
-            Time.setOffset(allowedMaxAge + 20);
-            verifyFails(mdoc, opts, trust, "Validity information verification failed", "Token has expired by iat");
         } finally {
             Time.setOffset(0);
         }

@@ -51,7 +51,6 @@ public class MdocAuthRequirements {
                 .withJwkThumbprint(jwkThumbprint)
                 .withMdocGeneratedNonce(mdocGeneratedNonce)
                 .withFallbackToIsoSpecSessionTranscript(authRequirements.shouldFallbackToIsoSpecSessionTranscript())
-                .withAllowedMaxAge(authRequirements.getHolderBindingProofMaxAge())
                 .build();
     }
 }
