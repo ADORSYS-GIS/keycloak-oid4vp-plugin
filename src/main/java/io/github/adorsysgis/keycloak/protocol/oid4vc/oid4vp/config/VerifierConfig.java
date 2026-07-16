@@ -1,12 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
 import com.apicatalog.jsonld.StringUtils;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthRequirements;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
@@ -17,18 +18,15 @@ import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
-import org.keycloak.models.KeycloakContext;
 
 /**
  * Access configurations that modulate the verifier's behavior.
  * <p></p>
- * Read full descriptions of configurations in {@link SdJwtAuthenticatorFactory}.
+ * Read full descriptions of configurations in {@link OID4VPAuthenticatorFactory}.
  */
 public class VerifierConfig {
 
     private static final Logger logger = Logger.getLogger(VerifierConfig.class);
-
-    private final SdJwtAuthRequirements authRequirements;
 
     private final ClientIdentifierPrefix clientIdentifierPrefix;
     private final ResponseMode responseMode;
@@ -41,60 +39,52 @@ public class VerifierConfig {
     private final List<String> transactionDataRaw;
     private final String verifierInfoConfig;
 
-    public VerifierConfig(KeycloakContext context, AuthenticatorConfigModel authConfig) {
+    public VerifierConfig(AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting verifier config properties");
 
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
 
-        // TODO: Relocate these non-SD-JWT-specific configurations.
-        //  They should normally not be exposed through SdJwtAuthenticatorFactory.
+        this.profileConfig = new OID4VPProfileConfig(authConfig);
 
         this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
-                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,
-                SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT));
+                OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,
+                OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT));
 
         this.responseMode = validateResponseMode(config.getOrDefault(
-                SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG,
-                SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT));
+                OID4VPAuthenticatorFactory.RESPONSE_MODE_CONFIG,
+                OID4VPAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT));
 
         this.requestUriMethod = validateRequestUriMethod(config.getOrDefault(
-                SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG,
-                SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT));
+                OID4VPAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG,
+                OID4VPAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT));
 
         this.authReqUrlScheme = validateCustomUrlScheme(config.getOrDefault(
-                SdJwtAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG,
-                SdJwtAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG_DEFAULT));
+                OID4VPAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG,
+                OID4VPAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG_DEFAULT));
 
         this.accessCertificate =
-                validateX5CCertificate(config.get(SdJwtAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG));
+                validateX5CCertificate(config.get(OID4VPAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG));
 
-        this.registrationCertificate = config.get(SdJwtAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG);
+        this.registrationCertificate = config.get(OID4VPAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG);
 
         this.requireCryptographicHolderBinding = Boolean.parseBoolean(config.getOrDefault(
-                SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
-                String.valueOf(SdJwtAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
+                OID4VPAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
+                String.valueOf(OID4VPAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
 
-        this.transactionDataRaw =
-                TransactionDataSupport.parseConfigValue(config.get(SdJwtAuthenticatorFactory.TRANSACTION_DATA_CONFIG));
+        this.transactionDataRaw = validateTransactionData(
+                TransactionDataSupport.parseConfigValue(config.get(OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG)),
+                requireCryptographicHolderBinding,
+                profileConfig);
 
-        this.verifierInfoConfig = config.get(SdJwtAuthenticatorFactory.VERIFIER_INFO_CONFIG);
-
-        if (!transactionDataRaw.isEmpty() && !requireCryptographicHolderBinding) {
-            throw new IllegalStateException(
-                    "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
-        }
-
-        // Collect authentication requirements
-        this.authRequirements = new SdJwtAuthRequirements(context, authConfig);
-        this.profileConfig = new OID4VPProfileConfig(context, authConfig);
+        this.verifierInfoConfig = config.get(OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG);
     }
 
     private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
         try {
             return ClientIdentifierPrefix.fromValue(clientIdentifierPrefix);
         } catch (IllegalArgumentException e) {
-            String defaultClientIdentifierPrefix = SdJwtAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT;
+            String defaultClientIdentifierPrefix = OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG_DEFAULT;
             logger.warnf(
                     "Invalid client identifier prefix: %s. Defaulting to %s",
                     clientIdentifierPrefix, defaultClientIdentifierPrefix);
@@ -106,14 +96,14 @@ public class VerifierConfig {
         try {
             return ResponseMode.fromValue(responseMode);
         } catch (IllegalArgumentException e) {
-            String defaultResponseMode = SdJwtAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT;
+            String defaultResponseMode = OID4VPAuthenticatorFactory.RESPONSE_MODE_CONFIG_DEFAULT;
             logger.warnf("Invalid response mode: %s. Defaulting to %s", responseMode, defaultResponseMode);
             return ResponseMode.fromValue(defaultResponseMode);
         }
     }
 
     private static String validateCustomUrlScheme(String customUrlScheme) {
-        String defaultCustomUrlScheme = SdJwtAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG_DEFAULT;
+        String defaultCustomUrlScheme = OID4VPAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG_DEFAULT;
         if (StringUtils.isBlank(customUrlScheme)) {
             return defaultCustomUrlScheme;
         }
@@ -132,7 +122,7 @@ public class VerifierConfig {
         try {
             return RequestUriMethod.fromValue(requestUriMethod);
         } catch (IllegalArgumentException e) {
-            String fallback = SdJwtAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT;
+            String fallback = OID4VPAuthenticatorFactory.REQUEST_URI_METHOD_CONFIG_DEFAULT;
             logger.warnf("Invalid request URI method: %s. Defaulting to %s", requestUriMethod, fallback);
             return RequestUriMethod.fromValue(fallback);
         }
@@ -152,17 +142,35 @@ public class VerifierConfig {
         }
     }
 
-    public SdJwtAuthRequirements getAuthRequirements() {
-        return authRequirements;
+    private static List<String> validateTransactionData(
+            List<String> transactionDataRaw,
+            boolean requireCryptographicHolderBinding,
+            OID4VPProfileConfig profileConfig) {
+        if (transactionDataRaw.isEmpty()) {
+            return transactionDataRaw;
+        }
+
+        if (!requireCryptographicHolderBinding) {
+            throw new IllegalStateException(
+                    "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
+        }
+
+        // TODO: Implement transaction_data binding verification for mso_mdoc credentials
+        // (follow-up ticket). Until then, transaction_data must not be requested when the
+        // primary credential of any profile is mso_mdoc — the mDoc equivalent of KB-JWT
+        // transaction_data_hashes binding is not yet enforced.
+        if (anyProfileHasMdocPrimary(profileConfig)) {
+            throw new IllegalStateException("transactionData is not yet supported for mso_mdoc primary credentials");
+        }
+
+        return transactionDataRaw;
     }
 
-    /**
-     * Builds the DCQL SD-JWT query specification from authenticator requirements.
-     * Keep this as the single source of requested VCTs/claims to avoid drift between
-     * DCQL pre-validation and authenticator validation.
-     */
-    public QuerySpec buildSdJwtQuerySpec() {
-        return authRequirements.getSdJwtQuerySpec(effectiveRequireCryptographicHolderBinding());
+    private static boolean anyProfileHasMdocPrimary(OID4VPProfileConfig profileConfig) {
+        return profileConfig.getProfiles().stream()
+                .map(AuthenticationProfile::getPrimaryCredential)
+                .map(CredentialRequirement::getFormat)
+                .anyMatch(CredentialFormat.MSO_MDOC.getValue()::equals);
     }
 
     public ClientIdentifierPrefix getClientIdentifierPrefix() {
@@ -191,10 +199,6 @@ public class VerifierConfig {
 
     public OID4VPProfileConfig getProfileConfig() {
         return profileConfig;
-    }
-
-    public boolean requireCryptographicHolderBinding() {
-        return requireCryptographicHolderBinding;
     }
 
     public List<String> getTransactionDataRaw() {

@@ -1,4 +1,4 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.sdjwt;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
@@ -9,11 +9,11 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.sdjwt.consumer.TrustedSdJwtIssuer;
 
-final class SdJwtTrustedIssuerResolver {
+public final class SdJwtTrustedIssuerResolver {
 
     private SdJwtTrustedIssuerResolver() {}
 
-    static List<TrustedSdJwtIssuer> resolve(KeycloakSession session, CredentialRequirement credential)
+    public static List<TrustedSdJwtIssuer> resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
             return List.of(new SelfTrustedSdJwtIssuer(session));

@@ -1,6 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -55,7 +55,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     @Test
     public void shouldAuthenticateSuccessfully_InOIDCFlow() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Collect OIDC session data
         FormData formData = getFreshOid4vpFormActionUrl();
@@ -167,7 +167,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     @Test
     public void shouldRedeemAuthorizationCode_InWrappedOidcFlow() throws Exception {
         FormData formData = getFreshOid4vpFormActionUrl();
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         TestOpts opts =
                 TestOpts.getDefault().setAuthContext(formData.authContext()).setShouldRetrieveAccessToken(false);
@@ -265,7 +265,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
      */
     private String completeOid4vpAuth(ApiFlowData apiFlow) throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         TestOpts opts = TestOpts.getDefault()
                 .setAuthContext(apiFlow.authContext())
@@ -279,7 +279,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
      */
     private TestFlowDataV2 startOid4vpAuthSameDevice() throws Exception {
         // Request a valid SD-JWT credential from Keycloak to use for authentication
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         // Collect OIDC session data (same device flow)
         FormData formData = getFreshOid4vpFormActionUrl(false);

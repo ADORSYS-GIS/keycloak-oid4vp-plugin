@@ -377,9 +377,9 @@ class DcqlQueryValidatorTest {
 
     @Test
     void acceptsValidSdJwtCredentialQuery() {
-        var query = new SdJwtCredentialConstrainer()
-                .buildQuery(
-                        SdJwtCredentialConstrainer.QuerySpec.of(List.of("https://example.com/vct"), List.of("sub")));
+        var profile =
+                DcqlQueryGeneratorTest.singleCredentialProfile(List.of("https://example.com/vct"), List.of("sub"));
+        var query = new DcqlQueryGenerator().buildQuery(profile, true);
         assertDoesNotThrow(
                 () -> DcqlQueryValidator.validateQuery(query), "Should accept a valid SD-JWT credential query");
     }

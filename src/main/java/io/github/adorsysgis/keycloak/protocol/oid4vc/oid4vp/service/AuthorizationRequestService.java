@@ -10,8 +10,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryValidator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGenerator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -71,19 +70,13 @@ public class AuthorizationRequestService {
     public static final String SYMBOLIC_AUD = "https://self-issued.me/v2";
 
     private final KeycloakSession session;
-    private final DcqlCredentialCapabilities dcqlCapabilities;
     private final VerifierDiscoveryService discoveryService;
 
     private final String openID4VPRootUrl;
     private final int authSessionLifespanSecs;
 
-    public AuthorizationRequestService(KeycloakSession session) {
-        this(session, DcqlCredentialCapabilities.createDefault());
-    }
-
     public AuthorizationRequestService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
-        this.dcqlCapabilities = dcqlCapabilities;
         this.discoveryService = new VerifierDiscoveryService(session, dcqlCapabilities);
         this.openID4VPRootUrl = OID4VPUserAuthEndpointBase.getOpenID4VPRootUrl(session);
 
@@ -245,9 +238,9 @@ public class AuthorizationRequestService {
                 .limit(2)
                 .collect(Collectors.joining("."));
 
-        DcqlQuery dcqlQuery = SdJwtCredentialConstrainer.create()
-                .buildQuery(profile, config.effectiveRequireCryptographicHolderBinding());
-        DcqlQueryValidator.validateQuery(dcqlQuery);
+        // Build DCQL query from the selected authentication profile
+        DcqlQuery dcqlQuery =
+                DcqlQueryGenerator.create().buildQuery(profile, config.effectiveRequireCryptographicHolderBinding());
 
         // transaction_data and verifier_info currently reference the primary DCQL
         // credential id. Multi-credential profile support keeps the selected
@@ -262,7 +255,7 @@ public class AuthorizationRequestService {
                 config.getRegistrationCertificate(), config.getVerifierInfoConfig(), dcqlCredentialId);
 
         // Aggregate properties
-        RequestObject requestObject = new RequestObject()
+        return new RequestObject()
                 .setIssuer(clientId)
                 .setResponseMode(config.getResponseMode())
                 .setResponseUri(responseUri)
@@ -271,13 +264,10 @@ public class AuthorizationRequestService {
                 .setNonce(nonce)
                 .setState(requestId)
                 .setAudience(SYMBOLIC_AUD)
+                .setDcqlQuery(dcqlQuery)
                 .setClientMetadata(clientMetadata)
                 .setVerifierInfo(verifierInfo)
                 .setTransactionData(transactionData);
-
-        requestObject.setDcqlQuery(dcqlQuery);
-
-        return requestObject;
     }
 
     private String buildAuthorizationRequestLink(

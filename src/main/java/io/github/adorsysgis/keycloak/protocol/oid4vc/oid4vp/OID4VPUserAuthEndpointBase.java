@@ -1,8 +1,14 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.interfaces.ECPrivateKey;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -12,7 +18,11 @@ import org.apache.http.client.utils.URLEncodedUtils;
 import org.jboss.logging.Logger;
 import org.jspecify.annotations.NonNull;
 import org.keycloak.authentication.AuthenticationProcessor;
+import org.keycloak.common.util.Base64Url;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.jose.jwe.JWE;
+import org.keycloak.jose.jwe.JWEException;
+import org.keycloak.jose.jwe.JWEHeader;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -28,6 +38,7 @@ import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.urls.UrlType;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -78,12 +89,12 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
     }
 
     /**
-     * Returns the SD-JWT authenticator configuration as part of the OpenID4VP authentication flow.
+     * Returns the OID4VP authenticator configuration as part of the OpenID4VP authentication flow.
      */
-    protected AuthenticatorConfigModel getSdjwtAuthenticatorConfig() {
+    protected AuthenticatorConfigModel getOid4vpAuthenticatorConfig() {
         AuthenticationFlowModel flow = getOid4vpAuthFlow();
         return realm.getAuthenticationExecutionsStream(flow.getId())
-                .filter(execution -> execution.getAuthenticator().equals(SdJwtAuthenticatorFactory.PROVIDER_ID))
+                .filter(execution -> execution.getAuthenticator().equals(OID4VPAuthenticatorFactory.PROVIDER_ID))
                 .findFirst()
                 .map(AuthenticationExecutionModel::getAuthenticatorConfig)
                 .map(realm::getAuthenticatorConfigById)
@@ -233,5 +244,35 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
         String tabSessionId = authSession.getTabId();
 
         return rootAuthSessionId + AUTH_SESSION_DELIMITER + tabSessionId;
+    }
+
+    /**
+     * Decrypt response to authorization request.
+     *
+     * <p>Extract and attach `apu` header to authorization context if set.
+     * Needed for mDoc device response verification.</p>
+     *
+     * @param encryptedResponse the assumed JWE encrypted response string
+     * @param ephemeralKey      the ephemeral key generated for the authentication
+     *                          session
+     */
+    protected ResponseObject decryptResponse(
+            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
+        try {
+            JWE jwe = AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
+
+            // Extract the `apu` (agreement PartyU info) from the JWE-encrypted response
+            String apu = ((JWEHeader) jwe.getHeader()).getAgreementPartyUInfo();
+            if (StringUtil.isNotBlank(apu)) {
+                authorizationContext.setResponseApuNonce(new String(Base64Url.decode(apu), StandardCharsets.UTF_8));
+            }
+
+            ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
+            String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
+            return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
+        } catch (JWEException | IOException e) {
+            logger.error("Failed to decrypt response", e);
+            throw new IllegalArgumentException("Failed to decrypt and parse response", e);
+        }
     }
 }

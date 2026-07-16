@@ -44,8 +44,8 @@
       "builtIn": false,
       "authenticationExecutions": [
         {
-          "authenticator": "sd-jwt-authenticator",
-          "authenticatorConfig": "sd-jwt-auth-config-haip",
+          "authenticator": "oid4vp-authenticator",
+          "authenticatorConfig": "oid4vp-auth-config-haip",
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
           "priority": 0,
@@ -57,9 +57,9 @@
   "authenticatorConfig": [
     {
       "id": "22c197eb-2b40-41a4-9676-43bc5775ca50",
-      "alias": "sd-jwt-auth-config-haip",
+      "alias": "oid4vp-auth-config-haip",
       "config": {
-        "vct": "https://credentials.example.com/identity_credential",
+        "credentialTypes": "https://credentials.example.com/identity_credential",
         "requireExpClaim": "true",
         "enforceRevocationStatus": "true",
         "clientIdentifierPrefix": "x509_hash",

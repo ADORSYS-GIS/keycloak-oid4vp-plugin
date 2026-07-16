@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMeth
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@SuppressWarnings("UnusedReturnValue")
 public class AuthorizationContext {
 
     /**
@@ -90,14 +91,40 @@ public class AuthorizationContext {
     @JsonProperty("request_object_jwt")
     private String requestObjectJwt;
 
+    /**
+     * HTTP method the wallet must use to dereference {@code request_uri}.
+     */
     @JsonProperty("request_uri_method")
     private RequestUriMethod requestUriMethod;
 
+    /**
+     * OpenID4VP authentication profile id selected for this session.
+     */
     @JsonProperty("profile_id")
     private String profileId;
 
+    /**
+     * Metadata supplied by the wallet when dereferencing {@code request_uri}
+     * via HTTP {@code POST}.
+     */
     @JsonProperty("wallet_metadata")
     private JsonNode walletMetadata;
+
+    /**
+     * Wallet-generated nonce extracted from the {@code apu}
+     * ({@code agreementPartyUInfo}) header of the JWE-encrypted OpenID4VP
+     * response. Per ISO/IEC 18013-7, the wallet picks a fresh nonce per
+     * presentation and advertises it base64url-encoded in the JWE {@code apu}.
+     *
+     * <p>Used to bind an mDoc device response to a specific OpenID4VP request.
+     * {@code MdocCredentialVerifier} reads {@code getResponseApuNonce()} and
+     * forwards it to {@code MdocVerificationOpts} as the {@code mdocGeneratedNonce}
+     * handover input.
+     *
+     * <p>{@code null} for unencrypted responses.
+     */
+    @JsonProperty("response_apu_nonce")
+    private String responseApuNonce;
 
     /**
      * An optional ephemeral key for encrypting responses.
@@ -282,6 +309,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setErrorDescription(String errorDescription) {
         this.errorDescription = errorDescription;
+        return this;
+    }
+
+    public String getResponseApuNonce() {
+        return responseApuNonce;
+    }
+
+    public AuthorizationContext setResponseApuNonce(String responseApuNonce) {
+        this.responseApuNonce = responseApuNonce;
         return this;
     }
 }

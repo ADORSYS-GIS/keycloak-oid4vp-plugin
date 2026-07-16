@@ -1,7 +1,7 @@
 [[oid4vp-deployment-configuration]]
 == OpenID4VP deployment configuration reference
 
-The following `sd-jwt-authenticator` settings control how the verifier builds
+The following `oid4vp-authenticator` settings control how the verifier builds
 OpenID4VP authorization requests and validates responses.
 
 [cols="1,1,2"]
@@ -24,7 +24,7 @@ Only `x509_san_dns` (default in the authenticator UI) and `x509_hash` are implem
 |`direct_post.jwt`
 a|How the wallet delivers the authorization response to the verifier `response_uri`.
 The plugin's `ResponseMode` model includes `fragment`, `form_post`, `direct_post`, `direct_post.jwt`, and `query`.
-The `sd-jwt-authenticator` configuration UI only offers `direct_post` (default) and `direct_post.jwt`.
+The `oid4vp-authenticator` configuration UI only offers `direct_post` (default) and `direct_post.jwt`.
 Use `direct_post` for a conventional form post (`vp_token`, `state`, and related fields).
 Use `direct_post.jwt` when the wallet must post a single encrypted JWE in the `response` form field; the verifier then advertises an ephemeral encryption key via `client_metadata.jwks`.
 

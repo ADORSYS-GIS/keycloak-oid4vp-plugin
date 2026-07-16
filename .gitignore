@@ -12,3 +12,6 @@ demo/.env
 
 # Custom docker-compose files
 docker-compose.*.yml
+
+# Free local notes
+.local/

@@ -1,9 +1,8 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.sdjwt;
 
 import java.util.List;
 import java.util.stream.Stream;
 import org.jboss.logging.Logger;
-import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
@@ -25,10 +24,6 @@ public class SelfTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
     private static final Logger logger = Logger.getLogger(SelfTrustedSdJwtIssuer.class);
 
     private final KeycloakSession session;
-
-    public SelfTrustedSdJwtIssuer(AuthenticationFlowContext context) {
-        this(context.getSession());
-    }
 
     public SelfTrustedSdJwtIssuer(KeycloakSession session) {
         this.session = session;

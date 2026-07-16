@@ -1,9 +1,15 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -43,7 +49,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         AuthenticationProfile profile = profileConfig.getProfile("dual");
         assertEquals("dual", profile.getId());
@@ -72,7 +78,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         assertEquals("pid-login", profileConfig.getProfile(null).getId());
         assertEquals(
@@ -101,7 +107,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         IllegalArgumentException error =
                 assertThrows(IllegalArgumentException.class, () -> profileConfig.getProfile("typo"));
@@ -142,7 +148,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(null, config);
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
 
         TrustPolicy trustPolicy = profileConfig
                 .getProfile("dual-pid")
@@ -172,8 +178,7 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        IllegalStateException error =
-                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals("OpenID4VP profile must have exactly one primary credential: broken", error.getMessage());
     }
 
@@ -192,8 +197,238 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        IllegalStateException error =
-                assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(null, config));
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals("OpenID4VP credential ids must be unique in profile: broken", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectTransactionDataWhenPrimaryCredentialIsMdoc() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "default",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["com.example.doctype"],
+                        "claims": ["com.example.namespace1/sub", "com.example.namespace1/username"],
+                        "trust": [{ "type": "x5c", "anchors": ["%s"] }]
+                      }
+                    ]
+                  }
+                ]
+                """.formatted(MdocBaseTest.getIssuerCertBase64()));
+        configMap.put(TRANSACTION_DATA_CONFIG, "{\"type\":\"qrat\",\"credential_ids\":[\"primary\"]}");
+
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(configMap);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new VerifierConfig(config));
+        assertEquals("transactionData is not yet supported for mso_mdoc primary credentials", error.getMessage());
+    }
+
+    // ---- Binding rule validation -------------------------------------------
+
+    private static final String DUAL_PROFILE_TEMPLATE = """
+            [
+              {
+                "id": "p",
+                "credentials": [
+                  {
+                    "id": "primary",
+                    "role": "primary",
+                    "credentialTypes": ["main-vct"],
+                    "claims": ["sub", "username"]
+                  },
+                  {
+                    "id": "supporting",
+                    "role": "supporting",
+                    "credentialTypes": ["supporting-vct"],
+                    "claims": ["username", "family_name"],
+                    "trust": [{ "type": "self" }],
+                    "binding": [ {binding} ]
+                  }
+                ]
+              }
+            ]
+            """;
+
+    private static OID4VPProfileConfig parseProfileWithBinding(String bindingJson) {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, DUAL_PROFILE_TEMPLATE.replace("{binding}", bindingJson)));
+        return new OID4VPProfileConfig(config);
+    }
+
+    @Test
+    void shouldRejectBindingRuleWithBlankType() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "", "credentialClaim": "username", "primaryCredentialClaim": "username" }
+                        """));
+        assertTrue(e.getMessage().contains("binding rule type must not be blank"));
+    }
+
+    @Test
+    void shouldRejectBindingRuleWithUnknownType() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "unknown_rule", "credentialClaim": "username", "primaryCredentialClaim": "username" }
+                        """));
+        assertTrue(e.getMessage().contains("Unsupported OpenID4VP binding rule type 'unknown_rule'"));
+    }
+
+    @Test
+    void shouldRejectBindingRuleWithBlankCredentialClaim() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "claim_equals_primary_claim", "credentialClaim": "", "primaryCredentialClaim": "username" }
+                        """));
+        assertTrue(e.getMessage().contains("credentialClaim must not be blank"));
+    }
+
+    @Test
+    void shouldRejectBindingRuleCredentialClaimNotInSupportingClaims() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "claim_equals_primary_claim", "credentialClaim": "email", "primaryCredentialClaim": "username" }
+                        """));
+        assertTrue(e.getMessage().contains("must be among the supporting credential's requested claims"));
+    }
+
+    @Test
+    void shouldRejectBindingRuleWithBlankPrimaryCredentialClaim() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "claim_equals_primary_claim", "credentialClaim": "username", "primaryCredentialClaim": "" }
+                        """));
+        assertTrue(e.getMessage().contains("primaryCredentialClaim must not be blank"));
+    }
+
+    @Test
+    void shouldRejectBindingRulePrimaryClaimNotInPrimaryClaims() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "claim_equals_primary_claim", "credentialClaim": "username", "primaryCredentialClaim": "family_name" }
+                        """));
+        assertTrue(e.getMessage().contains("must be among the primary credential's requested claims"));
+    }
+
+    @Test
+    void shouldRejectBindingRuleWithBlankUserAttribute() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
+                        { "type": "claim_equals_user_attribute", "credentialClaim": "username", "userAttribute": "" }
+                        """));
+        assertTrue(e.getMessage().contains("userAttribute must not be blank"));
+    }
+
+    @Test
+    void shouldAcceptValidBindingRule() {
+        assertDoesNotThrow(() -> parseProfileWithBinding("""
+                { "type": "claim_equals_primary_claim", "credentialClaim": "username", "primaryCredentialClaim": "username" }
+                """));
+    }
+
+    @Test
+    void shouldAcceptValidUserAttributeBindingRule() {
+        assertDoesNotThrow(() -> parseProfileWithBinding("""
+                { "type": "claim_equals_user_attribute", "credentialClaim": "family_name", "userAttribute": "family_name" }
+                """));
+    }
+
+    // ---- mDoc trust policy validation ----------------------------------------
+
+    private static final String MDOC_PROFILE_TEMPLATE = """
+            [
+              {
+                "id": "p",
+                "credentials": [
+                  {
+                    "id": "primary",
+                    "role": "primary",
+                    "format": "mso_mdoc",
+                    "credentialTypes": ["com.example.doctype"],
+                    "claims": ["com.example.ns/sub", "com.example.ns/username"],
+                    {trust}
+                  }
+                ]
+              }
+            ]
+            """;
+
+    private static void parseMdocProfileWithTrust(String trustJson) {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(
+                PROFILES_CONFIG,
+                MDOC_PROFILE_TEMPLATE
+                        .replace("{trust}", trustJson)
+                        .replace("{anchor}", MdocBaseTest.getIssuerCertBase64())));
+        new OID4VPProfileConfig(config);
+    }
+
+    @Test
+    void shouldRejectMdocCredentialWithoutTrustPolicy() {
+        IllegalStateException e =
+                assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("\"trust\": []"));
+        assertTrue(e.getMessage().contains("must configure at least one trust policy"));
+    }
+
+    @Test
+    void shouldRejectSelfTrustForMdocCredential() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "self" }]
+                        """));
+        assertTrue(e.getMessage().contains("Self-trust is not supported for mDoc credentials"));
+    }
+
+    @Test
+    void shouldRejectUnsupportedTrustTypeForMdoc() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "UnknownType", "anchors": ["{anchor}"] }]
+                        """));
+        assertTrue(e.getMessage().contains("Unsupported trust policy type 'UnknownType'"));
+    }
+
+    @Test
+    void shouldRejectBlankTrustTypeForMdoc() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "", "anchors": ["{anchor}"] }]
+                        """));
+        assertTrue(e.getMessage().contains("Trust policy type must not be blank"));
+    }
+
+    @Test
+    void shouldRejectX5cTrustWithoutAnchors() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "x5c", "anchors": [] }]
+                        """));
+        assertTrue(e.getMessage().contains("must declare at least one anchor"));
+    }
+
+    @Test
+    void shouldRejectX5cTrustWithBlankAnchor() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "x5c", "anchors": [""] }]
+                        """));
+        assertTrue(e.getMessage().contains("Invalid OpenID4VP profiles configuration"));
+    }
+
+    @Test
+    void shouldRejectX5cTrustWithMalformedBase64Anchor() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "x5c", "anchors": ["not-valid-base64!@#"] }]
+                        """));
+        assertTrue(e.getMessage().contains("Invalid OpenID4VP profiles configuration"));
+    }
+
+    @Test
+    void shouldRejectX5cTrustWithInvalidDerAnchor() {
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                        "trust": [{ "type": "x5c", "anchors": ["AQID"] }]
+                        """));
+        assertTrue(e.getMessage().contains("Invalid OpenID4VP profiles configuration"));
+    }
+
+    @Test
+    void shouldAcceptValidX5cTrustForMdoc() {
+        assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
+                "trust": [{ "type": "x5c", "anchors": ["{anchor}"] }]
+                """));
     }
 }
