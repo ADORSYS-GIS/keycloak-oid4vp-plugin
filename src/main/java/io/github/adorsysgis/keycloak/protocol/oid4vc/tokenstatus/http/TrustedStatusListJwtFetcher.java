@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorAdapter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
@@ -43,7 +44,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         JWSInput jws = parseStatusListJwt(statusListJwt);
 
         // Verify signature and certificate chain
-        verifyStatusListJwt(jws, uri);
+        verifyStatusListJwt(jws);
 
         return statusListJwt;
     }
@@ -51,7 +52,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
     /**
      * Verifies the signature and certificate chain of the Status List JWT.
      */
-    protected void verifyStatusListJwt(JWSInput jws, String uri) throws ReferencedTokenValidationException {
+    protected void verifyStatusListJwt(JWSInput jws) throws ReferencedTokenValidationException {
         X509Certificate leaf = getLeafCertificateFromX5C(jws);
         SignatureVerifierContext verifier = getVerifierContext(jws, leaf);
         validateJwsSignature(jws, verifier);
@@ -129,7 +130,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         }
 
         try {
-            return PKIXVerificationUtil.validateBase64Chain(x5c, truststoreProvider);
+            return PKIXVerificationUtil.validateBase64Chain(x5c, new TrustAnchorAdapter(truststoreProvider));
         } catch (VerificationException e) {
             throw new ReferencedTokenValidationException(e.getMessage(), e);
         }

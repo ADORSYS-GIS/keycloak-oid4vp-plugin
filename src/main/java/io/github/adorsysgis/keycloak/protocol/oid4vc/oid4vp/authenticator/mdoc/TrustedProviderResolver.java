@@ -5,17 +5,17 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.StaticTruststoreProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.truststore.TruststoreProvider;
 
 /**
  * Resolves the trust policy configured on a {@link CredentialRequirement} into a
- * {@link TruststoreProvider} suitable for mDoc issuer PKIX verification.
+ * {@link TrustAnchorProvider} suitable for mDoc issuer PKIX verification.
  *
  * <p>Unlike its SD-JWT counterpart {@code SdJwtTrustedIssuerResolver}, this resolver
  * does <strong>not</strong> support self-trust: mDoc issuers are always external to
@@ -36,7 +36,7 @@ public final class TrustedProviderResolver {
 
     private TrustedProviderResolver() {}
 
-    public static TruststoreProvider resolve(KeycloakSession session, CredentialRequirement credential)
+    public static TrustAnchorProvider resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
             throw new IllegalStateException(String.format(

@@ -15,7 +15,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
-import java.security.KeyStore;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -70,7 +69,6 @@ public class TrustedStatusListJwtFetcherTest {
         // Mock TruststoreProvider for PKIX validation
         TruststoreProvider truststoreProvider = Mockito.mock(TruststoreProvider.class);
         Mockito.lenient().when(session.getProvider(TruststoreProvider.class)).thenReturn(truststoreProvider);
-        Mockito.lenient().when(truststoreProvider.getTruststore()).thenReturn(Mockito.mock(KeyStore.class));
         Mockito.lenient().when(truststoreProvider.getRootCertificates()).thenReturn(Collections.emptyMap());
         Mockito.lenient().when(truststoreProvider.getIntermediateCertificates()).thenReturn(Collections.emptyMap());
 

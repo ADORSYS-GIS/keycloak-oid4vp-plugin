@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jboss.logging.Logger;
@@ -20,7 +21,6 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
-import org.keycloak.truststore.TruststoreProvider;
 import org.keycloak.util.JWKSUtils;
 
 /**
@@ -50,7 +50,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
 
         MdocAuthRequirements authReqs = new MdocAuthRequirements(context.getAuthenticatorConfig(), credential);
 
-        TruststoreProvider truststore = TrustedProviderResolver.resolve(context.getSession(), credential);
+        TrustAnchorProvider truststore = TrustedProviderResolver.resolve(context.getSession(), credential);
 
         RequestObject requestObject = authorizationContext.getRequestObject();
 
