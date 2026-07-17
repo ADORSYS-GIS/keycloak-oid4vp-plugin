@@ -15,3 +15,8 @@ docker-compose.*.yml
 
 # Free local notes
 .local/
+
+# Local test material
+local-secrets/
+test.json
+eudi-ios-wallet-logs*.txt
