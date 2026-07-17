@@ -46,6 +46,7 @@ import org.keycloak.utils.StringUtil;
 public class OID4VPAuthenticator implements Authenticator {
 
     private static final Logger logger = Logger.getLogger(OID4VPAuthenticator.class);
+    private static final int MAX_USER_ID_LOOKUP_SUBJECT_LENGTH = 255;
 
     private final Map<String, CredentialVerifier> handlers;
 
@@ -285,11 +286,15 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         UserModel user = null;
-        if (!StringUtil.isBlank(subject)) {
+        if (isSafeUserIdLookupSubject(subject)) {
             user = context.getSession().users().getUserById(context.getRealm(), subject);
             if (user != null) {
                 logger.debugf("Resolved user id: %s", user.getId());
             }
+        } else if (!StringUtil.isBlank(subject)) {
+            logger.warnf(
+                    "Presented subject is too long for user id lookup (%d characters). Falling back to username lookup.",
+                    subject.length());
         }
 
         if (user == null) {
@@ -313,6 +318,10 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         return user;
+    }
+
+    private static boolean isSafeUserIdLookupSubject(String subject) {
+        return !StringUtil.isBlank(subject) && subject.length() <= MAX_USER_ID_LOOKUP_SUBJECT_LENGTH;
     }
 
     private static String correlationId(AuthenticationFlowContext context) {
