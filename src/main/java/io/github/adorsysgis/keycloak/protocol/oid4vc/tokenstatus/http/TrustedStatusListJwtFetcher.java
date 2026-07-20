@@ -126,7 +126,8 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         // Enforce trust in X5C chain
         TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
         if (truststoreProvider == null || truststoreProvider.getTruststore() == null) {
-            logger.warn("No Keycloak global truststore configured. Certificate chain validation will fail.");
+            throw new ReferencedTokenValidationException(
+                    "No Keycloak global truststore configured; cannot validate certificate chain");
         }
 
         try {

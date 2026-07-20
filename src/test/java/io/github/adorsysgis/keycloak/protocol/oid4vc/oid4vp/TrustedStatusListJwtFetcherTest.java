@@ -15,6 +15,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.KeyStore;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -69,6 +70,7 @@ public class TrustedStatusListJwtFetcherTest {
         // Mock TruststoreProvider for PKIX validation
         TruststoreProvider truststoreProvider = Mockito.mock(TruststoreProvider.class);
         Mockito.lenient().when(session.getProvider(TruststoreProvider.class)).thenReturn(truststoreProvider);
+        Mockito.lenient().when(truststoreProvider.getTruststore()).thenReturn(Mockito.mock(KeyStore.class));
         Mockito.lenient().when(truststoreProvider.getRootCertificates()).thenReturn(Collections.emptyMap());
         Mockito.lenient().when(truststoreProvider.getIntermediateCertificates()).thenReturn(Collections.emptyMap());
 
@@ -129,6 +131,30 @@ public class TrustedStatusListJwtFetcherTest {
 
         var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
         assertTrue(e.getMessage().contains("No trusted root certificates available for validation"));
+    }
+
+    @Test
+    public void shouldRejectWhenTruststoreProviderMissing() {
+        String uri = "https://example.com/status-list-jwt";
+
+        // Simulate Keycloak returning no TruststoreProvider
+        Mockito.when(session.getProvider(TruststoreProvider.class)).thenReturn(null);
+
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
+        assertEquals("No Keycloak global truststore configured; cannot validate certificate chain", e.getMessage());
+    }
+
+    @Test
+    public void shouldRejectWhenTruststoreIsEmpty() {
+        String uri = "https://example.com/status-list-jwt";
+
+        // Simulate a configured TruststoreProvider whose underlying truststore is null
+        TruststoreProvider truststoreProvider = Mockito.mock(TruststoreProvider.class);
+        Mockito.when(session.getProvider(TruststoreProvider.class)).thenReturn(truststoreProvider);
+        Mockito.when(truststoreProvider.getTruststore()).thenReturn(null);
+
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
+        assertEquals("No Keycloak global truststore configured; cannot validate certificate chain", e.getMessage());
     }
 
     @Test

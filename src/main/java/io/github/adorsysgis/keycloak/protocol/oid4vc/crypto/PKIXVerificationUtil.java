@@ -16,8 +16,12 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.security.auth.x500.X500Principal;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Time;
 
@@ -39,16 +43,16 @@ public class PKIXVerificationUtil {
 
     public static X509Certificate[] validateChain(List<X509Certificate> certs, TrustAnchorProvider trustAnchorProvider)
             throws VerificationException {
-        List<X509Certificate> roots = trustAnchorProvider == null
-                ? List.of()
-                : trustAnchorProvider.getRootCertificates().values().stream()
-                        .flatMap(List::stream)
-                        .toList();
-        List<X509Certificate> intermediates = trustAnchorProvider == null
-                ? List.of()
-                : trustAnchorProvider.getIntermediateCertificates().values().stream()
-                        .flatMap(List::stream)
-                        .toList();
+        List<X509Certificate> roots = Optional.ofNullable(trustAnchorProvider)
+                .map(TrustAnchorProvider::getRootCertificates)
+                .map(PKIXVerificationUtil::collectCerts)
+                .orElse(null);
+
+        List<X509Certificate> intermediates = Optional.ofNullable(trustAnchorProvider)
+                .map(TrustAnchorProvider::getIntermediateCertificates)
+                .map(PKIXVerificationUtil::collectCerts)
+                .orElse(null);
+
         return validateChain(certs, roots, intermediates);
     }
 
@@ -148,5 +152,13 @@ public class PKIXVerificationUtil {
         } catch (CertificateException e) {
             throw new VerificationException("Failed to parse X.509 certificate", e);
         }
+    }
+
+    private static List<X509Certificate> collectCerts(Map<X500Principal, List<X509Certificate>> anchorMap) {
+        return Optional.ofNullable(anchorMap).orElse(Map.of()).values().stream()
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .toList();
     }
 }
