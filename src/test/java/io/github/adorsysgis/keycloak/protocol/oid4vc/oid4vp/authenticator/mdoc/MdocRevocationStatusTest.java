@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.Referenc
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,6 +46,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -101,35 +103,32 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     @Test
     public void shouldFail_WhenRevocationEnforcedAndStatusMissing() throws Exception {
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        JsonNode mso = MdocCredentialVerifier.extractMsoPayload(mdoc);
+        var mso = MdocCredentialVerifier.extractMsoPayload(mdoc);
 
-        assertTrue(mso.get(STATUS_FIELD) == null || mso.get(STATUS_FIELD).isNull());
-
-        ReferencedTokenValidator validator = new ReferencedTokenValidator(mockFetcher);
-        var exception = assertThrows(ReferencedTokenValidationException.class, () -> validator.validate(mso));
+        assertNull(mso.get(STATUS_FIELD));
+        ReferencedTokenValidationException exception =
+                assertThrows(ReferencedTokenValidationException.class, () -> new ReferencedTokenValidator(mockFetcher)
+                        .validate(mso));
         assertTrue(exception.getMessage().contains("Missing required '" + STATUS_FIELD + "'"));
     }
 
     @Test
     public void shouldPass_WhenRevocationEnforcedAndStatusValid() throws Exception {
-        String mdoc = buildMdocWithStatus(1, STATUS_LIST_URI);
-        JsonNode mso = MdocCredentialVerifier.extractMsoPayload(mdoc);
-
-        ReferencedTokenValidator validator = new ReferencedTokenValidator(mockFetcher);
-        assertDoesNotThrow(() -> validator.validate(mso));
+        String mdoc = buildMdocWithStatus(1);
+        assertDoesNotThrow(() ->
+                new ReferencedTokenValidator(mockFetcher).validate(MdocCredentialVerifier.extractMsoPayload(mdoc)));
     }
 
     @Test
     public void shouldFail_WhenRevocationEnforcedAndStatusInvalid() throws Exception {
-        String mdoc = buildMdocWithStatus(0, STATUS_LIST_URI);
-        JsonNode mso = MdocCredentialVerifier.extractMsoPayload(mdoc);
-
-        ReferencedTokenValidator validator = new ReferencedTokenValidator(mockFetcher);
-        var exception = assertThrows(ReferencedTokenValidationException.class, () -> validator.validate(mso));
+        String mdoc = buildMdocWithStatus(0);
+        ReferencedTokenValidationException exception =
+                assertThrows(ReferencedTokenValidationException.class, () -> new ReferencedTokenValidator(mockFetcher)
+                        .validate(MdocCredentialVerifier.extractMsoPayload(mdoc)));
         assertTrue(exception.getMessage().contains("Token status is not valid"));
     }
 
-    private String buildMdocWithStatus(int idx, String uri) throws Exception {
+    private String buildMdocWithStatus(int idx) throws Exception {
         DeviceResponse dr = buildDeviceResponse(opts);
         Document doc = extractDocument(dr);
         IssuerSigned issuerSigned =
@@ -141,15 +140,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                                 .getValue()))
                 .getPayload());
 
-        CBORPairList statusList = new CBORPairList(
-                new CBORPair(new CBORString("idx"), new CBORInteger(idx)),
-                new CBORPair(new CBORString("uri"), new CBORString(uri)));
-        CBORPairList statusWrapper = new CBORPairList(new CBORPair(new CBORString(STATUS_LIST_FIELD), statusList));
-        CBORPair statusPair = new CBORPair(new CBORString(STATUS_FIELD), statusWrapper);
-
-        List<CBORPair> newPairs = new ArrayList<>(originalMso.getPairs());
-        newPairs.add(statusPair);
-        CBORPairList msoWithStatus = new CBORPairList(newPairs);
+        CBORPairList msoWithStatus = getCborPairList(idx, originalMso);
 
         COSESign1 newIssuerAuth = signRawMso(msoWithStatus, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
         IssuerSigned newIssuerSigned = new IssuerSigned(
@@ -164,6 +155,19 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                         doc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue(),
                 null)));
         return newDr.encodeToBase64Url();
+    }
+
+    private static @NotNull CBORPairList getCborPairList(int idx, CBORPairList originalMso) {
+        CBORPairList statusList = new CBORPairList(
+                new CBORPair(new CBORString("idx"), new CBORInteger(idx)),
+                new CBORPair(new CBORString("uri"), new CBORString(MdocRevocationStatusTest.STATUS_LIST_URI)));
+        CBORPairList statusWrapper = new CBORPairList(new CBORPair(new CBORString(STATUS_LIST_FIELD), statusList));
+        CBORPair statusPair = new CBORPair(new CBORString(STATUS_FIELD), statusWrapper);
+
+        List<CBORPair> newPairs = new ArrayList<>(originalMso.getPairs());
+        newPairs.add(statusPair);
+        CBORPairList msoWithStatus = new CBORPairList(newPairs);
+        return msoWithStatus;
     }
 
     private static COSESign1 signRawMso(CBORPairList mso, COSEEC2Key issuerKey, List<X509Certificate> x5chain)
