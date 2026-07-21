@@ -46,7 +46,7 @@ public abstract class BaseKeycloakTest {
     private static final Logger logger = Logger.getLogger(BaseKeycloakTest.class);
 
     public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.0";
-    public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT-all.jar";
+    public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar";
 
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_HAIP_NAME = "test-haip";
