@@ -3,10 +3,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 import com.authlete.cose.constants.COSEAlgorithms;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.MdocGenericFormat;
 import java.util.List;
 import org.keycloak.common.VerificationException;
+import org.keycloak.utils.StringUtil;
 
 /**
  * DCQL capability for {@code mso_mdoc} (ISO/IEC 18013-5) credentials.
@@ -23,7 +24,28 @@ public final class MdocDcqlCredentialCapability implements DcqlCredentialCapabil
     }
 
     @Override
-    public void validatePresentation(DcqlQuery query, String presentedToken) throws VerificationException {
+    public void validateCredentialQuery(Credential credential) {
+        if (StringUtil.isBlank(credential.getMeta().getDoctypeValue())) {
+            throw new IllegalArgumentException("meta.doctype_value must be non-empty for mso_mdoc credential queries");
+        }
+        if (credential.getClaims() == null) {
+            return;
+        }
+        credential.getClaims().forEach(claim -> {
+            if (claim.getPath().size() != 2) {
+                throw new IllegalArgumentException(
+                        "mso_mdoc claim paths must contain exactly namespace and element identifier");
+            }
+        });
+    }
+
+    @Override
+    public boolean supportsPresentationPreValidation() {
+        return false;
+    }
+
+    @Override
+    public void validatePresentation(Credential credential, String presentedToken) throws VerificationException {
         throw new UnsupportedOperationException(
                 "DCQL presentation validation is not yet supported for mso_mdoc credentials");
     }

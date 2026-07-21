@@ -3,11 +3,9 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.keycloak.VCFormat;
 import org.keycloak.utils.StringUtil;
 
 /** Validates DCQL queries at build time per OpenID4VP 1.0 format-specific rules. */
@@ -16,17 +14,25 @@ public final class DcqlQueryValidator {
     private DcqlQueryValidator() {}
 
     public static void validateQuery(DcqlQuery query) {
+        validateQuery(query, DcqlCredentialCapabilities.createDefault());
+    }
+
+    public static void validateQuery(DcqlQuery query, DcqlCredentialCapabilities capabilities) {
         if (query == null
                 || query.getCredentials() == null
                 || query.getCredentials().isEmpty()) {
             throw new IllegalArgumentException("dcql_query.credentials must be non-empty");
         }
-        query.getCredentials().forEach(DcqlQueryValidator::validateCredential);
+        query.getCredentials().forEach(credential -> validateCredential(credential, capabilities));
         validateCredentialIdUniqueness(query.getCredentials());
         validateCredentialSets(query);
     }
 
     public static void validateCredential(Credential credential) {
+        validateCredential(credential, DcqlCredentialCapabilities.createDefault());
+    }
+
+    public static void validateCredential(Credential credential, DcqlCredentialCapabilities capabilities) {
         if (credential == null) {
             throw new IllegalArgumentException("dcql_query credential must not be null");
         }
@@ -35,19 +41,14 @@ public final class DcqlQueryValidator {
             throw new IllegalArgumentException("dcql_query credential format must be non-empty");
         }
 
-        Meta meta = credential.getMeta();
-        if (meta == null) {
+        if (credential.getMeta() == null) {
             throw new IllegalArgumentException(
                     "dcql_query credential meta must be present for format " + credential.getFormat());
         }
 
-        if (!VCFormat.SD_JWT_VC.equals(credential.getFormat())) {
-            throw new IllegalArgumentException("Unsupported dcql_query credential format: " + credential.getFormat());
-        }
-        validateSdJwtMeta(meta);
-
         validateClaimsAndClaimSets(credential);
         validateClaimPaths(credential);
+        capabilities.require(credential.getFormat()).validateCredentialQuery(credential);
     }
 
     private static void validateDcqlId(String id, String label) {
@@ -143,15 +144,6 @@ public final class DcqlQueryValidator {
         }
     }
 
-    private static void validateSdJwtMeta(Meta meta) {
-        if (meta.getVctValues() == null || meta.getVctValues().isEmpty()) {
-            throw new IllegalArgumentException("meta.vct_values must be non-empty for dc+sd-jwt credential queries");
-        }
-        if (meta.getVctValues().stream().anyMatch(StringUtil::isBlank)) {
-            throw new IllegalArgumentException("meta.vct_values must not contain blank entries");
-        }
-    }
-
     private static void validateClaimPaths(Credential credential) {
         if (credential.getClaims() == null) {
             return;
@@ -164,24 +156,8 @@ public final class DcqlQueryValidator {
             if (path.stream().anyMatch(StringUtil::isBlank)) {
                 throw new IllegalArgumentException("dcql_query claim path segments must be non-empty");
             }
-            if (path.stream().anyMatch(DcqlQueryValidator::isUnsupportedPathSegment)) {
-                throw new IllegalArgumentException(
-                        "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
-            }
             validateClaimValues(claim.getValues());
-            if (isVpWrapperPath(path)) {
-                throw new IllegalArgumentException(credential.getFormat()
-                        + " claim paths must be relative to the VC root, not the VP wrapper: "
-                        + path);
-            }
         }
-    }
-
-    private static boolean isUnsupportedPathSegment(String segment) {
-        if ("null".equals(segment)) {
-            return true;
-        }
-        return !segment.isEmpty() && segment.chars().allMatch(Character::isDigit);
     }
 
     private static void validateClaimValues(List<String> values) {
@@ -194,14 +170,6 @@ public final class DcqlQueryValidator {
         if (values.stream().anyMatch(StringUtil::isBlank)) {
             throw new IllegalArgumentException("dcql_query claim values must not contain blank entries");
         }
-    }
-
-    private static boolean isVpWrapperPath(List<String> path) {
-        if (path.isEmpty()) {
-            return false;
-        }
-        String first = path.getFirst();
-        return "verifiableCredential".equals(first) || "vp".equals(first);
     }
 
     private static void validateCredentialSets(DcqlQuery query) {

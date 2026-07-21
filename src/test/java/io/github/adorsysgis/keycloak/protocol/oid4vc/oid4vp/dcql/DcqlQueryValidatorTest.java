@@ -253,7 +253,7 @@ class DcqlQueryValidatorTest {
         credential.setMeta(new Meta());
         IllegalArgumentException error =
                 assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
-        assertEquals("Unsupported dcql_query credential format: jwt_vc_json", error.getMessage());
+        assertEquals("No DCQL credential capability for format: jwt_vc_json", error.getMessage());
     }
 
     @Test
@@ -376,6 +376,39 @@ class DcqlQueryValidatorTest {
     }
 
     @Test
+    void acceptsValidMdocCredentialQuery() {
+        assertDoesNotThrow(() -> DcqlQueryValidator.validateCredential(
+                mdocCredential(List.of("org.iso.18013.5.1", "given_name"), "org.iso.18013.5.1.mDL")));
+    }
+
+    @Test
+    void rejectsBlankMdocDoctype() {
+        Credential credential = mdocCredential(List.of("org.iso.18013.5.1", "given_name"), "  ");
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertEquals("meta.doctype_value must be non-empty for mso_mdoc credential queries", error.getMessage());
+    }
+
+    @Test
+    void rejectsMdocClaimPathsWithoutExactlyTwoComponents() {
+        for (List<String> path : List.of(List.of("namespace"), List.of("namespace", "element", "extra"))) {
+            IllegalArgumentException error = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> DcqlQueryValidator.validateCredential(mdocCredential(path, "org.iso.18013.5.1.mDL")));
+            assertEquals(
+                    "mso_mdoc claim paths must contain exactly namespace and element identifier", error.getMessage());
+        }
+    }
+
+    @Test
+    void rejectsBlankMdocClaimPathComponent() {
+        Credential credential = mdocCredential(List.of("org.iso.18013.5.1", "  "), "org.iso.18013.5.1.mDL");
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
+        assertEquals("dcql_query claim path segments must be non-empty", error.getMessage());
+    }
+
+    @Test
     void acceptsValidSdJwtCredentialQuery() {
         var profile =
                 DcqlQueryGeneratorTest.singleCredentialProfile(List.of("https://example.com/vct"), List.of("sub"));
@@ -392,6 +425,19 @@ class DcqlQueryValidatorTest {
         meta.setVctValues(List.of("https://example.com/vct"));
         credential.setMeta(meta);
         credential.setClaims(claims);
+        return credential;
+    }
+
+    private static Credential mdocCredential(List<String> path, String doctype) {
+        Credential credential = new Credential();
+        credential.setId("mdoc-credential");
+        credential.setFormat("mso_mdoc");
+        Meta meta = new Meta();
+        meta.setDoctypeValue(doctype);
+        credential.setMeta(meta);
+        Claim claim = new Claim();
+        claim.setPath(path);
+        credential.setClaims(List.of(claim));
         return credential;
     }
 }

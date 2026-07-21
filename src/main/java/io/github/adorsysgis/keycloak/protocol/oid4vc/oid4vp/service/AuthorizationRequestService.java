@@ -11,6 +11,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGenerator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -71,12 +72,14 @@ public class AuthorizationRequestService {
 
     private final KeycloakSession session;
     private final VerifierDiscoveryService discoveryService;
+    private final DcqlCredentialCapabilities dcqlCapabilities;
 
     private final String openID4VPRootUrl;
     private final int authSessionLifespanSecs;
 
     public AuthorizationRequestService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
+        this.dcqlCapabilities = dcqlCapabilities;
         this.discoveryService = new VerifierDiscoveryService(session, dcqlCapabilities);
         this.openID4VPRootUrl = OID4VPUserAuthEndpointBase.getOpenID4VPRootUrl(session);
 
@@ -241,6 +244,7 @@ public class AuthorizationRequestService {
         // Build DCQL query from the selected authentication profile
         DcqlQuery dcqlQuery =
                 DcqlQueryGenerator.create().buildQuery(profile, config.effectiveRequireCryptographicHolderBinding());
+        DcqlQueryValidator.validateQuery(dcqlQuery, dcqlCapabilities);
 
         // transaction_data and verifier_info currently reference the primary DCQL
         // credential id. Multi-credential profile support keeps the selected

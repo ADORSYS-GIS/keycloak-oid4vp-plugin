@@ -30,19 +30,23 @@ public final class DcqlPresentationValidator {
                     "Only single-credential DCQL queries are supported for presentation validation");
         }
 
-        Credential credentialQuery = query.getCredentials().getFirst();
-        if (!VCFormat.SD_JWT_VC.equals(credentialQuery.getFormat())) {
-            throw new VerificationException("Unsupported dcql_query credential format for presentation validation: "
-                    + credentialQuery.getFormat());
-        }
-        validateSdJwtPresentation(query, SdJwtVP.of(presentedToken));
+        validatePresentation(query.getCredentials().getFirst(), presentedToken);
     }
 
-    private static void validateSdJwtPresentation(DcqlQuery query, SdJwtVP presentation) throws VerificationException {
-        Credential credentialQuery = query.getCredentials().getFirst();
-        validateHolderBinding(credentialQuery, presentation);
-        validateSdJwtMeta(credentialQuery.getMeta(), presentation);
-        validateSdJwtRequestedClaims(credentialQuery, presentation);
+    public static void validatePresentation(Credential credential, String presentedToken) throws VerificationException {
+        DcqlQueryValidator.validateCredential(credential);
+        if (!VCFormat.SD_JWT_VC.equals(credential.getFormat())) {
+            throw new VerificationException(
+                    "Unsupported dcql_query credential format for presentation validation: " + credential.getFormat());
+        }
+        validateSdJwtPresentation(credential, SdJwtVP.of(presentedToken));
+    }
+
+    private static void validateSdJwtPresentation(Credential credential, SdJwtVP presentation)
+            throws VerificationException {
+        validateHolderBinding(credential, presentation);
+        validateSdJwtMeta(credential.getMeta(), presentation);
+        validateSdJwtRequestedClaims(credential, presentation);
     }
 
     private static void validateHolderBinding(Credential credentialQuery, SdJwtVP presentation)

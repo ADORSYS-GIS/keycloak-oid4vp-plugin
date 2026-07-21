@@ -7,7 +7,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.Creden
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGenerator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -222,23 +222,22 @@ public class AuthorizationResponseService {
             AuthorizationContext authContext,
             AuthenticationSessionStore store) {
         DcqlQuery dcqlQuery = authContext.getRequestObject().getDcqlQuery();
-        DcqlQuery credentialQuery = singleCredentialQuery(dcqlQuery, credentialId);
+        Credential credentialQuery = dcqlQuery.getCredentials().stream()
+                .filter(candidate -> credentialId.equals(candidate.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("DCQL query has no credential id: " + credentialId));
 
-        // TODO: Implement DCQL presentation pre-validation for mDoc.
-        //  For now, only SD-JWT VC has a registered DcqlCredentialCapability.
-        if (CredentialFormat.MSO_MDOC.equals(CredentialFormat.fromValue(
-                credentialQuery.getCredentials().getFirst().getFormat()))) {
+        DcqlCredentialCapability capability = dcqlCapabilities.require(credentialQuery.getFormat());
+        if (!capability.supportsPresentationPreValidation()) {
             logger.debugf(
                     "Skipping DCQL pre-validation for credential '%s' (format: %s); "
-                            + "full verification is delegated to the authenticator",
-                    credentialId, credentialQuery.getCredentials().getFirst().getFormat());
+                            + "the capability delegates full verification to the authenticator",
+                    credentialId, credentialQuery.getFormat());
             return;
         }
 
         try {
-            dcqlCapabilities
-                    .resolveForPresentation(credentialQuery)
-                    .validatePresentation(credentialQuery, presentedToken);
+            capability.validatePresentation(credentialQuery, presentedToken);
         } catch (VerificationException e) {
             logger.errorf(e, "Presented credential does not satisfy DCQL query");
             throw failWithHttpException(
@@ -252,15 +251,6 @@ public class AuthorizationResponseService {
             logger.errorf(e, "Failed to parse presented credential token");
             throw failInvalidVpToken("Could not parse credential token contained in `vp_token`", authContext, store);
         }
-    }
-
-    private DcqlQuery singleCredentialQuery(DcqlQuery dcqlQuery, String credentialId) {
-        Credential credential = dcqlQuery.getCredentials().stream()
-                .filter(candidate -> credentialId.equals(candidate.getId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("DCQL query has no credential id: " + credentialId));
-
-        return DcqlQueryGenerator.singleCredentialQuery(credential);
     }
 
     private WebApplicationException failInvalidVpToken(
