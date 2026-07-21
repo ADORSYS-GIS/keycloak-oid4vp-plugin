@@ -134,6 +134,30 @@ public class TrustedStatusListJwtFetcherTest {
     }
 
     @Test
+    public void shouldRejectWhenTruststoreProviderMissing() {
+        String uri = "https://example.com/status-list-jwt";
+
+        // Simulate Keycloak returning no TruststoreProvider
+        Mockito.when(session.getProvider(TruststoreProvider.class)).thenReturn(null);
+
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
+        assertEquals("No Keycloak global truststore configured; cannot validate certificate chain", e.getMessage());
+    }
+
+    @Test
+    public void shouldRejectWhenTruststoreIsEmpty() {
+        String uri = "https://example.com/status-list-jwt";
+
+        // Simulate a configured TruststoreProvider whose underlying truststore is null
+        TruststoreProvider truststoreProvider = Mockito.mock(TruststoreProvider.class);
+        Mockito.when(session.getProvider(TruststoreProvider.class)).thenReturn(truststoreProvider);
+        Mockito.when(truststoreProvider.getTruststore()).thenReturn(null);
+
+        var e = assertThrows(ReferencedTokenValidationException.class, () -> fetcher.fetchStatusListJwt(uri));
+        assertEquals("No Keycloak global truststore configured; cannot validate certificate chain", e.getMessage());
+    }
+
+    @Test
     public void shouldRejectExpiredCertificate() throws Exception {
         String uri = "https://example.com/status-list-jwt";
         setupTrustForStatusListJwt();

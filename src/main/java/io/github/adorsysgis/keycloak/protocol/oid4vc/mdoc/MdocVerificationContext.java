@@ -14,6 +14,7 @@ import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -30,7 +31,6 @@ import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
-import org.keycloak.truststore.TruststoreProvider;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -69,7 +69,7 @@ public class MdocVerificationContext {
     public void verifyPresentation(
             MdocVerificationOpts opts,
             PresentationRequirements presentationRequirements,
-            TruststoreProvider truststoreProvider)
+            TrustAnchorProvider truststoreProvider)
             throws VerificationException {
         // Verify response status BAE
         verifyResponseStatus(mdoc);
@@ -113,7 +113,7 @@ public class MdocVerificationContext {
      * <p>The X.5C chain attached to the issuer signature is PKIX-validated against the
      * provided truststore before its leaf public key is used to verify the COSE signature.
      */
-    private void verifyIssuerSignature(COSESign1 issuerAuth, TruststoreProvider truststoreProvider)
+    private void verifyIssuerSignature(COSESign1 issuerAuth, TrustAnchorProvider truststoreProvider)
             throws VerificationException {
         List<X509Certificate> x5cChain = CborUtil.extractX509Chain(issuerAuth);
         X509Certificate[] validatedChain = PKIXVerificationUtil.validateChain(x5cChain, truststoreProvider);
