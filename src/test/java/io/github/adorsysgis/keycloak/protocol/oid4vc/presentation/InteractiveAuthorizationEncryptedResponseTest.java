@@ -1,6 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -58,7 +58,7 @@ class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEn
     @Test
     @DisplayName("an encrypted openid4vp_response (ia_post.jwt) is accepted and yields an authorization_code")
     void encryptedInteractiveResponseIssuesAuthorizationCode() throws Exception {
-        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER_HAIP);
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER_HAIP);
 
         Challenge challenge = initiateInteractiveChallengeVerbose();
         RequestObject requestObject = new JWSInput(challenge.requestJwt()).readJsonContent(RequestObject.class);

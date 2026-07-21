@@ -1,7 +1,11 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.stub;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc.MdocCredentialVerifier;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.sdjwt.SdJwtCredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
 import java.io.IOException;
@@ -9,17 +13,19 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.models.KeycloakSession;
 
 /**
- * This class overrides the default behavior of the {@link SdJwtAuthenticatorFactory} to use a mock
+ * This class overrides the default behavior of the {@link OID4VPAuthenticatorFactory} to use a mock
  * {@link TrustedStatusListJwtFetcher} that fetches status list JWTs from local resources instead of
  * making actual HTTP calls. This is useful for testing purposes.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
+public class CustomOID4VPAuthenticatorFactory extends OID4VPAuthenticatorFactory {
 
     @Override
     public int order() {
@@ -29,8 +35,11 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
 
     @Override
     public Authenticator create(KeycloakSession session) {
+        Map<String, CredentialVerifier> handlers = new LinkedHashMap<>();
         StatusListJwtFetcher httpFetcher = new MockTrustedStatusListJwtFetcher(session);
-        return new SdJwtAuthenticator(httpFetcher);
+        handlers.put(CredentialFormat.SD_JWT_VC.getValue(), new SdJwtCredentialVerifier(httpFetcher));
+        handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier());
+        return new OID4VPAuthenticator(handlers);
     }
 
     public static class MockTrustedStatusListJwtFetcher extends TrustedStatusListJwtFetcher {
@@ -58,7 +67,7 @@ public class CustomSdJwtAuthenticatorFactory extends SdJwtAuthenticatorFactory {
         }
 
         public static String exampleStatusListJwt(String filename) {
-            try (InputStream stream = CustomSdJwtAuthenticatorFactory.class.getResourceAsStream(filename)) {
+            try (InputStream stream = CustomOID4VPAuthenticatorFactory.class.getResourceAsStream(filename)) {
                 if (stream == null) {
                     throw new IllegalArgumentException("Resource not found: " + filename);
                 }

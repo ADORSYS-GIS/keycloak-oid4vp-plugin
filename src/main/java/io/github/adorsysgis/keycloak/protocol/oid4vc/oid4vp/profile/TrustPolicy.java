@@ -1,7 +1,12 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.CertificateUtil;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.List;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Issuer trust policy for one requested credential.
@@ -16,7 +21,7 @@ public class TrustPolicy {
     private String type = SELF;
 
     @JsonProperty("anchors")
-    private List<String> anchors;
+    private List<X509Certificate> anchors;
 
     @JsonProperty("trustListUrl")
     private String trustListUrl;
@@ -30,6 +35,50 @@ public class TrustPolicy {
     @JsonProperty("issuer")
     private String issuer;
 
+    public TrustPolicy() {}
+
+    @JsonCreator
+    public static TrustPolicy create(
+            @JsonProperty("type") String type,
+            @JsonProperty("anchors") List<String> rawAnchors,
+            @JsonProperty("trustListUrl") String trustListUrl,
+            @JsonProperty("trustListSigningCertificate") String trustListSigningCertificate,
+            @JsonProperty("serviceType") String serviceType,
+            @JsonProperty("issuer") String issuer) {
+        TrustPolicy policy = new TrustPolicy();
+        policy.type = type != null ? type : SELF;
+        policy.trustListUrl = trustListUrl;
+        policy.trustListSigningCertificate = trustListSigningCertificate;
+        policy.serviceType = serviceType;
+        policy.issuer = issuer;
+        policy.anchors = parseAnchors(rawAnchors);
+        return policy;
+    }
+
+    private static List<X509Certificate> parseAnchors(List<String> rawAnchors) {
+        if (rawAnchors == null) {
+            return null;
+        }
+
+        if (rawAnchors.isEmpty()) {
+            return List.of();
+        }
+
+        List<X509Certificate> parsed = new ArrayList<>();
+        for (String raw : rawAnchors) {
+            if (StringUtil.isBlank(raw)) {
+                throw new IllegalArgumentException("Failed to parse x5c trust anchor: blank anchor");
+            }
+            try {
+                parsed.add(CertificateUtil.parseCertificate(raw));
+            } catch (Exception e) {
+                throw new IllegalArgumentException(String.format("Failed to parse x5c trust anchor: %s", raw), e);
+            }
+        }
+
+        return parsed;
+    }
+
     public String getType() {
         return type;
     }
@@ -39,11 +88,11 @@ public class TrustPolicy {
         return this;
     }
 
-    public List<String> getAnchors() {
+    public List<X509Certificate> getAnchors() {
         return anchors;
     }
 
-    public TrustPolicy setAnchors(List<String> anchors) {
+    public TrustPolicy setAnchors(List<X509Certificate> anchors) {
         this.anchors = anchors;
         return this;
     }

@@ -5,7 +5,6 @@ import static org.keycloak.common.util.UriUtils.checkUrl;
 import com.apicatalog.jsonld.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -23,7 +22,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -41,7 +39,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
-import java.security.interfaces.ECPrivateKey;
 import java.util.List;
 import java.util.Objects;
 import org.jboss.logging.Logger;
@@ -50,7 +47,6 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.events.EventBuilder;
-import org.keycloak.jose.jwe.JWEException;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -124,8 +120,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         AuthorizationContext authContext;
         try {
-            authContext = startAuthentication(
-                    clientId, profileId, null, new CodeChallengeDetails(codeChallenge, codeChallengeMethod));
+            var pkceDetails = new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
+            authContext = startAuthentication(clientId, profileId, null, pkceDetails);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -196,8 +192,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             }
         }
 
-        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        VerifierConfig config = new VerifierConfig(getOid4vpAuthenticatorConfig());
         AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
 
         authorizationContext = authorizationRequestService.finalizeAuthorizationRequest(
@@ -377,12 +372,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to process the authorization response
         AuthenticationProcessor authProcessor = getAuthenticationProcessor();
-        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(authorizationContext.getProfileId());
 
         authorizationResponseService.processAuthorizationResponse(
-                responseObject, authorizationContext, authSession, authProcessor, authConfig, profile);
+                responseObject, authorizationContext, authSession, authProcessor, profile);
     }
 
     private void persistWalletErrorResponse(
@@ -565,8 +560,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
-        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
 
         // Call delegate service to create an authorization request
@@ -593,8 +588,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
-        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
 
         // Honor the configured response mode: an encrypted verifier configuration (direct_post.jwt)
@@ -635,8 +630,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
     public List<AuthenticationProfile> getAuthenticationProfilesForClient(String clientId) {
         checkClient(clientId);
-        AuthenticatorConfigModel authConfig = getSdjwtAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(session.getContext(), authConfig);
+        AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(authConfig);
         return config.getProfileConfig().getProfilesForClient(clientId);
     }
 
@@ -668,26 +663,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         session.getContext().setAuthenticationSession(authSession);
         return authSession;
-    }
-
-    /**
-     * Decrypt response to authorization request.
-     *
-     * @param encryptedResponse the assumed JWE encrypted response string
-     * @param ephemeralKey      the ephemeral key generated for the authentication
-     *                          session
-     */
-    private ResponseObject decryptResponse(
-            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
-        try {
-            AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
-            ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
-            String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
-            return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
-        } catch (JWEException | IOException e) {
-            logger.error("Failed to decrypt response", e);
-            throw new IllegalArgumentException("Failed to decrypt and parse response", e);
-        }
     }
 
     /**

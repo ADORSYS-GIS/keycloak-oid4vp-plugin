@@ -1,7 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import java.util.Objects;
 import java.util.UUID;
 import org.keycloak.sessions.AuthenticationSessionModel;

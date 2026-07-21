@@ -1,6 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.SdJwtAuthenticatorFactory.VCT_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -256,7 +256,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     @DisplayName("should re-challenge without a fresh request while cross-device polling before presentation")
     void should_ReChallenge_When_CrossDevicePollingBeforePresentation() throws Exception {
-        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
@@ -339,7 +339,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     @DisplayName("should issue authorization_code for the scope-bound (credential identity) presentation")
     void should_IssueAuthorizationCode_When_PresentationSucceeds() throws Exception {
-        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
@@ -416,7 +416,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     @DisplayName("should reject presentation whose holder-binding audience is not bound to the challenge endpoint")
     void should_RejectPresentation_When_AudienceNotBoundToChallengeEndpoint() throws Exception {
-        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(VCT_CONFIG_DEFAULT, TEST_USER);
+        var sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 

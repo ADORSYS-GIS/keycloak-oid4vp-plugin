@@ -2,7 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;

@@ -91,6 +91,15 @@ public class ECTestUtils {
         return encryptMessage(payload, publicKey, JWEConstants.ECDH_ES, JWEConstants.A128GCM, kid);
     }
 
+    /**
+     * Encrypts the given payload into a JWE for the given public key, advertising {@code kid} and
+     * the {@code apu} (agreement PartyU info) header. The {@code apu} is conveyed Base64URL-encoded
+     * as required by RFC 7518; callers pass the raw value.
+     */
+    public static String encryptMessageWithApu(String payload, ECPublicKey publicKey, String kid, String apu) {
+        return encryptMessage(payload, publicKey, JWEConstants.ECDH_ES, JWEConstants.A128GCM, kid, apu);
+    }
+
     public static String encryptMessage(
             String payload, ECPublicKey publicKey, String jweAlgorithmName, String jweEncryptionName) {
         return encryptMessage(payload, publicKey, jweAlgorithmName, jweEncryptionName, null);
@@ -98,11 +107,33 @@ public class ECTestUtils {
 
     public static String encryptMessage(
             String payload, ECPublicKey publicKey, String jweAlgorithmName, String jweEncryptionName, String kid) {
+        return encryptMessage(payload, publicKey, jweAlgorithmName, jweEncryptionName, kid, null);
+    }
+
+    /**
+     * Encrypts the given payload into a JWE. When {@code apu} is non-null it is Base64URL-encoded
+     * and set as the {@code apu} (agreement PartyU info) header, as required by RFC 7518.
+     */
+    public static String encryptMessage(
+            String payload,
+            ECPublicKey publicKey,
+            String jweAlgorithmName,
+            String jweEncryptionName,
+            String kid,
+            String apu) {
         JWEAlgorithmProvider jweAlgorithmProvider =
                 CryptoIntegration.getProvider().getAlgorithmProvider(JWEAlgorithmProvider.class, jweAlgorithmName);
         JWEEncryptionProvider jweEncryptionProvider = new AesGcmJWEEncryptionProvider(jweEncryptionName);
 
-        JWEHeader jweHeader = new JWEHeader(jweAlgorithmName, jweEncryptionName, null, kid);
+        JWEHeader.JWEHeaderBuilder headerBuilder =
+                JWEHeader.builder().algorithm(jweAlgorithmName).encryptionAlgorithm(jweEncryptionName);
+        if (kid != null) {
+            headerBuilder.keyId(kid);
+        }
+        if (apu != null) {
+            headerBuilder.agreementPartyUInfo(Base64Url.encode(apu.getBytes(StandardCharsets.UTF_8)));
+        }
+        JWEHeader jweHeader = headerBuilder.build();
         JWE jwe = new JWE().header(jweHeader).content(payload.getBytes(StandardCharsets.UTF_8));
 
         jwe.getKeyStorage().setEncryptionKey(publicKey);

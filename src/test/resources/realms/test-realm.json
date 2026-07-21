@@ -65,8 +65,8 @@
       "builtIn": false,
       "authenticationExecutions": [
         {
-          "authenticator": "sd-jwt-authenticator",
-          "authenticatorConfig": "sd-jwt-auth-config",
+          "authenticator": "oid4vp-authenticator",
+          "authenticatorConfig": "oid4vp-auth-config",
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
           "priority": 0,
@@ -77,10 +77,10 @@
   ],
   "authenticatorConfig": [
     {
-      "id": "sdjwt-auth-config-id",
-      "alias": "sd-jwt-auth-config",
+      "id": "oid4vp-auth-config-id",
+      "alias": "oid4vp-auth-config",
       "config": {
-        "vct": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",
+        "credentialTypes": "https://credentials.example.com/identity_credential,https://example.com/vct-alt",
         "requireExpClaim": "true",
         "enforceRevocationStatus": "true",
         "profiles": "[{\"id\":\"default\",\"displayCta\":{\"en\":\"Sign in with a wallet\"},\"credentials\":[{\"id\":\"identity\",\"role\":\"primary\",\"credentialTypes\":[\"https://credentials.example.com/identity_credential\",\"https://example.com/vct-alt\"],\"claims\":[\"sub\",\"username\"]}]},{\"id\":\"stb-issuance\",\"description\":\"Presentation during issuance (PID matched against the brokered SAFE user)\",\"enabledForClients\":[\"issuance-only\"],\"credentials\":[{\"id\":\"pid\",\"role\":\"primary\",\"identitySource\":\"session\",\"credentialTypes\":[\"urn:eudi:pid:de:1\"],\"claims\":[\"given_name\",\"family_name\",\"birth_date\"],\"binding\":[{\"type\":\"claim_equals_user_attribute\",\"credentialClaim\":\"given_name\",\"userAttribute\":\"firstName\",\"comparison\":\"exact\"},{\"type\":\"claim_equals_user_attribute\",\"credentialClaim\":\"family_name\",\"userAttribute\":\"lastName\",\"comparison\":\"exact\"}]}]}]"

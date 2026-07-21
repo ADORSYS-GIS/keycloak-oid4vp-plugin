@@ -33,10 +33,6 @@ public class VerifierDiscoveryService {
     private final KeycloakSession session;
     private final DcqlCredentialCapabilities dcqlCapabilities;
 
-    public VerifierDiscoveryService(KeycloakSession session) {
-        this(session, DcqlCredentialCapabilities.createDefault());
-    }
-
     public VerifierDiscoveryService(KeycloakSession session, DcqlCredentialCapabilities dcqlCapabilities) {
         this.session = session;
         this.dcqlCapabilities = dcqlCapabilities;

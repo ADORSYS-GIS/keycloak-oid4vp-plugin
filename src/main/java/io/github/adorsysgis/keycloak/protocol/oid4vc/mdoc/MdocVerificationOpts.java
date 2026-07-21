@@ -134,11 +134,20 @@ public class MdocVerificationOpts extends ClaimVerifier {
         private boolean fallbackToIsoSpecSessionTranscript;
 
         private Builder() {
-            super();
+            this(null);
         }
 
         private Builder(Integer clockSkew) {
             super(clockSkew);
+
+            // Disable the iat age check: the mDoc spec does not include a device-signed
+            // timestamp in DeviceSigned that would allow a holder-binding age check.
+            // validityInfo.signed is the MSO issuer signing time, not the wallet
+            // presentation time, so an iat age check on it would reject valid
+            // long-lived mDocs after the configured holderBindingProofMaxAge.
+            // Replay protection comes from the device signature over the OpenID4VP
+            // SessionTranscript, which binds the verifier nonce and handover values.
+            withIatCheck(Integer.MAX_VALUE);
         }
 
         public Builder withClientId(String clientId) {
@@ -169,10 +178,6 @@ public class MdocVerificationOpts extends ClaimVerifier {
         public Builder withFallbackToIsoSpecSessionTranscript(boolean fallbackToIsoSpecSessionTranscript) {
             this.fallbackToIsoSpecSessionTranscript = fallbackToIsoSpecSessionTranscript;
             return this;
-        }
-
-        public Builder withAllowedMaxAge(Integer allowedMaxAge) {
-            return (Builder) super.withIatCheck(allowedMaxAge, false);
         }
 
         @Override

@@ -106,9 +106,9 @@ For provider configuration (including examples for `keycloak.conf`, `KC_*` envir
 - Technical performance/security tuning:
   [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
 
-### SdJwt authenticator configuration
+### OID4VP authenticator configuration
 
-Deployment-facing `sd-jwt-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
+Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
 `responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 

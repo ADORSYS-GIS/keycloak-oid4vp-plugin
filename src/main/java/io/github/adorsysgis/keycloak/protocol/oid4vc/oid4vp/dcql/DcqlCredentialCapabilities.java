@@ -1,6 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import java.util.List;
 
@@ -19,18 +18,12 @@ public final class DcqlCredentialCapabilities {
     }
 
     public static DcqlCredentialCapabilities createDefault() {
-        return new DcqlCredentialCapabilities(List.of(new SdJwtDcqlCredentialCapability()));
+        return new DcqlCredentialCapabilities(
+                List.of(new SdJwtDcqlCredentialCapability(), new MdocDcqlCredentialCapability()));
     }
 
     public List<DcqlCredentialCapability> all() {
         return capabilities;
-    }
-
-    public DcqlCredentialCapability resolve(VerifierConfig config) {
-        return capabilities.stream()
-                .filter(capability -> capability.supports(config))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No DCQL credential capability supports verifier config"));
     }
 
     public DcqlCredentialCapability resolveForPresentation(DcqlQuery query) {
@@ -43,6 +36,7 @@ public final class DcqlCredentialCapabilities {
         return capabilities.stream()
                 .filter(capability -> capability.format().equals(format))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No DCQL credential capability for format: " + format));
+                .orElseThrow(() -> new IllegalStateException(
+                        String.format("No DCQL credential capability for format: %s", format)));
     }
 }

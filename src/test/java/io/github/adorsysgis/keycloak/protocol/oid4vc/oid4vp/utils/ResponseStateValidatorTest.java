@@ -3,10 +3,12 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.SdJwtCredentialConstrainer.QuerySpec;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGenerator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -81,10 +83,15 @@ class ResponseStateValidatorTest {
     }
 
     private static Credential credentialWithHolderBinding(boolean required) {
-        QuerySpec spec =
-                QuerySpec.of(List.of("vct1"), List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME), required);
-        return SdJwtCredentialConstrainer.create()
-                .buildQuery(spec)
+        AuthenticationProfile profile = new AuthenticationProfile()
+                .setId("test")
+                .setCredentials(List.of(new CredentialRequirement()
+                        .setId("credential")
+                        .setRole(CredentialRole.PRIMARY)
+                        .setCredentialTypes(List.of("vct1"))
+                        .setClaims(List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME))));
+        return DcqlQueryGenerator.create()
+                .buildQuery(profile, required)
                 .getCredentials()
                 .getFirst();
     }
