@@ -250,7 +250,7 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);
         Map<String, CredentialVerifier> handlers = new LinkedHashMap<>();
         handlers.put(CredentialFormat.SD_JWT_VC.getValue(), new SdJwtCredentialVerifier(httpFetcher));
-        handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier());
+        handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier(httpFetcher));
         return handlers;
     }
 
