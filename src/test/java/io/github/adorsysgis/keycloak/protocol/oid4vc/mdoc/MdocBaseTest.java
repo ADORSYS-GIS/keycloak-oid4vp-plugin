@@ -6,6 +6,7 @@ import com.authlete.cbor.CBORByteArray;
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORNull;
+import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
 import com.authlete.cbor.CBORTaggedItem;
 import com.authlete.cose.COSEEC2Key;
@@ -44,8 +45,11 @@ import com.authlete.mdoc.ValueDigestsEntry;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc.MdocCredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -514,6 +518,35 @@ public class MdocBaseTest {
                 .ec2YInBase64Url("nZDEU7-G2Ij3gNA2I5Y8ngAf7r-vGeBeI9p9bj8glFc")
                 .ec2DInBase64Url("6hgQOsgeFUXDmEA8wsxslFSqYF5EoJ858ebE29HdV5w")
                 .buildEC2Key();
+    }
+
+    public static COSESign1 signRawCbor(CBORPairList mso, COSEEC2Key issuerKey, List<X509Certificate> x5chain)
+            throws IOException, COSEException, CertificateEncodingException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        mso.encode(baos);
+        byte[] msoBytes = baos.toByteArray();
+        CBORTaggedItem wrapped = CborUtil.wrap(msoBytes);
+
+        COSEProtectedHeaderBuilder protectedBuilder = new COSEProtectedHeaderBuilder().alg(COSEAlgorithms.ES256);
+        COSEUnprotectedHeader unprotectedHeader = (x5chain == null || x5chain.isEmpty())
+                ? null
+                : new COSEUnprotectedHeaderBuilder().x5chain(x5chain).build();
+
+        var sigStructure = new SigStructureBuilder()
+                .signature1()
+                .bodyAttributes(protectedBuilder.build())
+                .payload(wrapped.encode())
+                .build();
+        byte[] signature = new COSESigner(issuerKey.toECPrivateKey()).sign(sigStructure, COSEAlgorithms.ES256);
+
+        var builder = new COSESign1Builder()
+                .protectedHeader(protectedBuilder.build())
+                .payload(new CBORByteArray(wrapped.encode()))
+                .signature(signature);
+        if (unprotectedHeader != null) {
+            builder.unprotectedHeader(unprotectedHeader);
+        }
+        return builder.build();
     }
 
     public static X509Certificate toCert(String cert) {

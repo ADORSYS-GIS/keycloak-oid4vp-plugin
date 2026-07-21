@@ -303,7 +303,7 @@ public class MdocVerificationContext {
         }
     }
 
-    private static CBORPairList extractDocument(CBORPairList root) throws VerificationException {
+    public static CBORPairList extractDocument(CBORPairList root) throws VerificationException {
         var documentsEntry = root.findByKey(MdocConstants.L_DOCUMENTS);
         if (documentsEntry == null) {
             throw new VerificationException("mDoc response is missing the 'documents' field");
@@ -338,7 +338,7 @@ public class MdocVerificationContext {
                 deviceSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue();
     }
 
-    private static COSESign1 extractIssuerAuth(CBORPairList document) throws VerificationException {
+    public static COSESign1 extractIssuerAuth(CBORPairList document) throws VerificationException {
         var issuerSigned =
                 (CBORPairList) document.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
         var issuerAuth = (CBORItemList)

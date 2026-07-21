@@ -2,15 +2,9 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants.L_NAME_SPACES;
 
-import com.authlete.cbor.CBORItem;
-import com.authlete.cbor.CBORItemList;
-import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORParser;
-import com.authlete.cose.COSEException;
-import com.authlete.cose.COSESign1;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.CborUtil;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocEncodingException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocParser;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
@@ -106,44 +100,22 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         return payloadRef.get().get(L_NAME_SPACES);
     }
 
+    /**
+     * Extracts the Mobile Security Object (MSO) payload from an mDoc device response
+     * and converts it to a {@link JsonNode} for verification and status checks.
+     *
+     * @see https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check#how-status-information-is-stored
+     */
     static JsonNode extractMsoPayload(String mdocToken) throws VerificationException {
         try {
             var response = MdocParser.parseBase64Url(mdocToken);
-            var documents = findRequired(response, MdocConstants.L_DOCUMENTS, CBORItemList.class);
-            var document = firstDocument(documents);
-            var issuerSigned = findRequired(document, MdocConstants.L_ISSUER_SIGNED, CBORPairList.class);
-            var issuerAuthList = findRequired(issuerSigned, MdocConstants.L_ISSUER_AUTH, CBORItemList.class);
-            var payload = CborUtil.unwrap(COSESign1.build(issuerAuthList).getPayload());
-            return JsonSerialization.mapper.valueToTree(new CBORParser(payload.encode()).next());
-        } catch (MdocEncodingException | COSEException | IOException e) {
+            var document = MdocVerificationContext.extractDocument(response);
+            var issuerAuth = MdocVerificationContext.extractIssuerAuth(document);
+            var msoPayload = CborUtil.unwrap(issuerAuth.getPayload());
+            return JsonSerialization.mapper.valueToTree(new CBORParser(msoPayload.encode()).next());
+        } catch (MdocEncodingException | IOException e) {
             throw new VerificationException("Failed to extract MSO payload for status verification", e);
         }
-    }
-
-    private static <T extends CBORItem> T findRequired(CBORPairList parent, String key, Class<T> type)
-            throws VerificationException {
-        var entry = parent.findByKey(key);
-        if (entry == null || !type.isInstance(entry.getValue())) {
-            throw new VerificationException("mDoc response has invalid or missing '" + key + "'");
-        }
-        return type.cast(entry.getValue());
-    }
-
-    private static CBORPairList firstDocument(CBORItemList documents) throws VerificationException {
-
-        var items = documents.getItems();
-
-        if (items.isEmpty()) {
-            throw new VerificationException("mDoc response contains no documents");
-        }
-
-        var first = items.getFirst();
-
-        if (!(first instanceof CBORPairList doc)) {
-            throw new VerificationException("mDoc document has invalid format");
-        }
-
-        return doc;
     }
 
     /**
