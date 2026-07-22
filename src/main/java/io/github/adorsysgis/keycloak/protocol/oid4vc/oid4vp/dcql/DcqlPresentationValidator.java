@@ -33,8 +33,8 @@ public final class DcqlPresentationValidator {
         validatePresentation(query.getCredentials().getFirst(), presentedToken);
     }
 
+    /** Validates a presented token against an already validated credential query. */
     public static void validatePresentation(Credential credential, String presentedToken) throws VerificationException {
-        DcqlQueryValidator.validateCredential(credential);
         if (!VCFormat.SD_JWT_VC.equals(credential.getFormat())) {
             throw new VerificationException(
                     "Unsupported dcql_query credential format for presentation validation: " + credential.getFormat());

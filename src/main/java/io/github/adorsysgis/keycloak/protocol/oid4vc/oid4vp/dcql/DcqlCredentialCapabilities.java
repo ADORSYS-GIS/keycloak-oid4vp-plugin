@@ -12,6 +12,7 @@ import org.keycloak.utils.StringUtil;
 public final class DcqlCredentialCapabilities {
 
     private final Map<String, DcqlCredentialCapability> capabilitiesByFormat;
+    private final List<DcqlCredentialCapability> allCapabilities;
 
     public DcqlCredentialCapabilities(List<DcqlCredentialCapability> capabilities) {
         if (capabilities == null || capabilities.isEmpty()) {
@@ -32,6 +33,7 @@ public final class DcqlCredentialCapabilities {
             }
         }
         this.capabilitiesByFormat = Collections.unmodifiableMap(registeredCapabilities);
+        this.allCapabilities = List.copyOf(registeredCapabilities.values());
     }
 
     public static DcqlCredentialCapabilities createDefault() {
@@ -40,7 +42,7 @@ public final class DcqlCredentialCapabilities {
     }
 
     public List<DcqlCredentialCapability> all() {
-        return List.copyOf(capabilitiesByFormat.values());
+        return allCapabilities;
     }
 
     public DcqlCredentialCapability require(String format) {
