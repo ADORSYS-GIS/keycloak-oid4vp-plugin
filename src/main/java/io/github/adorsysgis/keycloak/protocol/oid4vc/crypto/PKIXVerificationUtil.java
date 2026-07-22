@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
@@ -15,11 +16,14 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.security.auth.x500.X500Principal;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Time;
-import org.keycloak.truststore.TruststoreProvider;
 
 public class PKIXVerificationUtil {
 
@@ -27,9 +31,9 @@ public class PKIXVerificationUtil {
 
     private PKIXVerificationUtil() {}
 
-    public static X509Certificate[] validateBase64Chain(List<String> certs, TruststoreProvider truststoreProvider)
+    public static X509Certificate[] validateBase64Chain(List<String> certs, TrustAnchorProvider trustAnchorProvider)
             throws VerificationException {
-        return validateChain(parseX509Certificates(certs), truststoreProvider);
+        return validateChain(parseX509Certificates(certs), trustAnchorProvider);
     }
 
     public static X509Certificate[] validateBase64Chain(
@@ -37,18 +41,18 @@ public class PKIXVerificationUtil {
         return validateChain(parseX509Certificates(certs), rootCertificates, List.of());
     }
 
-    public static X509Certificate[] validateChain(List<X509Certificate> certs, TruststoreProvider truststoreProvider)
+    public static X509Certificate[] validateChain(List<X509Certificate> certs, TrustAnchorProvider trustAnchorProvider)
             throws VerificationException {
-        List<X509Certificate> roots = truststoreProvider == null
-                ? List.of()
-                : truststoreProvider.getRootCertificates().values().stream()
-                        .flatMap(List::stream)
-                        .toList();
-        List<X509Certificate> intermediates = truststoreProvider == null
-                ? List.of()
-                : truststoreProvider.getIntermediateCertificates().values().stream()
-                        .flatMap(List::stream)
-                        .toList();
+        List<X509Certificate> roots = Optional.ofNullable(trustAnchorProvider)
+                .map(TrustAnchorProvider::getRootCertificates)
+                .map(PKIXVerificationUtil::collectCerts)
+                .orElse(null);
+
+        List<X509Certificate> intermediates = Optional.ofNullable(trustAnchorProvider)
+                .map(TrustAnchorProvider::getIntermediateCertificates)
+                .map(PKIXVerificationUtil::collectCerts)
+                .orElse(null);
+
         return validateChain(certs, roots, intermediates);
     }
 
@@ -148,5 +152,13 @@ public class PKIXVerificationUtil {
         } catch (CertificateException e) {
             throw new VerificationException("Failed to parse X.509 certificate", e);
         }
+    }
+
+    private static List<X509Certificate> collectCerts(Map<X500Principal, List<X509Certificate>> anchorMap) {
+        return Optional.ofNullable(anchorMap).orElse(Map.of()).values().stream()
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .toList();
     }
 }
