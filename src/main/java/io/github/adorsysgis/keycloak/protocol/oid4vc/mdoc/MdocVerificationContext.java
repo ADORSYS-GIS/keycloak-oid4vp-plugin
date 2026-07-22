@@ -13,6 +13,7 @@ import com.authlete.cose.COSEException;
 import com.authlete.cose.COSEKey;
 import com.authlete.cose.COSESign1;
 import com.authlete.cose.COSEVerifier;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.io.IOException;
@@ -48,6 +49,7 @@ public class MdocVerificationContext {
             List.of(JavaAlgorithm.SHA256, JavaAlgorithm.SHA384, JavaAlgorithm.SHA512);
 
     private final CBORPairList mdoc;
+    private JsonNode verifiedMsoPayload;
 
     public MdocVerificationContext(String mdoc) throws VerificationException {
         try {
@@ -81,6 +83,7 @@ public class MdocVerificationContext {
 
         // Verify device key binding
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
+        storeVerifiedMsoPayload(mso);
         verifyDeviceKeyBinding(document, mso, opts);
 
         // Verify that presented claims are protected by digests in MSO
@@ -303,7 +306,7 @@ public class MdocVerificationContext {
         }
     }
 
-    public static CBORPairList extractDocument(CBORPairList root) throws VerificationException {
+    static CBORPairList extractDocument(CBORPairList root) throws VerificationException {
         var documentsEntry = root.findByKey(MdocConstants.L_DOCUMENTS);
         if (documentsEntry == null) {
             throw new VerificationException("mDoc response is missing the 'documents' field");
@@ -338,7 +341,7 @@ public class MdocVerificationContext {
                 deviceSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue();
     }
 
-    public static COSESign1 extractIssuerAuth(CBORPairList document) throws VerificationException {
+    static COSESign1 extractIssuerAuth(CBORPairList document) throws VerificationException {
         var issuerSigned =
                 (CBORPairList) document.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
         var issuerAuth = (CBORItemList)
@@ -379,5 +382,21 @@ public class MdocVerificationContext {
         } catch (COSEException e) {
             throw new VerificationException("Failure parsing deviceSignature as COSE_Sign1", e);
         }
+    }
+
+    private void storeVerifiedMsoPayload(CBORPairList mso) throws VerificationException {
+        try {
+            this.verifiedMsoPayload = JsonSerialization.mapper.valueToTree(new CBORParser(mso.encode()).next());
+        } catch (IOException e) {
+            throw new VerificationException("Failed to serialize verified MSO", e);
+        }
+    }
+
+    /**
+     * @see <a href="https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check#how-status-information-is-stored">
+     * MATTR docs — status information in the MSO</a>
+     */
+    public JsonNode getVerifiedMsoPayload() {
+        return verifiedMsoPayload;
     }
 }

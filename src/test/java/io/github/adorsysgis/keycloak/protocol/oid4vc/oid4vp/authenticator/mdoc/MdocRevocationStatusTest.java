@@ -85,7 +85,9 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     @Test
     public void shouldExtractMsoAsJson() throws Exception {
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        JsonNode mso = MdocCredentialVerifier.extractMsoPayload(mdoc);
+        var ctx = new MdocVerificationContext(mdoc);
+        ctx.verifyPresentation(opts, null, trust);
+        JsonNode mso = ctx.getVerifiedMsoPayload();
 
         assertNotNull(mso);
         assertEquals("1.0", mso.get("version").asText());
@@ -104,7 +106,9 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     @Test
     public void shouldFail_WhenRevocationEnforcedAndStatusMissing() throws Exception {
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        var mso = MdocCredentialVerifier.extractMsoPayload(mdoc);
+        var ctx = new MdocVerificationContext(mdoc);
+        ctx.verifyPresentation(opts, null, trust);
+        var mso = ctx.getVerifiedMsoPayload();
 
         assertNull(mso.get(STATUS_FIELD));
         ReferencedTokenValidationException exception =
@@ -116,8 +120,9 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     @Test
     public void shouldPass_WhenRevocationEnforcedAndStatusValid() throws Exception {
         String mdoc = buildMdocWithStatus(1);
-        assertDoesNotThrow(() ->
-                new ReferencedTokenValidator(mockFetcher).validate(MdocCredentialVerifier.extractMsoPayload(mdoc)));
+        var ctx = new MdocVerificationContext(mdoc);
+        ctx.verifyPresentation(opts, null, trust);
+        assertDoesNotThrow(() -> new ReferencedTokenValidator(mockFetcher).validate(ctx.getVerifiedMsoPayload()));
     }
 
     @Test
@@ -170,9 +175,11 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     @Test
     public void shouldFail_WhenRevocationEnforcedAndStatusInvalid() throws Exception {
         String mdoc = buildMdocWithStatus(0);
+        var ctx = new MdocVerificationContext(mdoc);
+        ctx.verifyPresentation(opts, null, trust);
         ReferencedTokenValidationException exception =
                 assertThrows(ReferencedTokenValidationException.class, () -> new ReferencedTokenValidator(mockFetcher)
-                        .validate(MdocCredentialVerifier.extractMsoPayload(mdoc)));
+                        .validate(ctx.getVerifiedMsoPayload()));
         assertTrue(exception.getMessage().contains("Token status is not valid"));
     }
 

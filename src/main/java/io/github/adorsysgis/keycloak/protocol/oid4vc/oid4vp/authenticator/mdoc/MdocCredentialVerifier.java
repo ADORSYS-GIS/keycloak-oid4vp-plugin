@@ -2,11 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants.L_NAME_SPACES;
 
-import com.authlete.cbor.CBORParser;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.CborUtil;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocEncodingException;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocParser;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
@@ -20,7 +16,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorPro
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -29,7 +24,6 @@ import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.util.JWKSUtils;
-import org.keycloak.util.JsonSerialization;
 
 /**
  * {@link CredentialVerifier} implementation backing verification of {@code mso_mdoc}
@@ -82,12 +76,12 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             authReqs.getPresentationRequirements().checkIfSatisfiedBy(payload);
         };
 
-        new MdocVerificationContext(token).verifyPresentation(opts, requirements, truststore);
+        MdocVerificationContext verificationContext = new MdocVerificationContext(token);
+        verificationContext.verifyPresentation(opts, requirements, truststore);
 
         if (authReqs.shouldEnforceRevocationStatus()) {
             try {
-                JsonNode msoPayload = extractMsoPayload(token);
-                tokenStatusValidator.validate(msoPayload);
+                tokenStatusValidator.validate(verificationContext.getVerifiedMsoPayload());
             } catch (ReferencedTokenValidationException e) {
                 throw new VerificationException(
                         String.format(
@@ -98,24 +92,6 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         }
 
         return payloadRef.get().get(L_NAME_SPACES);
-    }
-
-    /**
-     * Extracts the Mobile Security Object (MSO) payload from an mDoc device response
-     * and converts it to a {@link JsonNode} for verification and status checks.
-     *
-     * @see https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check#how-status-information-is-stored
-     */
-    static JsonNode extractMsoPayload(String mdocToken) throws VerificationException {
-        try {
-            var response = MdocParser.parseBase64Url(mdocToken);
-            var document = MdocVerificationContext.extractDocument(response);
-            var issuerAuth = MdocVerificationContext.extractIssuerAuth(document);
-            var msoPayload = CborUtil.unwrap(issuerAuth.getPayload());
-            return JsonSerialization.mapper.valueToTree(new CBORParser(msoPayload.encode()).next());
-        } catch (MdocEncodingException | IOException e) {
-            throw new VerificationException("Failed to extract MSO payload for status verification", e);
-        }
     }
 
     /**
