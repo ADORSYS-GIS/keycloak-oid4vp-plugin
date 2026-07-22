@@ -1,11 +1,11 @@
-= National Wallet PID Verification Configuration
+= Configuring dual-credential authentication for the German wallet
 
-This page describes how to configure Keycloak OpenID4VP authentication for presentation flows involving a national wallet PID credential.
+This page describes the OpenID4VP configuration needed when authentication requires a PID credential presented by the German wallet.
 
-The configuration supports both:
+The configuration supports two common profiles:
 
-* a single-credential login profile;
-* a multi-credential login profile where one credential is used for Keycloak user binding and one or more additional credentials are verified as supporting credentials.
+* a single self-issued credential profile for normal wallet login;
+* a dual-credential profile where a primary credential identifies the Keycloak user and a PID credential is verified as an additional supporting credential.
 
 == References
 
@@ -17,18 +17,16 @@ Use the official German EUDI Wallet and EUDI Architecture documentation for ecos
 * https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/rp/PID_Presentation/[Relying Party PID presentation guide]
 * https://docs.eudi.dev/latest/build/supporting-ecosystem-services/trusted-list-service/[EUDI Trust List Service]
 
-== Overview
+== Authentication model
 
-For the national wallet PID flow, Keycloak acts as an OpenID4VP verifier.
-
-The recommended authentication model is:
+The authentication model is:
 
 . A primary credential identifies the Keycloak user.
 . A PID credential is requested as a supporting credential.
 . Each credential is verified according to its own format and trust policy.
-. Authentication succeeds only when all required credentials are valid.
+. Authentication succeeds only when all required credentials are valid and the supporting credential is meaningfully bound to the primary credential.
 
-The PID can be represented as an mDoc credential with:
+For the German wallet, the PID is requested as an mDoc credential:
 
 [source,text]
 ----
@@ -44,24 +42,28 @@ Doctype: eu.europa.ec.eudi.pid.1
 * Verifier access and registration certificate material from the Sandbox.
 * A wallet containing the credentials required by the selected authentication profile.
 
-== Verifier Certificate Material
+== OpenID4VP authenticator settings
 
-The national wallet profile requires verifier certificate material issued or accepted by the German EUDI Sandbox.
+Configure the general OpenID4VP authenticator settings as described in xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials].
 
-[cols="1,2"]
-|===
-|Field |Description
+For German wallet PID verification, the relevant verifier settings are:
 
-|Access certificate
-|Base64 DER encoded X.509 verifier access certificate.
-
-|Registration certificate
-|Full verifier registration certificate JWT.
-|===
+[source,text]
+----
+Client Identifier Prefix: x509_san_dns
+Response mode: direct_post.jwt
+Request URI method: get
+Custom URL scheme: openid4vp://
+Access certificate: <base64 DER access certificate>
+Registration certificate: <registration certificate JWT>
+Require cryptographic holder binding: On
+Maximum age of presented holder-binding proof: 60
+Fall back to ISO-spec session transcript (mDoc): Off
+----
 
 The access certificate must correspond to the Keycloak signing key used for OpenID4VP request objects and must identify the public hostname used by Keycloak.
 
-The registration certificate should describe the verifier purpose and the credential claims requested from the wallet.
+The registration certificate should describe the verifier purpose and the PID claims requested from the wallet.
 
 For a PID mDoc profile, the registration certificate should cover:
 
@@ -74,83 +76,27 @@ Claims:
   eu.europa.ec.eudi.pid.1 / family_name
 ----
 
-== Keycloak Signing Key
+The login theme must support OpenID4VP login buttons. For this plugin, use the `keycloak.v2+oid4vp` login theme.
 
-Configure an active realm key provider for signing OpenID4VP request objects.
+== Dual-credential German wallet PID profile
 
-Recommended key provider properties:
-
-[source,text]
-----
-Algorithm: ES256
-Keystore Type: PKCS12
-Key use: sig
-----
-
-The private key in this provider must match the public key represented by the configured access certificate.
-
-== OpenID4VP Authenticator Configuration
-
-Open the OpenID4VP authenticator configuration in the Keycloak authentication flow and configure the verifier settings.
-
-Recommended values for national wallet PID verification:
-
-[source,text]
-----
-Client Identifier Prefix: x509_san_dns
-Response mode: direct_post.jwt
-Request URI method: get
-Custom URL scheme: openid4vp://
-Access certificate: <base64 DER access certificate>
-Registration certificate: <registration certificate JWT>
-Require cryptographic holder binding: On
-Maximum age of presented holder-binding proof: 60
-Require Not Before claim (SD-JWT): Off
-Require Expiration claim (SD-JWT): Off
-Verify issuer claim (SD-JWT): On
-Fall back to ISO-spec session transcript (mDoc): Off
-Reject revoked credentials: Configure according to the deployment's status-list policy
-----
-
-Use `direct_post.jwt` when the wallet returns an encrypted authorization response.
-
-The login theme must also support OpenID4VP login buttons. For this plugin, use the `keycloak.v2+oid4vp` login theme.
-
-== Trust Policy Configuration
-
-PID issuer trust is configured per credential requirement.
-
-For the German EUDI Sandbox PID trust list, use:
-
-[source,json]
-----
-{
-  "type": "eudi_pid_trust_list",
-  "trustListUrl": "https://bmi.usercontent.opencode.de/eudi-wallet/test-trust-lists/pid-provider.jwt",
-  "trustListSigningCertificate": "<base64 DER trust-list signing certificate>",
-  "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance"
-}
-----
-
-The trust-list signing certificate anchors validation of the trust list JWT. The `serviceType` selects the trusted service entries that are valid for PID issuance.
-
-== Multi-Credential PID Profile
-
-Use a multi-credential profile when PID verification should strengthen a login that is still bound to a Keycloak user through a primary credential.
+Use a dual-credential profile when PID verification should strengthen a login that is still bound to a Keycloak user through a primary credential.
 
 In this model:
 
 * `main` is the primary credential used for Keycloak user recovery;
 * `pid` is a supporting credential verified through the EUDI PID trust policy.
 
+Paste the complete JSON array into the `OpenID4VP authentication profiles` field of the authenticator configuration.
+
 [source,json]
 ----
 [
   {
-    "id": "dual-national-pid-mdoc",
-    "description": "Login with Keycloak credential plus national wallet PID",
+    "id": "dual-german-pid-mdoc",
+    "description": "Login with Keycloak credential plus German wallet PID",
     "displayCta": {
-      "en": "Login with national PID"
+      "en": "Login with German PID"
     },
     "credentials": [
       {
@@ -195,11 +141,11 @@ In this model:
 ]
 ----
 
-== Single Credential Profile
+The `eudi_pid_trust_list` policy validates PID issuer trust against the configured trust-list JWT. The `trustListSigningCertificate` anchors the trust-list JWT, and `serviceType` selects entries that are valid for PID issuance.
 
-Use a single-credential profile when only one credential is required for login.
+== Single self-issued credential profile
 
-For a Keycloak-issued Identity Credential:
+Use a single-credential profile when only a self-issued primary credential is required for login.
 
 [source,json]
 ----
@@ -233,15 +179,7 @@ For a Keycloak-issued Identity Credential:
 ]
 ----
 
-A PID-only profile can also be configured if the PID credential contains the claims required by the deployment's user-binding policy.
-
-== Wallet And Relying Party Requirements
-
-The wallet must contain all credentials required by the selected profile.
-
-The relying-party application can be any OIDC client configured against the Keycloak realm. It only needs to initiate the normal OIDC login flow; the OpenID4VP authentication step is handled by Keycloak.
-
-== Authentication Flow
+== Authentication flow
 
 At runtime:
 

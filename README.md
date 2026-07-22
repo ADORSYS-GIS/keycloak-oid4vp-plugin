@@ -105,8 +105,8 @@ For provider configuration (including examples for `keycloak.conf`, `KC_*` envir
   [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
 - Technical performance/security tuning:
   [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
-- German national wallet PID verification configuration:
-  [`docs/modules/ROOT/pages/national-wallet-pid-verification-configuration.adoc`](./docs/modules/ROOT/pages/national-wallet-pid-verification-configuration.adoc)
+- German wallet PID verification configuration:
+  [`docs/modules/ROOT/pages/german-wallet-pid-verification-configuration.adoc`](./docs/modules/ROOT/pages/german-wallet-pid-verification-configuration.adoc)
 
 ### OID4VP authenticator configuration
 
