@@ -69,6 +69,8 @@ public abstract class BaseKeycloakTest {
         container
                 .withImagePullPolicy(PullPolicy.alwaysPull())
                 .withProviderLibsFrom(List.of(loadShadedPluginJar()))
+                // Hot-reload main classes from "target/classes" to test implementation changes
+                // without rebuilding the jar.
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci")
                 .withRealmImportFile("/realms/test-realm.json")
