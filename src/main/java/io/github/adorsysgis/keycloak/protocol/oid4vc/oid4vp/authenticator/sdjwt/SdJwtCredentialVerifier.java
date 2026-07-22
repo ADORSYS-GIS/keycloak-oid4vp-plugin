@@ -1,11 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.sdjwt;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -13,7 +12,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -24,8 +22,6 @@ import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
-import org.keycloak.sessions.AuthenticationSessionModel;
-import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -53,9 +49,9 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
     public JsonNode verifyCredential(
             AuthenticationFlowContext context,
             AuthorizationContext authorizationContext,
+            AuthRequirements authRequirements,
             CredentialRequirement credential,
-            String token,
-            boolean requireCryptographicHolderBinding)
+            String token)
             throws VerificationException {
 
         RequestObject requestObject = authorizationContext.getRequestObject();
@@ -64,8 +60,8 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
 
         SdJwtVP sdJwt = parseSdJwt(token);
 
-        SdJwtAuthRequirements authReqs = new SdJwtAuthRequirements(
-                context.getSession().getContext(), context.getAuthenticatorConfig(), credential);
+        SdJwtAuthRequirements authReqs =
+                new SdJwtAuthRequirements(context.getSession().getContext(), authRequirements, credential);
 
         AtomicReference<JsonNode> payloadRef = new AtomicReference<>();
         PresentationRequirements requirements = payload -> {
@@ -78,7 +74,8 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                 requirements,
                 SdJwtTrustedIssuerResolver.resolve(context.getSession(), credential),
                 authReqs.getIssuerSignedJwtVerificationOpts(),
-                authReqs.getKeyBindingJwtVerificationOpts(nonce, audience, requireCryptographicHolderBinding));
+                authReqs.getKeyBindingJwtVerificationOpts(
+                        nonce, audience, authReqs.shouldRequireCryptographicHolderBinding()));
 
         if (authReqs.shouldEnforceRevocationStatus()) {
             try {
@@ -93,7 +90,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         }
 
         if (credential.isPrimary()) {
-            validateTransactionData(context.getAuthenticationSession(), token);
+            validateTransactionData(authorizationContext, token);
         }
 
         return payloadRef.get();
@@ -104,17 +101,11 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         return Optional.ofNullable(claims.get(claimName)).map(JsonNode::asText).orElse(null);
     }
 
-    void validateTransactionData(AuthenticationSessionModel authSession, String presentedToken) {
-        String wireJson = authSession.getAuthNote(OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY);
-        if (StringUtil.isBlank(wireJson)) {
+    void validateTransactionData(AuthorizationContext authorizationContext, String presentedToken) {
+        List<String> transactionDataWire =
+                authorizationContext.getRequestObject().getTransactionData();
+        if (transactionDataWire == null || transactionDataWire.isEmpty()) {
             return;
-        }
-
-        List<String> transactionDataWire;
-        try {
-            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<>() {});
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Invalid transaction_data session state", e);
         }
 
         SdJwtVP sdJwt = parseSdJwt(presentedToken);

@@ -201,18 +201,15 @@ public class VerifierConfig {
         return profileConfig;
     }
 
+    public boolean shouldRequireCryptographicHolderBinding() {
+        return this.requireCryptographicHolderBinding;
+    }
+
     public List<String> getTransactionDataRaw() {
         return transactionDataRaw;
     }
 
     public String getVerifierInfoConfig() {
         return verifierInfoConfig;
-    }
-
-    /**
-     * Holder binding is required when configured or when transaction data is present.
-     */
-    public boolean effectiveRequireCryptographicHolderBinding() {
-        return requireCryptographicHolderBinding || !transactionDataRaw.isEmpty();
     }
 }

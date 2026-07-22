@@ -28,6 +28,7 @@ public class AuthRequirements {
     private final boolean verifyIssuerClaim;
     private final boolean fallbackToIsoSpecSessionTranscript;
     private final boolean enforceRevocationStatus;
+    private final boolean requireCryptographicHolderBinding;
 
     public AuthRequirements(AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting authentication requirement properties");
@@ -38,6 +39,10 @@ public class AuthRequirements {
         this.credentialTypes = parseMultiStr(config.getOrDefault(
                 OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG,
                 OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT));
+
+        this.requireCryptographicHolderBinding = Boolean.parseBoolean(config.getOrDefault(
+                OID4VPAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG,
+                String.valueOf(OID4VPAuthenticatorFactory.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_CONFIG_DEFAULT)));
 
         this.holderBindingProofMaxAge = Integer.parseInt(config.getOrDefault(
                 OID4VPAuthenticatorFactory.HOLDER_BINDING_PROOF_MAX_AGE_CONFIG,
@@ -66,6 +71,10 @@ public class AuthRequirements {
 
     public List<String> getCredentialTypes() {
         return credentialTypes;
+    }
+
+    public boolean shouldRequireCryptographicHolderBinding() {
+        return requireCryptographicHolderBinding;
     }
 
     public int getHolderBindingProofMaxAge() {
