@@ -1,0 +1,192 @@
+= Configuring dual-credential authentication for the German wallet
+
+This page describes the OpenID4VP configuration needed when authentication requires a PID credential presented by the German wallet.
+
+The configuration supports two common profiles:
+
+* a single self-issued credential profile for normal wallet login;
+* a dual-credential profile where a primary credential identifies the Keycloak user and a PID credential is verified as an additional supporting credential.
+
+== References
+
+Use the official German EUDI Wallet and EUDI Architecture documentation for ecosystem onboarding, Sandbox access, and certificate lifecycle details:
+
+* https://eudi-wallet.gov.de/en/ecosystem-knowledge-center[German EUDI Wallet Ecosystem Knowledge Center]
+* https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/sandbox/onboarding/joining/[German Sandbox onboarding guide]
+* https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/rp/onboarding/registrar_certificate_usage/[Using registrar certificates in presentation requests]
+* https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/rp/PID_Presentation/[Relying Party PID presentation guide]
+* https://docs.eudi.dev/latest/build/supporting-ecosystem-services/trusted-list-service/[EUDI Trust List Service]
+
+== Authentication model
+
+The authentication model is:
+
+. A primary credential identifies the Keycloak user.
+. A PID credential is requested as a supporting credential.
+. Each credential is verified according to its own format and trust policy.
+. Authentication succeeds only when all required credentials are valid and the supporting credential is meaningfully bound to the primary credential.
+
+For the German wallet, the PID is requested as an mDoc credential:
+
+[source,text]
+----
+Format: mso_mdoc
+Doctype: eu.europa.ec.eudi.pid.1
+----
+
+== Prerequisites
+
+* Keycloak with this plugin deployed.
+* A public HTTPS Keycloak base URL reachable by the wallet.
+* Access to the German EUDI Ecosystem Sandbox Registrar.
+* Verifier access and registration certificate material from the Sandbox.
+* A wallet containing the credentials required by the selected authentication profile.
+
+== OpenID4VP authenticator settings
+
+Configure the general OpenID4VP authenticator settings as described in xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials].
+
+For German wallet PID verification, the relevant verifier settings are:
+
+[source,text]
+----
+Client Identifier Prefix: x509_san_dns
+Response mode: direct_post.jwt
+Request URI method: get
+Custom URL scheme: openid4vp://
+Access certificate: <base64 DER access certificate>
+Registration certificate: <registration certificate JWT>
+Require cryptographic holder binding: On
+Maximum age of presented holder-binding proof: 60
+Fall back to ISO-spec session transcript (mDoc): Off
+----
+
+The access certificate must correspond to the Keycloak signing key used for OpenID4VP request objects and must identify the public hostname used by Keycloak.
+
+The registration certificate should describe the verifier purpose and the PID claims requested from the wallet.
+
+For a PID mDoc profile, the registration certificate should cover:
+
+[source,text]
+----
+Format: mso_mdoc
+Doctype: eu.europa.ec.eudi.pid.1
+Claims:
+  eu.europa.ec.eudi.pid.1 / given_name
+  eu.europa.ec.eudi.pid.1 / family_name
+----
+
+The login theme must support OpenID4VP login buttons. For this plugin, use the `keycloak.v2+oid4vp` login theme.
+
+== Dual-credential German wallet PID profile
+
+Use a dual-credential profile when PID verification should strengthen a login that is still bound to a Keycloak user through a primary credential.
+
+In this model:
+
+* `main` is the primary credential used for Keycloak user recovery;
+* `pid` is a supporting credential verified through the EUDI PID trust policy.
+
+Paste the complete JSON array into the `OpenID4VP authentication profiles` field of the authenticator configuration.
+
+[source,json]
+----
+[
+  {
+    "id": "dual-german-pid-mdoc",
+    "description": "Login with Keycloak credential plus German wallet PID",
+    "displayCta": {
+      "en": "Login with German PID"
+    },
+    "credentials": [
+      {
+        "id": "main",
+        "role": "primary",
+        "format": "dc+sd-jwt",
+        "credentialTypes": [
+          "https://credentials.example.com/identity_credential"
+        ],
+        "claims": [
+          "sub",
+          "username"
+        ],
+        "trust": [
+          {
+            "type": "self"
+          }
+        ]
+      },
+      {
+        "id": "pid",
+        "role": "supporting",
+        "format": "mso_mdoc",
+        "credentialTypes": [
+          "eu.europa.ec.eudi.pid.1"
+        ],
+        "claims": [
+          "eu.europa.ec.eudi.pid.1/given_name",
+          "eu.europa.ec.eudi.pid.1/family_name"
+        ],
+        "trust": [
+          {
+            "type": "eudi_pid_trust_list",
+            "trustListUrl": "https://bmi.usercontent.opencode.de/eudi-wallet/test-trust-lists/pid-provider.jwt",
+            "trustListSigningCertificate": "<base64 DER trust-list signing certificate>",
+            "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance"
+          }
+        ]
+      }
+    ]
+  }
+]
+----
+
+The `eudi_pid_trust_list` policy validates PID issuer trust against the configured trust-list JWT. The `trustListSigningCertificate` anchors the trust-list JWT, and `serviceType` selects entries that are valid for PID issuance.
+
+== Single self-issued credential profile
+
+Use a single-credential profile when only a self-issued primary credential is required for login.
+
+[source,json]
+----
+[
+  {
+    "id": "single-identity-login",
+    "description": "Login with Keycloak Identity Credential",
+    "displayCta": {
+      "en": "Sign in with wallet"
+    },
+    "credentials": [
+      {
+        "id": "main",
+        "role": "primary",
+        "format": "dc+sd-jwt",
+        "credentialTypes": [
+          "https://credentials.example.com/identity_credential"
+        ],
+        "claims": [
+          "sub",
+          "username"
+        ],
+        "trust": [
+          {
+            "type": "self"
+          }
+        ]
+      }
+    ]
+  }
+]
+----
+
+== Authentication flow
+
+At runtime:
+
+. The user starts an OIDC login.
+. Keycloak displays the wallet login button configured by the selected authentication profile.
+. Keycloak creates a signed OpenID4VP authorization request.
+. The wallet presents the required credential set.
+. Keycloak verifies each credential according to its configured format, claims, holder binding, and trust policy.
+. Keycloak binds the authenticated session to the user recovered from the primary credential.
+. The OIDC login completes.
