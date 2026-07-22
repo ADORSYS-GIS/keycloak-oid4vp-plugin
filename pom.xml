@@ -41,7 +41,7 @@
 
     <properties>
         <revision>999.0.0-SNAPSHOT</revision>
-        <keycloak.version>26.6.3</keycloak.version>
+        <keycloak.version>26.7.0</keycloak.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
@@ -226,9 +226,17 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>all</shadedClassifierName>
+                            <minimizeJar>true</minimizeJar>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.bouncycastle:*</exclude>
+                                    <exclude>com.fasterxml.jackson.*:*</exclude>
+                                    <exclude>com.google.code.gson:gson</exclude>
+                                    <exclude>org.slf4j:slf4j-api</exclude>
+                                    <exclude>org.yaml:snakeyaml</exclude>
+                                </excludes>
+                            </artifactSet>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>

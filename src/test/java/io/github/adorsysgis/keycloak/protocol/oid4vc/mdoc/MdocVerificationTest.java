@@ -7,20 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.authlete.mdoc.DeviceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
-import org.keycloak.truststore.TruststoreProvider;
 
 public class MdocVerificationTest extends MdocBaseTest {
 
     @Test
     public void shouldVerifyValidMdocSuccessfully_SpecSample() throws VerificationException {
         String mdoc = readResource("/mdoc/spec-sample.txt");
-        TruststoreProvider trust = new TestTruststoreProvider(getSpecSampleCert());
+        TrustAnchorProvider trust = new TestTruststoreProvider(getSpecSampleCert());
 
         MdocVerificationOpts opts = MdocVerificationOpts.builder()
                 .withClientId("example.com")
@@ -64,7 +64,7 @@ public class MdocVerificationTest extends MdocBaseTest {
     public void shouldVerifyValidMdocSuccessfully_OpenID4VPSpecTranscript() throws Exception {
         MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
+        TrustAnchorProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
         new MdocVerificationContext(mdoc).verifyPresentation(opts, null, trust);
     }
 
@@ -72,7 +72,7 @@ public class MdocVerificationTest extends MdocBaseTest {
     public void shouldFail_OnExpiredResponses() throws Exception {
         MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        TruststoreProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
+        TrustAnchorProvider trust = new TestTruststoreProvider(getIssuerCertRef1());
 
         try {
             Time.setOffset(DEFAULT_RESPONSE_VALIDITY_MINS * 60 + 300);
@@ -249,7 +249,7 @@ public class MdocVerificationTest extends MdocBaseTest {
     private static void verifyFails(
             String mdoc,
             MdocVerificationOpts opts,
-            TruststoreProvider trust,
+            TrustAnchorProvider trust,
             String expectedMessageFragment,
             String expectedCauseMessageFragment) {
         var exception = assertThrows(VerificationException.class, () -> new MdocVerificationContext(mdoc)
@@ -263,7 +263,7 @@ public class MdocVerificationTest extends MdocBaseTest {
 
     /** Convenience overload that only checks the top-level exception message. */
     private static void verifyFails(
-            String mdoc, MdocVerificationOpts opts, TruststoreProvider trust, String expectedMessageFragment) {
+            String mdoc, MdocVerificationOpts opts, TrustAnchorProvider trust, String expectedMessageFragment) {
         verifyFails(mdoc, opts, trust, expectedMessageFragment, null);
     }
 
