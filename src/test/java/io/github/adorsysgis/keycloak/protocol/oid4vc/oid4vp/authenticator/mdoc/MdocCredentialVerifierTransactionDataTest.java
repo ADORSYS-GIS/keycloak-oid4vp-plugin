@@ -127,6 +127,29 @@ class MdocCredentialVerifierTransactionDataTest {
     }
 
     @Test
+    void rejectsTransactionData_WhenRequestExpectsAlgButMdocHasNone() throws Exception {
+        // Request specifies transaction_data_hashes_alg: ["sha-256"]
+        var tx = JsonSerialization.mapper.createObjectNode();
+        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
+        tx.putArray(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
+        tx.putArray(TransactionDataSupport.HASH_ALGS_CLAIM).add("sha-256");
+        String wire = TransactionDataSupport.prepareWireEntry(TransactionDataSupport.encodeWireObject(tx), "cred-1");
+
+        String hash = TransactionDataSupport.base64UrlEncodeHash(
+                TransactionDataSupport.hashWireString(wire, TransactionDataSupport.DEFAULT_HASH_ALG));
+
+        // mDoc has transaction_data_hashes but no transaction_data_hashes_alg
+        String mdoc = buildMdocWithTransactionData(hash);
+
+        MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+
+        MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertThrows(
+                VerificationException.class, () -> handler.validateTransactionData(authSession, verificationContext));
+    }
+
+    @Test
     void skipsValidationWhenNoTransactionDataOnSession() throws Exception {
         MdocVerificationOpts opts =
                 MdocBaseTest.getDefaultMdocVerificationOpts().build();
