@@ -2,20 +2,34 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants.L_NAME_SPACES;
 
+import com.authlete.cbor.CBORItem;
+import com.authlete.cbor.CBORItemList;
+import com.authlete.cbor.CBORPair;
+import com.authlete.cbor.CBORPairList;
+import com.authlete.cbor.CBORString;
+import com.authlete.cbor.CBORTaggedItem;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.CborUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
+import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -23,7 +37,10 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
+import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JWKSUtils;
+import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 /**
  * {@link CredentialVerifier} implementation backing verification of {@code mso_mdoc}
@@ -95,7 +112,100 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
 
+        if (credential.isPrimary()) {
+            validateTransactionData(context.getAuthenticationSession(), verificationContext);
+        }
+
         return payloadRef.get().get(L_NAME_SPACES);
+    }
+
+    /**
+     * Validates {@code transaction_data_hashes} contained in
+     * {@code DeviceSigned.nameSpaces} against the verifier's
+     * {@code transaction_data} request.
+     */
+    void validateTransactionData(AuthenticationSessionModel authSession, MdocVerificationContext verificationContext)
+            throws VerificationException {
+        String wireJson = authSession.getAuthNote(OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY);
+        if (StringUtil.isBlank(wireJson)) {
+            return;
+        }
+
+        List<String> transactionDataWire;
+        try {
+            transactionDataWire = JsonSerialization.readValue(wireJson, new TypeReference<>() {});
+        } catch (IOException e) {
+            throw new VerificationException("Invalid transaction_data session state", e);
+        }
+
+        ObjectNode hashesPayload = extractTransactionDataHashes(verificationContext);
+        if (hashesPayload == null) {
+            throw new VerificationException(
+                    "Device namespaces must contain transaction_data_hashes when transaction_data is requested");
+        }
+
+        try {
+            TransactionDataValidator.validate(transactionDataWire, hashesPayload);
+        } catch (IllegalArgumentException e) {
+            throw new VerificationException("transaction_data_hashes validation failed", e);
+        }
+    }
+
+    /** Builds an ObjectNode from DeviceSigned.nameSpaces for TransactionDataValidator.
+     *  Returns null when transaction_data_hashes is absent.
+     */
+    private static ObjectNode extractTransactionDataHashes(MdocVerificationContext verificationContext)
+            throws VerificationException {
+        CBORTaggedItem nameSpacesTagged = verificationContext.getDeviceNameSpaces();
+        CBORItem unwrapped = CborUtil.unwrap(nameSpacesTagged);
+
+        if (!(unwrapped instanceof CBORPairList nsMap)) {
+            throw new VerificationException("DeviceSigned.nameSpaces is not a valid CBOR map");
+        }
+
+        ArrayNode hashes = null;
+        String hashesAlg = null;
+
+        for (CBORPair nsPair : nsMap.getPairs()) {
+            if (nsPair == null || !(nsPair.getValue() instanceof CBORPairList itemsMap)) {
+                continue;
+            }
+            // DeviceSignedItems stores element identifiers as map keys directly
+            var hashesPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM);
+            if (hashesPair != null) {
+                hashes = extractHashesArray(hashesPair.getValue());
+            }
+            var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
+            if (algPair != null && algPair.getValue() instanceof CBORString algStr) {
+                hashesAlg = algStr.getValue();
+            }
+        }
+
+        if (hashes == null) {
+            return null;
+        }
+
+        ObjectNode result = JsonSerialization.mapper.createObjectNode();
+        result.set(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM, hashes);
+        if (hashesAlg != null) {
+            result.put(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM, hashesAlg);
+        }
+        return result;
+    }
+
+    // Converts a CBOR array of strings (or a single string) to a JSON ArrayNode.
+    private static ArrayNode extractHashesArray(CBORItem value) {
+        ArrayNode hashes = JsonSerialization.mapper.createArrayNode();
+        if (value instanceof CBORItemList list) {
+            for (CBORItem hashItem : list.getItems()) {
+                if (hashItem instanceof CBORString hashStr) {
+                    hashes.add(hashStr.getValue());
+                }
+            }
+        } else if (value instanceof CBORString singleHash) {
+            hashes.add(singleHash.getValue());
+        }
+        return hashes;
     }
 
     /**

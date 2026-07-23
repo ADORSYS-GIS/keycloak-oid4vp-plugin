@@ -195,7 +195,7 @@ public class MdocBaseTest {
      */
     public static DeviceResponse buildDeviceResponse(
             MdocVerificationOpts opts, Map<String, Object> claims, String docType) throws Exception {
-        return buildDeviceResponse(opts, claims, docType, null);
+        return buildDeviceResponse(opts, claims, docType, null, null);
     }
 
     /**
@@ -221,14 +221,35 @@ public class MdocBaseTest {
     private static DeviceResponse buildDeviceResponse(
             MdocVerificationOpts opts, Map<String, Object> claims, String docType, IssuerSignedCustomizer customizer)
             throws Exception {
+        return buildDeviceResponse(opts, claims, docType, customizer, null);
+    }
+
+    private static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts,
+            Map<String, Object> claims,
+            String docType,
+            IssuerSignedCustomizer customizer,
+            DeviceNameSpaces deviceNameSpaces)
+            throws Exception {
         BuiltStandard built = buildStandardComponents(claims, docType);
-        DeviceSigned deviceSigned = buildDeviceSigned(opts, docType);
+        DeviceSigned deviceSigned = buildDeviceSigned(opts, docType, deviceNameSpaces);
 
         IssueContext ctx =
                 new IssueContext(built.nameSpaces, built.mso, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
         IssuerSigned issuerSigned = (customizer == null) ? ctx.signMsoAndWrap() : customizer.customize(ctx);
 
         return new DeviceResponse(List.of(new Document(docType, issuerSigned, deviceSigned, null)));
+    }
+
+    /**
+     * Builds a device response with custom device-signed namespaces. Intended for tests that
+     * need to include extra data (e.g. {@code transaction_data_hashes}) in the DeviceSigned
+     * section of the mDoc.
+     */
+    public static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts, Map<String, Object> claims, String docType, DeviceNameSpaces deviceNameSpaces)
+            throws Exception {
+        return buildDeviceResponse(opts, claims, docType, null, deviceNameSpaces);
     }
 
     private record BuiltStandard(IssuerNameSpaces nameSpaces, MobileSecurityObject mso) {}
@@ -289,8 +310,10 @@ public class MdocBaseTest {
         return new ValueDigests(entries);
     }
 
-    private static DeviceSigned buildDeviceSigned(MdocVerificationOpts opts, String docType) throws COSEException {
-        DeviceNameSpacesBytes deviceNameSpaces = new DeviceNameSpacesBytes(new DeviceNameSpaces(List.of()));
+    private static DeviceSigned buildDeviceSigned(
+            MdocVerificationOpts opts, String docType, DeviceNameSpaces customNameSpaces) throws COSEException {
+        DeviceNameSpaces nameSpaces = customNameSpaces != null ? customNameSpaces : new DeviceNameSpaces(List.of());
+        DeviceNameSpacesBytes deviceNameSpaces = new DeviceNameSpacesBytes(nameSpaces);
         // Use the ISO-spec transcript when a mdocGeneratedNonce is supplied and the fallback
         // is enabled; otherwise default to the OpenID4VP-spec transcript.
         boolean useIsoTranscript = opts.getMdocGeneratedNonce() != null && opts.fallbackToIsoSpecSessionTranscript();

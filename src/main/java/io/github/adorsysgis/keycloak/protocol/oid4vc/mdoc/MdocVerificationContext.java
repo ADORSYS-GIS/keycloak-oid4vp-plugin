@@ -60,6 +60,16 @@ public class MdocVerificationContext {
     }
 
     /**
+     * Returns the DeviceSigned namespaces from the parsed mDoc for use during
+     * presentation verification, including inspection of elements such as
+     * {@code transaction_data_hashes}.
+     */
+    public CBORTaggedItem getDeviceNameSpaces() throws VerificationException {
+        CBORPairList document = extractDocument(mdoc);
+        return extractDeviceNamespaces(document);
+    }
+
+    /**
      * Verifies mDoc presentation.
      *
      * @param opts                            Options to parameterize the mDoc verification.

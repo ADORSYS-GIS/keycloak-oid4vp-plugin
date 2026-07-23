@@ -202,7 +202,7 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
-    void shouldRejectTransactionDataWhenPrimaryCredentialIsMdoc() {
+    void shouldAcceptTransactionDataWithMdocPrimaryCredential() {
         Map<String, String> configMap = new HashMap<>();
         configMap.put(PROFILES_CONFIG, """
                 [
@@ -226,8 +226,7 @@ public class OID4VPProfileConfigTest {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(configMap);
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new VerifierConfig(config));
-        assertEquals("transactionData is not yet supported for mso_mdoc primary credentials", error.getMessage());
+        assertDoesNotThrow(() -> new VerifierConfig(config));
     }
 
     // ---- Binding rule validation -------------------------------------------

@@ -1,13 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
 import com.apicatalog.jsonld.StringUtils;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
@@ -74,8 +71,7 @@ public class VerifierConfig {
 
         this.transactionDataRaw = validateTransactionData(
                 TransactionDataSupport.parseConfigValue(config.get(OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG)),
-                requireCryptographicHolderBinding,
-                profileConfig);
+                requireCryptographicHolderBinding);
 
         this.verifierInfoConfig = config.get(OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG);
     }
@@ -143,9 +139,7 @@ public class VerifierConfig {
     }
 
     private static List<String> validateTransactionData(
-            List<String> transactionDataRaw,
-            boolean requireCryptographicHolderBinding,
-            OID4VPProfileConfig profileConfig) {
+            List<String> transactionDataRaw, boolean requireCryptographicHolderBinding) {
         if (transactionDataRaw.isEmpty()) {
             return transactionDataRaw;
         }
@@ -155,22 +149,7 @@ public class VerifierConfig {
                     "transactionData cannot be used when requireCryptographicHolderBinding is false (OpenID4VP B.3.3)");
         }
 
-        // TODO: Implement transaction_data binding verification for mso_mdoc credentials
-        // (follow-up ticket). Until then, transaction_data must not be requested when the
-        // primary credential of any profile is mso_mdoc — the mDoc equivalent of KB-JWT
-        // transaction_data_hashes binding is not yet enforced.
-        if (anyProfileHasMdocPrimary(profileConfig)) {
-            throw new IllegalStateException("transactionData is not yet supported for mso_mdoc primary credentials");
-        }
-
         return transactionDataRaw;
-    }
-
-    private static boolean anyProfileHasMdocPrimary(OID4VPProfileConfig profileConfig) {
-        return profileConfig.getProfiles().stream()
-                .map(AuthenticationProfile::getPrimaryCredential)
-                .map(CredentialRequirement::getFormat)
-                .anyMatch(CredentialFormat.MSO_MDOC.getValue()::equals);
     }
 
     public ClientIdentifierPrefix getClientIdentifierPrefix() {
