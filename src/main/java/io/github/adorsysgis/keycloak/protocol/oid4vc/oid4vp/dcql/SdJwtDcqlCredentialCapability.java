@@ -26,12 +26,6 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
     }
 
     @Override
-    public void validateCredentialQuery(Credential credential) {
-        validateMeta(credential.getMeta());
-        validateClaimPaths(credential);
-    }
-
-    @Override
     public boolean supportsPresentationPreValidation() {
         return true;
     }
@@ -55,32 +49,6 @@ public final class SdJwtDcqlCredentialCapability implements DcqlCredentialCapabi
         format.setSdJwtAlgValues(signatureAlgorithms);
         format.setKbJwtAlgValues(signatureAlgorithms);
         vpFormat.setDcSdJwt(format);
-    }
-
-    private static void validateMeta(Meta meta) {
-        if (meta.getVctValues() == null || meta.getVctValues().isEmpty()) {
-            throw new IllegalArgumentException("meta.vct_values must be non-empty for dc+sd-jwt credential queries");
-        }
-        if (meta.getVctValues().stream().anyMatch(StringUtil::isBlank)) {
-            throw new IllegalArgumentException("meta.vct_values must not contain blank entries");
-        }
-    }
-
-    private static void validateClaimPaths(Credential credential) {
-        if (credential.getClaims() == null) {
-            return;
-        }
-        credential.getClaims().forEach(claim -> {
-            List<String> path = claim.getPath();
-            if (path.stream().anyMatch(SdJwtDcqlCredentialCapability::isUnsupportedPathSegment)) {
-                throw new IllegalArgumentException(
-                        "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported");
-            }
-        });
-    }
-
-    private static boolean isUnsupportedPathSegment(String segment) {
-        return "null".equals(segment) || (!segment.isEmpty() && segment.chars().allMatch(Character::isDigit));
     }
 
     private static void validateHolderBinding(Credential credential, SdJwtVP presentation)

@@ -7,7 +7,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.MdocGenericFormat;
 import java.util.List;
 import org.keycloak.common.VerificationException;
-import org.keycloak.utils.StringUtil;
 
 /**
  * DCQL capability for {@code mso_mdoc} (ISO/IEC 18013-5) credentials.
@@ -21,22 +20,6 @@ public final class MdocDcqlCredentialCapability implements DcqlCredentialCapabil
     @Override
     public String format() {
         return CredentialFormat.MSO_MDOC.getValue();
-    }
-
-    @Override
-    public void validateCredentialQuery(Credential credential) {
-        if (StringUtil.isBlank(credential.getMeta().getDoctypeValue())) {
-            throw new IllegalArgumentException("meta.doctype_value must be non-empty for mso_mdoc credential queries");
-        }
-        if (credential.getClaims() == null) {
-            return;
-        }
-        credential.getClaims().forEach(claim -> {
-            if (claim.getPath().size() != 2) {
-                throw new IllegalArgumentException(
-                        "mso_mdoc claim paths must contain exactly namespace and element identifier");
-            }
-        });
     }
 
     @Override

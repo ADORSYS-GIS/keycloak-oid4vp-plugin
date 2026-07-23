@@ -1,6 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,7 +77,6 @@ public class DcqlQueryGeneratorTest {
                         .setClaims(claims)));
 
         DcqlQuery query = generator.buildQuery(profile, true);
-        assertDoesNotThrow(() -> DcqlQueryValidator.validateQuery(query));
         assertEquals(1, query.getCredentials().size());
         Credential credential = query.getCredentials().getFirst();
 

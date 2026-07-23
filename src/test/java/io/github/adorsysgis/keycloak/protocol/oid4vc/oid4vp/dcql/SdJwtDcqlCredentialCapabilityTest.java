@@ -219,7 +219,6 @@ class SdJwtDcqlCredentialCapabilityTest {
     }
 
     private static void validatePresentation(DcqlQuery query, String token) throws VerificationException {
-        DcqlQueryValidator.validateQuery(query);
         CAPABILITY.validatePresentation(query.getCredentials().getFirst(), token);
     }
 
