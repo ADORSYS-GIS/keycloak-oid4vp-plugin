@@ -42,6 +42,61 @@ class MdocCredentialVerifierTransactionDataTest {
     }
 
     @Test
+    void rejectsTransactionData_WhenHashEntryIsNotString() throws Exception {
+        String wire = wireEntry("payment");
+        String hash = hashForWire(wire);
+        // Build mDoc with a non-string item (integer 42) in the hashes array
+        DeviceSignedItemsEntry txDataEntry =
+                new DeviceSignedItemsEntry("transaction_data_hashes", List.<Object>of(hash, 42));
+        DeviceSignedItems items = new DeviceSignedItems(List.of(txDataEntry));
+        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(DOC_TYPE, items);
+        DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(nsEntry));
+
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
+        String mdoc = MdocBaseTest.buildDeviceResponse(
+                        opts, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces)
+                .encodeToBase64Url();
+
+        MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+
+        MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertThrows(
+                VerificationException.class, () -> handler.validateTransactionData(authSession, verificationContext));
+    }
+
+    @Test
+    void rejectsTransactionData_WhenHashesInMultipleNamespaces() throws Exception {
+        String wire = wireEntry("payment");
+        String hash = hashForWire(wire);
+
+        // Create two namespace entries both containing transaction_data_hashes
+        DeviceSignedItemsEntry txEntry1 = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
+        DeviceSignedItems items1 = new DeviceSignedItems(List.of(txEntry1));
+        DeviceNameSpacesEntry nsEntry1 = new DeviceNameSpacesEntry("ns1", items1);
+
+        DeviceSignedItemsEntry txEntry2 = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
+        DeviceSignedItems items2 = new DeviceSignedItems(List.of(txEntry2));
+        DeviceNameSpacesEntry nsEntry2 = new DeviceNameSpacesEntry("ns2", items2);
+
+        DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(nsEntry1, nsEntry2));
+
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
+        String mdoc = MdocBaseTest.buildDeviceResponse(
+                        opts, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces)
+                .encodeToBase64Url();
+
+        MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+
+        MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertThrows(
+                VerificationException.class, () -> handler.validateTransactionData(authSession, verificationContext));
+    }
+
+    @Test
     void rejectsMismatchedTransactionData() throws Exception {
         String wire = wireEntry("payment");
         String mdoc = buildMdocWithTransactionData("different-hash");

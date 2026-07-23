@@ -14,27 +14,36 @@ import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
+import com.authlete.mdoc.DeviceNameSpaces;
+import com.authlete.mdoc.DeviceNameSpacesEntry;
 import com.authlete.mdoc.DeviceResponse;
+import com.authlete.mdoc.DeviceSignedItems;
+import com.authlete.mdoc.DeviceSignedItemsEntry;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.util.JsonSerialization;
 
 public class MdocRevocationStatusTest extends MdocBaseTest {
 
@@ -139,6 +148,77 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                 assertThrows(ReferencedTokenValidationException.class, () -> new ReferencedTokenValidator(mockFetcher)
                         .validate(ctx.getVerifiedMsoPayload()));
         assertTrue(exception.getMessage().contains("Token status is not valid"));
+    }
+
+    @Test
+    public void shouldVerifyCredential_WithBothRevocationAndTransactionData() throws Exception {
+        // Setup transaction data wire and hash
+        var tx = JsonSerialization.mapper.createObjectNode();
+        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
+        tx.putArray(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
+        String wire = TransactionDataSupport.prepareWireEntry(TransactionDataSupport.encodeWireObject(tx), "cred-1");
+        String hash = TransactionDataSupport.base64UrlEncodeHash(
+                TransactionDataSupport.hashWireString(wire, TransactionDataSupport.DEFAULT_HASH_ALG));
+
+        // Build mDoc with matching transaction_data_hashes in DeviceSigned
+        DeviceSignedItemsEntry txEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
+        DeviceSignedItems items = new DeviceSignedItems(List.of(txEntry));
+        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(DOC_TYPE, items);
+        DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(nsEntry));
+
+        // Setup auth config with revocation enabled
+        var authConfig = new AuthenticatorConfigModel();
+        authConfig.getConfig().put(ENFORCE_REVOCATION_STATUS_CONFIG, "true");
+
+        var requestObject = new RequestObject()
+                .setClientId("x509_san_dns:example.com")
+                .setNonce("exc7gBkxjx1rdc9udRrveKvSsJIq80avlXeLHhGwqtA")
+                .setResponseUri("https://example.com/response");
+
+        var authCtx = new AuthorizationContext().setRequestObject(requestObject);
+
+        // Setup auth session with transaction data
+        var authSession = mock(AuthenticationSessionModel.class);
+        when(authSession.getAuthNote(OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY))
+                .thenReturn(JsonSerialization.writeValueAsString(List.of(wire)));
+
+        var context = mock(AuthenticationFlowContext.class);
+        when(context.getAuthenticatorConfig()).thenReturn(authConfig);
+        when(context.getAuthenticationSession()).thenReturn(authSession);
+
+        var credential = new CredentialRequirement()
+                .setId("test")
+                .setCredentialTypes(List.of(DOC_TYPE))
+                .setTrust(List.of(new TrustPolicy().setType(TrustPolicy.X5C).setAnchors(List.of(getIssuerCertRef1()))));
+
+        var verifier = new MdocCredentialVerifier(mockFetcher);
+
+        byte[] thumbprint = MdocCredentialVerifier.computeJwkThumbprint(requestObject);
+        var optsFromRequest = MdocVerificationOpts.builder()
+                .withClientId(requestObject.getClientId())
+                .withOid4vpNonce(requestObject.getNonce())
+                .withResponseUri(requestObject.getResponseUri())
+                .withJwkThumbprint(thumbprint)
+                .build();
+
+        // Build mDoc with valid status (idx 1) + transaction_data_hashes
+        DeviceResponse dr =
+                buildDeviceResponse(optsFromRequest, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces);
+        DeviceResponse withStatus = withModifiedMso(dr, mso -> getCborPairList(1, mso));
+        String validMdoc = withStatus.encodeToBase64Url();
+
+        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, credential, validMdoc, false));
+
+        // Build mDoc with revoked status (idx 0) + matching transaction_data_hashes
+        DeviceResponse revokedDr =
+                buildDeviceResponse(optsFromRequest, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces);
+        DeviceResponse withRevokedStatus = withModifiedMso(revokedDr, mso -> getCborPairList(0, mso));
+        String revokedMdoc = withRevokedStatus.encodeToBase64Url();
+
+        VerificationException exception = assertThrows(
+                VerificationException.class,
+                () -> verifier.verifyCredential(context, authCtx, credential, revokedMdoc, false));
+        assertTrue(exception.getMessage().contains("Token status verification failed"));
     }
 
     private String buildMdocWithStatus(int idx) throws Exception {

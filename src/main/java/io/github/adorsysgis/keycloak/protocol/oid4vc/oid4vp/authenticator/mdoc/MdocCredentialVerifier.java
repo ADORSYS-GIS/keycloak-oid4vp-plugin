@@ -173,6 +173,9 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             // DeviceSignedItems stores element identifiers as map keys directly
             var hashesPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM);
             if (hashesPair != null) {
+                if (hashes != null) {
+                    throw new VerificationException("transaction_data_hashes must not appear in multiple namespaces");
+                }
                 hashes = extractHashesArray(hashesPair.getValue());
             }
             var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
@@ -194,16 +197,21 @@ public class MdocCredentialVerifier implements CredentialVerifier {
     }
 
     // Converts a CBOR array of strings (or a single string) to a JSON ArrayNode.
-    private static ArrayNode extractHashesArray(CBORItem value) {
+    // Rejects non-string entries to prevent silent hash filtering.
+    private static ArrayNode extractHashesArray(CBORItem value) throws VerificationException {
         ArrayNode hashes = JsonSerialization.mapper.createArrayNode();
         if (value instanceof CBORItemList list) {
             for (CBORItem hashItem : list.getItems()) {
                 if (hashItem instanceof CBORString hashStr) {
                     hashes.add(hashStr.getValue());
+                } else {
+                    throw new VerificationException("transaction_data_hashes entries must be strings");
                 }
             }
         } else if (value instanceof CBORString singleHash) {
             hashes.add(singleHash.getValue());
+        } else {
+            throw new VerificationException("transaction_data_hashes must be a string or array of strings");
         }
         return hashes;
     }
