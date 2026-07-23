@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,7 +13,6 @@ import org.keycloak.utils.StringUtil;
 public final class DcqlCredentialCapabilities {
 
     private final Map<String, DcqlCredentialCapability> capabilitiesByFormat;
-    private final List<DcqlCredentialCapability> allCapabilities;
 
     public DcqlCredentialCapabilities(List<DcqlCredentialCapability> capabilities) {
         if (capabilities == null || capabilities.isEmpty()) {
@@ -33,7 +33,6 @@ public final class DcqlCredentialCapabilities {
             }
         }
         this.capabilitiesByFormat = Collections.unmodifiableMap(registeredCapabilities);
-        this.allCapabilities = List.copyOf(registeredCapabilities.values());
     }
 
     public static DcqlCredentialCapabilities createDefault() {
@@ -41,11 +40,11 @@ public final class DcqlCredentialCapabilities {
                 List.of(new SdJwtDcqlCredentialCapability(), new MdocDcqlCredentialCapability()));
     }
 
-    public List<DcqlCredentialCapability> all() {
-        return allCapabilities;
+    public Collection<DcqlCredentialCapability> all() {
+        return capabilitiesByFormat.values();
     }
 
-    public DcqlCredentialCapability require(String format) {
+    public DcqlCredentialCapability resolve(String format) {
         if (StringUtil.isBlank(format)) {
             throw new IllegalArgumentException("DCQL credential format must be non-empty");
         }

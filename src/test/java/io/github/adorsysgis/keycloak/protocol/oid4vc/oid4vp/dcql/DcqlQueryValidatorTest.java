@@ -30,24 +30,14 @@ class DcqlQueryValidatorTest {
     }
 
     @Test
-    void rejectsVpWrapperPathsForSdJwt() {
-        Credential credential = new Credential();
-        credential.setId("cred-1");
-        credential.setFormat(VCFormat.SD_JWT_VC);
-        Meta meta = new Meta();
-        meta.setVctValues(List.of("https://example.com/vct"));
-        credential.setMeta(meta);
+    void acceptsVpWrapperNamesAsCredentialClaimNames() {
+        for (String claimName : List.of("vp", "verifiableCredential")) {
+            Claim claim = new Claim();
+            claim.setPath(List.of(claimName, "sub"));
+            Credential credential = sdJwtCredential("cred-1", List.of(claim));
 
-        Claim claim = new Claim();
-        claim.setId("claim-1");
-        claim.setPath(List.of("vp", "sub"));
-        credential.setClaims(List.of(claim));
-
-        IllegalArgumentException error =
-                assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
-        assertEquals(
-                "dc+sd-jwt claim paths must be relative to the VC root, not the VP wrapper: [vp, sub]",
-                error.getMessage());
+            assertDoesNotThrow(() -> DcqlQueryValidator.validateCredential(credential));
+        }
     }
 
     @Test
@@ -294,18 +284,6 @@ class DcqlQueryValidatorTest {
                 assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
         assertEquals(
                 "dcql_query claim path supports object property names only; array indexes and null wildcards are not supported",
-                error.getMessage());
-    }
-
-    @Test
-    void rejectsVerifiableCredentialWrapperPath() {
-        Claim claim = new Claim();
-        claim.setPath(List.of("verifiableCredential", "sub"));
-        Credential credential = sdJwtCredential("cred-1", List.of(claim));
-        IllegalArgumentException error =
-                assertThrows(IllegalArgumentException.class, () -> DcqlQueryValidator.validateCredential(credential));
-        assertEquals(
-                "dc+sd-jwt claim paths must be relative to the VC root, not the VP wrapper: [verifiableCredential, sub]",
                 error.getMessage());
     }
 

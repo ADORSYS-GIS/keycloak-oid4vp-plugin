@@ -227,7 +227,7 @@ public class AuthorizationResponseService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("DCQL query has no credential id: " + credentialId));
 
-        DcqlCredentialCapability capability = dcqlCapabilities.require(credentialQuery.getFormat());
+        DcqlCredentialCapability capability = dcqlCapabilities.resolve(credentialQuery.getFormat());
         if (!capability.supportsPresentationPreValidation()) {
             logger.debugf(
                     "Skipping DCQL pre-validation for credential '%s' (format: %s); "

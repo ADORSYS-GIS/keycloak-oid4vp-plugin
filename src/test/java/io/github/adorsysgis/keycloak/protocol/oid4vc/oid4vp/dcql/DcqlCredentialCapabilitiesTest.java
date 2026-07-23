@@ -48,10 +48,10 @@ class DcqlCredentialCapabilitiesTest {
 
         assertSame(
                 SdJwtDcqlCredentialCapability.class,
-                capabilities.require(VCFormat.SD_JWT_VC).getClass());
+                capabilities.resolve(VCFormat.SD_JWT_VC).getClass());
         assertSame(
                 MdocDcqlCredentialCapability.class,
-                capabilities.require("mso_mdoc").getClass());
+                capabilities.resolve("mso_mdoc").getClass());
     }
 
     @Test
@@ -69,7 +69,7 @@ class DcqlCredentialCapabilitiesTest {
         DcqlCredentialCapabilities capabilities = DcqlCredentialCapabilities.createDefault();
 
         IllegalArgumentException error =
-                assertThrows(IllegalArgumentException.class, () -> capabilities.require("jwt_vc_json"));
+                assertThrows(IllegalArgumentException.class, () -> capabilities.resolve("jwt_vc_json"));
 
         assertEquals("No DCQL credential capability for format: jwt_vc_json", error.getMessage());
     }
@@ -78,7 +78,7 @@ class DcqlCredentialCapabilitiesTest {
     void reportsPresentationPreValidationSupportPerCapability() {
         DcqlCredentialCapabilities capabilities = DcqlCredentialCapabilities.createDefault();
 
-        assertTrue(capabilities.require(VCFormat.SD_JWT_VC).supportsPresentationPreValidation());
-        assertFalse(capabilities.require("mso_mdoc").supportsPresentationPreValidation());
+        assertTrue(capabilities.resolve(VCFormat.SD_JWT_VC).supportsPresentationPreValidation());
+        assertFalse(capabilities.resolve("mso_mdoc").supportsPresentationPreValidation());
     }
 }

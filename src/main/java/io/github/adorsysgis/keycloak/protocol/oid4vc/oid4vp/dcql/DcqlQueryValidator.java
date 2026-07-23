@@ -48,7 +48,7 @@ public final class DcqlQueryValidator {
 
         validateClaimsAndClaimSets(credential);
         validateClaimPaths(credential);
-        capabilities.require(credential.getFormat()).validateCredentialQuery(credential);
+        capabilities.resolve(credential.getFormat()).validateCredentialQuery(credential);
     }
 
     private static void validateDcqlId(String id, String label) {

@@ -8,9 +8,7 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.sdjwt.SdJwtUtils;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 
-/**
- * Resolves DCQL claim paths for presentation validation (VC root, not VP wrapper).
- */
+/** Resolves DCQL claim paths against the presented credential payload. */
 public final class ClaimPathResolver {
 
     private ClaimPathResolver() {}
