@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.CborUtil;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
@@ -153,6 +154,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
 
     /** Builds an ObjectNode from DeviceSigned.nameSpaces for TransactionDataValidator.
      *  Returns null when transaction_data_hashes is absent.
+     *  Checks that the namespace is authorized in the MSO's KeyAuthorizations per ISO 18013-5.
      */
     private static ObjectNode extractTransactionDataHashes(MdocVerificationContext verificationContext)
             throws VerificationException {
@@ -163,24 +165,21 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             throw new VerificationException("DeviceSigned.nameSpaces is not a valid CBOR map");
         }
 
+        // First pass: find the namespace containing transaction_data_hashes
         ArrayNode hashes = null;
-        String hashesAlg = null;
+        String hashesNamespace = null;
 
         for (CBORPair nsPair : nsMap.getPairs()) {
             if (nsPair == null || !(nsPair.getValue() instanceof CBORPairList itemsMap)) {
                 continue;
             }
-            // DeviceSignedItems stores element identifiers as map keys directly
             var hashesPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM);
             if (hashesPair != null) {
-                if (hashes != null) {
+                if (hashesNamespace != null) {
                     throw new VerificationException("transaction_data_hashes must not appear in multiple namespaces");
                 }
                 hashes = extractHashesArray(hashesPair.getValue());
-            }
-            var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
-            if (algPair != null && algPair.getValue() instanceof CBORString algStr) {
-                hashesAlg = algStr.getValue();
+                hashesNamespace = CborUtil.asString(nsPair.getKey());
             }
         }
 
@@ -188,12 +187,72 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             return null;
         }
 
+        // Second pass: read alg only from the hashes namespace; reject alg in other namespaces
+        String hashesAlg = null;
+
+        for (CBORPair nsPair : nsMap.getPairs()) {
+            if (nsPair == null || !(nsPair.getValue() instanceof CBORPairList itemsMap)) {
+                continue;
+            }
+            String nsName = CborUtil.asString(nsPair.getKey());
+            var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
+            if (algPair == null) {
+                continue;
+            }
+            if (!nsName.equals(hashesNamespace)) {
+                throw new VerificationException(
+                        "transaction_data_hashes_alg must not appear outside the namespace containing transaction_data_hashes");
+            }
+            hashesAlg = extractAlgString(algPair.getValue());
+        }
+
+        // Verify the namespace is authorized in the MSO's KeyAuthorizations
+        verifyNamespaceIsAuthorized(verificationContext.getVerifiedMsoPayload(), hashesNamespace);
+
         ObjectNode result = JsonSerialization.mapper.createObjectNode();
         result.set(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM, hashes);
         if (hashesAlg != null) {
             result.put(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM, hashesAlg);
         }
         return result;
+    }
+
+    private static String extractAlgString(CBORItem value) throws VerificationException {
+        if (value instanceof CBORString s) {
+            return s.getValue();
+        }
+        if (value instanceof CBORItemList list
+                && list.getItems().size() == 1
+                && list.getItems().get(0) instanceof CBORString s) {
+            return s.getValue();
+        }
+        throw new VerificationException("transaction_data_hashes_alg must be a string");
+    }
+
+    private static void verifyNamespaceIsAuthorized(JsonNode mso, String namespace) throws VerificationException {
+        JsonNode dki = mso.get(MdocConstants.L_DEVICE_KEY_INFO);
+        if (dki == null) {
+            throw new VerificationException("MSO is missing deviceKeyInfo");
+        }
+        JsonNode keyAuth = dki.get("keyAuthorizations");
+        if (keyAuth == null) {
+            throw new VerificationException("MSO deviceKeyInfo is missing keyAuthorizations");
+        }
+        JsonNode authorizedNs = keyAuth.get("nameSpaces");
+        if (authorizedNs == null || !authorizedNs.isArray()) {
+            throw new VerificationException("MSO keyAuthorizations is missing authorized nameSpaces");
+        }
+        boolean authorized = false;
+        for (JsonNode ns : authorizedNs) {
+            if (ns.asText().equals(namespace)) {
+                authorized = true;
+                break;
+            }
+        }
+        if (!authorized) {
+            throw new VerificationException(
+                    "Namespace '" + namespace + "' is not authorized for transaction_data_hashes in the MSO");
+        }
     }
 
     // Converts a CBOR array of strings (or a single string) to a JSON ArrayNode.

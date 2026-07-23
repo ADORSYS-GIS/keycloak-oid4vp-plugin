@@ -13,6 +13,7 @@ import com.authlete.mdoc.DeviceSignedItemsEntry;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
@@ -25,8 +26,8 @@ import org.keycloak.util.JsonSerialization;
 
 class MdocCredentialVerifierTransactionDataTest {
 
-    private static final String DOC_TYPE = "com.example.doctype";
     private static final String NAMESPACE = "com.example.namespace1";
+    private static final String DOC_TYPE = "com.example.doctype";
 
     @Test
     void acceptsMatchingTransactionData() throws Exception {
@@ -34,7 +35,11 @@ class MdocCredentialVerifierTransactionDataTest {
         String hash = hashForWire(wire);
 
         String mdoc = buildMdocWithTransactionData(hash);
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
@@ -45,11 +50,10 @@ class MdocCredentialVerifierTransactionDataTest {
     void rejectsTransactionData_WhenHashEntryIsNotString() throws Exception {
         String wire = wireEntry("payment");
         String hash = hashForWire(wire);
-        // Build mDoc with a non-string item (integer 42) in the hashes array
         DeviceSignedItemsEntry txDataEntry =
                 new DeviceSignedItemsEntry("transaction_data_hashes", List.<Object>of(hash, 42));
         DeviceSignedItems items = new DeviceSignedItems(List.of(txDataEntry));
-        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(DOC_TYPE, items);
+        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(NAMESPACE, items);
         DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(nsEntry));
 
         MdocVerificationOpts opts =
@@ -58,7 +62,45 @@ class MdocCredentialVerifierTransactionDataTest {
                         opts, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces)
                 .encodeToBase64Url();
 
+        MdocVerificationOpts verifyOpts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                verifyOpts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
+        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+
+        MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertThrows(
+                VerificationException.class, () -> handler.validateTransactionData(authSession, verificationContext));
+    }
+
+    @Test
+    void rejectsTransactionData_WhenAlgInDifferentNamespaceThanHashes() throws Exception {
+        String wire = wireEntry("payment");
+        String hash = hashForWire(wire);
+
+        // Namespace A has alg but no hashes, namespace B has hashes but no alg
+        DeviceSignedItemsEntry algEntry = new DeviceSignedItemsEntry("transaction_data_hashes_alg", List.of("sha-256"));
+        DeviceSignedItems algItems = new DeviceSignedItems(List.of(algEntry));
+        DeviceNameSpacesEntry algNsEntry = new DeviceNameSpacesEntry("alg-ns", algItems);
+
+        DeviceSignedItemsEntry hashEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
+        DeviceSignedItems hashItems = new DeviceSignedItems(List.of(hashEntry));
+        DeviceNameSpacesEntry hashNsEntry = new DeviceNameSpacesEntry(NAMESPACE, hashItems);
+
+        DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(algNsEntry, hashNsEntry));
+
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
+        String mdoc = MdocBaseTest.buildDeviceResponse(
+                        opts, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces)
+                .encodeToBase64Url();
+
+        MdocVerificationOpts verifyOpts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
+        MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                verifyOpts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
@@ -71,7 +113,6 @@ class MdocCredentialVerifierTransactionDataTest {
         String wire = wireEntry("payment");
         String hash = hashForWire(wire);
 
-        // Create two namespace entries both containing transaction_data_hashes
         DeviceSignedItemsEntry txEntry1 = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
         DeviceSignedItems items1 = new DeviceSignedItems(List.of(txEntry1));
         DeviceNameSpacesEntry nsEntry1 = new DeviceNameSpacesEntry("ns1", items1);
@@ -88,7 +129,11 @@ class MdocCredentialVerifierTransactionDataTest {
                         opts, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, deviceNameSpaces)
                 .encodeToBase64Url();
 
+        MdocVerificationOpts verifyOpts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                verifyOpts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
@@ -101,7 +146,11 @@ class MdocCredentialVerifierTransactionDataTest {
         String wire = wireEntry("payment");
         String mdoc = buildMdocWithTransactionData("different-hash");
 
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
@@ -112,13 +161,14 @@ class MdocCredentialVerifierTransactionDataTest {
     @Test
     void rejectsMissingTransactionDataHashes() throws Exception {
         String wire = wireEntry("payment");
-        // Build mDoc with empty device namespaces (no transaction_data_hashes)
         MdocVerificationOpts opts =
                 MdocBaseTest.getDefaultMdocVerificationOpts().build();
         String mdoc = MdocBaseTest.buildDeviceResponse(opts, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE)
                 .encodeToBase64Url();
 
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
@@ -128,7 +178,6 @@ class MdocCredentialVerifierTransactionDataTest {
 
     @Test
     void rejectsTransactionData_WhenRequestExpectsAlgButMdocHasNone() throws Exception {
-        // Request specifies transaction_data_hashes_alg: ["sha-256"]
         var tx = JsonSerialization.mapper.createObjectNode();
         tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
         tx.putArray(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
@@ -141,7 +190,11 @@ class MdocCredentialVerifierTransactionDataTest {
         // mDoc has transaction_data_hashes but no transaction_data_hashes_alg
         String mdoc = buildMdocWithTransactionData(hash);
 
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
@@ -157,6 +210,8 @@ class MdocCredentialVerifierTransactionDataTest {
                 .encodeToBase64Url();
 
         MdocVerificationContext verificationContext = new MdocVerificationContext(mdoc);
+        verificationContext.verifyPresentation(
+                opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
         AuthenticationSessionModel authSession = mock(AuthenticationSessionModel.class);
         when(authSession.getAuthNote(OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY))
                 .thenReturn(null);
@@ -172,11 +227,11 @@ class MdocCredentialVerifierTransactionDataTest {
         return authSession;
     }
 
-    // Builds an mDoc with transaction_data_hashes in its device namespaces.
+    // Builds an mDoc with transaction_data_hashes in the authorized namespace.
     private static String buildMdocWithTransactionData(String hash) throws Exception {
         DeviceSignedItemsEntry txDataEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
         DeviceSignedItems items = new DeviceSignedItems(List.of(txDataEntry));
-        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(DOC_TYPE, items);
+        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(NAMESPACE, items);
         DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(nsEntry));
 
         MdocVerificationOpts opts =

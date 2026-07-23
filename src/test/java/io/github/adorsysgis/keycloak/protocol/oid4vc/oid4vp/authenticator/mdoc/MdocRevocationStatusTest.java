@@ -27,6 +27,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
@@ -160,10 +161,10 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         String hash = TransactionDataSupport.base64UrlEncodeHash(
                 TransactionDataSupport.hashWireString(wire, TransactionDataSupport.DEFAULT_HASH_ALG));
 
-        // Build mDoc with matching transaction_data_hashes in DeviceSigned
+        // Build mDoc with matching transaction_data_hashes in the authorized namespace
         DeviceSignedItemsEntry txEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
         DeviceSignedItems items = new DeviceSignedItems(List.of(txEntry));
-        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(DOC_TYPE, items);
+        DeviceNameSpacesEntry nsEntry = new DeviceNameSpacesEntry(NAMESPACE, items);
         DeviceNameSpaces deviceNameSpaces = new DeviceNameSpaces(List.of(nsEntry));
 
         // Setup auth config with revocation enabled
@@ -188,6 +189,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
         var credential = new CredentialRequirement()
                 .setId("test")
+                .setRole(CredentialRole.PRIMARY)
                 .setCredentialTypes(List.of(DOC_TYPE))
                 .setTrust(List.of(new TrustPolicy().setType(TrustPolicy.X5C).setAnchors(List.of(getIssuerCertRef1()))));
 
@@ -219,6 +221,23 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                 VerificationException.class,
                 () -> verifier.verifyCredential(context, authCtx, credential, revokedMdoc, false));
         assertTrue(exception.getMessage().contains("Token status verification failed"));
+
+        // Build mDoc with matching hashes but unauthorized namespace (DOC_TYPE not in KeyAuthorizations)
+        DeviceSignedItemsEntry unauthorizedTxEntry =
+                new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
+        DeviceSignedItems unauthorizedItems = new DeviceSignedItems(List.of(unauthorizedTxEntry));
+        DeviceNameSpacesEntry unauthorizedNsEntry = new DeviceNameSpacesEntry(DOC_TYPE, unauthorizedItems);
+        DeviceNameSpaces unauthorizedNameSpaces = new DeviceNameSpaces(List.of(unauthorizedNsEntry));
+
+        DeviceResponse unauthorizedDr = buildDeviceResponse(
+                optsFromRequest, Map.of(NAMESPACE, Map.of("c", "v")), DOC_TYPE, unauthorizedNameSpaces);
+        DeviceResponse unauthorizedWithStatus = withModifiedMso(unauthorizedDr, mso -> getCborPairList(1, mso));
+        String unauthorizedMdoc = unauthorizedWithStatus.encodeToBase64Url();
+
+        VerificationException unauthorizedException = assertThrows(
+                VerificationException.class,
+                () -> verifier.verifyCredential(context, authCtx, credential, unauthorizedMdoc, false));
+        assertTrue(unauthorizedException.getMessage().contains("not authorized"));
     }
 
     private String buildMdocWithStatus(int idx) throws Exception {
