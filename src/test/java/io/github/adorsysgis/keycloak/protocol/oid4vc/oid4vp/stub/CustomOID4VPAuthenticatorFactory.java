@@ -38,7 +38,7 @@ public class CustomOID4VPAuthenticatorFactory extends OID4VPAuthenticatorFactory
         Map<String, CredentialVerifier> handlers = new LinkedHashMap<>();
         StatusListJwtFetcher httpFetcher = new MockTrustedStatusListJwtFetcher(session);
         handlers.put(CredentialFormat.SD_JWT_VC.getValue(), new SdJwtCredentialVerifier(httpFetcher));
-        handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier());
+        handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier(httpFetcher));
         return new OID4VPAuthenticator(handlers);
     }
 

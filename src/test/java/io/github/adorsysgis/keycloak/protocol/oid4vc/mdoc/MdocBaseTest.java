@@ -6,6 +6,7 @@ import com.authlete.cbor.CBORByteArray;
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORNull;
+import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
 import com.authlete.cbor.CBORTaggedItem;
 import com.authlete.cose.COSEEC2Key;
@@ -44,8 +45,11 @@ import com.authlete.mdoc.ValueDigestsEntry;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc.MdocCredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -56,6 +60,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.bouncycastle.util.encoders.Hex;
 import org.keycloak.crypto.JavaAlgorithm;
@@ -402,6 +407,35 @@ public class MdocBaseTest {
         return (Document) documents.getItems().getFirst();
     }
 
+    /**
+     * Returns a new {@link DeviceResponse} whose MSO has been replaced by applying
+     * {@code msoCustomizer} to the original MSO payload and re-signing it. The device
+     * signature and namespaces are carried over unchanged.
+     */
+    protected static DeviceResponse withModifiedMso(DeviceResponse dr, UnaryOperator<CBORPairList> msoCustomizer)
+            throws Exception {
+        Document doc = extractDocument(dr);
+        IssuerSigned issuerSigned =
+                (IssuerSigned) doc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
+        CBORItemList issuerAuthList = (CBORItemList)
+                issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue();
+        CBORPairList originalMso =
+                (CBORPairList) CborUtil.unwrap(COSESign1.build(issuerAuthList).getPayload());
+
+        CBORPairList modifiedMso = msoCustomizer.apply(originalMso);
+        COSESign1 newIssuerAuth = signRawCbor(modifiedMso, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
+        IssuerSigned newIssuerSigned = new IssuerSigned(
+                (IssuerNameSpaces)
+                        issuerSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue(),
+                newIssuerAuth);
+
+        return new DeviceResponse(List.of(new Document(
+                DOC_TYPE,
+                newIssuerSigned,
+                (DeviceSigned) doc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue(),
+                null)));
+    }
+
     protected static ValueDigests extractValueDigests(MobileSecurityObject mso) {
         return (ValueDigests) mso.findByKey(MdocConstants.L_VALUE_DIGESTS).getValue();
     }
@@ -514,6 +548,35 @@ public class MdocBaseTest {
                 .ec2YInBase64Url("nZDEU7-G2Ij3gNA2I5Y8ngAf7r-vGeBeI9p9bj8glFc")
                 .ec2DInBase64Url("6hgQOsgeFUXDmEA8wsxslFSqYF5EoJ858ebE29HdV5w")
                 .buildEC2Key();
+    }
+
+    public static COSESign1 signRawCbor(CBORPairList mso, COSEEC2Key issuerKey, List<X509Certificate> x5chain)
+            throws IOException, COSEException, CertificateEncodingException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        mso.encode(baos);
+        byte[] msoBytes = baos.toByteArray();
+        CBORTaggedItem wrapped = CborUtil.wrap(msoBytes);
+
+        COSEProtectedHeaderBuilder protectedBuilder = new COSEProtectedHeaderBuilder().alg(COSEAlgorithms.ES256);
+        COSEUnprotectedHeader unprotectedHeader = (x5chain == null || x5chain.isEmpty())
+                ? null
+                : new COSEUnprotectedHeaderBuilder().x5chain(x5chain).build();
+
+        var sigStructure = new SigStructureBuilder()
+                .signature1()
+                .bodyAttributes(protectedBuilder.build())
+                .payload(wrapped.encode())
+                .build();
+        byte[] signature = new COSESigner(issuerKey.toECPrivateKey()).sign(sigStructure, COSEAlgorithms.ES256);
+
+        var builder = new COSESign1Builder()
+                .protectedHeader(protectedBuilder.build())
+                .payload(new CBORByteArray(wrapped.encode()))
+                .signature(signature);
+        if (unprotectedHeader != null) {
+            builder.unprotectedHeader(unprotectedHeader);
+        }
+        return builder.build();
     }
 
     public static X509Certificate toCert(String cert) {

@@ -13,9 +13,11 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Base64Url;
@@ -32,7 +34,11 @@ import org.keycloak.util.JWKSUtils;
  */
 public class MdocCredentialVerifier implements CredentialVerifier {
 
-    private static final Logger logger = Logger.getLogger(MdocCredentialVerifier.class);
+    private final ReferencedTokenValidator tokenStatusValidator;
+
+    public MdocCredentialVerifier(StatusListJwtFetcher statusListJwtFetcher) {
+        this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
+    }
 
     @Override
     public CredentialFormat format() {
@@ -70,13 +76,24 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             authReqs.getPresentationRequirements().checkIfSatisfiedBy(payload);
         };
 
-        // TODO: Implement revocation status check for mDoc credentials
-        if (authReqs.shouldEnforceRevocationStatus()) {
-            throw new VerificationException(
-                    "Revocation status enforcement is not yet implemented for mso_mdoc credentials");
-        }
+        MdocVerificationContext verificationContext = new MdocVerificationContext(token);
+        verificationContext.verifyPresentation(opts, requirements, truststore);
 
-        new MdocVerificationContext(token).verifyPresentation(opts, requirements, truststore);
+        if (authReqs.shouldEnforceRevocationStatus()) {
+            try {
+                // Status is stored in the MSO payload per IETF Token Status List §Referenced Token
+                // (https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-11.html#name-referenced-token-in-cose)
+                // and MATTR docs
+                // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
+                tokenStatusValidator.validate(verificationContext.getVerifiedMsoPayload());
+            } catch (ReferencedTokenValidationException e) {
+                throw new VerificationException(
+                        String.format(
+                                "Token status verification failed for credential to requirement '%s'",
+                                credential.getId()),
+                        e);
+            }
+        }
 
         return payloadRef.get().get(L_NAME_SPACES);
     }

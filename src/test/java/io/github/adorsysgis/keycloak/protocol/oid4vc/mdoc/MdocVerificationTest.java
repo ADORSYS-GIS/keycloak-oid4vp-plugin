@@ -69,6 +69,22 @@ public class MdocVerificationTest extends MdocBaseTest {
     }
 
     @Test
+    public void shouldExtractMsoAsJson() throws Exception {
+        MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
+        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
+        var ctx = new MdocVerificationContext(mdoc);
+        ctx.verifyPresentation(opts, null, new TestTruststoreProvider(getIssuerCertRef1()));
+        JsonNode mso = ctx.getVerifiedMsoPayload();
+
+        assertNotNull(mso);
+        assertEquals("1.0", mso.get("version").asText());
+        assertEquals("SHA-256", mso.get("digestAlgorithm").asText());
+        assertNotNull(mso.get("valueDigests"));
+        assertNotNull(mso.get("deviceKeyInfo"));
+        assertNotNull(mso.get("validityInfo"));
+    }
+
+    @Test
     public void shouldFail_OnExpiredResponses() throws Exception {
         MdocVerificationOpts opts = getDefaultMdocVerificationOpts().build();
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
