@@ -202,6 +202,34 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldAcceptTransactionDataWithMdocPrimaryCredential() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "default",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["com.example.doctype"],
+                        "claims": ["com.example.namespace1/sub", "com.example.namespace1/username"],
+                        "trust": [{ "type": "x5c", "anchors": ["%s"] }]
+                      }
+                    ]
+                  }
+                ]
+                """.formatted(MdocBaseTest.getIssuerCertBase64()));
+        configMap.put(TRANSACTION_DATA_CONFIG, "{\"type\":\"qrat\",\"credential_ids\":[\"primary\"]}");
+
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(configMap);
+
+        assertDoesNotThrow(() -> new VerifierConfig(config));
+    }
+
+    @Test
     void shouldRejectCredentialIdentityPrimaryWithoutSubAndUsername() {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """
@@ -278,35 +306,6 @@ public class OID4VPProfileConfigTest {
         assertEquals(
                 "OpenID4VP session-identity primary credential must define binding rules: stb-issuance/pid",
                 error.getMessage());
-    }
-
-    @Test
-    void shouldRejectTransactionDataWhenPrimaryCredentialIsMdoc() {
-        Map<String, String> configMap = new HashMap<>();
-        configMap.put(PROFILES_CONFIG, """
-                [
-                  {
-                    "id": "default",
-                    "credentials": [
-                      {
-                        "id": "primary",
-                        "role": "primary",
-                        "format": "mso_mdoc",
-                        "credentialTypes": ["com.example.doctype"],
-                        "claims": ["com.example.namespace1/sub", "com.example.namespace1/username"],
-                        "trust": [{ "type": "x5c", "anchors": ["%s"] }]
-                      }
-                    ]
-                  }
-                ]
-                """.formatted(MdocBaseTest.getIssuerCertBase64()));
-        configMap.put(TRANSACTION_DATA_CONFIG, "{\"type\":\"qrat\",\"credential_ids\":[\"primary\"]}");
-
-        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
-        config.setConfig(configMap);
-
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new VerifierConfig(config));
-        assertEquals("transactionData is not yet supported for mso_mdoc primary credentials", error.getMessage());
     }
 
     // ---- Binding rule validation -------------------------------------------
