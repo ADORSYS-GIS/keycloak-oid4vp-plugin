@@ -60,6 +60,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.bouncycastle.util.encoders.Hex;
 import org.keycloak.crypto.JavaAlgorithm;
@@ -404,6 +405,35 @@ public class MdocBaseTest {
         CBORItemList documents =
                 (CBORItemList) dr.findByKey(MdocConstants.L_DOCUMENTS).getValue();
         return (Document) documents.getItems().getFirst();
+    }
+
+    /**
+     * Returns a new {@link DeviceResponse} whose MSO has been replaced by applying
+     * {@code msoCustomizer} to the original MSO payload and re-signing it. The device
+     * signature and namespaces are carried over unchanged.
+     */
+    protected static DeviceResponse withModifiedMso(DeviceResponse dr, UnaryOperator<CBORPairList> msoCustomizer)
+            throws Exception {
+        Document doc = extractDocument(dr);
+        IssuerSigned issuerSigned =
+                (IssuerSigned) doc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
+        CBORItemList issuerAuthList = (CBORItemList)
+                issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue();
+        CBORPairList originalMso =
+                (CBORPairList) CborUtil.unwrap(COSESign1.build(issuerAuthList).getPayload());
+
+        CBORPairList modifiedMso = msoCustomizer.apply(originalMso);
+        COSESign1 newIssuerAuth = signRawCbor(modifiedMso, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
+        IssuerSigned newIssuerSigned = new IssuerSigned(
+                (IssuerNameSpaces)
+                        issuerSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue(),
+                newIssuerAuth);
+
+        return new DeviceResponse(List.of(new Document(
+                DOC_TYPE,
+                newIssuerSigned,
+                (DeviceSigned) doc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue(),
+                null)));
     }
 
     protected static ValueDigests extractValueDigests(MobileSecurityObject mso) {

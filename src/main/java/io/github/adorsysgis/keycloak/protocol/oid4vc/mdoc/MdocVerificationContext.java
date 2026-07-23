@@ -83,8 +83,8 @@ public class MdocVerificationContext {
 
         // Verify device key binding
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
-        storeVerifiedMsoPayload(mso);
         verifyDeviceKeyBinding(document, mso, opts);
+        storeVerifiedMsoPayload(mso);
 
         // Verify that presented claims are protected by digests in MSO
         CBORPairList namespaces = extractNamespaces(document);
@@ -392,10 +392,6 @@ public class MdocVerificationContext {
         }
     }
 
-    /**
-     * @see <a href="https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check#how-status-information-is-stored">
-     * MATTR docs — status information in the MSO</a>
-     */
     public JsonNode getVerifiedMsoPayload() {
         return verifiedMsoPayload;
     }

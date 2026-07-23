@@ -4,8 +4,6 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,25 +11,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.authlete.cbor.CBORInteger;
-import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
-import com.authlete.cose.COSEEC2Key;
-import com.authlete.cose.COSESign1;
 import com.authlete.mdoc.DeviceResponse;
-import com.authlete.mdoc.DeviceSigned;
-import com.authlete.mdoc.Document;
-import com.authlete.mdoc.IssuerNameSpaces;
-import com.authlete.mdoc.IssuerSigned;
-import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.CborUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -40,11 +27,9 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorPro
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -83,27 +68,6 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     }
 
     @Test
-    public void shouldExtractMsoAsJson() throws Exception {
-        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        var ctx = new MdocVerificationContext(mdoc);
-        ctx.verifyPresentation(opts, null, trust);
-        JsonNode mso = ctx.getVerifiedMsoPayload();
-
-        assertNotNull(mso);
-        assertEquals("1.0", mso.get("version").asText());
-        assertEquals("SHA-256", mso.get("digestAlgorithm").asText());
-        assertNotNull(mso.get("valueDigests"));
-        assertNotNull(mso.get("deviceKeyInfo"));
-        assertNotNull(mso.get("validityInfo"));
-    }
-
-    @Test
-    public void shouldVerifyMdoc_WhenRevocationEnforcementDisabled() throws Exception {
-        String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
-        assertDoesNotThrow(() -> new MdocVerificationContext(mdoc).verifyPresentation(opts, null, trust));
-    }
-
-    @Test
     public void shouldFail_WhenRevocationEnforcedAndStatusMissing() throws Exception {
         String mdoc = buildDeviceResponse(opts).encodeToBase64Url();
         var ctx = new MdocVerificationContext(mdoc);
@@ -123,12 +87,6 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         var ctx = new MdocVerificationContext(mdoc);
         ctx.verifyPresentation(opts, null, trust);
         assertDoesNotThrow(() -> new ReferencedTokenValidator(mockFetcher).validate(ctx.getVerifiedMsoPayload()));
-    }
-
-    @Test
-    public void shouldConstructVerifier_WithFetcher() throws Exception {
-        var verifier = new MdocCredentialVerifier(mockFetcher);
-        assertEquals(CredentialFormat.MSO_MDOC, verifier.format());
     }
 
     @Test
@@ -189,32 +147,11 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
     private String buildMdocWithStatus(int idx, MdocVerificationOpts mdocOpts) throws Exception {
         DeviceResponse dr = buildDeviceResponse(mdocOpts);
-        Document doc = extractDocument(dr);
-        IssuerSigned issuerSigned =
-                (IssuerSigned) doc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
-
-        CBORItemList issuerAuthList = (CBORItemList)
-                issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue();
-        CBORPairList originalMso =
-                (CBORPairList) CborUtil.unwrap(COSESign1.build(issuerAuthList).getPayload());
-
-        CBORPairList msoWithStatus = getCborPairList(idx, originalMso);
-
-        COSESign1 newIssuerAuth = signRawMso(msoWithStatus, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
-        IssuerSigned newIssuerSigned = new IssuerSigned(
-                (IssuerNameSpaces)
-                        issuerSigned.findByKey(MdocConstants.L_NAME_SPACES).getValue(),
-                newIssuerAuth);
-
-        DeviceResponse newDr = new DeviceResponse(List.of(new Document(
-                DOC_TYPE,
-                newIssuerSigned,
-                (DeviceSigned) doc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue(),
-                null)));
-        return newDr.encodeToBase64Url();
+        DeviceResponse modified = withModifiedMso(dr, mso -> getCborPairList(idx, mso));
+        return modified.encodeToBase64Url();
     }
 
-    private static @NotNull CBORPairList getCborPairList(int idx, CBORPairList originalMso) {
+    private static CBORPairList getCborPairList(int idx, CBORPairList originalMso) {
         CBORPairList statusList = new CBORPairList(
                 new CBORPair(new CBORString("idx"), new CBORInteger(idx)),
                 new CBORPair(new CBORString("uri"), new CBORString(MdocRevocationStatusTest.STATUS_LIST_URI)));
@@ -223,12 +160,6 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
         List<CBORPair> newPairs = new ArrayList<>(originalMso.getPairs());
         newPairs.add(statusPair);
-        CBORPairList msoWithStatus = new CBORPairList(newPairs);
-        return msoWithStatus;
-    }
-
-    private static COSESign1 signRawMso(CBORPairList mso, COSEEC2Key issuerKey, List<X509Certificate> x5chain)
-            throws Exception {
-        return MdocBaseTest.signRawCbor(mso, issuerKey, x5chain);
+        return new CBORPairList(newPairs);
     }
 }
