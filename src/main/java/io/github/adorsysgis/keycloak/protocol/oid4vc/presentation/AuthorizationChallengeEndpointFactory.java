@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider;
 import org.keycloak.Config;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakContext;
@@ -26,6 +27,9 @@ public class AuthorizationChallengeEndpointFactory implements RealmResourceProvi
     public RealmResourceProvider create(KeycloakSession session) {
         KeycloakContext context = session.getContext();
         RealmModel realm = context.getRealm();
+        if (!Boolean.parseBoolean(realm.getAttribute(OID4VCIssuerMetadataProvider.ATTR_PRESENTATION_DURING_ISSUANCE))) {
+            return null;
+        }
         EventBuilder event = new EventBuilder(realm, session, context.getConnection());
         return new AuthorizationChallengeEndpoint(session, event);
     }

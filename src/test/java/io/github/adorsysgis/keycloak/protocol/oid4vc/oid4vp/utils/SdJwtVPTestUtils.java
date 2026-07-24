@@ -180,27 +180,8 @@ public class SdJwtVPTestUtils {
      */
     private static IssuerSignedJWT examplePidSdJwtCredential(
             String iss, String vct, String givenName, String familyName, String birthDate) {
-        Objects.requireNonNull(iss);
-        Objects.requireNonNull(vct);
-
-        ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
-        claimSet.put(OAuth2Constants.ISSUER, iss);
-        claimSet.put(CLAIM_NAME_VCT, vct);
-        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
-
-        claimSet.set(
-                STATUS_FIELD,
-                JsonSerialization.mapper.valueToTree(Map.of(
-                        STATUS_LIST_FIELD,
-                        new ReferencedTokenValidator.StatusInfo(0, "https://example.com/status-list-jwt"))));
-
-        // Bind credential to the holder wallet key (cnf)
-        JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
-        ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
-        cnf.set(CLAIM_NAME_JWK, JsonSerialization.mapper.valueToTree(jwk));
-        claimSet.set(CLAIM_NAME_CNF, cnf);
-
-        DisclosureSpec.Builder disclosure = DisclosureSpec.builder().withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
+        ObjectNode claimSet = baseCredentialClaims(iss, vct, true);
+        DisclosureSpec.Builder disclosure = baseDisclosure();
 
         claimSet.put("given_name", givenName);
         disclosure = disclosure.withUndisclosedClaim("given_name", "AJx-095VPrpTtN4QMOqROA");
@@ -227,33 +208,11 @@ public class SdJwtVPTestUtils {
      */
     private static IssuerSignedJWT exampleSdJwtCredential(
             String iss, String vct, String subject, String username, boolean setStatusClaim) {
-        Objects.requireNonNull(iss);
-        Objects.requireNonNull(vct);
-
-        ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
-        claimSet.put(OAuth2Constants.ISSUER, iss);
+        ObjectNode claimSet = baseCredentialClaims(iss, vct, setStatusClaim);
         if (subject != null) {
             claimSet.put(JsonWebToken.SUBJECT, subject);
         }
-        claimSet.put(CLAIM_NAME_VCT, vct);
-        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
-
-        // Add status list claim (Token Status List)
-        if (setStatusClaim) {
-            claimSet.set(
-                    STATUS_FIELD,
-                    JsonSerialization.mapper.valueToTree(Map.of(
-                            STATUS_LIST_FIELD,
-                            new ReferencedTokenValidator.StatusInfo(0, "https://example.com/status-list-jwt"))));
-        }
-
-        DisclosureSpec.Builder disclosure = DisclosureSpec.builder().withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
-
-        // Bind credential to user
-        JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
-        ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
-        cnf.set(CLAIM_NAME_JWK, JsonSerialization.mapper.valueToTree(jwk));
-        claimSet.set(CLAIM_NAME_CNF, cnf);
+        DisclosureSpec.Builder disclosure = baseDisclosure();
 
         if (username != null) {
             claimSet.put(OAuth2Constants.USERNAME, username);
@@ -263,6 +222,33 @@ public class SdJwtVPTestUtils {
         return IssuerSignedJWT.builder()
                 .withClaims(claimSet, disclosure.build())
                 .build();
+    }
+
+    private static ObjectNode baseCredentialClaims(String iss, String vct, boolean setStatusClaim) {
+        Objects.requireNonNull(iss);
+        Objects.requireNonNull(vct);
+
+        ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
+        claimSet.put(OAuth2Constants.ISSUER, iss);
+        claimSet.put(CLAIM_NAME_VCT, vct);
+        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
+        if (setStatusClaim) {
+            claimSet.set(
+                    STATUS_FIELD,
+                    JsonSerialization.mapper.valueToTree(Map.of(
+                            STATUS_LIST_FIELD,
+                            new ReferencedTokenValidator.StatusInfo(0, "https://example.com/status-list-jwt"))));
+        }
+
+        JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
+        ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
+        cnf.set(CLAIM_NAME_JWK, JsonSerialization.mapper.valueToTree(jwk));
+        claimSet.set(CLAIM_NAME_CNF, cnf);
+        return claimSet;
+    }
+
+    private static DisclosureSpec.Builder baseDisclosure() {
+        return DisclosureSpec.builder().withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
     }
 
     /**

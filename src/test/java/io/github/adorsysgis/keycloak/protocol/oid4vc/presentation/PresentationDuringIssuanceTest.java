@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
@@ -18,7 +17,6 @@ import java.util.UUID;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -78,6 +76,8 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
      */
     private static final String OFFERED_CREDENTIAL_CONFIG_ID = "kma_credential";
 
+    private static final String IDENTITY_CREDENTIAL_CONFIG_ID = "identity_credential";
+
     /**
      * Registers the OID4VCI credential scope for the offered (KMA) credential at runtime via the Admin
      * API. This is done programmatically rather than in the realm import so the realm keeps Keycloak's
@@ -88,31 +88,44 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @BeforeAll
     static void ensureOfferedCredentialScope() {
         var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
-        boolean exists = realm.clientScopes().findAll().stream()
-                .anyMatch(scope -> OFFERED_CREDENTIAL_CONFIG_ID.equals(scope.getName()));
-        if (exists) {
-            return;
-        }
+        ensureCredentialScope(realm, IDENTITY_CREDENTIAL_CONFIG_ID, CREDENTIAL_TYPES_CONFIG_DEFAULT, "default", false);
+        ensureCredentialScope(
+                realm,
+                OFFERED_CREDENTIAL_CONFIG_ID,
+                "https://credentials.example.com/kma_credential",
+                STB_ISSUANCE_PROFILE_ID,
+                true);
+        grantOfferedCredentialToBrokeredUser();
+    }
 
-        ClientScopeRepresentation scope = new ClientScopeRepresentation();
-        scope.setName(OFFERED_CREDENTIAL_CONFIG_ID);
-        scope.setProtocol("oid4vc");
-        scope.setAttributes(Map.of(
-                "vc.credential_configuration_id", OFFERED_CREDENTIAL_CONFIG_ID,
-                "vc.verifiable_credential_type", "https://credentials.example.com/kma_credential",
-                "vc.format", "dc+sd-jwt",
-                "vc.presentation_profile_id", STB_ISSUANCE_PROFILE_ID,
-                "vc.requires_presentation", "true"));
+    private static void ensureCredentialScope(
+            org.keycloak.admin.client.resource.RealmResource realm,
+            String configurationId,
+            String credentialType,
+            String profileId,
+            boolean requiresPresentation) {
+        boolean exists =
+                realm.clientScopes().findAll().stream().anyMatch(scope -> configurationId.equals(scope.getName()));
+        if (!exists) {
+            ClientScopeRepresentation scope = new ClientScopeRepresentation();
+            scope.setName(configurationId);
+            scope.setProtocol("oid4vc");
+            scope.setAttributes(Map.of(
+                    "vc.credential_configuration_id", configurationId,
+                    "vc.verifiable_credential_type", credentialType,
+                    "vc.format", "dc+sd-jwt",
+                    "vc.presentation_profile_id", profileId,
+                    "vc.requires_presentation", Boolean.toString(requiresPresentation)));
 
-        try (Response response = realm.clientScopes().create(scope)) {
-            int status = response.getStatus();
-            if (status != HttpStatus.SC_CREATED && status != HttpStatus.SC_CONFLICT) {
-                throw new IllegalStateException("Failed to create offered credential scope: HTTP " + status);
+            try (Response response = realm.clientScopes().create(scope)) {
+                int status = response.getStatus();
+                if (status != HttpStatus.SC_CREATED && status != HttpStatus.SC_CONFLICT) {
+                    throw new IllegalStateException("Failed to create credential scope: HTTP " + status);
+                }
             }
         }
 
-        assignOfferedCredentialScopeToTestClient();
-        grantOfferedCredentialToBrokeredUser();
+        assignCredentialScopeToTestClient(realm, configurationId);
     }
 
     /**
@@ -121,13 +134,13 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
      * the credential configuration among the client's optional scopes ({@code client.getClientScopes(false)}),
      * so without this assignment the gate cannot see that the credential requires a presentation.
      */
-    private static void assignOfferedCredentialScopeToTestClient() {
-        var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
+    private static void assignCredentialScopeToTestClient(
+            org.keycloak.admin.client.resource.RealmResource realm, String configurationId) {
         String scopeId = realm.clientScopes().findAll().stream()
-                .filter(scope -> OFFERED_CREDENTIAL_CONFIG_ID.equals(scope.getName()))
+                .filter(scope -> configurationId.equals(scope.getName()))
                 .map(ClientScopeRepresentation::getId)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Offered credential scope not found for assignment"));
+                .orElseThrow(() -> new IllegalStateException("Credential scope not found for assignment"));
 
         var clients = realm.clients().findByClientId(TEST_CLIENT_ID);
         if (clients.isEmpty()) {
@@ -176,9 +189,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
         // No interaction_types_supported at all -> the server cannot fulfil the request (OID4VCI §6.2.2)
-        var response = postChallenge(List.of(
+        var response = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
                 new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)));
 
@@ -193,7 +206,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
-        var response = postChallenge(List.of(
+        var response = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
@@ -204,6 +217,28 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
         var error = parseHttpResponse(response, OAuth2ErrorRepresentation.class);
         assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
+        assertEquals("Either scope, authorization_details or issuer_state is required", error.getErrorDescription());
+    }
+
+    @Test
+    @DisplayName("should reject an issuer_state that does not reference server-side credential offer state")
+    void should_RejectChallenge_When_IssuerStateIsInvalid() throws Exception {
+        var codeVerifier = PkceUtils.generateCodeVerifier();
+        var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
+
+        var response = postAuthorizationChallenge(List.of(
+                new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
+                new BasicNameValuePair(OAuth2Constants.ISSUER_STATE, "attacker-controlled-value"),
+                new BasicNameValuePair(
+                        AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
+                        AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
+                new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)));
+
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+        var error = parseHttpResponse(response, OAuth2ErrorRepresentation.class);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
+        assertEquals("Invalid issuer_state", error.getErrorDescription());
     }
 
     @Test
@@ -251,6 +286,10 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
                 HttpStatus.SC_BAD_REQUEST, credentialResponse.getStatusLine().getStatusCode());
         var error = parseHttpResponse(credentialResponse, OAuth2ErrorRepresentation.class);
         assertEquals("invalid_credential_request", error.getError());
+        assertEquals(
+                "Credential 'kma_credential' requires a verified presentation during issuance "
+                        + "(OID4VCI Interactive Authorization).",
+                error.getErrorDescription());
     }
 
     @Test
@@ -261,9 +300,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
         // 1. Initiate -> 401 insufficient_authorization with the inline OpenID4VP request and an auth_session.
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -275,7 +314,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         assertNotNull(challenge.getOpenid4vpRequest());
 
         // 2. Cross-device poll before presenting (auth_session only) -> 401 re-challenge WITHOUT a fresh request.
-        var poll = postChallenge(List.of(
+        var poll = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession())));
         assertEquals(HttpStatus.SC_UNAUTHORIZED, poll.getStatusLine().getStatusCode());
         var pollBody = parseHttpResponse(poll, AuthorizationChallengeResponse.class);
@@ -284,19 +323,19 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
                 AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION,
                 pollBody.getInteractionTypeRequired());
         assertEquals(challenge.getAuthSession(), pollBody.getAuthSession());
-        // §6.2.1.4: no new nonce/request is emitted; the wallet keeps using the original inline request.
-        assertNull(pollBody.getOpenid4vpRequest());
+        // §6.2.1.4: the original request (and nonce) remains stable across polls.
+        assertEquals(challenge.getOpenid4vpRequest(), pollBody.getOpenid4vpRequest());
 
         // 3. Present, then poll again -> the completed challenge yields the authorization_code.
         var requestObjectJwt = challenge.getOpenid4vpRequest().get("request").asText();
         RequestObject requestObject = new JWSInput(requestObjectJwt).readJsonContent(RequestObject.class);
         var openid4vpResponse = buildOpenid4vpResponseJson(sdJwt, requestObject);
-        var submit = postChallenge(List.of(
+        var submit = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, openid4vpResponse)));
         assertEquals(HttpStatus.SC_OK, submit.getStatusLine().getStatusCode());
 
-        var finalPoll = postChallenge(List.of(
+        var finalPoll = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession())));
         assertEquals(HttpStatus.SC_OK, finalPoll.getStatusLine().getStatusCode());
         assertNotNull(parseHttpResponse(finalPoll, AuthorizationChallengeResponse.class)
@@ -310,9 +349,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
         // Start a real challenge to obtain a genuinely-formatted auth_session handle.
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -327,7 +366,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         // point the root segment at a session that no longer exists. The handle can no longer be resolved.
         String expiredAuthSession = UUID.randomUUID() + authSession.substring(authSession.indexOf('.'));
 
-        var resume = postChallenge(
+        var resume = postAuthorizationChallenge(
                 List.of(new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, expiredAuthSession)));
 
         // The wallet's poll after expiry is rejected with a defined error, not silently accepted.
@@ -344,9 +383,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
         // 1. Initiate challenge -> 401 insufficient_authorization with the signed OpenID4VP request
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -368,7 +407,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
 
         var openid4vpResponse = buildOpenid4vpResponseJson(sdJwt, requestObject);
 
-        var resume = postChallenge(List.of(
+        var resume = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, openid4vpResponse)));
 
@@ -384,9 +423,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -403,7 +442,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
                 "{\"error\":\"%s\",\"error_description\":\"User declined\",\"state\":\"%s\"}",
                 OAuthErrorException.ACCESS_DENIED, requestObject.getState());
 
-        var resume = postChallenge(List.of(
+        var resume = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, errorResponse)));
 
@@ -420,9 +459,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -437,7 +476,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         // Present with a Key Binding JWT audience that is NOT the expected verifier (forwarding attempt)
         var tamperedResponse = buildOpenid4vpResponseJson(sdJwt, requestObject, "https://attacker.example.com");
 
-        var resume = postChallenge(List.of(
+        var resume = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, tamperedResponse)));
 
@@ -451,9 +490,9 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -465,7 +504,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         // openid4vp_response with only a state value (no vp_token, response or error)
         var emptyResponse = "{\"state\":\"irrelevant\"}";
 
-        var resume = postChallenge(List.of(
+        var resume = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, emptyResponse)));
 
@@ -482,9 +521,8 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
-        var initiate = postChallenge(List.of(
+        var initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(AuthorizationChallengeEndpoint.PROFILE_ID_PARAM, STB_ISSUANCE_PROFILE_ID),
                 new BasicNameValuePair(OAuth2Constants.ISSUER_STATE, issuerState),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
@@ -508,7 +546,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         RequestObject requestObject = new JWSInput(requestObjectJwt).readJsonContent(RequestObject.class);
         var openid4vpResponse = buildOpenid4vpResponseJson(pidSdJwt, requestObject);
 
-        return postChallenge(List.of(
+        return postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.getAuthSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, openid4vpResponse)));
     }
@@ -590,14 +628,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         params.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, PreAuthorizedCodeGrant.PRE_AUTH_GRANT_TYPE));
         params.add(new BasicNameValuePair(PreAuthorizedCodeGrant.CODE_REQUEST_PARAM, preAuthorizedCode));
 
-        HttpPost tokenReq = new HttpPost(getTestTokenEndpoint());
-        tokenReq.setEntity(new UrlEncodedFormEntity(params));
-        HttpResponse tokenResp = httpClient.execute(tokenReq);
-        assertEquals(HttpStatus.SC_OK, tokenResp.getStatusLine().getStatusCode());
-        JsonNode token = readJson(tokenResp);
-        String accessToken = token.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
-        assertNotNull(accessToken, "pre-authorized code redemption must yield an access token");
-        return accessToken;
+        return requestAccessToken(params);
     }
 
     /**
@@ -620,15 +651,5 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     private JsonNode readJson(HttpResponse response) throws IOException {
         String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
         return JsonSerialization.mapper.readTree(payload);
-    }
-
-    private HttpResponse postChallenge(List<BasicNameValuePair> form) throws Exception {
-        var url = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
-                .path(AuthorizationChallengeEndpointFactory.PROVIDER_ID)
-                .build()
-                .toString();
-        var post = new HttpPost(url);
-        post.setEntity(new UrlEncodedFormEntity(form));
-        return httpClient.execute(post);
     }
 }

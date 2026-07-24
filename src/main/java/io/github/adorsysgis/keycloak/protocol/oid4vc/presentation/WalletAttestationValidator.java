@@ -51,6 +51,8 @@ import org.keycloak.wellknown.WellKnownProvider;
  */
 public final class WalletAttestationValidator {
 
+    // TODO: Investigate reusing Keycloak's wallet/client-attestation validation from this
+    // RealmResource endpoint instead of mirroring the implementation here.
     private static final Logger logger = Logger.getLogger(WalletAttestationValidator.class);
 
     private WalletAttestationValidator() {}

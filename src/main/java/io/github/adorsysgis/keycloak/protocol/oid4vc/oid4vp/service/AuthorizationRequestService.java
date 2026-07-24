@@ -123,7 +123,7 @@ public class AuthorizationRequestService {
         oidcAuthSession = Optional.ofNullable(oidcAuthSession).orElse(new OIDCAuthSession(null, null, false));
         String responseCode = oidcAuthSession.enableSameDeviceResponse() ? generateSessionBoundId(authSession) : null;
 
-        // Generate ephemeral encryption keys if direct_post.jwt. Must be done before creating
+        // Generate ephemeral encryption keys if the response mode requires encryption. Must be done before creating
         // the request object, so updated client metadata are picked up as intended.
         EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(effectiveResponseMode);
 

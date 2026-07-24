@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -50,7 +51,9 @@ class SdJwtPrimaryBindingTest {
     @Test
     void throwsWhenClaimDoesNotMatchUserAttribute() {
         when(user.getUsername()).thenReturn("someone-else");
-        assertThrows(VerificationException.class, () -> apply(primaryWithUserAttributeBinding()));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> apply(primaryWithUserAttributeBinding()));
+        assertEquals("Primary credential 'pid' failed binding rule 'claim_equals_user_attribute'", error.getMessage());
     }
 
     @Test
@@ -71,7 +74,10 @@ class SdJwtPrimaryBindingTest {
                         .setType(BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM)
                         .setCredentialClaim("username")
                         .setPrimaryCredentialClaim("username")));
-        assertThrows(VerificationException.class, () -> apply(primary));
+        VerificationException error = assertThrows(VerificationException.class, () -> apply(primary));
+        assertEquals(
+                "Binding rule 'claim_equals_primary_claim' is not applicable to the primary credential 'pid'",
+                error.getMessage());
     }
 
     private void apply(CredentialRequirement primary) throws VerificationException {

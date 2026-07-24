@@ -2,7 +2,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseKeycloakTest;
@@ -14,9 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.admin.client.resource.RealmResource;
-import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
@@ -60,6 +56,10 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             assertFalse(
                     getOpenidConfiguration().has("authorization_challenge_endpoint"),
                     "authorization_challenge_endpoint must not be advertised when the feature is disabled");
+            assertEquals(
+                    HttpStatus.SC_NOT_FOUND,
+                    postAuthorizationChallenge(List.of()).getStatusLine().getStatusCode(),
+                    "authorization_challenge_endpoint must not respond when the feature is disabled");
 
             // Enabled -> present with the correct URL
             updateAttribute(realm, rep, attributes, "true");
@@ -94,7 +94,7 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
             // Valid interaction type, but no OAuth-Client-Attestation headers -> rejected.
-            HttpResponse response = postChallenge(List.of(
+            HttpResponse response = postAuthorizationChallenge(List.of(
                     new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
                     new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
                     new BasicNameValuePair(
@@ -106,9 +106,10 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
             OAuth2ErrorRepresentation error = parseHttpResponse(response, OAuth2ErrorRepresentation.class);
             assertEquals(OAuthErrorException.INVALID_CLIENT_ATTESTATION, error.getError());
-            assertTrue(
-                    error.getErrorDescription().contains("wallet attestation"),
-                    "error should explain that a wallet attestation is required");
+            assertEquals(
+                    "A wallet attestation is required: both OAuth-Client-Attestation and "
+                            + "OAuth-Client-Attestation-PoP headers must be present",
+                    error.getErrorDescription());
         } finally {
             restoreAttribute(
                     realm, rep, attributes, AuthorizationChallengeEndpoint.ATTR_REQUIRE_WALLET_ATTESTATION, original);
@@ -139,15 +140,5 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
         String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
         return JsonSerialization.mapper.readTree(payload);
-    }
-
-    private HttpResponse postChallenge(List<BasicNameValuePair> form) throws Exception {
-        String url = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
-                .path(AuthorizationChallengeEndpointFactory.PROVIDER_ID)
-                .build()
-                .toString();
-        HttpPost post = new HttpPost(url);
-        post.setEntity(new UrlEncodedFormEntity(form));
-        return httpClient.execute(post);
     }
 }

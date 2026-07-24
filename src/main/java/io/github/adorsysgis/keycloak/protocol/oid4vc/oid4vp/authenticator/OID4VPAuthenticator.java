@@ -107,8 +107,18 @@ public class OID4VPAuthenticator implements Authenticator {
             return;
         }
 
+        // Primary-credential binding rules establish that the verified credential belongs to the
+        // recovered Keycloak user. This is especially important for session-identity profiles, where
+        // the user comes from the issuance session rather than from identity claims in the credential.
         try {
             applyBindingRules(context, primaryCredential, primaryVerifier, primaryClaims, null, null, user);
+        } catch (VerificationException | IllegalStateException e) {
+            logger.errorf(e, "Primary credential binding failed (authSession = %s)", correlationId(context));
+            failRejectingPresentedCredential(context, e.getMessage(), e);
+            return;
+        }
+
+        try {
             var supportingTokens = supportingPresentedTokens(presentedTokens, primaryCredential.getId());
             verifySupportingCredentials(
                     context,
@@ -230,12 +240,12 @@ public class OID4VPAuthenticator implements Authenticator {
 
     private BindingValueComparator resolveComparator(KeycloakSession session, BindingRule rule)
             throws VerificationException {
-        String comparisonId = StringUtil.isBlank(rule.getComparison())
+        String comparatorId = StringUtil.isBlank(rule.getComparator())
                 ? ExactBindingValueComparatorFactory.PROVIDER_ID
-                : rule.getComparison();
-        BindingValueComparator comparator = session.getProvider(BindingValueComparator.class, comparisonId);
+                : rule.getComparator();
+        BindingValueComparator comparator = session.getProvider(BindingValueComparator.class, comparatorId);
         if (comparator == null) {
-            throw new VerificationException(String.format("Unknown binding comparison strategy '%s'", comparisonId));
+            throw new VerificationException(String.format("Unknown binding comparator '%s'", comparatorId));
         }
         return comparator;
     }

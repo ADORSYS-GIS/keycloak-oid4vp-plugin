@@ -7,19 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import jakarta.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
+import org.keycloak.representations.idm.ClientScopeRepresentation;
 
 /**
  * End-to-end tests for the encrypted variant of the OID4VCI §6 interactive authorization flow. On a
@@ -30,6 +31,40 @@ import org.keycloak.protocol.oidc.utils.PkceUtils;
 class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEndpointTest {
 
     private static final String TEST_USER_HAIP = "test-user-haip";
+    private static final String IDENTITY_CREDENTIAL_CONFIG_ID = "identity_credential";
+
+    @BeforeAll
+    static void ensureIdentityCredentialScope() {
+        var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_HAIP_NAME);
+        boolean exists = realm.clientScopes().findAll().stream()
+                .anyMatch(scope -> IDENTITY_CREDENTIAL_CONFIG_ID.equals(scope.getName()));
+        if (!exists) {
+            ClientScopeRepresentation scope = new ClientScopeRepresentation();
+            scope.setName(IDENTITY_CREDENTIAL_CONFIG_ID);
+            scope.setProtocol("oid4vc");
+            scope.setAttributes(Map.of(
+                    "vc.credential_configuration_id",
+                    IDENTITY_CREDENTIAL_CONFIG_ID,
+                    "vc.verifiable_credential_type",
+                    CREDENTIAL_TYPES_CONFIG_DEFAULT,
+                    "vc.format",
+                    "dc+sd-jwt",
+                    "vc.presentation_profile_id",
+                    "default"));
+            try (Response response = realm.clientScopes().create(scope)) {
+                assertEquals(HttpStatus.SC_CREATED, response.getStatus());
+            }
+        }
+
+        String scopeId = realm.clientScopes().findAll().stream()
+                .filter(scope -> IDENTITY_CREDENTIAL_CONFIG_ID.equals(scope.getName()))
+                .map(ClientScopeRepresentation::getId)
+                .findFirst()
+                .orElseThrow();
+        String clientId =
+                realm.clients().findByClientId(TEST_CLIENT_ID).getFirst().getId();
+        realm.clients().get(clientId).addOptionalClientScope(scopeId);
+    }
 
     @Override
     public String getActiveTestRealm() {
@@ -66,7 +101,7 @@ class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEn
 
         String encryptedResponse = buildEncryptedOpenid4vpResponseJson(sdJwt, requestObject);
 
-        HttpResponse resume = postChallenge(List.of(
+        HttpResponse resume = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.authSession()),
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM, encryptedResponse)));
 
@@ -83,9 +118,9 @@ class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEn
         var codeVerifier = PkceUtils.generateCodeVerifier();
         var codeChallenge = PkceUtils.encodeCodeChallenge(codeVerifier, OAuth2Constants.PKCE_METHOD_S256);
 
-        HttpResponse initiate = postChallenge(List.of(
+        HttpResponse initiate = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                         AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -99,16 +134,6 @@ class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEn
         return new Challenge(
                 challenge.getAuthSession(),
                 challenge.getOpenid4vpRequest().get("request").asText());
-    }
-
-    private HttpResponse postChallenge(List<BasicNameValuePair> form) throws Exception {
-        String url = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
-                .path(AuthorizationChallengeEndpointFactory.PROVIDER_ID)
-                .build()
-                .toString();
-        HttpPost post = new HttpPost(url);
-        post.setEntity(new UrlEncodedFormEntity(form));
-        return httpClient.execute(post);
     }
 
     private record Challenge(String authSession, String requestJwt) {}

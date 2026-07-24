@@ -27,8 +27,8 @@ public class BindingRule {
      * value against the expected value. Defaults to the strict, schema-neutral {@code exact} strategy
      * when omitted. Deployments may reference a custom (e.g. locale-tolerant) comparator here.
      */
-    @JsonProperty("comparison")
-    private String comparison;
+    @JsonProperty("comparator")
+    private String comparator;
 
     public String getType() {
         return type;
@@ -66,12 +66,12 @@ public class BindingRule {
         return this;
     }
 
-    public String getComparison() {
-        return comparison;
+    public String getComparator() {
+        return comparator;
     }
 
-    public BindingRule setComparison(String comparison) {
-        this.comparison = comparison;
+    public BindingRule setComparator(String comparator) {
+        this.comparator = comparator;
         return this;
     }
 }
