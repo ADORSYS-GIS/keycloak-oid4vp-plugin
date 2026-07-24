@@ -206,8 +206,15 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             hashesAlg = extractAlgString(algPair.getValue());
         }
 
-        // Verify the namespace is authorized in the MSO's KeyAuthorizations
-        verifyNamespaceIsAuthorized(verificationContext.getVerifiedMsoPayload(), hashesNamespace);
+        // Verify the namespace or elements are authorized in the MSO's KeyAuthorizations
+        verifyKeyAuthorization(
+                verificationContext.getVerifiedMsoPayload(),
+                hashesNamespace,
+                hashesAlg != null
+                        ? List.of(
+                                TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM,
+                                TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM)
+                        : List.of(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM));
 
         ObjectNode result = JsonSerialization.mapper.createObjectNode();
         result.set(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM, hashes);
@@ -229,7 +236,16 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         throw new VerificationException("transaction_data_hashes_alg must be a string");
     }
 
-    private static void verifyNamespaceIsAuthorized(JsonNode mso, String namespace) throws VerificationException {
+    /**
+     * Verifies that the device key is authorized for the given elements in the given namespace
+     * {@code KeyAuthorizations}. Authorization can come via either:
+     * <ul>
+     *   <li>{@code nameSpaces[namespace]} — authorizes all elements in the namespace, or
+     *   <li>{@code dataElements[namespace]} — authorizes only the listed {@code elementIds}.
+     * </ul>
+     */
+    private static void verifyKeyAuthorization(JsonNode mso, String namespace, List<String> elementIds)
+            throws VerificationException {
         JsonNode dki = mso.get(MdocConstants.L_DEVICE_KEY_INFO);
         if (dki == null) {
             throw new VerificationException("MSO is missing deviceKeyInfo");
@@ -238,21 +254,41 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         if (keyAuth == null) {
             throw new VerificationException("MSO deviceKeyInfo is missing keyAuthorizations");
         }
-        JsonNode authorizedNs = keyAuth.get("nameSpaces");
-        if (authorizedNs == null || !authorizedNs.isArray()) {
-            throw new VerificationException("MSO keyAuthorizations is missing authorized nameSpaces");
-        }
-        boolean authorized = false;
-        for (JsonNode ns : authorizedNs) {
-            if (ns.asText().equals(namespace)) {
-                authorized = true;
-                break;
+        // Check namespace-level authorization first
+        JsonNode nameSpaces = keyAuth.get("nameSpaces");
+        if (nameSpaces != null && nameSpaces.isArray()) {
+            for (JsonNode ns : nameSpaces) {
+                if (ns.asText().equals(namespace)) {
+                    return;
+                }
             }
         }
-        if (!authorized) {
-            throw new VerificationException(
-                    "Namespace '" + namespace + "' is not authorized for transaction_data_hashes in the MSO");
+        // Fall back to element-level authorization
+        JsonNode dataElements = keyAuth.get("dataElements");
+        if (dataElements != null && dataElements.isObject()) {
+            JsonNode elements = dataElements.get(namespace);
+            if (elements != null && elements.isArray()) {
+                boolean allFound = true;
+                for (String elementId : elementIds) {
+                    boolean found = false;
+                    for (JsonNode el : elements) {
+                        if (el.asText().equals(elementId)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        allFound = false;
+                        break;
+                    }
+                }
+                if (allFound) {
+                    return;
+                }
+            }
         }
+        throw new VerificationException(
+                "Namespace '" + namespace + "' is not authorized for " + elementIds + " in the MSO");
     }
 
     // Converts a CBOR array of strings (or a single string) to a JSON ArrayNode.

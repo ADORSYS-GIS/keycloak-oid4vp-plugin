@@ -5,18 +5,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.authlete.cbor.CBORPair;
+import com.authlete.cbor.CBORPairList;
+import com.authlete.cbor.CBORString;
+import com.authlete.mdoc.DeviceKeyInfo;
 import com.authlete.mdoc.DeviceNameSpaces;
 import com.authlete.mdoc.DeviceNameSpacesEntry;
 import com.authlete.mdoc.DeviceResponse;
 import com.authlete.mdoc.DeviceSignedItems;
 import com.authlete.mdoc.DeviceSignedItemsEntry;
+import com.authlete.mdoc.KeyAuthorizations;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -24,7 +31,7 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 
-class MdocCredentialVerifierTransactionDataTest {
+class MdocCredentialVerifierTransactionDataTest extends MdocBaseTest {
 
     private static final String NAMESPACE = "com.example.namespace1";
     private static final String DOC_TYPE = "com.example.doctype";
@@ -218,6 +225,80 @@ class MdocCredentialVerifierTransactionDataTest {
 
         MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
         assertDoesNotThrow(() -> handler.validateTransactionData(authSession, verificationContext));
+    }
+
+    @Test
+    void acceptsTransactionData_WhenAuthorizedViaDataElements() throws Exception {
+        String wire = wireEntry("payment");
+        String hash = hashForWire(wire);
+
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
+
+        // Build mDoc with transaction_data_hashes, then modify MSO to use dataElements-only auth
+        DeviceResponse dr = MdocBaseTest.buildDeviceResponse(
+                opts,
+                Map.of(NAMESPACE, Map.of("c", "v")),
+                DOC_TYPE,
+                new DeviceNameSpaces(List.of(new DeviceNameSpacesEntry(
+                        NAMESPACE,
+                        new DeviceSignedItems(
+                                List.of(new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash))))))));
+        DeviceResponse modified =
+                replaceKeyAuthorization(dr, dataElementsOnlyAuth(NAMESPACE, List.of("transaction_data_hashes")));
+        String modifiedMdoc = modified.encodeToBase64Url();
+
+        MdocVerificationContext modifiedCtx = new MdocVerificationContext(modifiedMdoc);
+        modifiedCtx.verifyPresentation(opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
+        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+
+        MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertDoesNotThrow(() -> handler.validateTransactionData(authSession, modifiedCtx));
+    }
+
+    @Test
+    void rejectsTransactionData_WhenElementNotAuthorizedInDataElements() throws Exception {
+        String wire = wireEntry("payment");
+        String hash = hashForWire(wire);
+
+        // Build mDoc with transaction_data_hashes, then modify MSO to authorize only a different element
+        MdocVerificationOpts opts =
+                MdocBaseTest.getDefaultMdocVerificationOpts().build();
+        DeviceResponse dr = MdocBaseTest.buildDeviceResponse(
+                opts,
+                Map.of(NAMESPACE, Map.of("c", "v")),
+                DOC_TYPE,
+                new DeviceNameSpaces(List.of(new DeviceNameSpacesEntry(
+                        NAMESPACE,
+                        new DeviceSignedItems(
+                                List.of(new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash))))))));
+        DeviceResponse modified =
+                replaceKeyAuthorization(dr, dataElementsOnlyAuth(NAMESPACE, List.of("some-other-element")));
+        String modifiedMdoc = modified.encodeToBase64Url();
+
+        MdocVerificationContext modifiedCtx = new MdocVerificationContext(modifiedMdoc);
+        modifiedCtx.verifyPresentation(opts, null, new TestTruststoreProvider(MdocBaseTest.getIssuerCertRef1()));
+        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+
+        MdocCredentialVerifier handler = new MdocCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertThrows(VerificationException.class, () -> handler.validateTransactionData(authSession, modifiedCtx));
+    }
+
+    private static DeviceResponse replaceKeyAuthorization(DeviceResponse dr, KeyAuthorizations keyAuth)
+            throws Exception {
+        return withModifiedMso(dr, mso -> {
+            List<CBORPair> newPairs = new ArrayList<>();
+            for (var pair : mso.getPairs()) {
+                if (pair != null
+                        && pair.getKey() instanceof CBORString keyStr
+                        && MdocConstants.L_DEVICE_KEY_INFO.equals(keyStr.getValue())) {
+                    newPairs.add(new CBORPair(pair.getKey(), new DeviceKeyInfo(getDeviceKeyRef1(), keyAuth, null)));
+                } else {
+                    newPairs.add(pair);
+                }
+            }
+            return new CBORPairList(newPairs);
+        });
     }
 
     private static AuthenticationSessionModel authSessionWithWire(List<String> wireEntries) throws Exception {

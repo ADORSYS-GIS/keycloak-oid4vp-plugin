@@ -6,6 +6,7 @@ import com.authlete.cbor.CBORByteArray;
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORNull;
+import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
 import com.authlete.cbor.CBORTaggedItem;
@@ -23,6 +24,7 @@ import com.authlete.cose.COSEUnprotectedHeaderBuilder;
 import com.authlete.cose.SigStructure;
 import com.authlete.cose.SigStructureBuilder;
 import com.authlete.cose.constants.COSEAlgorithms;
+import com.authlete.mdoc.AuthorizedDataElements;
 import com.authlete.mdoc.AuthorizedNameSpaces;
 import com.authlete.mdoc.DeviceAuth;
 import com.authlete.mdoc.DeviceKeyInfo;
@@ -500,6 +502,18 @@ public class MdocBaseTest {
 
         return new DeviceResponse(List.of(
                 new Document(DOC_TYPE, issuerSigned, new DeviceSigned(deviceNameSpaces, new DeviceAuth(mac0)), null)));
+    }
+
+    /**
+     * Builds a {@link KeyAuthorizations} that authorizes the given element identifiers
+     * within the given namespace through {@code dataElements} only (no {@code nameSpaces}).
+     */
+    public static KeyAuthorizations dataElementsOnlyAuth(String namespace, List<String> elementIds) {
+        var ns = new CBORString(namespace);
+        var elements = elementIds.stream().map(CBORString::new).toList();
+        var elList = new CBORItemList(elements);
+        var pair = new CBORPair(ns, elList);
+        return new KeyAuthorizations(null, new AuthorizedDataElements((List) List.of(pair)));
     }
 
     public static MdocVerificationOpts.Builder getDefaultMdocVerificationOpts() {
