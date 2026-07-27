@@ -64,12 +64,15 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         mockFetcher = uri -> {
             String mockJwtPayload = """
                     {
+                        "sub": "%s",
+                        "iat": 1700000000,
+                        "exp": 9999999999,
                         "status_list": {
                             "bits": 1,
                             "lst": "%s"
                         }
                     }
-                    """.formatted(IETF_1BIT_SMALL_TEST_VECTOR);
+                    """.formatted(uri, IETF_1BIT_SMALL_TEST_VECTOR);
             String header = "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCJ9"; // {"typ":"statuslist+jwt"}
             String payload = Base64.getUrlEncoder().withoutPadding().encodeToString(mockJwtPayload.getBytes());
             return header + "." + payload + ".mock_signature";

@@ -31,6 +31,8 @@ public class ReferencedTokenValidator {
     private static final String URI_FIELD = "uri";
     private static final String BITS_FIELD = "bits";
     private static final String LST_FIELD = "lst";
+    private static final String SUB_FIELD = "sub";
+    private static final String IAT_FIELD = "iat";
     private static final String EXP_FIELD = "exp";
 
     private static final String JWT_TYPE_STATUS_LIST = "statuslist+jwt";
@@ -92,17 +94,7 @@ public class ReferencedTokenValidator {
      * @throws ReferencedTokenValidationException if basic validation fails
      */
     private void validateBasicTokenProperties(JsonNode tokenPayload) throws ReferencedTokenValidationException {
-        JsonNode exp = tokenPayload.get(EXP_FIELD);
-        if (exp != null && exp.isNumber()) {
-            long expirationTime = exp.asLong();
-            long currentTime = System.currentTimeMillis() / 1000;
-
-            if (currentTime > expirationTime) {
-                throw new ReferencedTokenValidationException(
-                        "Token has expired. Expiration time: " + expirationTime + ", Current time: " + currentTime);
-            }
-        }
-        // Additional basic validations can be added here as needed
+        rejectExpired(tokenPayload.get(EXP_FIELD), "Token");
     }
 
     /**
@@ -175,12 +167,12 @@ public class ReferencedTokenValidator {
     }
 
     /**
-     * Fetches the status list token from the specified URI.
+     * Fetches the status list token from the specified URI and validates its payload claims.
      * The status list server returns a JWT token, not raw JSON.
      *
      * @param uri The URI to fetch the status list token from
      * @return The status list token as JsonNode
-     * @throws ReferencedTokenValidationException if fetching fails
+     * @throws ReferencedTokenValidationException if fetching or validation fails
      */
     private JsonNode fetchStatusListToken(String uri) throws ReferencedTokenValidationException {
         try {
@@ -203,10 +195,53 @@ public class ReferencedTokenValidator {
             }
 
             // Extract the payload and parse as JSON
-            return jws.readJsonContent(JsonNode.class);
+            JsonNode payload = jws.readJsonContent(JsonNode.class);
+
+            validateStatusListTokenClaims(payload, uri);
+
+            return payload;
 
         } catch (JWSInputException e) {
             throw new ReferencedTokenValidationException("Failed to parse Status List JWT from: " + uri, e);
+        }
+    }
+
+    /**
+     * Validates the required claims of a Status List JWT payload per IETF Token Status List §§5.1, 8.3.
+     * Requires sub, iat; checks sub matches expected URI; rejects expired exp if present.
+     */
+    private void validateStatusListTokenClaims(JsonNode payload, String expectedUri)
+            throws ReferencedTokenValidationException {
+        JsonNode subNode = payload.get(SUB_FIELD);
+        if (subNode == null || !subNode.isTextual() || subNode.asText().trim().isEmpty()) {
+            throw new ReferencedTokenValidationException(
+                    "Status List Token must contain a non-empty string 'sub' claim");
+        }
+        if (!expectedUri.equals(subNode.asText())) {
+            throw new ReferencedTokenValidationException(
+                    "Status List Token 'sub' (" + subNode.asText() + ") does not match expected URI: " + expectedUri);
+        }
+
+        JsonNode iatNode = payload.get(IAT_FIELD);
+        if (iatNode == null || !iatNode.isNumber()) {
+            throw new ReferencedTokenValidationException("Status List Token must contain a numeric 'iat' claim");
+        }
+
+        rejectExpired(payload.get(EXP_FIELD), "Status List Token");
+    }
+
+    /**
+     * Checks the exp claim and throws if expired.
+     */
+    private static void rejectExpired(JsonNode expNode, String tokenDescription)
+            throws ReferencedTokenValidationException {
+        if (expNode != null && expNode.isNumber()) {
+            long expirationTime = expNode.asLong();
+            long currentTime = System.currentTimeMillis() / 1000;
+            if (currentTime > expirationTime) {
+                throw new ReferencedTokenValidationException(tokenDescription + " has expired. Expiration time: "
+                        + expirationTime + ", Current time: " + currentTime);
+            }
         }
     }
 
