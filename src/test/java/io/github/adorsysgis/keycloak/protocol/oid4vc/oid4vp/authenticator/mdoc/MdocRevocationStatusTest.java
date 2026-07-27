@@ -19,6 +19,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -93,6 +94,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     public void shouldFailVerification_WhenCredentialRevoked() throws Exception {
         var authConfig = new AuthenticatorConfigModel();
         authConfig.getConfig().put(ENFORCE_REVOCATION_STATUS_CONFIG, "true");
+        var authReqs = new AuthRequirements(authConfig);
 
         var requestObject = new RequestObject()
                 .setClientId("x509_san_dns:example.com")
@@ -121,12 +123,12 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                 .build();
 
         String validMdoc = buildMdocWithStatus(1, optsFromRequest);
-        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, credential, validMdoc, false));
+        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, authReqs, credential, validMdoc));
 
         String revokedMdoc = buildMdocWithStatus(0, optsFromRequest);
         VerificationException exception = assertThrows(
                 VerificationException.class,
-                () -> verifier.verifyCredential(context, authCtx, credential, revokedMdoc, false));
+                () -> verifier.verifyCredential(context, authCtx, authReqs, credential, revokedMdoc));
         assertTrue(exception.getMessage().contains("Token status verification failed"));
     }
 
