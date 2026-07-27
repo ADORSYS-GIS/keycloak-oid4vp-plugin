@@ -20,6 +20,7 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     private static final Logger logger = Logger.getLogger(OID4VCIssuerMetadataProvider.class);
 
     public static final String ATTR_DISPLAY = "oid4vci.display";
+    public static final String ATTR_PRESENTATION_DURING_ISSUANCE = "oid4vci.presentation_during_issuance";
 
     private final RealmModel realm;
 

@@ -250,12 +250,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // will be missing during code redemption, causing the expected failure.
         TestOpts opts = TestOpts.getDefault().setAuthContext(apiFlow.authContext());
 
-        testFailingCodeRedemption(
-                sdJwt,
-                opts,
-                HttpStatus.SC_BAD_REQUEST,
-                OAuthErrorException.INVALID_GRANT,
-                "Authorization code verifier not valid");
+        testFailingCodeRedemption(sdJwt, opts);
     }
 
     @Test
@@ -267,12 +262,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         TestOpts opts =
                 TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier("invalid-code-verifier");
 
-        testFailingCodeRedemption(
-                sdJwt,
-                opts,
-                HttpStatus.SC_BAD_REQUEST,
-                OAuthErrorException.INVALID_GRANT,
-                "Authorization code verifier not valid");
+        testFailingCodeRedemption(sdJwt, opts);
     }
 
     @Test

@@ -17,6 +17,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Processing
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
@@ -292,6 +293,11 @@ public class AuthorizationResponseService {
                         session.getContext().getRealm().getName()));
 
         clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
+
+        // Mark the user session as presentation-verified so the issuance gate can enforce that the
+        // authorization code was obtained via a Verifiable Presentation (OID4VCI Interactive
+        // Authorization). This marker is the carrier consumed at the credential endpoint.
+        clientSession.getUserSession().setNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE, Boolean.TRUE.toString());
 
         // Gather code data and generate authorization code
 

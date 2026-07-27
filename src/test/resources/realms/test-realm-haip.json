@@ -5,6 +5,10 @@
   "sslRequired": "none",
   "eventsEnabled": true,
   "enabledEventTypes": ["LOGIN", "LOGIN_ERROR"],
+  "attributes": {
+    "oid4vci.presentation_during_issuance": "true"
+  },
+  "verifiableCredentialsEnabled": true,
   "users": [
     {
       "id": "test-user-haip-id",

@@ -14,6 +14,8 @@ public enum ResponseMode {
     FORM_POST("form_post"),
     DIRECT_POST("direct_post"),
     DIRECT_POST_JWT("direct_post.jwt"),
+    IA_POST("ia_post"),
+    IA_POST_JWT("ia_post.jwt"),
     QUERY("query");
 
     private final String value;
@@ -25,6 +27,14 @@ public enum ResponseMode {
     @JsonValue
     public String getValue() {
         return value;
+    }
+
+    /**
+     * Whether this response mode requires the OpenID4VP Authorization Response to be encrypted
+     * (the {@code .jwt} variants {@code direct_post.jwt} and {@code ia_post.jwt}).
+     */
+    public boolean isEncrypted() {
+        return this == DIRECT_POST_JWT || this == IA_POST_JWT;
     }
 
     public static ResponseMode fromValue(String value) {

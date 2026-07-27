@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.interfaces.ECPublicKey;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,6 +32,7 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
+import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
 import org.keycloak.jose.jwk.JWK;
@@ -172,11 +174,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     }
 
     /**
-     * Helper for flows that should fail at authorization code redemption.
+     * Helper for flows that should fail at authorization code redemption because the PKCE
+     * {@code code_verifier} is missing or invalid.
      */
-    protected void testFailingCodeRedemption(
-            String sdJwt, TestOpts opts, int httpStatus, String expectedError, String expectedErrorDescription)
-            throws Exception {
+    protected void testFailingCodeRedemption(String sdJwt, TestOpts opts) throws Exception {
         ApiFlowData apiFlow = resolveApiFlow(opts);
         RequestObject requestObject = resolveRequestObject(apiFlow.authContext().getAuthorizationRequest());
 
@@ -186,11 +187,12 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
         HttpResponse redemptionResponse =
                 redeemAuthorizationCodeResponse(apiFlow.authContext().getTransactionId(), apiFlow.codeVerifier());
-        assertEquals(httpStatus, redemptionResponse.getStatusLine().getStatusCode());
+        assertEquals(
+                HttpStatus.SC_BAD_REQUEST, redemptionResponse.getStatusLine().getStatusCode());
 
         OAuth2ErrorRepresentation errorRep = parseErrorResponse(redemptionResponse);
-        assertEquals(expectedError, errorRep.getError());
-        assertTrue(errorRep.getErrorDescription().contains(expectedErrorDescription));
+        assertEquals(OAuthErrorException.INVALID_GRANT, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Authorization code verifier not valid"));
     }
 
     /**
@@ -298,7 +300,6 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
         assertEquals(AuthorizationContextStatus.SUCCESS, statusPayload.getStatus());
         assertNull(statusPayload.getAuthorizationCode(), "authorization_code must not be exposed in status responses");
-
         return statusPayload;
     }
 
@@ -454,6 +455,48 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         DcqlQuery dcqlQuery = requestObject.getDcqlQuery();
         return dcqlQuery.getCredentials().stream()
                 .collect(Collectors.toMap(Credential::getId, credential -> List.of(sdJwtVpToken)));
+    }
+
+    /**
+     * Builds the JSON-encoded {@code openid4vp_response} object (vp_token + state) submitted to the
+     * Authorization Challenge Endpoint in the OID4VCI interactive authorization (ia_post) flow.
+     */
+    protected String buildOpenid4vpResponseJson(String sdJwt, RequestObject requestObject) throws Exception {
+        return buildOpenid4vpResponseJson(sdJwt, requestObject, requestObject.getClientId());
+    }
+
+    /**
+     * Variant that allows overriding the Key Binding JWT audience to exercise holder-binding
+     * verification (OID4VCI §6.2.1.1: the VP audience must be bound to the challenge endpoint).
+     */
+    protected String buildOpenid4vpResponseJson(String sdJwt, RequestObject requestObject, String aud)
+            throws Exception {
+        String sdJwtVpToken =
+                sdJwtVPTestUtils.presentSdJwt(sdJwt, requestObject.getNonce(), aud, SdJwtVPTestUtils.getUserJwk());
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put(ResponseObject.VP_TOKEN_KEY, prepareVpTokenMap(sdJwtVpToken, requestObject));
+        response.put(ResponseObject.STATE_KEY, requestObject.getState());
+        return JsonSerialization.writeValueAsString(response);
+    }
+
+    /**
+     * Builds the JSON-encoded {@code openid4vp_response} object carrying an <em>encrypted</em> OpenID4VP
+     * Authorization Response ({@code {"response": "<jwe>"}}) submitted to the Authorization Challenge
+     * Endpoint in the OID4VCI interactive authorization {@code ia_post.jwt} flow (OID4VCI §6.2.1.1). The
+     * response is encrypted for the ephemeral key advertised in the request's {@code client_metadata.jwks}.
+     */
+    protected String buildEncryptedOpenid4vpResponseJson(String sdJwt, RequestObject requestObject) throws Exception {
+        String sdJwtVpToken = sdJwtVPTestUtils.presentSdJwt(
+                sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+        Map<String, List<String>> vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
+        String plaintext = JsonSerialization.writeValueAsString(Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap));
+
+        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
+        ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        String encResp = ECTestUtils.encryptMessage(plaintext, encKey, encJwk.getKeyId());
+
+        return JsonSerialization.writeValueAsString(Map.of("response", encResp));
     }
 
     @FunctionalInterface

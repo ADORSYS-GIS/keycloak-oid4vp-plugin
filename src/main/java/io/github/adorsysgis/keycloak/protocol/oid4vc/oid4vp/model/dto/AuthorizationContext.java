@@ -104,6 +104,15 @@ public class AuthorizationContext {
     private String profileId;
 
     /**
+     * Id of the brokered user the credential offer is bound to (OID4VCI presentation during issuance).
+     * When set, the authenticating identity is taken from this user instead of being derived from the
+     * presented credential (a PID carries no Keycloak username); the presented credential is only
+     * matched against this user's attributes by the profile's binding rules.
+     */
+    @JsonProperty("subject_user_id")
+    private String subjectUserId;
+
+    /**
      * Metadata supplied by the wallet when dereferencing {@code request_uri}
      * via HTTP {@code POST}.
      */
@@ -264,6 +273,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setProfileId(String profileId) {
         this.profileId = profileId;
+        return this;
+    }
+
+    public String getSubjectUserId() {
+        return subjectUserId;
+    }
+
+    public AuthorizationContext setSubjectUserId(String subjectUserId) {
+        this.subjectUserId = subjectUserId;
         return this;
     }
 

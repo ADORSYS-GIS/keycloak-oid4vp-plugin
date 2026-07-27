@@ -2,6 +2,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -15,7 +17,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -94,7 +95,8 @@ public class OID4VPAuthenticator implements Authenticator {
             return;
         }
 
-        UserModel user = recoverAuthenticatingUser(context, primaryVerifier, primaryClaims);
+        UserModel user =
+                recoverAuthenticatingUser(context, authContext, primaryCredential, primaryVerifier, primaryClaims);
         if (user == null) {
             return;
         }
@@ -102,6 +104,17 @@ public class OID4VPAuthenticator implements Authenticator {
         if (!user.isEnabled()) {
             logger.debugf("Rejecting authentication for disabled user '%s'", user.getUsername());
             failDenyingDisabledUser(context);
+            return;
+        }
+
+        // Primary-credential binding rules establish that the verified credential belongs to the
+        // recovered Keycloak user. This is especially important for session-identity profiles, where
+        // the user comes from the issuance session rather than from identity claims in the credential.
+        try {
+            applyBindingRules(context, primaryCredential, primaryVerifier, primaryClaims, null, null, user);
+        } catch (VerificationException | IllegalStateException e) {
+            logger.errorf(e, "Primary credential binding failed (authSession = %s)", correlationId(context));
+            failRejectingPresentedCredential(context, e.getMessage(), e);
             return;
         }
 
@@ -183,11 +196,13 @@ public class OID4VPAuthenticator implements Authenticator {
             JsonNode supportingClaims = supportingVerifier.verifyCredential(
                     context, authContext, credential, token, requireCryptographicHolderBinding);
 
-            applyBindingRules(credential, supportingVerifier, supportingClaims, primaryVerifier, primaryClaims, user);
+            applyBindingRules(
+                    context, credential, supportingVerifier, supportingClaims, primaryVerifier, primaryClaims, user);
         }
     }
 
-    private void applyBindingRules(
+    void applyBindingRules(
+            AuthenticationFlowContext context,
             CredentialRequirement credential,
             CredentialVerifier supportingVerifier,
             JsonNode supportingClaims,
@@ -200,8 +215,14 @@ public class OID4VPAuthenticator implements Authenticator {
             String supportingValue = supportingVerifier.readClaim(supportingClaims, rule.getCredentialClaim());
             String expectedValue =
                     switch (rule.getType()) {
-                        case BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM ->
-                            primaryVerifier.readClaim(primaryClaims, rule.getPrimaryCredentialClaim());
+                        case BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM -> {
+                            if (primaryVerifier == null || primaryClaims == null) {
+                                throw new VerificationException(String.format(
+                                        "Binding rule '%s' is not applicable to the primary credential '%s'",
+                                        rule.getType(), credential.getId()));
+                            }
+                            yield primaryVerifier.readClaim(primaryClaims, rule.getPrimaryCredentialClaim());
+                        }
                         case BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE ->
                             readUserAttribute(user, rule.getUserAttribute());
                         default ->
@@ -209,17 +230,24 @@ public class OID4VPAuthenticator implements Authenticator {
                                     String.format("Unsupported binding rule type: %s", rule.getType()));
                     };
 
-            if (StringUtil.isBlank(supportingValue) || StringUtil.isBlank(expectedValue)) {
+            if (!resolveComparator(context.getSession(), rule).matches(supportingValue, expectedValue)) {
                 throw new VerificationException(String.format(
-                        "Supporting credential '%s' failed binding rule '%s': missing or blank binding value",
-                        credential.getId(), rule.getType()));
-            }
-
-            if (!Objects.equals(expectedValue, supportingValue)) {
-                throw new VerificationException(String.format(
-                        "Supporting credential '%s' failed binding rule '%s'", credential.getId(), rule.getType()));
+                        "%s credential '%s' failed binding rule '%s'",
+                        credential.isPrimary() ? "Primary" : "Supporting", credential.getId(), rule.getType()));
             }
         }
+    }
+
+    private BindingValueComparator resolveComparator(KeycloakSession session, BindingRule rule)
+            throws VerificationException {
+        String comparatorId = StringUtil.isBlank(rule.getComparator())
+                ? ExactBindingValueComparatorFactory.PROVIDER_ID
+                : rule.getComparator();
+        BindingValueComparator comparator = session.getProvider(BindingValueComparator.class, comparatorId);
+        if (comparator == null) {
+            throw new VerificationException(String.format("Unknown binding comparator '%s'", comparatorId));
+        }
+        return comparator;
     }
 
     private static String readUserAttribute(UserModel user, String userAttribute) {
@@ -267,8 +295,21 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     private UserModel recoverAuthenticatingUser(
-            AuthenticationFlowContext context, CredentialVerifier verifier, JsonNode primaryClaims) {
+            AuthenticationFlowContext context,
+            AuthorizationContext authContext,
+            CredentialRequirement primaryCredential,
+            CredentialVerifier verifier,
+            JsonNode primaryClaims) {
         logger.info("Recovering authenticating user");
+
+        if (primaryCredential.isSessionIdentity()) {
+            String subjectUserId = authContext.getSubjectUserId();
+            if (StringUtil.isBlank(subjectUserId)) {
+                failRejectingPresentedCredential(context, "Missing session-bound subject user");
+                return null;
+            }
+            return recoverPresentationSubject(context, subjectUserId);
+        }
 
         String subject = verifier.readClaim(primaryClaims, JsonWebToken.SUBJECT);
         if (StringUtil.isBlank(subject)) {
@@ -312,6 +353,17 @@ public class OID4VPAuthenticator implements Authenticator {
             return null;
         }
 
+        return user;
+    }
+
+    private UserModel recoverPresentationSubject(AuthenticationFlowContext context, String subjectUserId) {
+        UserModel user = context.getSession().users().getUserById(context.getRealm(), subjectUserId);
+        if (user == null) {
+            logger.warnf("Credential offer subject '%s' did not resolve to a user", subjectUserId);
+            failDenyingAuthenticatingUser(context);
+            return null;
+        }
+        logger.debugf("Resolved presentation-during-issuance subject user id: %s", user.getId());
         return user;
     }
 

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -17,6 +18,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.InteractiveResponseConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
@@ -242,6 +244,80 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authorizationContext = recoverAuthorizationContextByRequestId(requestId);
         AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
 
+        processAuthorizationResponse(
+                authorizationContext,
+                authSession,
+                requestId,
+                encryptedResponse,
+                error,
+                errorDescription,
+                vpToken,
+                state);
+
+        return walletResponse(authorizationContext);
+    }
+
+    /**
+     * Submits an OpenID4VP Authorization Response over the OID4VCI interactive authorization
+     * (ia_post) flow, where the wallet posts the response back to the Authorization Challenge
+     * Endpoint keyed by {@code transaction_id} instead of the per-request response route.
+     *
+     * @return the issued authorization code on success
+     */
+    public String submitInteractiveAuthorizationResponse(
+            String transactionId,
+            String encryptedResponse,
+            String error,
+            String errorDescription,
+            String vpToken,
+            String state) {
+        logger.debug("Processing interactive authorization response for presentation during issuance...");
+
+        AuthenticationSessionModel authSession = recoverAuthenticationSession(transactionId);
+        AuthorizationContext authorizationContext =
+                new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
+
+        processAuthorizationResponse(
+                authorizationContext,
+                authSession,
+                authorizationContext.getRequestId(),
+                encryptedResponse,
+                error,
+                errorDescription,
+                vpToken,
+                state);
+
+        // processAuthorizationResponse mutates authorizationContext in-place. A wallet-submitted
+        // OpenID4VP error sets the ERROR status here (persistWalletErrorResponse); a successful
+        // presentation sets SUCCESS. A failed VP verification instead propagates a 401 from the auth
+        // processor and never reaches this point, so if we are here getStatus() already reflects the
+        // terminal outcome without re-fetching from the session store.
+        // OID4VCI §6.2.1.1/§6.2.2: a wallet-submitted OpenID4VP error response must surface as an
+        // Authorization Challenge Error Response, not as an empty successful response without a code.
+        if (AuthorizationContextStatus.ERROR.equals(authorizationContext.getStatus())) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    StringUtil.isNotBlank(error) ? error : OAuthErrorException.INVALID_REQUEST,
+                    authorizationContext.getErrorDescription()));
+        }
+
+        return authorizationContext.getAuthorizationCode();
+    }
+
+    /**
+     * Shared OpenID4VP Authorization Response processing for both the per-request response route
+     * and the interactive (ia_post) challenge route.
+     */
+    private void processAuthorizationResponse(
+            AuthorizationContext authorizationContext,
+            AuthenticationSessionModel authSession,
+            String requestId,
+            String encryptedResponse,
+            String error,
+            String errorDescription,
+            String vpToken,
+            String state) {
+
         if (StringUtil.isNotBlank(error)) {
             if (StringUtil.isNotBlank(encryptedResponse) || StringUtil.isNotBlank(vpToken)) {
                 throw new BadRequestException(errorResponse(
@@ -260,7 +336,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                         e);
             }
             persistWalletErrorResponse(authorizationContext, authSession, error, errorDescription);
-            return walletResponse(authorizationContext);
+            return;
         }
 
         // Validate that response is encrypted if required
@@ -302,8 +378,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         authorizationResponseService.processAuthorizationResponse(
                 responseObject, authorizationContext, authSession, authProcessor, profile);
-
-        return walletResponse(authorizationContext);
     }
 
     private void persistWalletErrorResponse(
@@ -497,6 +571,44 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
                 .setTransactionId(authorizationContext.getTransactionId());
+    }
+
+    /**
+     * Initializes OpenID4VP authentication for the OID4VCI interactive authorization (ia_post)
+     * flow. The signed request object is embedded inline and its {@code response_uri} points to
+     * the supplied Authorization Challenge Endpoint, where the wallet posts its response.
+     *
+     * @return an authorization context exposing the {@code transaction_id} and signed request object
+     */
+    public AuthorizationContext startInteractiveAuthentication(
+            String clientId, String profileId, CodeChallengeDetails codeChallengeDetails, String responseUri) {
+        logger.debug("Generating new interactive authentication context...");
+
+        validateOwnershipBinding(codeChallengeDetails);
+
+        ClientModel client = checkClient(clientId);
+        AuthenticationSessionModel authSession = createAuthSession(client);
+        AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
+        VerifierConfig config = new VerifierConfig(authConfig);
+        AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
+
+        // Honor the configured response mode: an encrypted verifier configuration (direct_post.jwt)
+        // maps to the encrypted interactive mode ia_post.jwt, otherwise the unencrypted ia_post
+        // is used (OID4VCI §6.2.1.1).
+        ResponseMode interactiveResponseMode =
+                config.getResponseMode().isEncrypted() ? ResponseMode.IA_POST_JWT : ResponseMode.IA_POST;
+
+        AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
+                config,
+                profile,
+                authSession,
+                null,
+                codeChallengeDetails,
+                new InteractiveResponseConfig(interactiveResponseMode, responseUri));
+
+        return new AuthorizationContext()
+                .setTransactionId(authorizationContext.getTransactionId())
+                .setRequestObjectJwt(authorizationContext.getRequestObjectJwt());
     }
 
     /**

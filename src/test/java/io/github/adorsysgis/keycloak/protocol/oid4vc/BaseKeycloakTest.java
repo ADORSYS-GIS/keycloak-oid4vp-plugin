@@ -2,16 +2,17 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -31,16 +32,19 @@ import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.util.JsonSerialization;
 import org.testcontainers.images.PullPolicy;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 /**
  * Base Keycloak test class for leveraging the TestContainers infrastructure.
  *
+ * <p>The Keycloak container is a JVM-wide <strong>singleton</strong>: it is started once (lazily, on
+ * first class load) and reused across all test classes in the same Surefire fork, instead of being
+ * restarted per test class. It is never stopped explicitly; the Testcontainers Ryuk reaper tears it
+ * down at JVM shutdown. This drastically reduces the total test time (one Quarkus augmentation +
+ * bootstrap instead of one per test class).
+ *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
-@Testcontainers
 public abstract class BaseKeycloakTest {
 
     private static final Logger logger = Logger.getLogger(BaseKeycloakTest.class);
@@ -61,8 +65,11 @@ public abstract class BaseKeycloakTest {
 
     protected static CloseableHttpClient httpClient;
 
-    @Container
     protected static final KeycloakContainer keycloak = createKeycloak();
+
+    static {
+        keycloak.start();
+    }
 
     private static KeycloakContainer createKeycloak() {
         KeycloakContainer container = new KeycloakContainer(TEST_KEYCLOAK_IMAGE);
@@ -72,7 +79,7 @@ public abstract class BaseKeycloakTest {
                 // Hot-reload main classes from "target/classes" to test implementation changes
                 // without rebuilding the jar.
                 .withProviderClassesFrom("target/classes", "target/test-classes")
-                .withFeaturesEnabled("oid4vc-vci")
+                .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
                 .withRealmImportFile("/realms/test-realm.json")
                 .withRealmImportFile("/realms/test-realm-haip.json")
                 .withRealmImportFile("/realms/test-realm-v2.json")
@@ -175,7 +182,11 @@ public abstract class BaseKeycloakTest {
             params.add(new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, codeVerifier));
         }
 
-        // Prepare the request
+        return requestAccessToken(params);
+    }
+
+    /** Executes a token request with the supplied OAuth grant parameters. */
+    protected String requestAccessToken(List<? extends NameValuePair> params) throws IOException {
         HttpPost httpPost = new HttpPost(getTestTokenEndpoint());
         httpPost.setEntity(new UrlEncodedFormEntity(params));
 
@@ -183,8 +194,23 @@ public abstract class BaseKeycloakTest {
         try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
             assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
             String json = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-            Map<String, String> payload = JsonSerialization.readValue(json, new TypeReference<>() {});
-            return payload.get(OAuth2Constants.ACCESS_TOKEN);
+            JsonNode payload = JsonSerialization.readValue(json, JsonNode.class);
+            String accessToken = payload.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
+            if (accessToken == null) {
+                throw new IllegalStateException("Token response does not contain an access token");
+            }
+            return accessToken;
         }
+    }
+
+    /** Posts a form to the OID4VCI Authorization Challenge Endpoint. */
+    protected HttpResponse postAuthorizationChallenge(List<? extends NameValuePair> form) throws IOException {
+        String url = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
+                .path(AuthorizationChallengeEndpointFactory.PROVIDER_ID)
+                .build()
+                .toString();
+        HttpPost post = new HttpPost(url);
+        post.setEntity(new UrlEncodedFormEntity(form));
+        return httpClient.execute(post);
     }
 }

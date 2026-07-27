@@ -138,6 +138,64 @@ public class SdJwtVPTestUtils {
     }
 
     /**
+     * Requests that Keycloak issue a PID-shaped SD-JWT credential carrying {@code given_name},
+     * {@code family_name} and {@code birth_date} as selectively disclosed claims. Used by the
+     * "presentation during issuance" (session-identity) flow, where the identity is taken from the
+     * credential offer and the presented PID is only matched against the brokered user's attributes.
+     */
+    public String requestPidSdJwtCredential(String vct, String givenName, String familyName, String birthDate) {
+        return requestPidSdJwtCredential(vct, givenName, familyName, birthDate, getKeycloakJwk());
+    }
+
+    /**
+     * Requests that Keycloak issue a PID-shaped SD-JWT credential with a specific issuer key.
+     */
+    public String requestPidSdJwtCredential(
+            String vct, String givenName, String familyName, String birthDate, JWK issuerJwk) {
+        SignatureSignerContext signer;
+        try {
+            KeyWrapper keyWrapper = RSATestUtils.getRsaKeyWrapper(issuerJwk);
+            signer = new AsymmetricSignatureSignerContext(keyWrapper);
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        }
+
+        String serverUrl = keycloak.getAuthServerUrl();
+        String keycloakIssuerURI = KeycloakUriBuilder.fromUri(serverUrl)
+                .path("/realms/{realm}")
+                .build(activeTestRealm)
+                .toString();
+
+        IssuerSignedJWT issuerSignedJWT =
+                examplePidSdJwtCredential(keycloakIssuerURI, vct, givenName, familyName, birthDate);
+        return SdJwt.builder()
+                .withIssuerSignedJwt(issuerSignedJWT)
+                .withIssuerSigningContext(signer)
+                .build()
+                .toSdJwtString();
+    }
+
+    /**
+     * Scaffold a PID-shaped SD-JWT credential (given_name / family_name / birth_date disclosures).
+     */
+    private static IssuerSignedJWT examplePidSdJwtCredential(
+            String iss, String vct, String givenName, String familyName, String birthDate) {
+        ObjectNode claimSet = baseCredentialClaims(iss, vct, true);
+        DisclosureSpec.Builder disclosure = baseDisclosure();
+
+        claimSet.put("given_name", givenName);
+        disclosure = disclosure.withUndisclosedClaim("given_name", "AJx-095VPrpTtN4QMOqROA");
+        claimSet.put("family_name", familyName);
+        disclosure = disclosure.withUndisclosedClaim("family_name", "Pc33JM2LchcU_lHggv_ufQ");
+        claimSet.put("birth_date", birthDate);
+        disclosure = disclosure.withUndisclosedClaim("birth_date", "G02NSrQfjFXQ7Io09sya_A");
+
+        return IssuerSignedJWT.builder()
+                .withClaims(claimSet, disclosure.build())
+                .build();
+    }
+
+    /**
      * Scaffold an SD-JWT identity credential for unit tests (no Keycloak container required).
      */
     public static IssuerSignedJWT exampleIssuerSignedJwtForTest(
@@ -150,33 +208,11 @@ public class SdJwtVPTestUtils {
      */
     private static IssuerSignedJWT exampleSdJwtCredential(
             String iss, String vct, String subject, String username, boolean setStatusClaim) {
-        Objects.requireNonNull(iss);
-        Objects.requireNonNull(vct);
-
-        ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
-        claimSet.put(OAuth2Constants.ISSUER, iss);
+        ObjectNode claimSet = baseCredentialClaims(iss, vct, setStatusClaim);
         if (subject != null) {
             claimSet.put(JsonWebToken.SUBJECT, subject);
         }
-        claimSet.put(CLAIM_NAME_VCT, vct);
-        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
-
-        // Add status list claim (Token Status List)
-        if (setStatusClaim) {
-            claimSet.set(
-                    STATUS_FIELD,
-                    JsonSerialization.mapper.valueToTree(Map.of(
-                            STATUS_LIST_FIELD,
-                            new ReferencedTokenValidator.StatusInfo(0, "https://example.com/status-list-jwt"))));
-        }
-
-        DisclosureSpec.Builder disclosure = DisclosureSpec.builder().withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
-
-        // Bind credential to user
-        JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
-        ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
-        cnf.set(CLAIM_NAME_JWK, JsonSerialization.mapper.valueToTree(jwk));
-        claimSet.set(CLAIM_NAME_CNF, cnf);
+        DisclosureSpec.Builder disclosure = baseDisclosure();
 
         if (username != null) {
             claimSet.put(OAuth2Constants.USERNAME, username);
@@ -186,6 +222,33 @@ public class SdJwtVPTestUtils {
         return IssuerSignedJWT.builder()
                 .withClaims(claimSet, disclosure.build())
                 .build();
+    }
+
+    private static ObjectNode baseCredentialClaims(String iss, String vct, boolean setStatusClaim) {
+        Objects.requireNonNull(iss);
+        Objects.requireNonNull(vct);
+
+        ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
+        claimSet.put(OAuth2Constants.ISSUER, iss);
+        claimSet.put(CLAIM_NAME_VCT, vct);
+        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
+        if (setStatusClaim) {
+            claimSet.set(
+                    STATUS_FIELD,
+                    JsonSerialization.mapper.valueToTree(Map.of(
+                            STATUS_LIST_FIELD,
+                            new ReferencedTokenValidator.StatusInfo(0, "https://example.com/status-list-jwt"))));
+        }
+
+        JWK jwk = ECTestUtils.getECPublicJwk(getUserJwk());
+        ObjectNode cnf = JsonSerialization.mapper.createObjectNode();
+        cnf.set(CLAIM_NAME_JWK, JsonSerialization.mapper.valueToTree(jwk));
+        claimSet.set(CLAIM_NAME_CNF, cnf);
+        return claimSet;
+    }
+
+    private static DisclosureSpec.Builder baseDisclosure() {
+        return DisclosureSpec.builder().withDecoyClaim("G02NSrQfjFXQ7Io09syajA");
     }
 
     /**
