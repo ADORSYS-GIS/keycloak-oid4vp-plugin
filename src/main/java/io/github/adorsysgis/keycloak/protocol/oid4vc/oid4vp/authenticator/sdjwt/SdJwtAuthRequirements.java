@@ -12,8 +12,6 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
-import org.keycloak.OAuth2Constants;
-import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
@@ -31,32 +29,29 @@ public class SdJwtAuthRequirements {
 
     private final AuthRequirements authRequirements;
 
-    private List<String> expectedVcts;
-    private List<String> requiredClaims;
-    private String expectedVctsPattern;
+    private final List<String> expectedVcts;
+    private final List<String> requiredClaims;
+    private final String expectedVctsPattern;
     private final String keycloakIssuerURI;
 
-    private CredentialRequirement credentialRequirement;
+    private final CredentialRequirement credentialRequirement;
 
-    public SdJwtAuthRequirements(KeycloakContext context, AuthenticatorConfigModel authConfig) {
+    public SdJwtAuthRequirements(
+            KeycloakContext context, AuthRequirements authRequirements, CredentialRequirement credentialRequirement) {
         logger.debugf("Collecting SD-JWT authentication requirements");
 
-        this.authRequirements = new AuthRequirements(authConfig);
-        this.expectedVcts = authRequirements.getCredentialTypes();
-        this.requiredClaims = List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME);
+        this.authRequirements = authRequirements;
+        this.credentialRequirement = credentialRequirement;
+        this.requiredClaims = credentialRequirement.getClaims();
 
+        this.expectedVcts = credentialRequirement.getCredentialTypes();
         this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
         this.keycloakIssuerURI = Urls.realmIssuer(
                 context.getUri().getBaseUri(), context.getRealm().getName());
     }
 
-    public SdJwtAuthRequirements(
-            KeycloakContext context, AuthenticatorConfigModel authConfig, CredentialRequirement credentialRequirement) {
-        this(context, authConfig);
-        this.credentialRequirement = credentialRequirement;
-        this.expectedVcts = credentialRequirement.getCredentialTypes();
-        this.requiredClaims = credentialRequirement.getClaims();
-        this.expectedVctsPattern = buildExpectedVctsPattern(expectedVcts);
+    public boolean shouldRequireCryptographicHolderBinding() {
+        return authRequirements.shouldRequireCryptographicHolderBinding();
     }
 
     public List<String> getExpectedVcts() {

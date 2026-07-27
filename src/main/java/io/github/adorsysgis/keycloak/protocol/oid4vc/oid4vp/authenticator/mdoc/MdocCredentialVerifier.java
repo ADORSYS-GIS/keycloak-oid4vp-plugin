@@ -7,6 +7,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContex
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -49,12 +50,12 @@ public class MdocCredentialVerifier implements CredentialVerifier {
     public JsonNode verifyCredential(
             AuthenticationFlowContext context,
             AuthorizationContext authorizationContext,
+            AuthRequirements authRequirements,
             CredentialRequirement credential,
-            String token,
-            boolean requireCryptographicHolderBinding)
+            String token)
             throws VerificationException {
 
-        MdocAuthRequirements authReqs = new MdocAuthRequirements(context.getAuthenticatorConfig(), credential);
+        MdocAuthRequirements authReqs = new MdocAuthRequirements(authRequirements, credential);
 
         TrustAnchorProvider truststore = TrustedProviderResolver.resolve(context.getSession(), credential);
 

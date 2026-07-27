@@ -6,7 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.RSATestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
@@ -16,6 +17,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.crypto.CryptoIntegration;
+import org.keycloak.common.util.Time;
 import org.keycloak.crypto.AsymmetricSignatureSignerContext;
 import org.keycloak.crypto.ECDSASignatureSignerContext;
 import org.keycloak.crypto.KeyWrapper;
@@ -24,7 +26,6 @@ import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.sdjwt.vp.SdJwtVP;
-import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 
 class SdJwtCredentialVerifierTransactionDataTest {
@@ -44,10 +45,10 @@ class SdJwtCredentialVerifierTransactionDataTest {
         String hash = hashForWire(wire);
         String presentedSdJwt = presentationWithHashes(List.of(hash));
 
-        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+        AuthorizationContext authContext = authContextWithWire(List.of(wire));
         SdJwtCredentialVerifier handler = new SdJwtCredentialVerifier(mock(StatusListJwtFetcher.class));
 
-        assertDoesNotThrow(() -> handler.validateTransactionData(authSession, presentedSdJwt));
+        assertDoesNotThrow(() -> handler.validateTransactionData(authContext, presentedSdJwt));
     }
 
     @Test
@@ -55,30 +56,30 @@ class SdJwtCredentialVerifierTransactionDataTest {
         String wire = wireEntry("payment");
         String presentedSdJwt = presentationWithHashes(List.of("invalid-hash"));
 
-        AuthenticationSessionModel authSession = authSessionWithWire(List.of(wire));
+        AuthorizationContext authContext = authContextWithWire(List.of(wire));
         SdJwtCredentialVerifier handler = new SdJwtCredentialVerifier(mock(StatusListJwtFetcher.class));
 
         assertThrows(
-                IllegalArgumentException.class, () -> handler.validateTransactionData(authSession, presentedSdJwt));
+                IllegalArgumentException.class, () -> handler.validateTransactionData(authContext, presentedSdJwt));
     }
 
     @Test
-    void skipsValidationWhenNoTransactionDataOnSession() throws Exception {
+    void skipsValidationWhenNoTransactionDataInRequest() throws Exception {
         String presentedSdJwt = presentationWithHashes(List.of("any"));
-        AuthenticationSessionModel authSession = mock(AuthenticationSessionModel.class);
-        when(authSession.getAuthNote(OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY))
-                .thenReturn(null);
+        AuthorizationContext authContext = authContextWithWire(null);
 
         SdJwtCredentialVerifier handler = new SdJwtCredentialVerifier(mock(StatusListJwtFetcher.class));
 
-        assertDoesNotThrow(() -> handler.validateTransactionData(authSession, presentedSdJwt));
+        assertDoesNotThrow(() -> handler.validateTransactionData(authContext, presentedSdJwt));
     }
 
-    private static AuthenticationSessionModel authSessionWithWire(List<String> wireEntries) throws Exception {
-        AuthenticationSessionModel authSession = mock(AuthenticationSessionModel.class);
-        when(authSession.getAuthNote(OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY))
-                .thenReturn(JsonSerialization.writeValueAsString(wireEntries));
-        return authSession;
+    private static AuthorizationContext authContextWithWire(List<String> wireEntries) {
+        RequestObject requestObject = mock(RequestObject.class);
+        when(requestObject.getTransactionData()).thenReturn(wireEntries);
+
+        AuthorizationContext authContext = mock(AuthorizationContext.class);
+        when(authContext.getRequestObject()).thenReturn(requestObject);
+        return authContext;
     }
 
     private static String presentationWithHashes(List<String> hashes) throws Exception {
@@ -103,7 +104,7 @@ class SdJwtCredentialVerifierTransactionDataTest {
 
     private static JsonWebToken buildKbJwtClaims(List<String> hashes) {
         JsonWebToken kbJwtClaims = new JsonWebToken();
-        long currentTime = org.keycloak.common.util.Time.currentTime();
+        long currentTime = Time.currentTimeSeconds();
         kbJwtClaims.iat(currentTime);
         kbJwtClaims.exp(currentTime + SdJwtVPTestUtils.KB_JWT_LIFESPAN_SECS);
         kbJwtClaims.getOtherClaims().put(IDToken.NONCE, NONCE);

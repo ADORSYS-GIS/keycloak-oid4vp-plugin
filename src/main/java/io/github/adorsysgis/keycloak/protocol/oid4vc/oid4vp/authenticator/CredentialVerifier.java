@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -34,9 +35,9 @@ public interface CredentialVerifier {
     JsonNode verifyCredential(
             AuthenticationFlowContext context,
             AuthorizationContext authorizationContext,
+            AuthRequirements authRequirements,
             CredentialRequirement credential,
-            String token,
-            boolean requireCryptographicHolderBinding)
+            String token)
             throws VerificationException;
 
     /**

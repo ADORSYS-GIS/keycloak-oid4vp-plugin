@@ -4,7 +4,6 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability;
@@ -23,7 +22,6 @@ import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
@@ -82,10 +80,14 @@ public class AuthorizationResponseService {
                     store);
         }
 
-        HashMap<String, String> presentedTokens = extractPresentedTokens(responseObject, profile, store, authContext);
+        // Propagate authorization context to processor session
+        AuthenticationSessionModel authProcessorSession = authProcessor.getAuthenticationSession();
+        new AuthenticationSessionStore(authProcessorSession).storeAuthorizationContext(authContext);
 
-        setupAuthenticationSession(authProcessor.getAuthenticationSession(), presentedTokens, authContext);
-        new AuthenticationSessionStore(authProcessor.getAuthenticationSession()).storeAuthorizationContext(authContext);
+        // Collect and pass presented tokens as session note so the authenticator can pick them up
+        HashMap<String, String> presentedTokens = extractPresentedTokens(responseObject, profile, store, authContext);
+        authProcessorSession.setAuthNote(
+                OID4VPAuthenticator.PRESENTED_TOKENS_KEY, JsonSerialization.valueAsString(presentedTokens));
 
         // Run authentication processor to validate the presented credentials
         logger.debug("Running authentication processor to validate presented credentials...");
@@ -117,42 +119,6 @@ public class AuthorizationResponseService {
 
         // Persist authorization context
         store.storeAuthorizationContext(authContext);
-    }
-
-    // ---- Session setup -------------------------------------------------------
-
-    /**
-     * Stores the presented tokens, holder-binding requirement and transaction data
-     * as authentication-session notes so the authenticator can pick them up.
-     *
-     * <p>This logic is format-agnostic; format-specific verification happens later
-     * inside the authenticator via {@link CredentialVerifier}.
-     */
-    private void setupAuthenticationSession(
-            AuthenticationSessionModel authSession,
-            Map<String, String> presentedTokens,
-            AuthorizationContext authContext) {
-
-        authSession.setAuthNote(
-                OID4VPAuthenticator.PRESENTED_TOKENS_KEY, JsonSerialization.valueAsString(presentedTokens));
-
-        DcqlQuery dcqlQuery = authContext.getRequestObject().getDcqlQuery();
-        boolean requireCryptographicHolderBinding = dcqlQuery.getCredentials().stream()
-                .noneMatch(c -> Boolean.FALSE.equals(c.getRequireCryptographicHolderBinding()));
-        authSession.setAuthNote(
-                OID4VPAuthenticator.REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY,
-                String.valueOf(requireCryptographicHolderBinding));
-
-        var transactionData = authContext.getRequestObject().getTransactionData();
-        if (transactionData != null && !transactionData.isEmpty()) {
-            try {
-                authSession.setAuthNote(
-                        OID4VPAuthenticator.TRANSACTION_DATA_WIRE_KEY,
-                        JsonSerialization.writeValueAsString(transactionData));
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to persist transaction_data for validation", e);
-            }
-        }
     }
 
     // ---- Token extraction ----------------------------------------------------

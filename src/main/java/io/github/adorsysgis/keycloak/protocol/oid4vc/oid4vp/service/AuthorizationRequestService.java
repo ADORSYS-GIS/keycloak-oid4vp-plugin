@@ -265,7 +265,7 @@ public class AuthorizationRequestService {
 
         // Build DCQL query from the selected authentication profile
         DcqlQuery dcqlQuery =
-                DcqlQueryGenerator.create().buildQuery(profile, config.effectiveRequireCryptographicHolderBinding());
+                DcqlQueryGenerator.create().buildQuery(profile, config.shouldRequireCryptographicHolderBinding());
 
         // transaction_data and verifier_info currently reference the primary DCQL
         // credential id. Multi-credential profile support keeps the selected

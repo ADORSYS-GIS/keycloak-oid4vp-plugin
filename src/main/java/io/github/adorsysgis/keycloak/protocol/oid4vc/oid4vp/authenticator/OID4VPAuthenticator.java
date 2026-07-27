@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -55,10 +56,6 @@ public class OID4VPAuthenticator implements Authenticator {
      */
     public static final String PRESENTED_TOKENS_KEY = "presented_tokens";
 
-    public static final String REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY = "require_cryptographic_holder_binding";
-
-    public static final String TRANSACTION_DATA_WIRE_KEY = "transaction_data_wire";
-
     public OID4VPAuthenticator(Map<String, CredentialVerifier> handlers) {
         this.handlers = handlers;
     }
@@ -72,7 +69,7 @@ public class OID4VPAuthenticator implements Authenticator {
         CredentialRequirement primaryCredential = profile.getPrimaryCredential();
 
         AuthorizationContext authContext = getAuthorizationContext(authSession);
-        boolean requireCryptographicHolderBinding = parseRequireCryptographicHolderBinding(authSession);
+        AuthRequirements authRequirements = new AuthRequirements(context.getAuthenticatorConfig());
 
         Map<String, String> presentedTokens = getPresentedTokens(authSession);
         String primaryToken = presentedTokens.get(primaryCredential.getId());
@@ -88,7 +85,7 @@ public class OID4VPAuthenticator implements Authenticator {
 
         try {
             primaryClaims = primaryVerifier.verifyCredential(
-                    context, authContext, primaryCredential, primaryToken, requireCryptographicHolderBinding);
+                    context, authContext, authRequirements, primaryCredential, primaryToken);
         } catch (VerificationException e) {
             logger.errorf(e, "Primary credential verification failed (authSession = %s)", correlationId(context));
             failRejectingPresentedCredential(context, e.getMessage(), e);
@@ -129,7 +126,7 @@ public class OID4VPAuthenticator implements Authenticator {
                     primaryClaims,
                     supportingTokens,
                     user,
-                    requireCryptographicHolderBinding);
+                    authRequirements);
         } catch (VerificationException | IllegalStateException e) {
             logger.errorf(e, "Supporting credential verification failed (authSession = %s)", correlationId(context));
             failRejectingPresentedCredential(context, e.getMessage(), e);
@@ -178,7 +175,7 @@ public class OID4VPAuthenticator implements Authenticator {
             JsonNode primaryClaims,
             Map<String, String> supportingTokens,
             UserModel user,
-            boolean requireCryptographicHolderBinding)
+            AuthRequirements authRequirements)
             throws VerificationException {
 
         for (CredentialRequirement credential : profile.getCredentials()) {
@@ -193,8 +190,8 @@ public class OID4VPAuthenticator implements Authenticator {
             }
 
             CredentialVerifier supportingVerifier = resolveVerifier(authSession, credential.getId());
-            JsonNode supportingClaims = supportingVerifier.verifyCredential(
-                    context, authContext, credential, token, requireCryptographicHolderBinding);
+            JsonNode supportingClaims =
+                    supportingVerifier.verifyCredential(context, authContext, authRequirements, credential, token);
 
             applyBindingRules(
                     context, credential, supportingVerifier, supportingClaims, primaryVerifier, primaryClaims, user);
@@ -287,11 +284,6 @@ public class OID4VPAuthenticator implements Authenticator {
         return presentedTokens.entrySet().stream()
                 .filter(e -> !primaryCredentialId.equals(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    private static boolean parseRequireCryptographicHolderBinding(AuthenticationSessionModel authSession) {
-        String note = authSession.getAuthNote(REQUIRE_CRYPTOGRAPHIC_HOLDER_BINDING_KEY);
-        return StringUtil.isBlank(note) || Boolean.parseBoolean(note);
     }
 
     private UserModel recoverAuthenticatingUser(

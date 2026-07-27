@@ -6,7 +6,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRe
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import java.util.List;
 import org.jboss.logging.Logger;
-import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 
 /**
@@ -17,19 +16,12 @@ public class MdocAuthRequirements {
     private static final Logger logger = Logger.getLogger(MdocAuthRequirements.class);
 
     private final AuthRequirements authRequirements;
+    private final List<String> expectedDocTypes;
+    private final List<ClaimReference> requiredClaims;
 
-    private List<String> expectedDocTypes;
-    private List<ClaimReference> requiredClaims;
-
-    public MdocAuthRequirements(AuthenticatorConfigModel authConfig) {
+    public MdocAuthRequirements(AuthRequirements authRequirements, CredentialRequirement credentialRequirement) {
         logger.debugf("Collecting mDoc authentication requirements");
-        this.authRequirements = new AuthRequirements(authConfig);
-        this.expectedDocTypes = authRequirements.getCredentialTypes();
-        this.requiredClaims = List.of();
-    }
-
-    public MdocAuthRequirements(AuthenticatorConfigModel authConfig, CredentialRequirement credentialRequirement) {
-        this(authConfig);
+        this.authRequirements = authRequirements;
         this.expectedDocTypes = credentialRequirement.getCredentialTypes();
         this.requiredClaims = credentialRequirement.getClaimReferences();
     }
