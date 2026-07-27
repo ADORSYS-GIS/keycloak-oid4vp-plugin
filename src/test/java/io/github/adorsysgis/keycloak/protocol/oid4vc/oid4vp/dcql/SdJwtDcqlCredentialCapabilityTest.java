@@ -26,13 +26,14 @@ import org.keycloak.sdjwt.IssuerSignedJWT;
 import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.util.JsonSerialization;
 
-class DcqlPresentationValidatorTest {
+class SdJwtDcqlCredentialCapabilityTest {
 
     private static final String VCT = "https://credentials.example.com/identity_credential";
+    private static final SdJwtDcqlCredentialCapability CAPABILITY = new SdJwtDcqlCredentialCapability();
 
     @BeforeAll
     static void initCrypto() {
-        CryptoIntegration.init(DcqlPresentationValidatorTest.class.getClassLoader());
+        CryptoIntegration.init(SdJwtDcqlCredentialCapabilityTest.class.getClassLoader());
     }
 
     @Test
@@ -50,7 +51,7 @@ class DcqlPresentationValidatorTest {
         DcqlQuery query = queryWithClaims(claim("address-street", List.of("address", "street_address")));
 
         assertDoesNotThrow(
-                () -> DcqlPresentationValidator.validatePresentation(query, token),
+                () -> validatePresentation(query, token),
                 "Should accept presentation that satisfies nested disclosed claim path");
     }
 
@@ -63,8 +64,7 @@ class DcqlPresentationValidatorTest {
         DcqlQuery query = queryWithClaims(claimWithValues("given-name", List.of("given_name"), List.of("Alice")));
 
         assertDoesNotThrow(
-                () -> DcqlPresentationValidator.validatePresentation(query, token),
-                "Should accept presentation when claim values match");
+                () -> validatePresentation(query, token), "Should accept presentation when claim values match");
     }
 
     @Test
@@ -75,8 +75,8 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = queryWithClaims(claimWithValues("given-name", List.of("given_name"), List.of("Bob")));
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT does not satisfy DCQL claim values for path: [given_name]", error.getMessage());
     }
 
@@ -88,8 +88,8 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = queryWithClaims(claim("family-name", List.of("family_name")));
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT does not satisfy DCQL claim path: [family_name]", error.getMessage());
     }
 
@@ -110,7 +110,7 @@ class DcqlPresentationValidatorTest {
         DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
         assertDoesNotThrow(
-                () -> DcqlPresentationValidator.validatePresentation(query, token),
+                () -> validatePresentation(query, token),
                 "Should accept presentation when any claim_sets option is fully satisfied");
     }
 
@@ -127,8 +127,8 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT does not satisfy any DCQL claim_sets option", error.getMessage());
     }
 
@@ -141,8 +141,8 @@ class DcqlPresentationValidatorTest {
         DcqlQuery query = queryWithClaims(claim("given-name", List.of("given_name")));
         query.getCredentials().getFirst().getMeta().setVctValues(List.of("https://credentials.example.com/other"));
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT vct does not match any value in meta.vct_values: " + VCT, error.getMessage());
     }
 
@@ -153,28 +153,9 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = queryWithClaims(claim("given-name", List.of("given_name")));
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT is missing required vct claim", error.getMessage());
-    }
-
-    @Test
-    void rejectsMultipleCredentialQueries() throws Exception {
-        String token = buildSdJwtToken(
-                claimSet -> claimSet.put("given_name", "Alice"),
-                DisclosureSpec.builder().build());
-
-        Credential first = credentialWithClaims(List.of(claim("given-name", List.of("given_name"))));
-        first.setId("cred-1");
-        Credential second = credentialWithClaims(List.of(claim("family-name", List.of("family_name"))));
-        second.setId("cred-2");
-        DcqlQuery query = new DcqlQuery();
-        query.setCredentials(List.of(first, second));
-
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
-        assertEquals(
-                "Only single-credential DCQL queries are supported for presentation validation", error.getMessage());
     }
 
     @Test
@@ -186,7 +167,7 @@ class DcqlPresentationValidatorTest {
         Credential credential = credentialWithClaims(List.of());
         DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
-        assertDoesNotThrow(() -> DcqlPresentationValidator.validatePresentation(query, token));
+        assertDoesNotThrow(() -> validatePresentation(query, token));
     }
 
     @Test
@@ -205,8 +186,8 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT does not satisfy any DCQL claim_sets option", error.getMessage());
     }
 
@@ -220,8 +201,8 @@ class DcqlPresentationValidatorTest {
         credential.setRequireCryptographicHolderBinding(null);
         DcqlQuery query = DcqlQueryGenerator.singleCredentialQuery(credential);
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("DCQL query requires cryptographic holder binding (Key Binding JWT)", error.getMessage());
     }
 
@@ -232,9 +213,13 @@ class DcqlPresentationValidatorTest {
 
         DcqlQuery query = queryWithClaims(claim("given-name", List.of("given_name")));
 
-        VerificationException error = assertThrows(
-                VerificationException.class, () -> DcqlPresentationValidator.validatePresentation(query, token));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> validatePresentation(query, token));
         assertEquals("Presented SD-JWT is missing required vct claim", error.getMessage());
+    }
+
+    private static void validatePresentation(DcqlQuery query, String token) throws VerificationException {
+        CAPABILITY.validatePresentation(query.getCredentials().getFirst(), token);
     }
 
     private static DcqlQuery queryWithClaims(Claim... claims) {

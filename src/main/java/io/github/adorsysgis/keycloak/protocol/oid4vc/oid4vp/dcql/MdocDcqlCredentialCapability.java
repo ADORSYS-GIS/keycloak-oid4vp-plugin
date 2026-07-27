@@ -3,7 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 import com.authlete.cose.constants.COSEAlgorithms;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.prex.MdocGenericFormat;
 import java.util.List;
 import org.keycloak.common.VerificationException;
@@ -23,7 +23,12 @@ public final class MdocDcqlCredentialCapability implements DcqlCredentialCapabil
     }
 
     @Override
-    public void validatePresentation(DcqlQuery query, String presentedToken) throws VerificationException {
+    public boolean supportsPresentationPreValidation() {
+        return false;
+    }
+
+    @Override
+    public void validatePresentation(Credential credential, String presentedToken) throws VerificationException {
         throw new UnsupportedOperationException(
                 "DCQL presentation validation is not yet supported for mso_mdoc credentials");
     }

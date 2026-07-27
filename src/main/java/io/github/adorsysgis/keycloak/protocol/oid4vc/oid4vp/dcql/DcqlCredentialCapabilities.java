@@ -1,20 +1,38 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Registry of format-specific {@link DcqlCredentialCapability} implementations.
  */
 public final class DcqlCredentialCapabilities {
 
-    private final List<DcqlCredentialCapability> capabilities;
+    private final Map<String, DcqlCredentialCapability> capabilitiesByFormat;
 
     public DcqlCredentialCapabilities(List<DcqlCredentialCapability> capabilities) {
         if (capabilities == null || capabilities.isEmpty()) {
             throw new IllegalArgumentException("At least one DCQL credential capability is required");
         }
-        this.capabilities = List.copyOf(capabilities);
+
+        Map<String, DcqlCredentialCapability> registeredCapabilities = new LinkedHashMap<>();
+        for (DcqlCredentialCapability capability : capabilities) {
+            if (capability == null) {
+                throw new IllegalArgumentException("DCQL credential capability must not be null");
+            }
+            String format = capability.format();
+            if (StringUtil.isBlank(format)) {
+                throw new IllegalArgumentException("DCQL credential capability format must be non-empty");
+            }
+            if (registeredCapabilities.putIfAbsent(format, capability) != null) {
+                throw new IllegalArgumentException("Duplicate DCQL credential capability format: " + format);
+            }
+        }
+        this.capabilitiesByFormat = Collections.unmodifiableMap(registeredCapabilities);
     }
 
     public static DcqlCredentialCapabilities createDefault() {
@@ -22,21 +40,18 @@ public final class DcqlCredentialCapabilities {
                 List.of(new SdJwtDcqlCredentialCapability(), new MdocDcqlCredentialCapability()));
     }
 
-    public List<DcqlCredentialCapability> all() {
-        return capabilities;
+    public Collection<DcqlCredentialCapability> all() {
+        return capabilitiesByFormat.values();
     }
 
-    public DcqlCredentialCapability resolveForPresentation(DcqlQuery query) {
-        if (query == null
-                || query.getCredentials() == null
-                || query.getCredentials().size() != 1) {
-            throw new IllegalStateException("DCQL presentation validation requires exactly one credential query");
+    public DcqlCredentialCapability resolve(String format) {
+        if (StringUtil.isBlank(format)) {
+            throw new IllegalArgumentException("DCQL credential format must be non-empty");
         }
-        String format = query.getCredentials().getFirst().getFormat();
-        return capabilities.stream()
-                .filter(capability -> capability.format().equals(format))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        String.format("No DCQL credential capability for format: %s", format)));
+        DcqlCredentialCapability capability = capabilitiesByFormat.get(format);
+        if (capability == null) {
+            throw new IllegalArgumentException("No DCQL credential capability for format: " + format);
+        }
+        return capability;
     }
 }
