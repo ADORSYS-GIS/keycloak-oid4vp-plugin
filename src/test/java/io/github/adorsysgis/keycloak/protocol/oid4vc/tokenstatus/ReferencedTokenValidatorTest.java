@@ -551,6 +551,111 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
+    public void testStatusListJwt_RejectsExpiredExpEqualsNow() {
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "https://status.example.com/list",
+                    "iat": 1700000000,
+                    "exp": 1000,
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "eNrbuRgAAhcBXQ"
+                    }
+                }
+                """);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        ReferencedTokenValidationException exception = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
+        assertTrue(
+                exception.getMessage().contains("expired"),
+                "Should mention expired when exp == now. Actual: " + exception.getMessage());
+    }
+
+    @Test
+    public void testStatusListJwt_AcceptsExpAfterNow() throws Exception {
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "https://status.example.com/list",
+                    "iat": 1700000000,
+                    "exp": 1001,
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "eNrbuRgAAhcBXQ"
+                    }
+                }
+                """);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        val.validate(credentialPayload(1, TEST_STATUS_LIST_URI));
+    }
+
+    @Test
+    public void testStatusListJwt_RejectsStringExp() {
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "https://status.example.com/list",
+                    "iat": 1700000000,
+                    "exp": "not-a-number",
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "eNrbuRgAAhcBXQ"
+                    }
+                }
+                """);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        ReferencedTokenValidationException exception = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
+        assertTrue(
+                exception.getMessage().contains("numeric"),
+                "Should mention numeric. Actual: " + exception.getMessage());
+    }
+
+    @Test
+    public void testStatusListJwt_RejectsNullExp() {
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "https://status.example.com/list",
+                    "iat": 1700000000,
+                    "exp": null,
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "eNrbuRgAAhcBXQ"
+                    }
+                }
+                """);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        ReferencedTokenValidationException exception = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
+        assertTrue(
+                exception.getMessage().contains("numeric"),
+                "Should mention numeric. Actual: " + exception.getMessage());
+    }
+
+    @Test
+    public void testStatusListJwt_RejectsBooleanExp() {
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "https://status.example.com/list",
+                    "iat": 1700000000,
+                    "exp": true,
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "eNrbuRgAAhcBXQ"
+                    }
+                }
+                """);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        ReferencedTokenValidationException exception = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
+        assertTrue(
+                exception.getMessage().contains("numeric"),
+                "Should mention numeric. Actual: " + exception.getMessage());
+    }
+
+    @Test
     public void testStatusListJwt_AcceptsValidClaims() throws Exception {
         // status[1] = 0 (VALID) in the 1-bit test vector
         validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI));

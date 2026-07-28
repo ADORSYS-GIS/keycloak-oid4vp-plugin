@@ -38,9 +38,20 @@ public class ReferencedTokenValidator {
     private static final String JWT_TYPE_STATUS_LIST = "statuslist+jwt";
 
     private final StatusListJwtFetcher statusListJwtFetcher;
+    private final TimeProvider timeProvider;
 
     public ReferencedTokenValidator(StatusListJwtFetcher statusListJwtFetcher) {
+        this(statusListJwtFetcher, () -> System.currentTimeMillis() / 1000);
+    }
+
+    ReferencedTokenValidator(StatusListJwtFetcher statusListJwtFetcher, TimeProvider timeProvider) {
         this.statusListJwtFetcher = statusListJwtFetcher;
+        this.timeProvider = timeProvider;
+    }
+
+    @FunctionalInterface
+    public interface TimeProvider {
+        long currentTimeSeconds();
     }
 
     /**
@@ -233,12 +244,14 @@ public class ReferencedTokenValidator {
     /**
      * Checks the exp claim and throws if expired.
      */
-    private static void rejectExpired(JsonNode expNode, String tokenDescription)
-            throws ReferencedTokenValidationException {
-        if (expNode != null && expNode.isNumber()) {
+    private void rejectExpired(JsonNode expNode, String tokenDescription) throws ReferencedTokenValidationException {
+        if (expNode != null) {
+            if (!expNode.isNumber()) {
+                throw new ReferencedTokenValidationException(tokenDescription + " 'exp' claim must be a numeric value");
+            }
             long expirationTime = expNode.asLong();
-            long currentTime = System.currentTimeMillis() / 1000;
-            if (currentTime > expirationTime) {
+            long currentTime = timeProvider.currentTimeSeconds();
+            if (currentTime >= expirationTime) {
                 throw new ReferencedTokenValidationException(tokenDescription + " has expired. Expiration time: "
                         + expirationTime + ", Current time: " + currentTime);
             }
