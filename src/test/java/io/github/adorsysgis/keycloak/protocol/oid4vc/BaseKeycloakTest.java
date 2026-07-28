@@ -86,6 +86,7 @@ public abstract class BaseKeycloakTest {
                         "/realms/test-realm-haip.json",
                         "/realms/test-realm-v2.json",
                         "/realms/test-realm-legacy-v1-2-6.json")
+                .withEnv("JAVA_OPTS_APPEND", "-Xms1g -Xmx2g")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
