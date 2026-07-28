@@ -55,6 +55,7 @@ public abstract class BaseKeycloakTest {
     public static final String TEST_REALM_NAME = "test";
     public static final String TEST_REALM_HAIP_NAME = "test-haip";
     public static final String TEST_REALM_V2_NAME = "test-v2";
+    public static final String TEST_REALM_LEGACY_V1_2_6_NAME = "test-legacy-v1-2-6";
 
     public static final String TEST_USER = "test-user";
     public static final String TEST_USER_ID = "test-user-id";
@@ -80,9 +81,12 @@ public abstract class BaseKeycloakTest {
                 // without rebuilding the jar.
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
-                .withRealmImportFile("/realms/test-realm.json")
-                .withRealmImportFile("/realms/test-realm-haip.json")
-                .withRealmImportFile("/realms/test-realm-v2.json")
+                .withRealmImportFiles(
+                        "/realms/test-realm.json",
+                        "/realms/test-realm-haip.json",
+                        "/realms/test-realm-v2.json",
+                        "/realms/test-realm-legacy-v1-2-6.json")
+                .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
                 .withCopyToContainer(
