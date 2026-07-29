@@ -30,7 +30,10 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedToken
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Base64Url;
@@ -155,21 +158,35 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             throw new VerificationException("DeviceSigned.nameSpaces is not a valid CBOR map");
         }
 
-        // First pass: find the namespace containing transaction_data_hashes
+        // Single pass: collect both hashes and alg while checking for duplicates and cross-namespace violations
         ArrayNode hashes = null;
         String hashesNamespace = null;
+        String hashesAlg = null;
+        String algNamespace = null;
 
         for (CBORPair nsPair : nsMap.getPairs()) {
             if (nsPair == null || !(nsPair.getValue() instanceof CBORPairList itemsMap)) {
                 continue;
             }
+            String nsName = CborUtil.asString(nsPair.getKey());
+
             var hashesPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_CLAIM);
             if (hashesPair != null) {
                 if (hashesNamespace != null) {
                     throw new VerificationException("transaction_data_hashes must not appear in multiple namespaces");
                 }
                 hashes = extractHashesArray(hashesPair.getValue());
-                hashesNamespace = CborUtil.asString(nsPair.getKey());
+                hashesNamespace = nsName;
+            }
+
+            var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
+            if (algPair != null) {
+                if (algNamespace != null) {
+                    throw new VerificationException(
+                            "transaction_data_hashes_alg must not appear in multiple namespaces");
+                }
+                algNamespace = nsName;
+                hashesAlg = extractAlgString(algPair.getValue());
             }
         }
 
@@ -177,23 +194,9 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             return null;
         }
 
-        // Second pass: read alg only from the hashes namespace; reject alg in other namespaces
-        String hashesAlg = null;
-
-        for (CBORPair nsPair : nsMap.getPairs()) {
-            if (nsPair == null || !(nsPair.getValue() instanceof CBORPairList itemsMap)) {
-                continue;
-            }
-            String nsName = CborUtil.asString(nsPair.getKey());
-            var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
-            if (algPair == null) {
-                continue;
-            }
-            if (!nsName.equals(hashesNamespace)) {
-                throw new VerificationException(
-                        "transaction_data_hashes_alg must not appear outside the namespace containing transaction_data_hashes");
-            }
-            hashesAlg = extractAlgString(algPair.getValue());
+        if (algNamespace != null && !algNamespace.equals(hashesNamespace)) {
+            throw new VerificationException(
+                    "transaction_data_hashes_alg must not appear outside the namespace containing transaction_data_hashes");
         }
 
         // Verify the namespace or elements are authorized in the MSO's KeyAuthorizations
@@ -240,12 +243,12 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         if (dki == null) {
             throw new VerificationException("MSO is missing deviceKeyInfo");
         }
-        JsonNode keyAuth = dki.get("keyAuthorizations");
+        JsonNode keyAuth = dki.get(MdocConstants.L_KEY_AUTHORIZATIONS);
         if (keyAuth == null) {
             throw new VerificationException("MSO deviceKeyInfo is missing keyAuthorizations");
         }
         // Check namespace-level authorization first
-        JsonNode nameSpaces = keyAuth.get("nameSpaces");
+        JsonNode nameSpaces = keyAuth.get(MdocConstants.L_NAME_SPACES);
         if (nameSpaces != null && nameSpaces.isArray()) {
             for (JsonNode ns : nameSpaces) {
                 if (ns.asText().equals(namespace)) {
@@ -254,25 +257,14 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
         // Fall back to element-level authorization
-        JsonNode dataElements = keyAuth.get("dataElements");
+        JsonNode dataElements = keyAuth.get(MdocConstants.L_DATA_ELEMENTS);
         if (dataElements != null && dataElements.isObject()) {
             JsonNode elements = dataElements.get(namespace);
             if (elements != null && elements.isArray()) {
-                boolean allFound = true;
-                for (String elementId : elementIds) {
-                    boolean found = false;
-                    for (JsonNode el : elements) {
-                        if (el.asText().equals(elementId)) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        allFound = false;
-                        break;
-                    }
-                }
-                if (allFound) {
+                Set<String> existingIds = StreamSupport.stream(elements.spliterator(), false)
+                        .map(JsonNode::asText)
+                        .collect(Collectors.toSet());
+                if (existingIds.containsAll(elementIds)) {
                     return;
                 }
             }

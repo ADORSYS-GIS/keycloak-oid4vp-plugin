@@ -50,6 +50,7 @@ public class MdocVerificationContext {
 
     private final CBORPairList mdoc;
     private JsonNode verifiedMsoPayload;
+    private CBORTaggedItem deviceNameSpaces;
 
     public MdocVerificationContext(String mdoc) throws VerificationException {
         try {
@@ -57,16 +58,6 @@ public class MdocVerificationContext {
         } catch (MdocEncodingException e) {
             throw new VerificationException("Failed to parse subject as an mDoc device response", e);
         }
-    }
-
-    /**
-     * Returns the DeviceSigned namespaces from the parsed mDoc for use during
-     * presentation verification, including inspection of elements such as
-     * {@code transaction_data_hashes}.
-     */
-    public CBORTaggedItem getDeviceNameSpaces() throws VerificationException {
-        CBORPairList document = extractDocument(mdoc);
-        return extractDeviceNamespaces(document);
     }
 
     /**
@@ -90,6 +81,9 @@ public class MdocVerificationContext {
         CBORPairList document = extractDocument(mdoc);
         COSESign1 issuerAuth = extractIssuerAuth(document);
         verifyIssuerSignature(issuerAuth, truststoreProvider);
+
+        // Cache for getDeviceNameSpaces() to avoid re-parsing
+        this.deviceNameSpaces = extractDeviceNamespaces(document);
 
         // Verify device key binding
         CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
@@ -402,7 +396,18 @@ public class MdocVerificationContext {
         }
     }
 
+    /**
+     * Returns the verified MSO payload as JSON.
+     */
     public JsonNode getVerifiedMsoPayload() {
         return verifiedMsoPayload;
+    }
+
+    /**
+     * Returns the DeviceSigned nameSpaces from the parsed mDoc, cached during
+     * {@link #verifyPresentation(MdocVerificationOpts, PresentationRequirements, TrustAnchorProvider)}.
+     */
+    public CBORTaggedItem getDeviceNameSpaces() {
+        return deviceNameSpaces;
     }
 }

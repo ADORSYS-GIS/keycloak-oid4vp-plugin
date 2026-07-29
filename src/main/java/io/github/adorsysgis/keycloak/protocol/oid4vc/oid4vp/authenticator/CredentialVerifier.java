@@ -44,4 +44,22 @@ public interface CredentialVerifier {
      * Reads claims according to format-specific rules.
      */
     String readClaim(JsonNode claims, String claimName);
+
+    /**
+     * Validates {@code transaction_data_hashes} from the presented credential
+     * against the verifier's {@code transaction_data} request, if any.
+     *
+     * <p>Override when the credential format supports embedding transaction data
+     * hashes independently of {@link #verifyCredential} (e.g. SD-JWT KB-JWT).
+     * Formats where validation depends on verification state (e.g. mso_mdoc)
+     * handle this inside {@link #verifyCredential} instead.
+     *
+     * @param authorizationContext  context containing the request object
+     * @param token                 raw credential presentation token
+     * @throws VerificationException if the hashes do not match the request
+     */
+    default void validateTransactionData(AuthorizationContext authorizationContext, String token)
+            throws VerificationException {
+        // no-op: format does not support standalone transaction data validation
+    }
 }
