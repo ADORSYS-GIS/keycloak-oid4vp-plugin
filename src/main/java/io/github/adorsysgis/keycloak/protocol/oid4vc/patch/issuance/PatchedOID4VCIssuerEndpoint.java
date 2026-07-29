@@ -114,7 +114,8 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
         KeycloakContext context = keycloakSession.getContext();
         String tokenString;
         try {
-            tokenString = AppAuthManager.extractAuthorizationHeaderToken(context.getHttpRequest().getHttpHeaders());
+            tokenString = AppAuthManager.extractAuthorizationHeaderToken(
+                    context.getHttpRequest().getHttpHeaders());
         } catch (RuntimeException e) {
             return null; // Malformed/missing Authorization header: let the core endpoint report it.
         }
