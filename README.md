@@ -96,10 +96,22 @@ you are encouraged to create a `docker-compose.override.yml` based on the provid
 
 ## Configuration
 
-This plugin supports a `verbose-errors` setting to control whether detailed verification errors are returned to clients.
-By default, verbose errors are disabled (safe-by-default).
+The plugin can be configured via the `oid4vp-auth` realm resource provider's standard Keycloak SPI
+properties. These can be set in `keycloak.conf`, via CLI flags, or via `KC_*` environment variables.
 
-For provider configuration (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI flags), see:
+To automatically create the supplied `oid4vp auth` authentication flow during startup, configure the
+realms for which the flow should be created as a comma-separated list:
+
+```bash
+bin/kc.sh start \
+  --spi-realm-restapi-extension-oid4vp-auth-managed-realms='test,dev'
+```
+
+This plugin equally supports a `verbose-errors` setting to control whether detailed verification errors
+are returned to clients. By default, verbose errors are disabled (safe-by-default).
+
+For complete configuration examples (including examples for `keycloak.conf`, `KC_*` environment variables, and CLI
+flags), see:
 
 - Authentication flow and provider configuration:
   [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
