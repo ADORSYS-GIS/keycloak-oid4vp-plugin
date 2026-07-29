@@ -37,7 +37,13 @@ public class Migration_v1_3_0 implements Migration {
     public static final String LEGACY_VCT_CONFIG_KEY = "vct";
     public static final String LEGACY_KBJWT_MAX_AGE_CONFIG_KEY = "kbJwtMaxAge";
 
-    // Snapshot of authenticator identifiers as they existed in v1.3.0
+    // Snapshot of authenticator identifiers as they existed in v1.3.0.
+    //
+    // These deliberately redeclare literals that OID4VPAuthenticatorFactory also exposes.
+    // Referencing those constants would silently bind the migration to the *current* identifiers:
+    // a later rename in the factory would make the migration look for the wrong strings in already-migrated
+    // realms. Freezing the values here pins the migration to what was valid at ship time.
+
     public static final String CURRENT_AUTHENTICATOR = "oid4vp-authenticator";
     public static final String CURRENT_CREDENTIAL_TYPES_CONFIG_KEY = "credentialTypes";
     public static final String CURRENT_HOLDER_BINDING_PROOF_MAX_AGE_CONFIG_KEY = "holderBindingProofMaxAge";
@@ -114,7 +120,7 @@ public class Migration_v1_3_0 implements Migration {
     }
 
     private void backfillFallbackToIsoSpecConfig(RealmModel realm) {
-        AtomicInteger updated = new AtomicInteger();
+        int updated = 0;
         for (AuthenticatorConfigModel config :
                 MigrationUtils.configsInOid4vpFlow(realm, LEGACY_AUTHENTICATOR, CURRENT_AUTHENTICATOR)) {
             if (MigrationUtils.contains(config, CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY)) {
@@ -125,13 +131,13 @@ public class Migration_v1_3_0 implements Migration {
                     CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY,
                     CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_DEFAULT);
             realm.updateAuthenticatorConfig(config);
-            updated.incrementAndGet();
+            updated++;
         }
 
-        if (updated.get() > 0) {
+        if (updated > 0) {
             logger.infof(
                     "Backfilled '%s' default on %d authenticator config(s) in realm '%s'",
-                    CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY, updated.get(), realm.getName());
+                    CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY, updated, realm.getName());
         } else {
             logger.debugf(
                     "No authenticator config in realm '%s' needed '%s' default backfill",

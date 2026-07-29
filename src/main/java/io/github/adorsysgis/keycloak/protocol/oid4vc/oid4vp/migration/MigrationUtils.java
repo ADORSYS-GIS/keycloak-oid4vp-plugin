@@ -1,7 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,7 +37,8 @@ public final class MigrationUtils {
         if (flow == null) {
             return List.of();
         }
-        Set<String> ids = Set.of(providerIds);
+
+        Set<String> ids = new LinkedHashSet<>(Arrays.asList(providerIds));
 
         return realm.getAuthenticationExecutionsStream(flow.getId())
                 .filter(execution -> ids.contains(execution.getAuthenticator()))

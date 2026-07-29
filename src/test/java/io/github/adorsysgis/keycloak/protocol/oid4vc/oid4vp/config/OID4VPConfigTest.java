@@ -41,6 +41,31 @@ class OID4VPConfigTest {
     }
 
     @Test
+    void shouldDeduplicateManagedRealmEntries() {
+        Config.Scope scope = mock(Config.Scope.class);
+        when(scope.get("managed-realms")).thenReturn("test, test, dev , dev");
+
+        OID4VPConfig config = new OID4VPConfig(scope);
+
+        assertTrue(config.shouldAutoCreateAuthFlowFor("test"));
+        assertTrue(config.shouldAutoCreateAuthFlowFor("dev"));
+        assertFalse(config.shouldAutoCreateAuthFlowFor("production"));
+    }
+
+    @Test
+    void shouldFilterOutMalformedManagedRealmEntries() {
+        Config.Scope scope = mock(Config.Scope.class);
+        // Empty segments (between commas) and whitespace-only segments must be ignored.
+        when(scope.get("managed-realms")).thenReturn("test,, dev ,  ,preview");
+
+        OID4VPConfig config = new OID4VPConfig(scope);
+
+        assertTrue(config.shouldAutoCreateAuthFlowFor("test"));
+        assertTrue(config.shouldAutoCreateAuthFlowFor("dev"));
+        assertTrue(config.shouldAutoCreateAuthFlowFor("preview"));
+    }
+
+    @Test
     void shouldTreatEmptyValueAsDisabled() {
         Config.Scope scope = mock(Config.Scope.class);
         when(scope.get("managed-realms")).thenReturn("");

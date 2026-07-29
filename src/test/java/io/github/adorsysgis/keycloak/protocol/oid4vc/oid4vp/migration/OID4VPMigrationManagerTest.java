@@ -1,13 +1,15 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.MockOid4vpRealm.withExecutions;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.MockOid4vpRealm.withFlow;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.MockOid4vpRealm.withoutFlow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -16,6 +18,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.steps.Migration_v1_3_0;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,6 +64,16 @@ class OID4VPMigrationManagerTest {
     }
 
     @Test
+    void shouldRefuseDuplicateMigrationIds() {
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> new OID4VPMigrationManager(
+                        defaultConfig(), List.of(new RecordingMigration("dup"), new RecordingMigration("dup"))));
+
+        assertTrue(thrown.getMessage().contains("Migration ids must be unique; found duplicate id 'dup'"));
+    }
+
+    @Test
     void shouldResumeFromFirstMigrationAfterLastApplied() {
         RealmModel realm = withFlow("m1");
 
@@ -89,15 +102,33 @@ class OID4VPMigrationManagerTest {
     }
 
     @Test
-    void shouldRunAllMigrationsWhenLastAppliedDoesNotMatchAnyRegistered() {
-        RealmModel realm = withFlow("unknown-id-from-older-plugin-version");
+    void shouldFailClosedWhenLastAppliedIsNonNullAndNotRegistered() {
+        RealmModel realm = withFlow("v99.0.0");
 
-        RecordingMigration m1 = new RecordingMigration("m1");
-        RecordingMigration m2 = new RecordingMigration("m2");
-        runMigrations(realm, m1, m2);
+        IllegalStateException thrown =
+                assertThrows(IllegalStateException.class, () -> runMigrations(realm, new RecordingMigration("v1.0.0")));
 
-        assertEquals(1, m1.invocations.get());
-        assertEquals(1, m2.invocations.get());
+        assertTrue(thrown.getMessage()
+                .contains("Realm 'test' has lastApplied='v99.0.0' which does not match any registered migration"));
+
+        // No mutation of the realm: no flow creation, no execution, no marker change.
+        verify(realm, never()).addAuthenticationFlow(any(AuthenticationFlowModel.class));
+        verify(realm, never()).addAuthenticatorExecution(any(AuthenticationExecutionModel.class));
+        verify(realm, never())
+                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
+    }
+
+    @Test
+    void shouldCreateFlowAndStampLatestWhenManagerRecreatesAFlowForARealmWithAnUnknownMarker() {
+        RealmModel realm = withoutFlow("test", "v99.0.0", true);
+
+        runMigrations(configWithRealms("test"), realm, new RecordingMigration("v1.0.0"));
+
+        // Flow was created by the manager itself; the fresh flow is in target state so the
+        // unknown marker is overridden with the latest migration id rather than triggering
+        // fail-closed.
+        verify(realm, times(1)).addAuthenticationFlow(any(AuthenticationFlowModel.class));
+        verify(realm, times(1)).setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("v1.0.0"));
     }
 
     @Test
@@ -121,12 +152,20 @@ class OID4VPMigrationManagerTest {
     }
 
     @Test
-    void shouldCreateFlowBeforeRunningMigrationsWithCurrentAuthenticator() {
+    void shouldStampLatestMigrationIdAndSkipMigrationsWhenManagerCreatesTheFlow() {
         RealmModel realm = withoutFlow("test", null, true);
 
-        RecordingMigration migration = new RecordingMigration("m3");
-        runMigrations(configWithRealms("test"), realm, migration);
+        RecordingMigration m1 = new RecordingMigration("m1");
+        RecordingMigration m2 = new RecordingMigration("m2");
+        RecordingMigration m3 = new RecordingMigration("m3");
+        runMigrations(configWithRealms("test"), realm, m1, m2, m3);
 
+        // The fresh flow is already in target state, so no individual migrations run.
+        assertEquals(0, m1.invocations.get());
+        assertEquals(0, m2.invocations.get());
+        assertEquals(0, m3.invocations.get());
+
+        // The flow was created with the current authenticator.
         verify(realm, times(1)).addAuthenticationFlow(any(AuthenticationFlowModel.class));
         verify(realm, times(1))
                 .addAuthenticatorExecution(
@@ -135,10 +174,9 @@ class OID4VPMigrationManagerTest {
                                 && "new-flow-id".equals(exec.getParentFlow())
                                 && !exec.isAuthenticatorFlow()));
 
-        inOrder(realm)
-                .verify(realm)
-                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("m3"));
-        assertEquals(1, migration.invocations.get());
+        // The marker is stamped directly to the latest migration id, giving operators a simple
+        // rollback path: delete the flow + restart.
+        verify(realm, times(1)).setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("m3"));
     }
 
     @Test
@@ -150,6 +188,67 @@ class OID4VPMigrationManagerTest {
         verify(realm, never()).addAuthenticationFlow(any(AuthenticationFlowModel.class));
         verify(realm, never())
                 .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
+    }
+
+    @Test
+    void shouldNotAutoCreateFlowWhenManagedRealmAlreadyHasOne() {
+        // Managed realm + existing flow: the auto-create branch must not fire (the flow is
+        // already there), and migrations proceed normally.
+        RealmModel realm = withFlow("m1");
+        RecordingMigration m1 = new RecordingMigration("m1");
+        RecordingMigration m2 = new RecordingMigration("m2");
+        RecordingMigration m3 = new RecordingMigration("m3");
+
+        runMigrations(configWithRealms("test"), realm, m1, m2, m3);
+
+        verify(realm, never()).addAuthenticationFlow(any(AuthenticationFlowModel.class));
+        assertEquals(0, m1.invocations.get());
+        assertEquals(1, m2.invocations.get());
+        assertEquals(1, m3.invocations.get());
+        verify(realm, times(1)).setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("m3"));
+    }
+
+    @Test
+    void shouldRejectFlowsThatAreNotExactlyOneOid4vpAuthenticator() {
+        Consumer<String[]> assertRejectsHealthCheck = authenticatorIds -> {
+            IllegalStateException thrown = assertThrows(
+                    IllegalStateException.class,
+                    () -> runMigrations(withExecutions(null, authenticatorIds), new RecordingMigration("m1")));
+
+            assertTrue(thrown.getMessage()
+                    .contains(String.format(
+                            "not in the expected state: it must contain exactly one execution with authenticator '%s'",
+                            OID4VPAuthenticatorFactory.PROVIDER_ID)));
+        };
+
+        // All-unrelated executions: migration runs, marker is stamped for the migration that
+        // succeeded, and the end-of-migrate health check then throws because the flow has no
+        // oid4vp-authenticator.
+        assertRejectsHealthCheck.accept(new String[] {"some-other-authenticator", "yet-another-one"});
+
+        // Mixed: one oid4vp-authenticator alongside an unrelated one — still rejected because
+        // the flow carries more than one execution.
+        assertRejectsHealthCheck.accept(
+                new String[] {"some-other-authenticator", OID4VPAuthenticatorFactory.PROVIDER_ID});
+
+        // Duplicate oid4vp-authenticator executions — rejected as not exactly one.
+        assertRejectsHealthCheck.accept(
+                new String[] {OID4VPAuthenticatorFactory.PROVIDER_ID, OID4VPAuthenticatorFactory.PROVIDER_ID});
+
+        // Legacy-only execution: rejected because the legacy sd-jwt-authenticator has not been
+        // normalized by a real Migration_v1_3_0 in this scenario. (In production that
+        // migration renames it before the check runs.)
+        assertRejectsHealthCheck.accept(new String[] {Migration_v1_3_0.LEGACY_AUTHENTICATOR});
+
+        // Sanity check: exactly one oid4vp-authenticator passes the health check and the
+        // marker is stamped for the migration that ran.
+        {
+            RecordingMigration migration = new RecordingMigration("m1");
+            RealmModel realm = withExecutions(null, OID4VPAuthenticatorFactory.PROVIDER_ID);
+            runMigrations(realm, migration);
+            assertEquals(1, migration.invocations.get());
+            verify(realm, times(1)).setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("m1"));
+        }
     }
 
     /** Records invocations and exposes an optional side-effect recorder. */
