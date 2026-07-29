@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.models.ClientModel;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserSessionModel;
@@ -68,8 +69,7 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      * are left untouched.
      */
     private void enforcePresentationDuringIssuance() {
-        AuthenticationManager.AuthResult authResult =
-                new AppAuthManager.BearerTokenAuthenticator(keycloakSession).authenticate();
+        AuthenticationManager.AuthResult authResult = resolveAuthResultWithoutConsumingDPoP();
         if (authResult == null || authResult.token() == null) {
             return; // Let the core endpoint emit the standard invalid-token error.
         }
@@ -94,6 +94,47 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
                     credentialConfigurationId);
             throw presentationRequired(credentialConfigurationId);
         }
+    }
+
+    /**
+     * Reads and verifies the bearer access token WITHOUT triggering DPoP proof validation.
+     * <p>
+     * The core {@link OID4VCIssuerEndpoint} authenticates the request itself (including the full DPoP
+     * check). Since a DPoP proof is single-use, running
+     * {@link AppAuthManager.BearerTokenAuthenticator#authenticate()} here as well would consume the
+     * proof and make the subsequent core authentication fail with a DPoP replay error. Therefore this
+     * gate calls {@link AuthenticationManager#verifyIdentityToken} directly with an empty verifier
+     * consumer (no DPoP check), which still validates signature, expiry and revocation and resolves the
+     * client/user session, but leaves the DPoP proof untouched for the core endpoint.
+     * </p>
+     *
+     * @return the verified {@link AuthenticationManager.AuthResult}, or {@code null} if no/invalid token
+     */
+    private AuthenticationManager.AuthResult resolveAuthResultWithoutConsumingDPoP() {
+        KeycloakContext context = keycloakSession.getContext();
+        String tokenString;
+        try {
+            tokenString = AppAuthManager.extractAuthorizationHeaderToken(context.getHttpRequest().getHttpHeaders());
+        } catch (RuntimeException e) {
+            return null; // Malformed/missing Authorization header: let the core endpoint report it.
+        }
+        if (tokenString == null) {
+            return null;
+        }
+        return AuthenticationManager.verifyIdentityToken(
+                keycloakSession,
+                context.getRealm(),
+                context.getUri(),
+                context.getConnection(),
+                true, // checkActive
+                true, // checkTokenType
+                null, // checkAudience
+                false, // isCookie
+                tokenString,
+                context.getHttpRequest().getHttpHeaders(),
+                verifier -> {
+                    /* intentionally no DPoP verifier: the proof must not be consumed here */
+                });
     }
 
     /**
