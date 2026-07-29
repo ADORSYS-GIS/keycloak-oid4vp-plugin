@@ -54,7 +54,7 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             // Disabled -> absent
             updateAttribute(realm, rep, attributes, "false");
             assertFalse(
-                    getOpenidConfiguration().has("authorization_challenge_endpoint"),
+                    getAuthorizationServerConfiguration().has("authorization_challenge_endpoint"),
                     "authorization_challenge_endpoint must not be advertised when the feature is disabled");
             assertEquals(
                     HttpStatus.SC_NOT_FOUND,
@@ -66,7 +66,7 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             String expected = getTestRealmEndpoint() + "/" + AuthorizationChallengeEndpointFactory.PROVIDER_ID;
             assertEquals(
                     expected,
-                    getOpenidConfiguration()
+                    getAuthorizationServerConfiguration()
                             .get("authorization_challenge_endpoint")
                             .asText());
         } finally {
@@ -134,8 +134,8 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
         realm.update(rep);
     }
 
-    private JsonNode getOpenidConfiguration() throws Exception {
-        String url = getTestRealmEndpoint() + "/.well-known/openid-configuration";
+    private JsonNode getAuthorizationServerConfiguration() throws Exception {
+        String url = getTestRealmEndpoint() + "/.well-known/oauth-authorization-server";
         HttpResponse response = httpClient.execute(new HttpGet(url));
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
         String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
