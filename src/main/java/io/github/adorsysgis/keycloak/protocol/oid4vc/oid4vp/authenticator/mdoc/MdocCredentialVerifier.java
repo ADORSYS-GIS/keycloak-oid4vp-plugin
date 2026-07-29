@@ -162,7 +162,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         ArrayNode hashes = null;
         String hashesNamespace = null;
         String hashesAlg = null;
-        String algNamespace = null;
+        String hashAlgNamespace = null;
 
         for (CBORPair nsPair : nsMap.getPairs()) {
             if (nsPair == null || !(nsPair.getValue() instanceof CBORPairList itemsMap)) {
@@ -181,11 +181,11 @@ public class MdocCredentialVerifier implements CredentialVerifier {
 
             var algPair = itemsMap.findByKey(TransactionDataValidator.TRANSACTION_DATA_HASHES_ALG_CLAIM);
             if (algPair != null) {
-                if (algNamespace != null) {
+                if (hashAlgNamespace != null) {
                     throw new VerificationException(
                             "transaction_data_hashes_alg must not appear in multiple namespaces");
                 }
-                algNamespace = nsName;
+                hashAlgNamespace = nsName;
                 hashesAlg = extractAlgString(algPair.getValue());
             }
         }
@@ -194,7 +194,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             return null;
         }
 
-        if (algNamespace != null && !algNamespace.equals(hashesNamespace)) {
+        if (hashAlgNamespace != null && !hashAlgNamespace.equals(hashesNamespace)) {
             throw new VerificationException(
                     "transaction_data_hashes_alg must not appear outside the namespace containing transaction_data_hashes");
         }
