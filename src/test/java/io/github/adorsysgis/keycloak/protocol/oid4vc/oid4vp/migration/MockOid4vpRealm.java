@@ -62,20 +62,7 @@ public final class MockOid4vpRealm {
     public static RealmModel withoutFlow(String name, String lastApplied, boolean stubCreation) {
         RealmModel realm = mock(RealmModel.class);
         when(realm.getName()).thenReturn(name);
-
-        // Track the lastApplied value so a subsequent getAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE)
-        // reflects what setAttribute last wrote. The production code reads the attribute after
-        // writing it (e.g. after stamping the latest id on a freshly created flow), and the
-        // mock must reflect that mutation rather than keep returning the initial value.
-        AtomicReference<String> currentLastApplied = new AtomicReference<>(lastApplied);
-        when(realm.getAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE))
-                .thenAnswer(invocation -> currentLastApplied.get());
-        doAnswer(invocation -> {
-                    currentLastApplied.set(invocation.getArgument(1));
-                    return null;
-                })
-                .when(realm)
-                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
+        stubLastAppliedAttribute(realm, lastApplied);
 
         AuthenticationFlowModel persisted = mock(AuthenticationFlowModel.class);
         AtomicBoolean flowCreated = new AtomicBoolean(false);
@@ -158,9 +145,18 @@ public final class MockOid4vpRealm {
                 .when(realm.getAuthenticationExecutionsStream("flow-id"))
                 .thenAnswer(invocation -> executions.stream());
 
-        // Same pattern as withoutFlow: getAttribute must reflect the most recent setAttribute
-        // call so the manager sees the marker it just stamped on a freshly created flow.
-        AtomicReference<String> currentLastApplied = new AtomicReference<>(lastApplied);
+        stubLastAppliedAttribute(realm, lastApplied);
+
+        return realm;
+    }
+
+    /**
+     * Stubs {@link RealmModel#getAttribute(String)} and {@link RealmModel#setAttribute(String, String)}
+     * for {@link OID4VPMigrationManager#LAST_APPLIED_MIGRATION_ATTRIBUTE} so the mock returns the
+     * most recently written value on subsequent reads.
+     */
+    private static void stubLastAppliedAttribute(RealmModel realm, String initialLastApplied) {
+        AtomicReference<String> currentLastApplied = new AtomicReference<>(initialLastApplied);
         lenient()
                 .when(realm.getAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE))
                 .thenAnswer(invocation -> currentLastApplied.get());
@@ -171,8 +167,6 @@ public final class MockOid4vpRealm {
                 })
                 .when(realm)
                 .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
-
-        return realm;
     }
 
     /**
