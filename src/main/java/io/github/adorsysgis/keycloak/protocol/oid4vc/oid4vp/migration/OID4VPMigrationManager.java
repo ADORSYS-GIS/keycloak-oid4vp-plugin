@@ -6,12 +6,15 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.steps.Migration_v1_3_0;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlow;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Orchestrates the realm migrations of this plugin.
@@ -64,31 +67,41 @@ public final class OID4VPMigrationManager {
      * it completes successfully, so a crash or failure mid-batch resumes from the next migration
      * rather than redoing the entire batch. A migration that throws aborts the rest of the batch
      * without recording a partial state beyond what already succeeded.
+     *
+     * <p>When the manager creates the OID4VP auth flow itself, no individual migrations run and
+     * the marker is stamped to the latest migration id directly: the fresh flow is already in
+     * the target state. Operators rolling back to a previous flow configuration can simply delete
+     * the flow and restart.
      */
     public void migrate(KeycloakSession session, RealmModel realm) {
-        if (config.shouldAutoCreateAuthFlowFor(realm.getName())) {
-            ensureOid4vpAuthFlowExists(realm);
+        String lastApplied = realm.getAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE);
+        if (StringUtil.isNotBlank(lastApplied) && !isRegisteredMigration(lastApplied)) {
+            throw new IllegalStateException(String.format(
+                    "Realm '%s' has lastApplied='%s' which does not match any registered migration. "
+                            + "Refusing to mutate the realm to avoid masking a newer or foreign plugin "
+                            + "version. If this is intentional, clear the attribute manually and restart.",
+                    realm.getName(), lastApplied));
         }
 
         if (realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW) == null) {
-            logger.debugf(
-                    "Skipping migration for realm '%s': no oid4vp auth flow and the realm is not "
-                            + "in the managed-realms list",
-                    realm.getName());
-            return;
+            if (config.shouldAutoCreateAuthFlowFor(realm.getName())) {
+                ensureOid4vpAuthFlowExists(realm);
+                lastApplied = latestMigrationId();
+                realm.setAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE, lastApplied);
+            } else {
+                logger.infof(
+                        "Skipping migration for realm '%s': no oid4vp auth flow and the realm is not "
+                                + "in the managed-realms list",
+                        realm.getName());
+                return;
+            }
         }
 
-        String lastApplied = realm.getAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE);
         int resumeIndex = indexAfter(migrations, lastApplied);
         if (resumeIndex > 0) {
             logger.debugf(
                     "Skipping %d already-applied migration(s) for realm '%s' (lastApplied=%s)",
                     resumeIndex, realm.getName(), lastApplied);
-        } else if (lastApplied != null) {
-            logger.warnf(
-                    "Realm '%s' has lastApplied='%s' which does not match any registered migration; "
-                            + "running all migrations from the start",
-                    realm.getName(), lastApplied);
         }
 
         for (int i = resumeIndex; i < migrations.size(); i++) {
@@ -107,6 +120,8 @@ public final class OID4VPMigrationManager {
             realm.setAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE, migration.id());
             logger.infof("Migration '%s' completed for realm '%s'", migration.id(), realm.getName());
         }
+
+        assertOid4vpAuthFlowIsHealthy(realm);
     }
 
     /**
@@ -150,5 +165,58 @@ public final class OID4VPMigrationManager {
         execution.setPriority(10);
         execution.setAuthenticatorFlow(false);
         realm.addAuthenticatorExecution(execution);
+    }
+
+    /**
+     * Asserts that the reserved {@link OID4VPUserAuthEndpointBase#OID4VP_AUTH_FLOW oid4vp auth}
+     * flow for {@code realm} exists and contains exactly one execution, and that execution
+     * references the current {@link OID4VPAuthenticatorFactory#PROVIDER_ID oid4vp-authenticator}.
+     */
+    void assertOid4vpAuthFlowIsHealthy(RealmModel realm) {
+        AuthenticationFlowModel flow = realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW);
+        if (flow == null) {
+            throw new IllegalStateException(String.format(
+                    "Authentication flow '%s' is expected to exist in realm '%s' but is missing. "
+                            + "Refusing to start.",
+                    OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW, realm.getName()));
+        }
+
+        List<AuthenticationExecutionModel> executions = realm.getAuthenticationExecutionsStream(flow.getId())
+                .toList();
+
+        boolean exactlyOneOid4vpAuthenticator = executions.size() == 1
+                && OID4VPAuthenticatorFactory.PROVIDER_ID.equals(executions.getFirst().getAuthenticator());
+
+        if (!exactlyOneOid4vpAuthenticator) {
+            String found = executions.stream()
+                    .map(AuthenticationExecutionModel::getAuthenticator)
+                    .collect(Collectors.joining(", ", "[", "]"));
+
+            throw new IllegalStateException(String.format(
+                    "Authentication flow '%s' in realm '%s' is not in the expected state: it must "
+                            + "contain exactly one execution with authenticator '%s', but found %d "
+                            + "execution(s) with authenticator(s) %s. Refusing to start.",
+                    OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW,
+                    realm.getName(),
+                    OID4VPAuthenticatorFactory.PROVIDER_ID,
+                    executions.size(),
+                    found));
+        }
+    }
+
+    /**
+     * @return the id of the last migration registered with this manager,
+     *         or {@code null} when no migrations are registered.
+     */
+    private String latestMigrationId() {
+        return migrations.isEmpty() ? null : migrations.getLast().id();
+    }
+
+    /**
+     * @return {@code true} when {@code id} matches the id of a registered {@link Migration}.
+     */
+    private boolean isRegisteredMigration(String id) {
+        return migrations.stream()
+                .anyMatch(migration -> Objects.equals(migration.id(), id));
     }
 }

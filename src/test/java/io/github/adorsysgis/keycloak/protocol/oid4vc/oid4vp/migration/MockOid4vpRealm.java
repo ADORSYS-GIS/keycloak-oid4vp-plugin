@@ -7,7 +7,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
+
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.keycloak.models.AuthenticationExecutionModel;
@@ -37,20 +40,20 @@ public final class MockOid4vpRealm {
     }
 
     /**
-     * Realm with an existing OID4VP auth flow.
+     * Realm with an existing OID4VP auth flow carrying a single healthy execution
+     * ({@link OID4VPAuthenticatorFactory#PROVIDER_ID}). This is the realistic default for tests
+     * that do not care about the flow's execution contents.
      */
     public static RealmModel withFlow(String lastApplied) {
-        RealmModel realm = mock(RealmModel.class);
-        when(realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW))
-                .thenReturn(mock(AuthenticationFlowModel.class));
-        when(realm.getAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE))
-                .thenReturn(lastApplied);
-        return realm;
+        return withExecutions(lastApplied, OID4VPAuthenticatorFactory.PROVIDER_ID);
     }
 
     /**
      * Realm with no flow and an optional stub for {@code addAuthenticationFlow} returning a
-     * persisted flow that becomes visible to subsequent lookups.
+     * persisted flow that becomes visible to subsequent lookups. When {@code stubCreation} is
+     * true the persisted flow is also pre-populated with a single healthy
+     * {@link OID4VPAuthenticatorFactory#PROVIDER_ID} execution, so the post-migration health
+     * check passes.
      */
     public static RealmModel withoutFlow(String name, String lastApplied, boolean stubCreation) {
         RealmModel realm = mock(RealmModel.class);
@@ -64,8 +67,17 @@ public final class MockOid4vpRealm {
             when(persisted.getId()).thenReturn("new-flow-id");
             when(realm.addAuthenticationFlow(any(AuthenticationFlowModel.class)))
                     .thenReturn(persisted);
+            // The flow is reported as missing for the first two lookups (the manager's own
+            // existence check + the existence check inside ensureOid4vpAuthFlowExists), then
+            // becomes visible after addAuthenticationFlow has been called.
             when(realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW))
-                    .thenReturn(null, persisted);
+                    .thenReturn(null, null, persisted);
+
+            AuthenticationExecutionModel execution = mock(AuthenticationExecutionModel.class);
+            when(execution.getAuthenticator()).thenReturn(OID4VPAuthenticatorFactory.PROVIDER_ID);
+            lenient()
+                    .when(realm.getAuthenticationExecutionsStream("new-flow-id"))
+                    .thenAnswer(invocation -> Stream.of(execution));
         }
 
         return realm;
@@ -102,6 +114,36 @@ public final class MockOid4vpRealm {
         lenient().when(config.getConfig()).thenReturn(new LinkedHashMap<>(configEntries));
 
         return new RealmSetup(realm, execution, config);
+    }
+
+    /**
+     * Builds a realm whose {@code oid4vp auth} flow exposes a stream of executions whose
+     * {@link AuthenticationExecutionModel#getAuthenticator()} values match the supplied
+     * authenticator ids, in order. Useful for asserting how the manager reacts to flows that
+     * contain unknown or mixed execution sets.
+     */
+    public static RealmModel withExecutions(String lastApplied, String... authenticatorIds) {
+        RealmModel realm = mock(RealmModel.class);
+        AuthenticationFlowModel flow = mock(AuthenticationFlowModel.class);
+        List<AuthenticationExecutionModel> executions = new ArrayList<>(authenticatorIds.length);
+        for (String authenticatorId : authenticatorIds) {
+            AuthenticationExecutionModel execution = mock(AuthenticationExecutionModel.class);
+            when(execution.getAuthenticator()).thenReturn(authenticatorId);
+            executions.add(execution);
+        }
+
+        lenient()
+                .when(realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW))
+                .thenReturn(flow);
+        lenient().when(flow.getId()).thenReturn("flow-id");
+        lenient()
+                .when(realm.getAuthenticationExecutionsStream("flow-id"))
+                .thenAnswer(invocation -> executions.stream());
+        lenient()
+                .when(realm.getAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE))
+                .thenReturn(lastApplied);
+
+        return realm;
     }
 
     /**
