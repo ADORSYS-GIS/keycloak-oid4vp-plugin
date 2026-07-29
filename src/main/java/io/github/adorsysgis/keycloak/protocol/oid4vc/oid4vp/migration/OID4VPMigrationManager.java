@@ -5,8 +5,10 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.steps.Migration_v1_3_0;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlow;
@@ -48,6 +50,23 @@ public final class OID4VPMigrationManager {
     public OID4VPMigrationManager(OID4VPConfig config, List<Migration> migrations) {
         this.config = config;
         this.migrations = List.copyOf(migrations);
+        assertUniqueMigrationIds(migrations);
+    }
+
+    /**
+     * Refuses to construct the manager with duplicate migration ids: resume behaviour would
+     * become ambiguous (the manager picks the first match in {@link #indexAfter}) and any
+     * stamped marker could refer to either copy. Failing fast at construction is the only
+     * place the issue can be diagnosed unambiguously.
+     */
+    private static void assertUniqueMigrationIds(List<Migration> migrations) {
+        Set<String> seen = new HashSet<>(migrations.size());
+        for (Migration migration : migrations) {
+            if (!seen.add(migration.id())) {
+                throw new IllegalArgumentException(
+                        "Migration ids must be unique; found duplicate id '" + migration.id() + "'");
+            }
+        }
     }
 
     /**

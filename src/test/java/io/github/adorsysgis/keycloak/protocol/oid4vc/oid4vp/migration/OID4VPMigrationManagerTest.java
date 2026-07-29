@@ -21,7 +21,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.steps.Migration_v1_3_0;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.keycloak.Config;
@@ -64,6 +63,19 @@ class OID4VPMigrationManagerTest {
     }
 
     @Test
+    void shouldRefuseDuplicateMigrationIds() {
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> new OID4VPMigrationManager(
+                        defaultConfig(),
+                        List.of(new RecordingMigration("dup"), new RecordingMigration("dup"))),
+                "Constructor must fail fast when two migrations share the same id, otherwise "
+                        + "resume behaviour becomes ambiguous");
+
+        assertTrue(thrown.getMessage().contains("dup"), "Exception should name the duplicated id");
+    }
+
+    @Test
     void shouldResumeFromFirstMigrationAfterLastApplied() {
         RealmModel realm = withFlow("m1");
 
@@ -72,9 +84,9 @@ class OID4VPMigrationManagerTest {
         RecordingMigration m3 = new RecordingMigration("m3");
         runMigrations(realm, m1, m2, m3);
 
-        assertEquals(0, m1.invocations.get());
-        assertEquals(1, m2.invocations.get());
-        assertEquals(1, m3.invocations.get());
+        assertEquals(0, m1.invocations);
+        assertEquals(1, m2.invocations);
+        assertEquals(1, m3.invocations);
     }
 
     @Test
@@ -86,9 +98,9 @@ class OID4VPMigrationManagerTest {
         RecordingMigration m3 = new RecordingMigration("m3");
         runMigrations(realm, m1, m2, m3);
 
-        assertEquals(0, m1.invocations.get());
-        assertEquals(0, m2.invocations.get());
-        assertEquals(0, m3.invocations.get());
+        assertEquals(0, m1.invocations);
+        assertEquals(0, m2.invocations);
+        assertEquals(0, m3.invocations);
     }
 
     @Test
@@ -139,7 +151,7 @@ class OID4VPMigrationManagerTest {
 
         assertNotNull(caught);
         assertEquals("boom", caught.getMessage());
-        assertEquals(0, never.invocations.get());
+        assertEquals(0, never.invocations);
         verify(realm, never()).setAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE, "failing");
     }
 
@@ -153,9 +165,9 @@ class OID4VPMigrationManagerTest {
         runMigrations(configWithRealms("test"), realm, m1, m2, m3);
 
         // The fresh flow is already in target state, so no individual migrations run.
-        assertEquals(0, m1.invocations.get());
-        assertEquals(0, m2.invocations.get());
-        assertEquals(0, m3.invocations.get());
+        assertEquals(0, m1.invocations);
+        assertEquals(0, m2.invocations);
+        assertEquals(0, m3.invocations);
 
         // The flow was created with the current authenticator.
         verify(realm, times(1)).addAuthenticationFlow(any(AuthenticationFlowModel.class));
@@ -181,6 +193,25 @@ class OID4VPMigrationManagerTest {
         verify(realm, never()).addAuthenticationFlow(any(AuthenticationFlowModel.class));
         verify(realm, never())
                 .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
+    }
+
+    @Test
+    void shouldNotAutoCreateFlowWhenManagedRealmAlreadyHasOne() {
+        // Managed realm + existing flow: the auto-create branch must not fire (the flow is
+        // already there), and migrations proceed normally.
+        RealmModel realm = withFlow("m1");
+        RecordingMigration m1 = new RecordingMigration("m1");
+        RecordingMigration m2 = new RecordingMigration("m2");
+        RecordingMigration m3 = new RecordingMigration("m3");
+
+        runMigrations(configWithRealms("test"), realm, m1, m2, m3);
+
+        verify(realm, never()).addAuthenticationFlow(any(AuthenticationFlowModel.class));
+        assertEquals(0, m1.invocations);
+        assertEquals(1, m2.invocations);
+        assertEquals(1, m3.invocations);
+        verify(realm, times(1))
+                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("m3"));
     }
 
     @Test
@@ -246,7 +277,7 @@ class OID4VPMigrationManagerTest {
             RecordingMigration migration = new RecordingMigration("m1");
             RealmModel realm = withExecutions(null, OID4VPAuthenticatorFactory.PROVIDER_ID);
             runMigrations(realm, migration);
-            assertEquals(1, migration.invocations.get());
+            assertEquals(1, migration.invocations);
             verify(realm, times(1))
                     .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("m1"));
         }
@@ -256,7 +287,7 @@ class OID4VPMigrationManagerTest {
     private static final class RecordingMigration implements Migration {
 
         private final String id;
-        final AtomicInteger invocations = new AtomicInteger();
+        int invocations = 0;
         private final Consumer<String> recorder;
 
         RecordingMigration(String id) {
@@ -275,7 +306,7 @@ class OID4VPMigrationManagerTest {
 
         @Override
         public void apply(KeycloakSession session, RealmModel realm) {
-            invocations.incrementAndGet();
+            invocations++;
             if (recorder != null) {
                 recorder.accept(id);
             }

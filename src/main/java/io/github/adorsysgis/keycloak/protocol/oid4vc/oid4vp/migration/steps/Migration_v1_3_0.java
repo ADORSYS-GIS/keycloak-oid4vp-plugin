@@ -3,8 +3,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.steps;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.Migration;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.MigrationUtils;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.jboss.logging.Logger;
+import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -65,19 +65,20 @@ public class Migration_v1_3_0 implements Migration {
             return;
         }
 
-        AtomicInteger renamed = new AtomicInteger();
-        realm.getAuthenticationExecutionsStream(flow.getId()).forEach(execution -> {
+        int[] renamed = {0};
+        for (AuthenticationExecutionModel execution :
+                (Iterable<AuthenticationExecutionModel>) realm.getAuthenticationExecutionsStream(flow.getId())::iterator) {
             if (LEGACY_AUTHENTICATOR.equals(execution.getAuthenticator())) {
                 execution.setAuthenticator(CURRENT_AUTHENTICATOR);
                 realm.updateAuthenticatorExecution(execution);
-                renamed.incrementAndGet();
+                renamed[0]++;
             }
-        });
+        }
 
-        if (renamed.get() > 0) {
+        if (renamed[0] > 0) {
             logger.infof(
                     "Renamed %d execution(s) from '%s' to '%s' in realm '%s'",
-                    renamed.get(), LEGACY_AUTHENTICATOR, CURRENT_AUTHENTICATOR, realm.getName());
+                    renamed[0], LEGACY_AUTHENTICATOR, CURRENT_AUTHENTICATOR, realm.getName());
         } else {
             logger.debugf("No executions with legacy alias '%s' in realm '%s'", LEGACY_AUTHENTICATOR, realm.getName());
         }
@@ -114,7 +115,7 @@ public class Migration_v1_3_0 implements Migration {
     }
 
     private void backfillFallbackToIsoSpecConfig(RealmModel realm) {
-        AtomicInteger updated = new AtomicInteger();
+        int updated = 0;
         for (AuthenticatorConfigModel config :
                 MigrationUtils.configsInOid4vpFlow(realm, LEGACY_AUTHENTICATOR, CURRENT_AUTHENTICATOR)) {
             if (MigrationUtils.contains(config, CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY)) {
@@ -125,13 +126,13 @@ public class Migration_v1_3_0 implements Migration {
                     CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY,
                     CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_DEFAULT);
             realm.updateAuthenticatorConfig(config);
-            updated.incrementAndGet();
+            updated++;
         }
 
-        if (updated.get() > 0) {
+        if (updated > 0) {
             logger.infof(
                     "Backfilled '%s' default on %d authenticator config(s) in realm '%s'",
-                    CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY, updated.get(), realm.getName());
+                    CURRENT_FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG_KEY, updated, realm.getName());
         } else {
             logger.debugf(
                     "No authenticator config in realm '%s' needed '%s' default backfill",

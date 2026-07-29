@@ -29,6 +29,10 @@ public final class MigrationUtils {
      * <p>Configs whose ID is {@code null} (i.e. executions with no config attached) are skipped.
      * Passing multiple IDs lets callers match both the current authenticator and any legacy
      * aliases after a rename.
+     *
+     * <p>{@link Set#of(Object[])} is used to deduplicate the lookup set and intentionally throws
+     * {@link IllegalArgumentException} when called with duplicate provider ids: the caller has
+     * almost certainly made a mistake and silently dropping the duplicate would mask it.
      */
     public static List<AuthenticatorConfigModel> configsInOid4vpFlow(RealmModel realm, String... providerIds) {
         AuthenticationFlowModel flow = realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW);
