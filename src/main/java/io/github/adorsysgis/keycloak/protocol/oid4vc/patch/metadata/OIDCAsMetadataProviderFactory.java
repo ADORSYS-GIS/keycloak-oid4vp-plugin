@@ -2,15 +2,15 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 
 import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.protocol.oidc.OIDCWellKnownProviderFactory;
+import org.keycloak.protocol.oauth2.OAuth2WellKnownProviderFactory;
 import org.keycloak.wellknown.WellKnownProvider;
 
 /**
  * Registers {@link OIDCAsMetadataProvider} under the {@code openid-configuration} alias with a higher
- * priority than the default {@link OIDCWellKnownProviderFactory}, so the enriched Authorization Server
+ * priority than the default {@link OAuth2WellKnownProviderFactory}, so the enriched Authorization Server
  * Metadata (including {@code authorization_challenge_endpoint}) wins.
  */
-public class OIDCAsMetadataProviderFactory extends OIDCWellKnownProviderFactory {
+public class OIDCAsMetadataProviderFactory extends OAuth2WellKnownProviderFactory {
 
     private boolean includeClientScopes = true;
 
