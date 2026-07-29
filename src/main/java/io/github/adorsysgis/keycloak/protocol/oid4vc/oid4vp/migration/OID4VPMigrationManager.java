@@ -71,23 +71,14 @@ public final class OID4VPMigrationManager {
      * <p>When the manager creates the OID4VP auth flow itself, no individual migrations run and
      * the marker is stamped to the latest migration id directly: the fresh flow is already in
      * the target state. Operators rolling back to a previous flow configuration can simply delete
-     * the flow and restart.
+     * the flow and restart; this also gives operators a way to reset a realm whose recorded
+     * marker belongs to a newer or foreign plugin version.
      */
     public void migrate(KeycloakSession session, RealmModel realm) {
-        String lastApplied = realm.getAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE);
-        if (StringUtil.isNotBlank(lastApplied) && !isRegisteredMigration(lastApplied)) {
-            throw new IllegalStateException(String.format(
-                    "Realm '%s' has lastApplied='%s' which does not match any registered migration. "
-                            + "Refusing to mutate the realm to avoid masking a newer or foreign plugin "
-                            + "version. If this is intentional, clear the attribute manually and restart.",
-                    realm.getName(), lastApplied));
-        }
-
         if (realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW) == null) {
             if (config.shouldAutoCreateAuthFlowFor(realm.getName())) {
                 ensureOid4vpAuthFlowExists(realm);
-                lastApplied = latestMigrationId();
-                realm.setAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE, lastApplied);
+                realm.setAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE, latestMigrationId());
             } else {
                 logger.infof(
                         "Skipping migration for realm '%s': no oid4vp auth flow and the realm is not "
@@ -95,6 +86,16 @@ public final class OID4VPMigrationManager {
                         realm.getName());
                 return;
             }
+        }
+
+        String lastApplied = realm.getAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE);
+        if (StringUtil.isNotBlank(lastApplied) && !isRegisteredMigration(lastApplied)) {
+            throw new IllegalStateException(String.format(
+                    "Realm '%s' has lastApplied='%s' which does not match any registered migration. "
+                            + "Refusing to mutate the realm to avoid masking a newer or foreign plugin "
+                            + "version. Downgrading? Consider backing up the current flow configuration "
+                            + "and deleting the '%s' flow so Keycloak can create a fresh state on next restart.",
+                    realm.getName(), lastApplied, OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW));
         }
 
         int resumeIndex = indexAfter(migrations, lastApplied);
@@ -195,7 +196,9 @@ public final class OID4VPMigrationManager {
             throw new IllegalStateException(String.format(
                     "Authentication flow '%s' in realm '%s' is not in the expected state: it must "
                             + "contain exactly one execution with authenticator '%s', but found %d "
-                            + "execution(s) with authenticator(s) %s. Refusing to start.",
+                            + "execution(s) with authenticator(s) %s. Refusing to start. "
+                    + "Last resort: consider backing up the current flow configuration "
+                    + "and deleting the flow so Keycloak can create a fresh state on next restart.",
                     OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW,
                     realm.getName(),
                     OID4VPAuthenticatorFactory.PROVIDER_ID,

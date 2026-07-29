@@ -99,13 +99,28 @@ class OID4VPMigrationManagerTest {
                 IllegalStateException.class,
                 () -> runMigrations(realm, new RecordingMigration("v1.0.0")));
 
-        assertTrue(thrown.getMessage().contains("Realm 'null' has lastApplied='v99.0.0' which does not match any registered migration"), "Exception should name the unknown marker");
+        assertTrue(
+                thrown.getMessage().contains("Realm 'test' has lastApplied='v99.0.0' which does not match any registered migration"));
 
         // No mutation of the realm: no flow creation, no execution, no marker change.
         verify(realm, never()).addAuthenticationFlow(any(AuthenticationFlowModel.class));
         verify(realm, never()).addAuthenticatorExecution(any(AuthenticationExecutionModel.class));
         verify(realm, never())
                 .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
+    }
+
+    @Test
+    void shouldCreateFlowAndStampLatestWhenManagerRecreatesAFlowForARealmWithAnUnknownMarker() {
+        RealmModel realm = withoutFlow("test", "v99.0.0", true);
+
+        runMigrations(configWithRealms("test"), realm, new RecordingMigration("v1.0.0"));
+
+        // Flow was created by the manager itself; the fresh flow is in target state so the
+        // unknown marker is overridden with the latest migration id rather than triggering
+        // fail-closed.
+        verify(realm, times(1)).addAuthenticationFlow(any(AuthenticationFlowModel.class));
+        verify(realm, times(1))
+                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), eq("v1.0.0"));
     }
 
     @Test
@@ -181,11 +196,14 @@ class OID4VPMigrationManagerTest {
                     () -> runMigrations(realm, migration));
             assertNotNull(thrown.getMessage());
             assertTrue(
-                    thrown.getMessage().contains(OID4VPAuthenticatorFactory.PROVIDER_ID),
-                    "Exception should name the expected authenticator id");
+                    thrown.getMessage().contains(
+                            "execution with authenticator '" + OID4VPAuthenticatorFactory.PROVIDER_ID + "'"),
+                    "Exception should name the expected authenticator id along with surrounding "
+                            + "context, not just the bare id");
             assertTrue(
-                    thrown.getMessage().contains("exactly one"),
-                    "Exception should explain the strict 'exactly one' requirement");
+                    thrown.getMessage().contains("must contain exactly one execution"),
+                    "Exception should explain the strict 'exactly one execution' requirement "
+                            + "in its full sentence form");
         }
 
         // Mixed: one oid4vp-authenticator alongside an unrelated one — still rejected because
@@ -194,7 +212,9 @@ class OID4VPMigrationManagerTest {
             RecordingMigration migration = new RecordingMigration("m1");
             RealmModel realm = withExecutions(
                     null, "some-other-authenticator", OID4VPAuthenticatorFactory.PROVIDER_ID);
-            assertThrows(IllegalStateException.class, () -> runMigrations(realm, migration));
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> runMigrations(realm, migration));
         }
 
         // Duplicate oid4vp-authenticator executions — rejected as not exactly one.
@@ -204,7 +224,9 @@ class OID4VPMigrationManagerTest {
                     null,
                     OID4VPAuthenticatorFactory.PROVIDER_ID,
                     OID4VPAuthenticatorFactory.PROVIDER_ID);
-            assertThrows(IllegalStateException.class, () -> runMigrations(realm, migration));
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> runMigrations(realm, migration));
         }
 
         // Legacy-only execution: rejected because the legacy sd-jwt-authenticator has not been
@@ -213,7 +235,9 @@ class OID4VPMigrationManagerTest {
         {
             RecordingMigration migration = new RecordingMigration("m1");
             RealmModel realm = withExecutions(null, Migration_v1_3_0.LEGACY_AUTHENTICATOR);
-            assertThrows(IllegalStateException.class, () -> runMigrations(realm, migration));
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> runMigrations(realm, migration));
         }
 
         // Sanity check: exactly one oid4vp-authenticator passes the health check and the

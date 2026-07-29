@@ -1,6 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -12,6 +14,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -58,20 +62,33 @@ public final class MockOid4vpRealm {
     public static RealmModel withoutFlow(String name, String lastApplied, boolean stubCreation) {
         RealmModel realm = mock(RealmModel.class);
         when(realm.getName()).thenReturn(name);
+
+        // Track the lastApplied value so a subsequent getAttribute(LAST_APPLIED_MIGRATION_ATTRIBUTE)
+        // reflects what setAttribute last wrote. The production code reads the attribute after
+        // writing it (e.g. after stamping the latest id on a freshly created flow), and the
+        // mock must reflect that mutation rather than keep returning the initial value.
+        AtomicReference<String> currentLastApplied = new AtomicReference<>(lastApplied);
         when(realm.getAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE))
-                .thenReturn(lastApplied);
-        when(realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW)).thenReturn(null);
+                .thenAnswer(invocation -> currentLastApplied.get());
+        doAnswer(invocation -> {
+                    currentLastApplied.set(invocation.getArgument(1));
+                    return null;
+                })
+                .when(realm)
+                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
+
+        AuthenticationFlowModel persisted = mock(AuthenticationFlowModel.class);
+        AtomicBoolean flowCreated = new AtomicBoolean(false);
+        when(realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW))
+                .thenAnswer(invocation -> flowCreated.get() ? persisted : null);
 
         if (stubCreation) {
-            AuthenticationFlowModel persisted = mock(AuthenticationFlowModel.class);
             when(persisted.getId()).thenReturn("new-flow-id");
             when(realm.addAuthenticationFlow(any(AuthenticationFlowModel.class)))
-                    .thenReturn(persisted);
-            // The flow is reported as missing for the first two lookups (the manager's own
-            // existence check + the existence check inside ensureOid4vpAuthFlowExists), then
-            // becomes visible after addAuthenticationFlow has been called.
-            when(realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW))
-                    .thenReturn(null, null, persisted);
+                    .thenAnswer(invocation -> {
+                        flowCreated.set(true);
+                        return persisted;
+                    });
 
             AuthenticationExecutionModel execution = mock(AuthenticationExecutionModel.class);
             when(execution.getAuthenticator()).thenReturn(OID4VPAuthenticatorFactory.PROVIDER_ID);
@@ -124,6 +141,7 @@ public final class MockOid4vpRealm {
      */
     public static RealmModel withExecutions(String lastApplied, String... authenticatorIds) {
         RealmModel realm = mock(RealmModel.class);
+        when(realm.getName()).thenReturn("test");
         AuthenticationFlowModel flow = mock(AuthenticationFlowModel.class);
         List<AuthenticationExecutionModel> executions = new ArrayList<>(authenticatorIds.length);
         for (String authenticatorId : authenticatorIds) {
@@ -139,9 +157,20 @@ public final class MockOid4vpRealm {
         lenient()
                 .when(realm.getAuthenticationExecutionsStream("flow-id"))
                 .thenAnswer(invocation -> executions.stream());
+
+        // Same pattern as withoutFlow: getAttribute must reflect the most recent setAttribute
+        // call so the manager sees the marker it just stamped on a freshly created flow.
+        AtomicReference<String> currentLastApplied = new AtomicReference<>(lastApplied);
         lenient()
                 .when(realm.getAttribute(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE))
-                .thenReturn(lastApplied);
+                .thenAnswer(invocation -> currentLastApplied.get());
+        lenient()
+                .doAnswer(invocation -> {
+                    currentLastApplied.set(invocation.getArgument(1));
+                    return null;
+                })
+                .when(realm)
+                .setAttribute(eq(OID4VPMigrationManager.LAST_APPLIED_MIGRATION_ATTRIBUTE), any(String.class));
 
         return realm;
     }
