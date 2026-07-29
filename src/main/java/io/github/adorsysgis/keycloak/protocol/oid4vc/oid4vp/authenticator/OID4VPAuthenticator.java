@@ -86,6 +86,7 @@ public class OID4VPAuthenticator implements Authenticator {
         try {
             primaryClaims = primaryVerifier.verifyCredential(
                     context, authContext, authRequirements, primaryCredential, primaryToken);
+            primaryVerifier.validateTransactionData(authContext, primaryToken);
         } catch (VerificationException e) {
             logger.errorf(e, "Primary credential verification failed (authSession = %s)", correlationId(context));
             failRejectingPresentedCredential(context, e.getMessage(), e);

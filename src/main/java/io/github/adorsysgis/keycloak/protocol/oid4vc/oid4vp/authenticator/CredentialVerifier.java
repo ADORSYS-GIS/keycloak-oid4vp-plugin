@@ -44,4 +44,18 @@ public interface CredentialVerifier {
      * Reads claims according to format-specific rules.
      */
     String readClaim(JsonNode claims, String claimName);
+
+    /**
+     * Validates {@code transaction_data_hashes} from the presented credential
+     * against the verifier's {@code transaction_data} request, if any.
+     *
+     * <p>Called by the authenticator after {@link #verifyCredential} succeeds.
+     * The verifier may use state cached during {@link #verifyCredential} to
+     * perform the validation (e.g. a post-verification {@code MdocVerificationContext}).
+     *
+     * @param authorizationContext  context containing the request object
+     * @param token                 raw credential presentation token
+     * @throws VerificationException if the hashes do not match the request
+     */
+    void validateTransactionData(AuthorizationContext authorizationContext, String token) throws VerificationException;
 }

@@ -25,4 +25,6 @@ public class MdocConstants {
     public static final String L_DEVICE_SIGNATURE = "deviceSignature";
     public static final String L_DEVICE_AUTHENTICATION = "DeviceAuthentication";
     public static final String L_OPENID4VP_HANDOVER = "OpenID4VPHandover";
+    public static final String L_KEY_AUTHORIZATIONS = "keyAuthorizations";
+    public static final String L_DATA_ELEMENTS = "dataElements";
 }

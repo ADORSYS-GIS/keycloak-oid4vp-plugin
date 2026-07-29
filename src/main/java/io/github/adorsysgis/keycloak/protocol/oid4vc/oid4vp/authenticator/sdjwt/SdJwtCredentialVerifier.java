@@ -89,10 +89,6 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        if (credential.isPrimary()) {
-            validateTransactionData(authorizationContext, token);
-        }
-
         return payloadRef.get();
     }
 
@@ -101,7 +97,8 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         return Optional.ofNullable(claims.get(claimName)).map(JsonNode::asText).orElse(null);
     }
 
-    void validateTransactionData(AuthorizationContext authorizationContext, String presentedToken) {
+    @Override
+    public void validateTransactionData(AuthorizationContext authorizationContext, String presentedToken) {
         List<String> transactionDataWire =
                 authorizationContext.getRequestObject().getTransactionData();
         if (transactionDataWire == null || transactionDataWire.isEmpty()) {

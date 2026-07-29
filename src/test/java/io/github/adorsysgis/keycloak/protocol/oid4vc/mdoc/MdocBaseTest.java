@@ -6,6 +6,7 @@ import com.authlete.cbor.CBORByteArray;
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORNull;
+import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
 import com.authlete.cbor.CBORTaggedItem;
@@ -23,6 +24,7 @@ import com.authlete.cose.COSEUnprotectedHeaderBuilder;
 import com.authlete.cose.SigStructure;
 import com.authlete.cose.SigStructureBuilder;
 import com.authlete.cose.constants.COSEAlgorithms;
+import com.authlete.mdoc.AuthorizedDataElements;
 import com.authlete.mdoc.AuthorizedNameSpaces;
 import com.authlete.mdoc.DeviceAuth;
 import com.authlete.mdoc.DeviceKeyInfo;
@@ -195,7 +197,7 @@ public class MdocBaseTest {
      */
     public static DeviceResponse buildDeviceResponse(
             MdocVerificationOpts opts, Map<String, Object> claims, String docType) throws Exception {
-        return buildDeviceResponse(opts, claims, docType, null);
+        return buildDeviceResponse(opts, claims, docType, null, null);
     }
 
     /**
@@ -221,14 +223,35 @@ public class MdocBaseTest {
     private static DeviceResponse buildDeviceResponse(
             MdocVerificationOpts opts, Map<String, Object> claims, String docType, IssuerSignedCustomizer customizer)
             throws Exception {
+        return buildDeviceResponse(opts, claims, docType, customizer, null);
+    }
+
+    private static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts,
+            Map<String, Object> claims,
+            String docType,
+            IssuerSignedCustomizer customizer,
+            DeviceNameSpaces deviceNameSpaces)
+            throws Exception {
         BuiltStandard built = buildStandardComponents(claims, docType);
-        DeviceSigned deviceSigned = buildDeviceSigned(opts, docType);
+        DeviceSigned deviceSigned = buildDeviceSigned(opts, docType, deviceNameSpaces);
 
         IssueContext ctx =
                 new IssueContext(built.nameSpaces, built.mso, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
         IssuerSigned issuerSigned = (customizer == null) ? ctx.signMsoAndWrap() : customizer.customize(ctx);
 
         return new DeviceResponse(List.of(new Document(docType, issuerSigned, deviceSigned, null)));
+    }
+
+    /**
+     * Builds a device response with custom device-signed namespaces. Intended for tests that
+     * need to include extra data (e.g. {@code transaction_data_hashes}) in the DeviceSigned
+     * section of the mDoc.
+     */
+    public static DeviceResponse buildDeviceResponse(
+            MdocVerificationOpts opts, Map<String, Object> claims, String docType, DeviceNameSpaces deviceNameSpaces)
+            throws Exception {
+        return buildDeviceResponse(opts, claims, docType, null, deviceNameSpaces);
     }
 
     private record BuiltStandard(IssuerNameSpaces nameSpaces, MobileSecurityObject mso) {}
@@ -289,8 +312,10 @@ public class MdocBaseTest {
         return new ValueDigests(entries);
     }
 
-    private static DeviceSigned buildDeviceSigned(MdocVerificationOpts opts, String docType) throws COSEException {
-        DeviceNameSpacesBytes deviceNameSpaces = new DeviceNameSpacesBytes(new DeviceNameSpaces(List.of()));
+    private static DeviceSigned buildDeviceSigned(
+            MdocVerificationOpts opts, String docType, DeviceNameSpaces customNameSpaces) throws COSEException {
+        DeviceNameSpaces nameSpaces = customNameSpaces != null ? customNameSpaces : new DeviceNameSpaces(List.of());
+        DeviceNameSpacesBytes deviceNameSpaces = new DeviceNameSpacesBytes(nameSpaces);
         // Use the ISO-spec transcript when a mdocGeneratedNonce is supplied and the fallback
         // is enabled; otherwise default to the OpenID4VP-spec transcript.
         boolean useIsoTranscript = opts.getMdocGeneratedNonce() != null && opts.fallbackToIsoSpecSessionTranscript();
@@ -477,6 +502,18 @@ public class MdocBaseTest {
 
         return new DeviceResponse(List.of(
                 new Document(DOC_TYPE, issuerSigned, new DeviceSigned(deviceNameSpaces, new DeviceAuth(mac0)), null)));
+    }
+
+    /**
+     * Builds a {@link KeyAuthorizations} that authorizes the given element identifiers
+     * within the given namespace through {@code dataElements} only (no {@code nameSpaces}).
+     */
+    public static KeyAuthorizations dataElementsOnlyAuth(String namespace, List<String> elementIds) {
+        var ns = new CBORString(namespace);
+        var elements = elementIds.stream().map(CBORString::new).toList();
+        var elList = new CBORItemList(elements);
+        var pair = new CBORPair(ns, elList);
+        return new KeyAuthorizations(null, new AuthorizedDataElements((List) List.of(pair)));
     }
 
     public static MdocVerificationOpts.Builder getDefaultMdocVerificationOpts() {
