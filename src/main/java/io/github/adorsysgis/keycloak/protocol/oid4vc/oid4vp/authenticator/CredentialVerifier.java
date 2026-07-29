@@ -49,17 +49,13 @@ public interface CredentialVerifier {
      * Validates {@code transaction_data_hashes} from the presented credential
      * against the verifier's {@code transaction_data} request, if any.
      *
-     * <p>Override when the credential format supports embedding transaction data
-     * hashes independently of {@link #verifyCredential} (e.g. SD-JWT KB-JWT).
-     * Formats where validation depends on verification state (e.g. mso_mdoc)
-     * handle this inside {@link #verifyCredential} instead.
+     * <p>Called by the authenticator after {@link #verifyCredential} succeeds.
+     * The verifier may use state cached during {@link #verifyCredential} to
+     * perform the validation (e.g. a post-verification {@code MdocVerificationContext}).
      *
      * @param authorizationContext  context containing the request object
      * @param token                 raw credential presentation token
      * @throws VerificationException if the hashes do not match the request
      */
-    default void validateTransactionData(AuthorizationContext authorizationContext, String token)
-            throws VerificationException {
-        // no-op: format does not support standalone transaction data validation
-    }
+    void validateTransactionData(AuthorizationContext authorizationContext, String token) throws VerificationException;
 }

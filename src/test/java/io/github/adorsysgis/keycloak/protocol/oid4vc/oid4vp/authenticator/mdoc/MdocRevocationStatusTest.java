@@ -230,9 +230,9 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         DeviceResponse unauthorizedWithStatus = withModifiedMso(unauthorizedDr, mso -> getCborPairList(1, mso));
         String unauthorizedMdoc = unauthorizedWithStatus.encodeToBase64Url();
 
+        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, authReqs, credential, unauthorizedMdoc));
         VerificationException unauthorizedException = assertThrows(
-                VerificationException.class,
-                () -> verifier.verifyCredential(context, authCtx, authReqs, credential, unauthorizedMdoc));
+                VerificationException.class, () -> verifier.validateTransactionData(authCtx, unauthorizedMdoc));
         assertTrue(unauthorizedException.getMessage().contains("not authorized"));
     }
 

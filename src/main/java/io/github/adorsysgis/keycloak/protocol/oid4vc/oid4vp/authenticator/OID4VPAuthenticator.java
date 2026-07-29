@@ -86,9 +86,6 @@ public class OID4VPAuthenticator implements Authenticator {
         try {
             primaryClaims = primaryVerifier.verifyCredential(
                     context, authContext, authRequirements, primaryCredential, primaryToken);
-            // SD-JWT validates transaction_data via the interface method (above).
-            // mso_mdoc validates internally inside verifyCredential() because it
-            // depends on the post-verification MdocVerificationContext state.
             primaryVerifier.validateTransactionData(authContext, primaryToken);
         } catch (VerificationException e) {
             logger.errorf(e, "Primary credential verification failed (authSession = %s)", correlationId(context));

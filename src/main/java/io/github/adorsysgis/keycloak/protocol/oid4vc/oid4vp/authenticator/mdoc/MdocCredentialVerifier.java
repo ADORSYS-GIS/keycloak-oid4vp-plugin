@@ -52,6 +52,7 @@ import org.keycloak.util.JsonSerialization;
 public class MdocCredentialVerifier implements CredentialVerifier {
 
     private final ReferencedTokenValidator tokenStatusValidator;
+    private MdocVerificationContext verificationContext;
 
     public MdocCredentialVerifier(StatusListJwtFetcher statusListJwtFetcher) {
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
@@ -93,7 +94,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             authReqs.getPresentationRequirements().checkIfSatisfiedBy(payload);
         };
 
-        MdocVerificationContext verificationContext = new MdocVerificationContext(token);
+        verificationContext = new MdocVerificationContext(token);
         verificationContext.verifyPresentation(opts, requirements, truststore);
 
         if (authReqs.shouldEnforceRevocationStatus()) {
@@ -112,11 +113,16 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        if (credential.isPrimary()) {
-            validateTransactionData(authorizationContext, verificationContext);
-        }
-
         return payloadRef.get().get(L_NAME_SPACES);
+    }
+
+    @Override
+    public void validateTransactionData(AuthorizationContext authorizationContext, String token)
+            throws VerificationException {
+        if (verificationContext == null) {
+            throw new IllegalStateException("verifyCredential() must be called before validateTransactionData()");
+        }
+        validateTransactionData(authorizationContext, verificationContext);
     }
 
     /**
