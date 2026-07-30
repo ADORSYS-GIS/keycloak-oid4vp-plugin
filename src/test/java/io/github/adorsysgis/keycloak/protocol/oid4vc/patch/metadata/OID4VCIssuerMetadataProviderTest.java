@@ -37,8 +37,8 @@ public class OID4VCIssuerMetadataProviderTest {
         public void shouldExposeRootDisplayObject() {
             JsonNode metadataJson = assertDoesNotThrow(() -> retrieveCredentialIssuerMetadataJson(
                     httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
-            CredentialIssuer metadata =
-                    assertDoesNotThrow(() -> JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class));
+            CredentialIssuer metadata = assertDoesNotThrow(
+                    () -> JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class));
 
             List<DisplayObject> display = metadata.getDisplay();
             assertEquals(2, display.size());
@@ -67,8 +67,8 @@ public class OID4VCIssuerMetadataProviderTest {
         public void shouldNotExposeRootDisplayObject() {
             JsonNode metadataJson = assertDoesNotThrow(() -> retrieveCredentialIssuerMetadataJson(
                     httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
-            CredentialIssuer metadata =
-                    assertDoesNotThrow(() -> JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class));
+            CredentialIssuer metadata = assertDoesNotThrow(
+                    () -> JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class));
             assertNull(metadata.getDisplay());
             assertNull(metadata.getCredentialResponseEncryption(), "credential_response_encryption should be omitted");
             assertNull(metadata.getCredentialRequestEncryption(), "credential_request_encryption should be omitted");
