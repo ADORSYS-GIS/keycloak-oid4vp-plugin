@@ -2,9 +2,12 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseKeycloakTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.apache.http.HttpResponse;
@@ -32,8 +35,10 @@ public class OID4VCIssuerMetadataProviderTest {
 
         @Test
         public void shouldExposeRootDisplayObject() {
-            CredentialIssuer metadata = assertDoesNotThrow(() ->
-                    retrieveCredentialIssuerMetadata(httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
+            JsonNode metadataJson = assertDoesNotThrow(() -> retrieveCredentialIssuerMetadataJson(
+                    httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
+            CredentialIssuer metadata =
+                    assertDoesNotThrow(() -> JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class));
 
             List<DisplayObject> display = metadata.getDisplay();
             assertEquals(2, display.size());
@@ -49,6 +54,9 @@ public class OID4VCIssuerMetadataProviderTest {
 
             assertNull(metadata.getCredentialResponseEncryption(), "credential_response_encryption should be omitted");
             assertNull(metadata.getCredentialRequestEncryption(), "credential_request_encryption should be omitted");
+            assertFalse(
+                    metadataJson.has("authorization_challenge_endpoint"),
+                    "authorization_challenge_endpoint must be omitted when presentation during issuance is disabled");
         }
     }
 
@@ -57,15 +65,26 @@ public class OID4VCIssuerMetadataProviderTest {
 
         @Test
         public void shouldNotExposeRootDisplayObject() {
-            CredentialIssuer metadata = assertDoesNotThrow(() ->
-                    retrieveCredentialIssuerMetadata(httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
+            JsonNode metadataJson = assertDoesNotThrow(() -> retrieveCredentialIssuerMetadataJson(
+                    httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm()));
+            CredentialIssuer metadata =
+                    assertDoesNotThrow(() -> JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class));
             assertNull(metadata.getDisplay());
             assertNull(metadata.getCredentialResponseEncryption(), "credential_response_encryption should be omitted");
             assertNull(metadata.getCredentialRequestEncryption(), "credential_request_encryption should be omitted");
+            assertEquals(
+                    getTestRealmEndpoint() + "/" + AuthorizationChallengeEndpointFactory.PROVIDER_ID,
+                    metadataJson.get("authorization_challenge_endpoint").asText());
         }
     }
 
     protected CredentialIssuer retrieveCredentialIssuerMetadata(HttpClient httpClient, String serverUrl, String realm)
+            throws Exception {
+        return JsonSerialization.mapper.treeToValue(
+                retrieveCredentialIssuerMetadataJson(httpClient, serverUrl, realm), CredentialIssuer.class);
+    }
+
+    protected JsonNode retrieveCredentialIssuerMetadataJson(HttpClient httpClient, String serverUrl, String realm)
             throws Exception {
         String wellKnownEndpoint = KeycloakUriBuilder.fromUri(serverUrl)
                 .path("/.well-known/openid-credential-issuer/realms/{realm}")
@@ -77,6 +96,6 @@ public class OID4VCIssuerMetadataProviderTest {
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
         String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-        return JsonSerialization.readValue(payload, CredentialIssuer.class);
+        return JsonSerialization.mapper.readTree(payload);
     }
 }

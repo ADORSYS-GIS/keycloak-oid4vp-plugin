@@ -1,6 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -12,6 +15,8 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider;
 import org.keycloak.protocol.oid4vc.model.CredentialIssuer;
 import org.keycloak.protocol.oid4vc.model.DisplayObject;
+import org.keycloak.services.Urls;
+import org.keycloak.urls.UrlType;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
@@ -33,6 +38,13 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     public CredentialIssuer getIssuerMetadata() {
         CredentialIssuer metadata = super.getIssuerMetadata();
 
+        // The German EUDI Wallet ecosystem profile requires the Authorization Challenge Endpoint
+        // directly in the Credential Issuer Metadata. Keep advertising it in the Authorization
+        // Server Metadata as well, as required by the underlying First-Party Applications draft.
+        if (isPresentationDuringIssuanceEnabled()) {
+            metadata = ExtendedCredentialIssuer.from(metadata, authorizationChallengeEndpoint());
+        }
+
         // Add root display metadata
         metadata.setDisplay(parseDisplay());
 
@@ -41,6 +53,16 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         metadata.setCredentialRequestEncryption(null);
 
         return metadata;
+    }
+
+    private boolean isPresentationDuringIssuanceEnabled() {
+        return Boolean.parseBoolean(realm.getAttribute(ATTR_PRESENTATION_DURING_ISSUANCE));
+    }
+
+    private String authorizationChallengeEndpoint() {
+        String baseRealmUrl = Urls.realmIssuer(
+                keycloakSession.getContext().getUri(UrlType.FRONTEND).getBaseUri(), realm.getName());
+        return baseRealmUrl + "/" + AuthorizationChallengeEndpointFactory.PROVIDER_ID;
     }
 
     private List<DisplayObject> parseDisplay() {
@@ -67,6 +89,29 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
             // Log the error and return null if parsing fails
             logger.error("Failed to parse display metadata", e);
             return null;
+        }
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private static final class ExtendedCredentialIssuer extends CredentialIssuer {
+
+        @JsonProperty("authorization_challenge_endpoint")
+        private String authorizationChallengeEndpoint;
+
+        private static ExtendedCredentialIssuer from(CredentialIssuer source, String authorizationChallengeEndpoint) {
+            ExtendedCredentialIssuer target = new ExtendedCredentialIssuer();
+            target.setCredentialIssuer(source.getCredentialIssuer())
+                    .setCredentialEndpoint(source.getCredentialEndpoint())
+                    .setNonceEndpoint(source.getNonceEndpoint())
+                    .setDeferredCredentialEndpoint(source.getDeferredCredentialEndpoint())
+                    .setAuthorizationServers(source.getAuthorizationServers())
+                    .setBatchCredentialIssuance(source.getBatchCredentialIssuance())
+                    .setCredentialsSupported(source.getCredentialsSupported())
+                    .setDisplay(source.getDisplay())
+                    .setCredentialResponseEncryption(source.getCredentialResponseEncryption())
+                    .setCredentialRequestEncryption(source.getCredentialRequestEncryption());
+            target.authorizationChallengeEndpoint = authorizationChallengeEndpoint;
+            return target;
         }
     }
 }
