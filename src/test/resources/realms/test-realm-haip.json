@@ -5,7 +5,6 @@
   "sslRequired": "none",
   "eventsEnabled": true,
   "enabledEventTypes": ["LOGIN", "LOGIN_ERROR"],
-  "loginTimeout": 3600,
   "attributes": {
     "oid4vci.presentation_during_issuance": "true"
   },
