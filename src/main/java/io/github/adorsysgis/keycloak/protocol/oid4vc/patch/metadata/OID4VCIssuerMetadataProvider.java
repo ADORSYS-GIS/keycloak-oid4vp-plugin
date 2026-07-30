@@ -99,17 +99,8 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         private String authorizationChallengeEndpoint;
 
         private static ExtendedCredentialIssuer from(CredentialIssuer source, String authorizationChallengeEndpoint) {
-            ExtendedCredentialIssuer target = new ExtendedCredentialIssuer();
-            target.setCredentialIssuer(source.getCredentialIssuer())
-                    .setCredentialEndpoint(source.getCredentialEndpoint())
-                    .setNonceEndpoint(source.getNonceEndpoint())
-                    .setDeferredCredentialEndpoint(source.getDeferredCredentialEndpoint())
-                    .setAuthorizationServers(source.getAuthorizationServers())
-                    .setBatchCredentialIssuance(source.getBatchCredentialIssuance())
-                    .setCredentialsSupported(source.getCredentialsSupported())
-                    .setDisplay(source.getDisplay())
-                    .setCredentialResponseEncryption(source.getCredentialResponseEncryption())
-                    .setCredentialRequestEncryption(source.getCredentialRequestEncryption());
+            ExtendedCredentialIssuer target =
+                    JsonSerialization.mapper.convertValue(source, ExtendedCredentialIssuer.class);
             target.authorizationChallengeEndpoint = authorizationChallengeEndpoint;
             return target;
         }
