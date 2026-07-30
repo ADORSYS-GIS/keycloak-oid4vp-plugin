@@ -6,12 +6,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.Base64;
 import java.util.List;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.keycloak.common.util.Time;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -36,8 +43,14 @@ public class ReferencedTokenValidatorTest {
 
     private ReferencedTokenValidator validator;
 
+    @AfterEach
+    public void tearDown() {
+        Time.setOffset(0);
+    }
+
     @BeforeEach
     public void setUp() {
+        Time.setOffset((int) (1000 - System.currentTimeMillis() / 1000));
         validator = new ReferencedTokenValidator(this::buildValidStatusListJwt);
     }
 
@@ -63,18 +76,14 @@ public class ReferencedTokenValidatorTest {
     }
 
     private static JsonNode credentialPayload(int idx, String uri) {
-        return JsonSerialization.mapper
-                .createObjectNode()
-                .set(
-                        "status",
-                        JsonSerialization.mapper
-                                .createObjectNode()
-                                .set(
-                                        "status_list",
-                                        JsonSerialization.mapper
-                                                .createObjectNode()
-                                                .put("idx", idx)
-                                                .put("uri", uri)));
+        ObjectNode statusList = JsonSerialization.mapper.createObjectNode();
+        statusList.put("idx", idx);
+        statusList.put("uri", uri);
+        ObjectNode status = JsonSerialization.mapper.createObjectNode();
+        status.set("status_list", statusList);
+        ObjectNode payload = JsonSerialization.mapper.createObjectNode();
+        payload.set("status", status);
+        return payload;
     }
 
     @Test
@@ -467,7 +476,9 @@ public class ReferencedTokenValidatorTest {
         ReferencedTokenValidationException exception = assertThrows(
                 ReferencedTokenValidationException.class,
                 () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
-        assertTrue(exception.getMessage().contains("'sub'"), "Should mention sub. Actual: " + exception.getMessage());
+        assertTrue(
+                exception.getMessage().contains("must contain a non-empty string 'sub'"),
+                "Should mention sub. Actual: " + exception.getMessage());
     }
 
     @Test
@@ -506,7 +517,9 @@ public class ReferencedTokenValidatorTest {
         ReferencedTokenValidationException exception = assertThrows(
                 ReferencedTokenValidationException.class,
                 () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
-        assertTrue(exception.getMessage().contains("'iat'"), "Should mention iat. Actual: " + exception.getMessage());
+        assertTrue(
+                exception.getMessage().contains("must contain a numeric 'iat'"),
+                "Should mention iat. Actual: " + exception.getMessage());
     }
 
     @Test
@@ -525,7 +538,9 @@ public class ReferencedTokenValidatorTest {
         ReferencedTokenValidationException exception = assertThrows(
                 ReferencedTokenValidationException.class,
                 () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
-        assertTrue(exception.getMessage().contains("'iat'"), "Should mention iat. Actual: " + exception.getMessage());
+        assertTrue(
+                exception.getMessage().contains("must contain a numeric 'iat'"),
+                "Should mention iat. Actual: " + exception.getMessage());
     }
 
     @Test
@@ -546,7 +561,7 @@ public class ReferencedTokenValidatorTest {
                 ReferencedTokenValidationException.class,
                 () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
         assertTrue(
-                exception.getMessage().contains("expired"),
+                exception.getMessage().contains("has expired"),
                 "Should mention expired. Actual: " + exception.getMessage());
     }
 
@@ -563,12 +578,12 @@ public class ReferencedTokenValidatorTest {
                     }
                 }
                 """);
-        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher);
         ReferencedTokenValidationException exception = assertThrows(
                 ReferencedTokenValidationException.class,
                 () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
         assertTrue(
-                exception.getMessage().contains("expired"),
+                exception.getMessage().contains("has expired"),
                 "Should mention expired when exp == now. Actual: " + exception.getMessage());
     }
 
@@ -585,74 +600,38 @@ public class ReferencedTokenValidatorTest {
                     }
                 }
                 """);
-        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher);
         val.validate(credentialPayload(1, TEST_STATUS_LIST_URI));
     }
 
-    @Test
-    public void testStatusListJwt_RejectsStringExp() {
-        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+    @ParameterizedTest
+    @MethodSource("invalidExpProvider")
+    public void testStatusListJwt_RejectsInvalidExp(String expEntry) {
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt(String.format("""
                 {
                     "sub": "https://status.example.com/list",
                     "iat": 1700000000,
-                    "exp": "not-a-number",
+                    %s,
                     "status_list": {
                         "bits": 1,
                         "lst": "eNrbuRgAAhcBXQ"
                     }
                 }
-                """);
-        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
+                """, expEntry));
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher);
         ReferencedTokenValidationException exception = assertThrows(
                 ReferencedTokenValidationException.class,
                 () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
         assertTrue(
-                exception.getMessage().contains("numeric"),
+                exception.getMessage().contains("numeric value"),
                 "Should mention numeric. Actual: " + exception.getMessage());
     }
 
-    @Test
-    public void testStatusListJwt_RejectsNullExp() {
-        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
-                {
-                    "sub": "https://status.example.com/list",
-                    "iat": 1700000000,
-                    "exp": null,
-                    "status_list": {
-                        "bits": 1,
-                        "lst": "eNrbuRgAAhcBXQ"
-                    }
-                }
-                """);
-        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
-        ReferencedTokenValidationException exception = assertThrows(
-                ReferencedTokenValidationException.class,
-                () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
-        assertTrue(
-                exception.getMessage().contains("numeric"),
-                "Should mention numeric. Actual: " + exception.getMessage());
-    }
-
-    @Test
-    public void testStatusListJwt_RejectsBooleanExp() {
-        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
-                {
-                    "sub": "https://status.example.com/list",
-                    "iat": 1700000000,
-                    "exp": true,
-                    "status_list": {
-                        "bits": 1,
-                        "lst": "eNrbuRgAAhcBXQ"
-                    }
-                }
-                """);
-        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher, () -> 1000);
-        ReferencedTokenValidationException exception = assertThrows(
-                ReferencedTokenValidationException.class,
-                () -> val.validate(credentialPayload(0, TEST_STATUS_LIST_URI)));
-        assertTrue(
-                exception.getMessage().contains("numeric"),
-                "Should mention numeric. Actual: " + exception.getMessage());
+    private static Stream<Arguments> invalidExpProvider() {
+        return Stream.of(
+                Arguments.of("\"exp\": \"not-a-number\""),
+                Arguments.of("\"exp\": null"),
+                Arguments.of("\"exp\": true"));
     }
 
     @Test

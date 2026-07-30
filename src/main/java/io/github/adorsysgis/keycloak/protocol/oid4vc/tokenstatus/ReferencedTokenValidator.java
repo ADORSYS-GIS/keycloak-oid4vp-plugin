@@ -11,6 +11,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
+import org.keycloak.common.util.Time;
 import org.keycloak.jose.JOSE;
 import org.keycloak.jose.JOSEParser;
 import org.keycloak.jose.jws.JWSInput;
@@ -38,20 +39,9 @@ public class ReferencedTokenValidator {
     private static final String JWT_TYPE_STATUS_LIST = "statuslist+jwt";
 
     private final StatusListJwtFetcher statusListJwtFetcher;
-    private final TimeProvider timeProvider;
 
     public ReferencedTokenValidator(StatusListJwtFetcher statusListJwtFetcher) {
-        this(statusListJwtFetcher, () -> System.currentTimeMillis() / 1000);
-    }
-
-    ReferencedTokenValidator(StatusListJwtFetcher statusListJwtFetcher, TimeProvider timeProvider) {
         this.statusListJwtFetcher = statusListJwtFetcher;
-        this.timeProvider = timeProvider;
-    }
-
-    @FunctionalInterface
-    public interface TimeProvider {
-        long currentTimeSeconds();
     }
 
     /**
@@ -250,7 +240,7 @@ public class ReferencedTokenValidator {
                 throw new ReferencedTokenValidationException(tokenDescription + " 'exp' claim must be a numeric value");
             }
             long expirationTime = expNode.asLong();
-            long currentTime = timeProvider.currentTimeSeconds();
+            long currentTime = Time.currentTimeMillis() / 1000;
             if (currentTime >= expirationTime) {
                 throw new ReferencedTokenValidationException(tokenDescription + " has expired. Expiration time: "
                         + expirationTime + ", Current time: " + currentTime);
