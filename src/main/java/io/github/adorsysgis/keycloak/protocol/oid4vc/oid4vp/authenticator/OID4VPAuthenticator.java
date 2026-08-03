@@ -17,6 +17,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseS
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jboss.logging.Logger;
@@ -311,7 +312,7 @@ public class OID4VPAuthenticator implements Authenticator {
         }
     }
 
-    private Map<String, CredentialVerifier> resolveVerifiers(AuthorizationContext authContext) {
+    Map<String, CredentialVerifier> resolveVerifiers(AuthorizationContext authContext) {
         DcqlQuery dcqlQuery = authContext.getRequestObject().getDcqlQuery();
         if (dcqlQuery == null || dcqlQuery.getCredentials() == null) {
             throw new IllegalStateException("No DCQL query found in authorization context");
@@ -429,7 +430,13 @@ public class OID4VPAuthenticator implements Authenticator {
             AuthenticationProfile authenticationProfile,
             AuthRequirements authRequirements,
             Map<String, String> presentedTokens,
-            Map<String, CredentialVerifier> credentialVerifiers) {}
+            Map<String, CredentialVerifier> credentialVerifiers) {
+
+        public Context {
+            presentedTokens = Collections.unmodifiableMap(presentedTokens);
+            credentialVerifiers = Collections.unmodifiableMap(credentialVerifiers);
+        }
+    }
 
     record AuthenticatingUser(UserModel userModel, JsonNode primaryClaims) {}
 }
