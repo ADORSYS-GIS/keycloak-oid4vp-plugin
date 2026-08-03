@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.ALTERNATIVE_PRIMARY_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.SUPPORTING_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
@@ -338,6 +339,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
 
             testSuccessfulAuthentication(sdJwt, opts);
+        });
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_WithAlternativePrimaryCredentialGroup() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.alternativePrimary(), (apiFlow, requestObject) -> {
+            assertEquals(2, requestObject.getDcqlQuery().getCredentials().size());
+            assertEquals(
+                    List.of(List.of(PRIMARY_CREDENTIAL_ID), List.of(ALTERNATIVE_PRIMARY_CREDENTIAL_ID)),
+                    requestObject.getDcqlQuery().getCredentialSets().getFirst().getOptions());
+
+            String sdJwtVpToken = presentSdJwt(requestObject);
+            TestOpts opts =
+                    TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
+
+            testSuccessfulAuthenticationWithVPTokenMap(Map.of(ALTERNATIVE_PRIMARY_CREDENTIAL_ID, sdJwtVpToken), opts);
         });
     }
 

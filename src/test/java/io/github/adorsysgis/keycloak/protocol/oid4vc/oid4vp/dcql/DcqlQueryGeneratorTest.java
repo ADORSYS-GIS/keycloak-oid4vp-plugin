@@ -9,6 +9,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirementGroup;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import java.util.HashSet;
 import java.util.List;
@@ -61,6 +62,42 @@ public class DcqlQueryGeneratorTest {
         assertEquals(
                 List.of("main", "supporting"),
                 query.getCredentialSets().getFirst().getOptions().getFirst());
+    }
+
+    @Test
+    void testGenerateGroupedAlternativeCredentialDcqlQuery() {
+        AuthenticationProfile profile = new AuthenticationProfile()
+                .setId("grouped")
+                .setCredentials(List.of(
+                        new CredentialRequirement()
+                                .setId("passport")
+                                .setRole(CredentialRole.PRIMARY)
+                                .setCredentialTypes(List.of("passport-vct"))
+                                .setClaims(List.of("sub", "username")),
+                        new CredentialRequirement()
+                                .setId("national-id")
+                                .setRole(CredentialRole.PRIMARY)
+                                .setCredentialTypes(List.of("national-id-vct"))
+                                .setClaims(List.of("sub", "username")),
+                        new CredentialRequirement()
+                                .setId("pid")
+                                .setRole(CredentialRole.SUPPORTING)
+                                .setCredentialTypes(List.of("pid-vct"))
+                                .setClaims(List.of("given_name"))))
+                .setCredentialGroups(List.of(
+                        new CredentialRequirementGroup()
+                                .setId("primary-identity")
+                                .setOptions(List.of(List.of("passport"), List.of("national-id"))),
+                        new CredentialRequirementGroup().setId("pid").setOptions(List.of(List.of("pid")))));
+
+        DcqlQuery query = generator.buildQuery(profile, true);
+
+        assertEquals(3, query.getCredentials().size());
+        assertEquals(2, query.getCredentialSets().size());
+        assertEquals(
+                List.of(List.of("passport"), List.of("national-id")),
+                query.getCredentialSets().getFirst().getOptions());
+        assertEquals(List.of(List.of("pid")), query.getCredentialSets().get(1).getOptions());
     }
 
     @Test

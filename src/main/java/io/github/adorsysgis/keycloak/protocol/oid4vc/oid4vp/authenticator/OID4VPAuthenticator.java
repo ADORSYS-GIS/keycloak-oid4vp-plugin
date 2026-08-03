@@ -66,12 +66,19 @@ public class OID4VPAuthenticator implements Authenticator {
         logger.info("Authenticating with OID4VPAuthenticator");
 
         AuthenticationProfile profile = getAuthenticationProfile(context);
-        CredentialRequirement primaryCredential = profile.getPrimaryCredential();
 
         AuthorizationContext authContext = getAuthorizationContext(authSession);
         AuthRequirements authRequirements = new AuthRequirements(context.getAuthenticatorConfig());
 
         Map<String, String> presentedTokens = getPresentedTokens(authSession);
+        CredentialRequirement primaryCredential;
+        try {
+            primaryCredential = profile.getPresentedPrimaryCredential(presentedTokens.keySet());
+        } catch (IllegalStateException e) {
+            failRejectingPresentedCredential(context, e.getMessage(), e);
+            return;
+        }
+
         String primaryToken = presentedTokens.get(primaryCredential.getId());
         if (StringUtil.isBlank(primaryToken)) {
             failRejectingPresentedCredential(
@@ -186,8 +193,7 @@ public class OID4VPAuthenticator implements Authenticator {
 
             String token = supportingTokens.get(credential.getId());
             if (StringUtil.isBlank(token)) {
-                throw new VerificationException(String.format(
-                        "Supporting credential '%s' is missing from the presentation", credential.getId()));
+                continue;
             }
 
             CredentialVerifier supportingVerifier = resolveVerifier(authSession, credential.getId());

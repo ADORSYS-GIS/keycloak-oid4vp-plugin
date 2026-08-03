@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -57,6 +58,40 @@ public class OID4VPProfileConfigTest {
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
+    }
+
+    @Test
+    void shouldParseCredentialGroups() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "grouped",
+                    "credentials": [
+                      { "id": "passport", "role": "primary", "credentialTypes": ["passport-vct"], "claims": ["sub", "username"] },
+                      { "id": "national-id", "role": "primary", "credentialTypes": ["national-id-vct"], "claims": ["sub", "username"] },
+                      { "id": "pid", "role": "supporting", "credentialTypes": ["pid-vct"], "claims": ["given_name"] }
+                    ],
+                    "credentialGroups": [
+                      {
+                        "id": "primary-identity",
+                        "options": [["passport"], ["national-id"]]
+                      },
+                      {
+                        "id": "pid-support",
+                        "options": [["pid"]]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        AuthenticationProfile profile = new OID4VPProfileConfig(config).getProfile("grouped");
+
+        assertEquals(2, profile.getCredentialGroups().size());
+        assertEquals(
+                List.of(List.of("passport"), List.of("national-id")),
+                profile.getCredentialGroups().getFirst().getOptions());
     }
 
     @Test
@@ -180,6 +215,33 @@ public class OID4VPProfileConfigTest {
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals("OpenID4VP profile must have exactly one primary credential: broken", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectCredentialGroupWithoutConsistentPrimarySelection() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "broken",
+                    "credentials": [
+                      { "id": "passport", "role": "primary", "credentialTypes": ["passport-vct"], "claims": ["sub", "username"] },
+                      { "id": "pid", "role": "supporting", "credentialTypes": ["pid-vct"], "claims": ["given_name"] }
+                    ],
+                    "credentialGroups": [
+                      {
+                        "id": "primary-identity",
+                        "options": [["passport"], ["pid"]]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertEquals(
+                "OpenID4VP credential group options must consistently select a primary credential: broken/primary-identity",
+                error.getMessage());
     }
 
     @Test
