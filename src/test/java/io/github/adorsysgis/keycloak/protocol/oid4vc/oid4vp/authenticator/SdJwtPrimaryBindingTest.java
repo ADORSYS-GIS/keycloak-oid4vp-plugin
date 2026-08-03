@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
@@ -53,7 +54,7 @@ class SdJwtPrimaryBindingTest {
         when(user.getUsername()).thenReturn("someone-else");
         VerificationException error =
                 assertThrows(VerificationException.class, () -> apply(primaryWithUserAttributeBinding()));
-        assertEquals("Primary credential 'pid' failed binding rule 'claim_equals_user_attribute'", error.getMessage());
+        assertEquals("Credential 'pid' failed binding rule 'claim_equals_user_attribute'", error.getMessage());
     }
 
     @Test
@@ -81,7 +82,19 @@ class SdJwtPrimaryBindingTest {
     }
 
     private void apply(CredentialRequirement primary) throws VerificationException {
-        authenticator.applyBindingRules(context, primary, verifier, claims, null, null, user);
+        AuthenticationProfile profile =
+                new AuthenticationProfile().setId("default").setCredentials(List.of(primary));
+
+        OID4VPAuthenticator.Context ctx = new ContextBuilder()
+                .id("id")
+                .authenticationFlowContext(context)
+                .authenticationProfile(profile)
+                .credentialVerifier(primary.getId(), verifier)
+                .build();
+
+        OID4VPAuthenticator.AuthenticatingUser authenticatingUser =
+                new OID4VPAuthenticator.AuthenticatingUser(user, claims);
+        authenticator.applyBindingRules(ctx, authenticatingUser, primary, claims);
     }
 
     private static CredentialRequirement primaryWithUserAttributeBinding() {

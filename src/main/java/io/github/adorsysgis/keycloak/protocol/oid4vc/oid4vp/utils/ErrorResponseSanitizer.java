@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
@@ -35,18 +36,9 @@ public final class ErrorResponseSanitizer {
     }
 
     public static String correlationIdFromAuthSession(AuthenticationSessionModel authSession) {
-        if (authSession == null) {
-            return newCorrelationId();
-        }
-        return OID4VPUserAuthEndpointBase.getAuthSessionId(authSession);
-    }
-
-    public static String correlationIdFromState(String state) {
-        try {
-            return OID4VPUserAuthEndpointBase.pruneAuthSessionId(state);
-        } catch (IllegalArgumentException e) {
-            return newCorrelationId();
-        }
+        return Optional.ofNullable(authSession)
+                .map(OID4VPUserAuthEndpointBase::getAuthSessionId)
+                .orElseGet(ErrorResponseSanitizer::newCorrelationId);
     }
 
     public static String clientDescription(String generic, String detailed, String correlationId) {

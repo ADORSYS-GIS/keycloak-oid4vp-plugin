@@ -1,10 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
-import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 
 /**
@@ -23,6 +20,12 @@ public interface CredentialVerifier {
     CredentialFormat format();
 
     /**
+     * Returns a fresh, independent verifier for a single authentication run so that
+     * per-verification state is not shared across sessions.
+     */
+    CredentialVerifier copy();
+
+    /**
      * Verifies a credential presentation and returns the verified claims.
      *
      * <p>The orchestrator uses the returned claims for binding-rule evaluation and
@@ -32,18 +35,8 @@ public interface CredentialVerifier {
      * @throws VerificationException if cryptographic verification, claim requirements, or trust
      *         policy validation fails
      */
-    JsonNode verifyCredential(
-            AuthenticationFlowContext context,
-            AuthorizationContext authorizationContext,
-            AuthRequirements authRequirements,
-            CredentialRequirement credential,
-            String token)
+    JsonNode verifyCredential(OID4VPAuthenticator.Context context, CredentialRequirement credential, String token)
             throws VerificationException;
-
-    /**
-     * Reads claims according to format-specific rules.
-     */
-    String readClaim(JsonNode claims, String claimName);
 
     /**
      * Validates {@code transaction_data_hashes} from the presented credential
@@ -53,9 +46,14 @@ public interface CredentialVerifier {
      * The verifier may use state cached during {@link #verifyCredential} to
      * perform the validation (e.g. a post-verification {@code MdocVerificationContext}).
      *
-     * @param authorizationContext  context containing the request object
-     * @param token                 raw credential presentation token
+     * @param context  authenticator context for accessing transaction data
+     * @param token    raw credential presentation token
      * @throws VerificationException if the hashes do not match the request
      */
-    void validateTransactionData(AuthorizationContext authorizationContext, String token) throws VerificationException;
+    void validateTransactionData(OID4VPAuthenticator.Context context, String token) throws VerificationException;
+
+    /**
+     * Reads claims according to format-specific rules.
+     */
+    String readClaim(JsonNode claims, String claimName);
 }

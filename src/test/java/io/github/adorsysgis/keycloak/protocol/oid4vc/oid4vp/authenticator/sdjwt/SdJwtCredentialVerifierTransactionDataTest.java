@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.ContextBuilder;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
@@ -16,6 +18,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusList
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.AsymmetricSignatureSignerContext;
@@ -45,10 +48,10 @@ class SdJwtCredentialVerifierTransactionDataTest {
         String hash = hashForWire(wire);
         String presentedSdJwt = presentationWithHashes(List.of(hash));
 
-        AuthorizationContext authContext = authContextWithWire(List.of(wire));
+        var ctx = ctxWithWire(List.of(wire));
         SdJwtCredentialVerifier handler = new SdJwtCredentialVerifier(mock(StatusListJwtFetcher.class));
 
-        assertDoesNotThrow(() -> handler.validateTransactionData(authContext, presentedSdJwt));
+        assertDoesNotThrow(() -> handler.validateTransactionData(ctx, presentedSdJwt));
     }
 
     @Test
@@ -56,21 +59,26 @@ class SdJwtCredentialVerifierTransactionDataTest {
         String wire = wireEntry("payment");
         String presentedSdJwt = presentationWithHashes(List.of("invalid-hash"));
 
-        AuthorizationContext authContext = authContextWithWire(List.of(wire));
+        var ctx = ctxWithWire(List.of(wire));
         SdJwtCredentialVerifier handler = new SdJwtCredentialVerifier(mock(StatusListJwtFetcher.class));
 
-        assertThrows(
-                IllegalArgumentException.class, () -> handler.validateTransactionData(authContext, presentedSdJwt));
+        assertThrows(IllegalArgumentException.class, () -> handler.validateTransactionData(ctx, presentedSdJwt));
     }
 
     @Test
     void skipsValidationWhenNoTransactionDataInRequest() throws Exception {
         String presentedSdJwt = presentationWithHashes(List.of("any"));
-        AuthorizationContext authContext = authContextWithWire(null);
+        var ctx = ctxWithWire(null);
 
         SdJwtCredentialVerifier handler = new SdJwtCredentialVerifier(mock(StatusListJwtFetcher.class));
+        assertDoesNotThrow(() -> handler.validateTransactionData(ctx, presentedSdJwt));
+    }
 
-        assertDoesNotThrow(() -> handler.validateTransactionData(authContext, presentedSdJwt));
+    private static OID4VPAuthenticator.Context ctxWithWire(List<String> wireEntries) {
+        return new ContextBuilder()
+                .authenticationFlowContext(mock(AuthenticationFlowContext.class))
+                .authorizationContext(authContextWithWire(wireEntries))
+                .build();
     }
 
     private static AuthorizationContext authContextWithWire(List<String> wireEntries) {

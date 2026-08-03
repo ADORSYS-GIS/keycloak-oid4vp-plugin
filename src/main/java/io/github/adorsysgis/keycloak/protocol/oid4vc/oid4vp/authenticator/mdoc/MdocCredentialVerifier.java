@@ -17,7 +17,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContex
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -34,10 +34,10 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jwk.JSONWebKeySet;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.util.JWKSUtils;
 import org.keycloak.util.JsonSerialization;
@@ -58,6 +58,15 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
     }
 
+    private MdocCredentialVerifier(ReferencedTokenValidator tokenStatusValidator) {
+        this.tokenStatusValidator = tokenStatusValidator;
+    }
+
+    @Override
+    public MdocCredentialVerifier copy() {
+        return new MdocCredentialVerifier(tokenStatusValidator);
+    }
+
     @Override
     public CredentialFormat format() {
         return CredentialFormat.MSO_MDOC;
@@ -65,17 +74,14 @@ public class MdocCredentialVerifier implements CredentialVerifier {
 
     @Override
     public JsonNode verifyCredential(
-            AuthenticationFlowContext context,
-            AuthorizationContext authorizationContext,
-            AuthRequirements authRequirements,
-            CredentialRequirement credential,
-            String token)
+            OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException {
 
-        MdocAuthRequirements authReqs = new MdocAuthRequirements(authRequirements, credential);
+        KeycloakSession session = context.authenticationFlowContext().getSession();
+        TrustAnchorProvider truststore = TrustedProviderResolver.resolve(session, credentialReq);
+        MdocAuthRequirements authReqs = new MdocAuthRequirements(context.authRequirements(), credentialReq);
 
-        TrustAnchorProvider truststore = TrustedProviderResolver.resolve(context.getSession(), credential);
-
+        AuthorizationContext authorizationContext = context.authorizationContext();
         RequestObject requestObject = authorizationContext.getRequestObject();
 
         byte[] jwkThumbprint = computeJwkThumbprint(requestObject);
@@ -108,7 +114,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
                 throw new VerificationException(
                         String.format(
                                 "Token status verification failed for credential to requirement '%s'",
-                                credential.getId()),
+                                credentialReq.getId()),
                         e);
             }
         }
@@ -117,12 +123,12 @@ public class MdocCredentialVerifier implements CredentialVerifier {
     }
 
     @Override
-    public void validateTransactionData(AuthorizationContext authorizationContext, String token)
+    public void validateTransactionData(OID4VPAuthenticator.Context context, String token)
             throws VerificationException {
         if (verificationContext == null) {
             throw new IllegalStateException("verifyCredential() must be called before validateTransactionData()");
         }
-        validateTransactionData(authorizationContext, verificationContext);
+        validateTransactionData(context.authorizationContext(), verificationContext);
     }
 
     /**
@@ -229,7 +235,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         }
         if (value instanceof CBORItemList list
                 && list.getItems().size() == 1
-                && list.getItems().get(0) instanceof CBORString s) {
+                && list.getItems().getFirst() instanceof CBORString s) {
             return s.getValue();
         }
         throw new VerificationException("transaction_data_hashes_alg must be a string");
