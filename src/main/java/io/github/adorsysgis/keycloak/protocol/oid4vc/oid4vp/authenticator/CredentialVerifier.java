@@ -35,7 +35,7 @@ public interface CredentialVerifier {
      * @throws VerificationException if cryptographic verification, claim requirements, or trust
      *         policy validation fails
      */
-    JsonNode verifyCredential(OID4VPAuthenticator.Context context, CredentialRequirement credential, String token)
+    JsonNode verifyCredential(OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException;
 
     /**

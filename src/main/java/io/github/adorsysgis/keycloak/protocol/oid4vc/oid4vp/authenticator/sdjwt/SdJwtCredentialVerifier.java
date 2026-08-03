@@ -37,14 +37,14 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
     }
 
-    private SdJwtCredentialVerifier(SdJwtPresentationConsumer consumer, ReferencedTokenValidator tokenStatusValidator) {
-        this.consumer = consumer;
+    private SdJwtCredentialVerifier(ReferencedTokenValidator tokenStatusValidator) {
+        this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = tokenStatusValidator;
     }
 
     @Override
     public SdJwtCredentialVerifier copy() {
-        return new SdJwtCredentialVerifier(consumer, tokenStatusValidator);
+        return new SdJwtCredentialVerifier(tokenStatusValidator);
     }
 
     @Override
@@ -54,14 +54,14 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
 
     @Override
     public JsonNode verifyCredential(
-            OID4VPAuthenticator.Context context, CredentialRequirement credential, String token)
+            OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException {
 
         KeycloakSession session = context.authenticationFlowContext().getSession();
         AuthorizationContext authorizationContext = context.authorizationContext();
         RequestObject requestObject = authorizationContext.getRequestObject();
         SdJwtAuthRequirements authReqs =
-                new SdJwtAuthRequirements(session.getContext(), context.authRequirements(), credential);
+                new SdJwtAuthRequirements(session.getContext(), context.authRequirements(), credentialReq);
 
         SdJwtVP sdJwt = parseSdJwt(token);
 
@@ -74,7 +74,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         consumer.verifySdJwtPresentation(
                 sdJwt,
                 requirements,
-                SdJwtTrustedIssuerResolver.resolve(session, credential),
+                SdJwtTrustedIssuerResolver.resolve(session, credentialReq),
                 authReqs.getIssuerSignedJwtVerificationOpts(),
                 authReqs.getKeyBindingJwtVerificationOpts(
                         requestObject.getNonce(),
@@ -88,7 +88,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                 throw new VerificationException(
                         String.format(
                                 "Token status verification failed for credential to requirement '%s'",
-                                credential.getId()),
+                                credentialReq.getId()),
                         e);
             }
         }

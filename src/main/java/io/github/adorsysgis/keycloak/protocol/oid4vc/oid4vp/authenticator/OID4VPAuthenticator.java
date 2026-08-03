@@ -24,6 +24,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.FlowStatus;
 import org.keycloak.common.VerificationException;
 import org.keycloak.events.Errors;
 import org.keycloak.models.KeycloakSession;
@@ -71,7 +72,9 @@ public class OID4VPAuthenticator implements Authenticator {
         try {
             authUser = verifyPrimaryCredential(ctx);
         } catch (VerificationException e) {
-            logger.errorf(e, "Primary credential verification failed (authSession = %s)", ctx.id());
+            String msg = "Primary credential verification failed";
+            logger.errorf(e, "%s (authSession = %s)", msg, ctx.id());
+            failRejectingPresentedCredential(ctx, msg);
             return;
         }
 
@@ -79,7 +82,9 @@ public class OID4VPAuthenticator implements Authenticator {
         try {
             verifySupportingCredentials(ctx, authUser);
         } catch (VerificationException e) {
-            logger.errorf(e, "Supporting credential verification failed (authSession = %s)", ctx.id());
+            String msg = "Supporting credential verification failed";
+            logger.errorf(e, "%s (authSession = %s)", msg, ctx.id());
+            failRejectingPresentedCredential(ctx, msg);
             return;
         }
 
@@ -161,13 +166,8 @@ public class OID4VPAuthenticator implements Authenticator {
                 continue;
             }
 
-            String token = ctx.presentedTokens().get(credential.getId());
-            if (StringUtil.isBlank(token)) {
-                throw new VerificationException(String.format(
-                        "Supporting credential '%s' is missing from the presentation", credential.getId()));
-            }
-
             try {
+                String token = ctx.presentedTokens().get(credential.getId());
                 CredentialVerifier supportingVerifier =
                         ctx.credentialVerifiers().get(credential.getId());
                 JsonNode supportingClaims = supportingVerifier.verifyCredential(ctx, credential, token);
@@ -219,11 +219,27 @@ public class OID4VPAuthenticator implements Authenticator {
         logger.infof("Recovering authenticating user (authSession = %s)", ctx.id());
         CredentialRequirement primaryCredentialReq = ctx.authenticationProfile().getPrimaryCredential();
 
-        if (primaryCredentialReq.isSessionIdentity()) {
-            // User is to be recovered from session, not primary claims
-            return recoverPresentationDuringIssuanceUser(ctx);
+        UserModel user = primaryCredentialReq.isSessionIdentity()
+                ? recoverPresentationDuringIssuanceUser(ctx)
+                : recoverUserFromClaims(ctx, primaryCredentialReq, primaryClaims);
+
+        if (user == null) {
+            return null;
         }
 
+        logger.debugf("Recovered authenticating user has id '%s'", user.getId());
+
+        if (!user.isEnabled()) {
+            logger.debugf("Rejecting authentication for disabled user '%s'", user.getUsername());
+            failDenyingDisabledUser(ctx);
+            return null;
+        }
+
+        return user;
+    }
+
+    private UserModel recoverUserFromClaims(
+            Context ctx, CredentialRequirement primaryCredentialReq, JsonNode primaryClaims) {
         CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
         String subject = verifier.readClaim(primaryClaims, JsonWebToken.SUBJECT);
         String username = verifier.readClaim(primaryClaims, OAuth2Constants.USERNAME);
@@ -250,21 +266,11 @@ public class OID4VPAuthenticator implements Authenticator {
             return null;
         }
 
-        logger.debugf("Recovered authenticating user has id '%s'", user.getId());
-
-        // Running additional checks on the recovered user
-
         if (StringUtil.isNotBlank(username) && !username.equals(user.getUsername())) {
             logger.warnf(
                     "Username mismatch for subject '%s': credential='%s', user='%s'",
                     subject, username, user.getUsername());
             failRejectingPresentedCredential(ctx, "Username mismatch");
-            return null;
-        }
-
-        if (!user.isEnabled()) {
-            logger.debugf("Rejecting authentication for disabled user '%s'", user.getUsername());
-            failDenyingDisabledUser(ctx);
             return null;
         }
 
@@ -376,6 +382,14 @@ public class OID4VPAuthenticator implements Authenticator {
 
     private void failAuthentication(
             Context ctx, AuthenticationFlowError flowError, String errorCode, String description) {
+        if (ctx.authenticationFlowContext().getStatus() == FlowStatus.FAILED) {
+            logger.debugf(
+                    "A failure has already been set; skipping '%s' (errorCode=%s) to preserve the "
+                            + "previous failure (authSession = %s)",
+                    description, errorCode, ctx.id());
+            return;
+        }
+
         var errorRep = new OAuth2ErrorRepresentation(errorCode, description);
         ctx.authenticationFlowContext()
                 .failure(
