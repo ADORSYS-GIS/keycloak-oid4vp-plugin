@@ -17,18 +17,21 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseS
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.FlowStatus;
 import org.keycloak.common.VerificationException;
 import org.keycloak.events.Errors;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.UserProvider;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -61,185 +64,285 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     @Override
-    public void authenticate(AuthenticationFlowContext context) {
-        AuthenticationSessionModel authSession = context.getAuthenticationSession();
-        logger.info("Authenticating with OID4VPAuthenticator");
+    public void authenticate(AuthenticationFlowContext authFlowContext) {
+        Context ctx = gatherContext(authFlowContext);
+        logger.debugf("Authenticating with OID4VPAuthenticator (authSession = %s)", ctx.id());
 
-        AuthenticationProfile profile = getAuthenticationProfile(context);
+        // Verify primary credential and recover authenticating user
+        AuthenticatingUser authUser;
+        try {
+            authUser = verifyPrimaryCredential(ctx);
+        } catch (VerificationException e) {
+            String msg = "Primary credential verification failed";
+            logger.errorf(e, "%s (authSession = %s)", msg, ctx.id());
+            failRejectingPresentedCredential(ctx, msg);
+            return;
+        }
 
-        AuthorizationContext authContext = getAuthorizationContext(authSession);
-        AuthRequirements authRequirements = new AuthRequirements(context.getAuthenticatorConfig());
+        // Verify supporting credentials while enforcing binding to authenticating user
+        try {
+            verifySupportingCredentials(ctx, authUser);
+        } catch (VerificationException e) {
+            String msg = "Supporting credential verification failed";
+            logger.errorf(e, "%s (authSession = %s)", msg, ctx.id());
+            failRejectingPresentedCredential(ctx, msg);
+            return;
+        }
+
+        // Authentication successful: attach authenticated user to context
+        UserModel user = authUser.userModel();
+        authFlowContext.setUser(user);
+        authFlowContext.success();
+        logger.debugf("User '%s' successfully authenticated", user.getUsername());
+    }
+
+    /**
+     * Builds the {@link Context} carried throughout the authentication run.
+     */
+    private Context gatherContext(AuthenticationFlowContext authFlowContext) {
+        AuthRequirements authRequirements = new AuthRequirements(authFlowContext.getAuthenticatorConfig());
+        AuthenticationSessionModel authSession = authFlowContext.getAuthenticationSession();
+        AuthorizationContext authContext = new AuthenticationSessionStore(authSession).getAuthorizationContext();
+
+        // TODO: Access the profile config reliably without full parsing on every iteration.
+        //       Issue also applies to VerifierConfig.
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(authFlowContext.getAuthenticatorConfig());
+        AuthenticationProfile authProfile = profileConfig.getProfile(authContext.getProfileId());
 
         Map<String, String> presentedTokens = getPresentedTokens(authSession);
-        CredentialRequirement primaryCredential;
-        try {
-            primaryCredential = profile.getPresentedPrimaryCredential(presentedTokens.keySet());
-        } catch (IllegalStateException e) {
-            failRejectingPresentedCredential(context, e.getMessage(), e);
-            return;
-        }
+        Map<String, CredentialVerifier> credentialVerifiers = resolveVerifiers(authContext);
 
-        String primaryToken = presentedTokens.get(primaryCredential.getId());
-        if (StringUtil.isBlank(primaryToken)) {
-            failRejectingPresentedCredential(
-                    context,
-                    String.format("Missing credential presentation for credential: %s", primaryCredential.getId()));
-            return;
-        }
+        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(authSession);
+        return new Context(
+                correlationId,
+                authFlowContext,
+                authSession,
+                authContext,
+                authProfile,
+                authRequirements,
+                presentedTokens,
+                credentialVerifiers);
+    }
 
-        CredentialVerifier primaryVerifier = resolveVerifier(authSession, primaryCredential.getId());
+    private AuthenticatingUser verifyPrimaryCredential(Context ctx) throws VerificationException {
+        CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
+        CredentialVerifier primaryVerifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
+        String primaryToken = ctx.presentedTokens().get(primaryCredentialReq.getId());
+
+        // Run credential verification and capture claims
         JsonNode primaryClaims;
-
         try {
-            primaryClaims = primaryVerifier.verifyCredential(
-                    context, authContext, authRequirements, primaryCredential, primaryToken);
-            primaryVerifier.validateTransactionData(authContext, primaryToken);
-        } catch (VerificationException e) {
-            logger.errorf(e, "Primary credential verification failed (authSession = %s)", correlationId(context));
-            failRejectingPresentedCredential(context, e.getMessage(), e);
-            return;
+            primaryClaims = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
+            primaryVerifier.validateTransactionData(ctx, primaryToken);
+        } catch (VerificationException | IllegalStateException e) {
+            String msg = "Primary credential verification failed";
+            failRejectingPresentedCredential(ctx, String.format("%s: %s", msg, e.getMessage()));
+            throw new VerificationException(msg, e);
         }
 
-        UserModel user =
-                recoverAuthenticatingUser(context, authContext, primaryCredential, primaryVerifier, primaryClaims);
+        // Recover authenticating user from Keycloak
+        UserModel user = recoverAuthenticatingUser(ctx, primaryClaims);
         if (user == null) {
-            return;
+            throw new VerificationException("Failure recovering authenticating user");
         }
-
-        if (!user.isEnabled()) {
-            logger.debugf("Rejecting authentication for disabled user '%s'", user.getUsername());
-            failDenyingDisabledUser(context);
-            return;
-        }
+        AuthenticatingUser authUser = new AuthenticatingUser(user, primaryClaims);
 
         // Primary-credential binding rules establish that the verified credential belongs to the
         // recovered Keycloak user. This is especially important for session-identity profiles, where
         // the user comes from the issuance session rather than from identity claims in the credential.
         try {
-            applyBindingRules(context, primaryCredential, primaryVerifier, primaryClaims, null, null, user);
+            applyBindingRules(ctx, authUser, primaryCredentialReq, primaryClaims);
         } catch (VerificationException | IllegalStateException e) {
-            logger.errorf(e, "Primary credential binding failed (authSession = %s)", correlationId(context));
-            failRejectingPresentedCredential(context, e.getMessage(), e);
-            return;
+            String msg = "Primary credential binding checks failed";
+            failRejectingPresentedCredential(ctx, String.format("%s: %s", msg, e.getMessage()));
+            throw new VerificationException(msg, e);
         }
 
-        try {
-            var supportingTokens = supportingPresentedTokens(presentedTokens, primaryCredential.getId());
-            verifySupportingCredentials(
-                    context,
-                    authContext,
-                    authSession,
-                    profile,
-                    primaryVerifier,
-                    primaryClaims,
-                    supportingTokens,
-                    user,
-                    authRequirements);
-        } catch (VerificationException | IllegalStateException e) {
-            logger.errorf(e, "Supporting credential verification failed (authSession = %s)", correlationId(context));
-            failRejectingPresentedCredential(context, e.getMessage(), e);
-            return;
-        }
-
-        context.setUser(user);
-        context.success();
-        logger.debugf("User '%s' successfully authenticated", user.getUsername());
+        return authUser;
     }
 
-    @Override
-    public void action(AuthenticationFlowContext context) {
-        // No form action is relevant for this authenticator
-    }
-
-    private CredentialVerifier resolveVerifier(AuthenticationSessionModel authSession, String credentialId) {
-        DcqlQuery dcqlQuery =
-                getAuthorizationContext(authSession).getRequestObject().getDcqlQuery();
-        if (dcqlQuery == null || dcqlQuery.getCredentials() == null) {
-            throw new IllegalStateException("No DCQL query found in authorization context");
-        }
-
-        String format = dcqlQuery.getCredentials().stream()
-                .filter(c -> credentialId.equals(c.getId()))
-                .map(Credential::getFormat)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        String.format("Credential '%s' not found in DCQL query", credentialId)));
-
-        CredentialVerifier verifier = handlers.get(format);
-        if (verifier == null) {
-            throw new IllegalStateException(String.format(
-                    "No registered verifier supports format '%s' for credential '%s'", format, credentialId));
-        }
-
-        return verifier;
-    }
-
-    private void verifySupportingCredentials(
-            AuthenticationFlowContext context,
-            AuthorizationContext authContext,
-            AuthenticationSessionModel authSession,
-            AuthenticationProfile profile,
-            CredentialVerifier primaryVerifier,
-            JsonNode primaryClaims,
-            Map<String, String> supportingTokens,
-            UserModel user,
-            AuthRequirements authRequirements)
-            throws VerificationException {
-
-        for (CredentialRequirement credential : profile.getCredentials()) {
+    private void verifySupportingCredentials(Context ctx, AuthenticatingUser authUser) throws VerificationException {
+        for (CredentialRequirement credential : ctx.authenticationProfile().getCredentials()) {
             if (credential.isPrimary()) {
                 continue;
             }
 
-            String token = supportingTokens.get(credential.getId());
+            String token = ctx.presentedTokens().get(credential.getId());
             if (StringUtil.isBlank(token)) {
                 continue;
             }
 
-            CredentialVerifier supportingVerifier = resolveVerifier(authSession, credential.getId());
-            JsonNode supportingClaims =
-                    supportingVerifier.verifyCredential(context, authContext, authRequirements, credential, token);
-
-            applyBindingRules(
-                    context, credential, supportingVerifier, supportingClaims, primaryVerifier, primaryClaims, user);
+            try {
+                CredentialVerifier supportingVerifier =
+                        ctx.credentialVerifiers().get(credential.getId());
+                JsonNode supportingClaims = supportingVerifier.verifyCredential(ctx, credential, token);
+                applyBindingRules(ctx, authUser, credential, supportingClaims);
+            } catch (VerificationException | IllegalStateException e) {
+                String msg = "Supporting credential verification failed";
+                failRejectingPresentedCredential(ctx, String.format("%s: %s", msg, e.getMessage()));
+                throw new VerificationException(msg, e);
+            }
         }
     }
 
     void applyBindingRules(
-            AuthenticationFlowContext context,
-            CredentialRequirement credential,
-            CredentialVerifier supportingVerifier,
-            JsonNode supportingClaims,
-            CredentialVerifier primaryVerifier,
-            JsonNode primaryClaims,
-            UserModel user)
+            Context ctx, AuthenticatingUser authUser, CredentialRequirement credentialReq, JsonNode claims)
             throws VerificationException {
+        KeycloakSession session = ctx.authenticationFlowContext().getSession();
+        CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
+        CredentialVerifier primaryVerifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
 
-        for (BindingRule rule : credential.getBinding()) {
-            String supportingValue = supportingVerifier.readClaim(supportingClaims, rule.getCredentialClaim());
+        for (BindingRule rule : credentialReq.getBinding()) {
+            CredentialVerifier verifier = ctx.credentialVerifiers().get(credentialReq.getId());
+            String actualValue = verifier.readClaim(claims, rule.getCredentialClaim());
+
             String expectedValue =
                     switch (rule.getType()) {
                         case BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM -> {
-                            if (primaryVerifier == null || primaryClaims == null) {
+                            if (credentialReq.isPrimary()) {
                                 throw new VerificationException(String.format(
                                         "Binding rule '%s' is not applicable to the primary credential '%s'",
-                                        rule.getType(), credential.getId()));
+                                        rule.getType(), credentialReq.getId()));
                             }
-                            yield primaryVerifier.readClaim(primaryClaims, rule.getPrimaryCredentialClaim());
+                            yield primaryVerifier.readClaim(authUser.primaryClaims(), rule.getPrimaryCredentialClaim());
                         }
                         case BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE ->
-                            readUserAttribute(user, rule.getUserAttribute());
+                            readUserAttribute(authUser.userModel(), rule.getUserAttribute());
                         default ->
                             throw new IllegalStateException(
                                     String.format("Unsupported binding rule type: %s", rule.getType()));
                     };
 
-            if (!resolveComparator(context.getSession(), rule).matches(supportingValue, expectedValue)) {
+            if (!resolveComparator(session, rule).matches(actualValue, expectedValue)) {
                 throw new VerificationException(String.format(
-                        "%s credential '%s' failed binding rule '%s'",
-                        credential.isPrimary() ? "Primary" : "Supporting", credential.getId(), rule.getType()));
+                        "Credential '%s' failed binding rule '%s'", credentialReq.getId(), rule.getType()));
             }
         }
+    }
+
+    private UserModel recoverAuthenticatingUser(Context ctx, JsonNode primaryClaims) {
+        logger.infof("Recovering authenticating user (authSession = %s)", ctx.id());
+        CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
+
+        UserModel user = primaryCredentialReq.isSessionIdentity()
+                ? recoverPresentationDuringIssuanceUser(ctx)
+                : recoverUserFromClaims(ctx, primaryCredentialReq, primaryClaims);
+
+        if (user == null) {
+            return null;
+        }
+
+        logger.debugf("Recovered authenticating user has id '%s'", user.getId());
+
+        if (!user.isEnabled()) {
+            logger.debugf("Rejecting authentication for disabled user '%s'", user.getUsername());
+            failDenyingDisabledUser(ctx);
+            return null;
+        }
+
+        return user;
+    }
+
+    private CredentialRequirement getPresentedPrimaryCredential(Context ctx) {
+        return ctx.authenticationProfile()
+                .getPresentedPrimaryCredential(ctx.presentedTokens().keySet());
+    }
+
+    private UserModel recoverUserFromClaims(
+            Context ctx, CredentialRequirement primaryCredentialReq, JsonNode primaryClaims) {
+        CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
+        String subject = verifier.readClaim(primaryClaims, JsonWebToken.SUBJECT);
+        String username = verifier.readClaim(primaryClaims, OAuth2Constants.USERNAME);
+        logger.debugf("Attempting user recovery with subject '%s' and username '%s'", subject, username);
+
+        KeycloakSession session = ctx.authenticationFlowContext().getSession();
+        RealmModel realm = ctx.authenticationFlowContext().getRealm();
+        UserProvider userProvider = session.users();
+
+        UserModel user = null;
+        if (StringUtil.isNotBlank(subject)) {
+            user = userProvider.getUserById(realm, subject);
+        }
+
+        if (user == null && StringUtil.isNotBlank(username)) {
+            // TODO: Remove username-only fallback once SubjectID mapper is fixed and stable.
+            logger.warn("Subject did not resolve to a user. Falling back to username lookup");
+            user = userProvider.getUserByUsername(realm, username);
+        }
+
+        if (user == null) {
+            logger.debugf("Authentication passed but authenticating user is unknown");
+            failDenyingAuthenticatingUser(ctx);
+            return null;
+        }
+
+        if (StringUtil.isNotBlank(username) && !username.equals(user.getUsername())) {
+            logger.warnf(
+                    "Username mismatch for subject '%s': credential='%s', user='%s'",
+                    subject, username, user.getUsername());
+            failRejectingPresentedCredential(ctx, "Username mismatch");
+            return null;
+        }
+
+        return user;
+    }
+
+    private UserModel recoverPresentationDuringIssuanceUser(Context ctx) {
+        String subjectUserId = ctx.authorizationContext().getSubjectUserId();
+        if (StringUtil.isBlank(subjectUserId)) {
+            failRejectingPresentedCredential(ctx, "Missing session-bound subject user");
+            return null;
+        }
+
+        KeycloakSession session = ctx.authenticationFlowContext().getSession();
+        RealmModel realm = ctx.authenticationFlowContext().getRealm();
+        UserModel user = session.users().getUserById(realm, subjectUserId);
+
+        if (user == null) {
+            logger.warnf("Credential offer subject '%s' did not resolve to a user", subjectUserId);
+            failDenyingAuthenticatingUser(ctx);
+            return null;
+        }
+
+        logger.debugf("Resolved presentation-during-issuance subject user id: %s", user.getId());
+        return user;
+    }
+
+    private Map<String, String> getPresentedTokens(AuthenticationSessionModel authSession) {
+        String tokensJson = authSession.getAuthNote(PRESENTED_TOKENS_KEY);
+        if (StringUtil.isBlank(tokensJson)) {
+            return Map.of();
+        }
+
+        try {
+            return JsonSerialization.readValue(tokensJson, new TypeReference<>() {});
+        } catch (IOException e) {
+            throw new IllegalStateException("Invalid OID4VP presented credentials auth note", e);
+        }
+    }
+
+    Map<String, CredentialVerifier> resolveVerifiers(AuthorizationContext authContext) {
+        DcqlQuery dcqlQuery = authContext.getRequestObject().getDcqlQuery();
+        if (dcqlQuery == null || dcqlQuery.getCredentials() == null) {
+            throw new IllegalStateException("No DCQL query found in authorization context");
+        }
+
+        Map<String, CredentialVerifier> verifiers = new LinkedHashMap<>();
+        for (Credential credential : dcqlQuery.getCredentials()) {
+            String credentialId = credential.getId();
+            String format = credential.getFormat();
+            CredentialVerifier verifier = handlers.get(format);
+            if (verifier == null) {
+                throw new IllegalStateException(String.format(
+                        "No registered verifier supports format '%s' for credential '%s'", format, credentialId));
+            }
+            // Clone the template verifier so per-verification state (e.g. verification context held
+            // between verifyCredential and validateTransactionData) is not shared or clobbered across
+            // concurrent authentication sessions.
+            verifiers.put(credentialId, verifier.copy());
+        }
+
+        return verifiers;
     }
 
     private BindingValueComparator resolveComparator(KeycloakSession session, BindingRule rule)
@@ -263,164 +366,53 @@ public class OID4VPAuthenticator implements Authenticator {
         };
     }
 
-    private AuthorizationContext getAuthorizationContext(AuthenticationSessionModel authSession) {
-        return new AuthenticationSessionStore(authSession).getAuthorizationContext();
-    }
-
-    private AuthenticationProfile getAuthenticationProfile(AuthenticationFlowContext context) {
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(context.getAuthenticatorConfig());
-        AuthorizationContext authContext = getAuthorizationContext(context.getAuthenticationSession());
-        return profileConfig.getProfile(authContext.getProfileId());
-    }
-
-    private Map<String, String> getPresentedTokens(AuthenticationSessionModel authSession) {
-        String tokensJson = authSession.getAuthNote(PRESENTED_TOKENS_KEY);
-        if (StringUtil.isBlank(tokensJson)) {
-            return Map.of();
-        }
-
-        try {
-            return JsonSerialization.readValue(tokensJson, new TypeReference<>() {});
-        } catch (IOException e) {
-            throw new IllegalStateException("Invalid OID4VP presented credentials auth note", e);
-        }
-    }
-
-    private static Map<String, String> supportingPresentedTokens(
-            Map<String, String> presentedTokens, String primaryCredentialId) {
-        return presentedTokens.entrySet().stream()
-                .filter(e -> !primaryCredentialId.equals(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    private UserModel recoverAuthenticatingUser(
-            AuthenticationFlowContext context,
-            AuthorizationContext authContext,
-            CredentialRequirement primaryCredential,
-            CredentialVerifier verifier,
-            JsonNode primaryClaims) {
-        logger.info("Recovering authenticating user");
-
-        if (primaryCredential.isSessionIdentity()) {
-            String subjectUserId = authContext.getSubjectUserId();
-            if (StringUtil.isBlank(subjectUserId)) {
-                failRejectingPresentedCredential(context, "Missing session-bound subject user");
-                return null;
-            }
-            return recoverPresentationSubject(context, subjectUserId);
-        }
-
-        String subject = verifier.readClaim(primaryClaims, JsonWebToken.SUBJECT);
-        if (StringUtil.isBlank(subject)) {
-            logger.warn("Presented credential is missing subject claim");
-        } else {
-            logger.debugf("Presented subject: %s", subject);
-        }
-
-        String presentedUsername = verifier.readClaim(primaryClaims, OAuth2Constants.USERNAME);
-        if (StringUtil.isBlank(presentedUsername)) {
-            logger.warn("Presented credential is missing required username claim");
-            failRejectingPresentedCredential(context, "Missing username claim");
-            return null;
-        }
-
-        UserModel user = null;
-        if (!StringUtil.isBlank(subject)) {
-            user = context.getSession().users().getUserById(context.getRealm(), subject);
-            if (user != null) {
-                logger.debugf("Resolved user id: %s", user.getId());
-            }
-        }
-
-        if (user == null) {
-            // TODO: Remove username-only fallback once SubjectID mapper is fixed and stable.
-            logger.warn("Subject did not resolve to a user. Falling back to username lookup.");
-            user = context.getSession().users().getUserByUsername(context.getRealm(), presentedUsername);
-        }
-
-        if (user == null) {
-            logger.debugf("Authentication passed but authenticating user is unknown");
-            failDenyingAuthenticatingUser(context);
-            return null;
-        }
-
-        if (!presentedUsername.equals(user.getUsername())) {
-            logger.warnf(
-                    "Username mismatch for subject '%s': credential='%s', user='%s'",
-                    subject, presentedUsername, user.getUsername());
-            failRejectingPresentedCredential(context, "Username mismatch");
-            return null;
-        }
-
-        return user;
-    }
-
-    private UserModel recoverPresentationSubject(AuthenticationFlowContext context, String subjectUserId) {
-        UserModel user = context.getSession().users().getUserById(context.getRealm(), subjectUserId);
-        if (user == null) {
-            logger.warnf("Credential offer subject '%s' did not resolve to a user", subjectUserId);
-            failDenyingAuthenticatingUser(context);
-            return null;
-        }
-        logger.debugf("Resolved presentation-during-issuance subject user id: %s", user.getId());
-        return user;
-    }
-
-    private static String correlationId(AuthenticationFlowContext context) {
-        return ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-    }
-
-    private void failRejectingPresentedCredential(AuthenticationFlowContext context, String reason) {
-        failRejectingPresentedCredential(context, reason, null);
-    }
-
-    private void failRejectingPresentedCredential(AuthenticationFlowContext context, String reason, Throwable cause) {
-        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        if (cause != null) {
-            logger.errorf(cause, "Presented OID4VP credential rejected (authSession = %s): %s", correlationId, reason);
-        } else {
-            logger.errorf("Presented OID4VP credential rejected (authSession = %s): %s", correlationId, reason);
-        }
-
-        String description = String.format("Invalid OID4VP credential presentation (%s)", reason);
-        var errorRep = new OAuth2ErrorRepresentation(Errors.INVALID_USER_CREDENTIALS, description);
-
-        context.failure(
+    private void failRejectingPresentedCredential(Context ctx, String reason) {
+        failAuthentication(
+                ctx,
                 AuthenticationFlowError.INVALID_CREDENTIALS,
-                Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
-                        .type(MediaType.APPLICATION_JSON_TYPE)
-                        .entity(errorRep)
-                        .build());
+                Errors.INVALID_USER_CREDENTIALS,
+                String.format("Invalid OID4VP credential presentation: %s", reason));
     }
 
-    private void failDenyingAuthenticatingUser(AuthenticationFlowContext context) {
-        logger.info("Presented OID4VP credential will be rejected for associated user is unknown");
-
-        String correlationId = ErrorResponseSanitizer.correlationIdFromAuthSession(context.getAuthenticationSession());
-        logger.errorf("User with presented OID4VP credential is unknown (authSession = %s)", correlationId);
-
-        String description = "User with presented OID4VP credential is unknown";
-
-        var errorRep = new OAuth2ErrorRepresentation(Errors.USER_NOT_FOUND, description);
-
-        context.failure(
+    private void failDenyingAuthenticatingUser(Context ctx) {
+        failAuthentication(
+                ctx,
                 AuthenticationFlowError.UNKNOWN_USER,
-                Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
-                        .type(MediaType.APPLICATION_JSON_TYPE)
-                        .entity(errorRep)
-                        .build());
+                Errors.USER_NOT_FOUND,
+                "User with presented OID4VP credential is unknown");
     }
 
-    private void failDenyingDisabledUser(AuthenticationFlowContext context) {
-        var errorRep = new OAuth2ErrorRepresentation(
-                Errors.USER_DISABLED, "User with presented OID4VP credential is disabled");
-
-        context.failure(
+    private void failDenyingDisabledUser(Context ctx) {
+        failAuthentication(
+                ctx,
                 AuthenticationFlowError.USER_DISABLED,
-                Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
-                        .type(MediaType.APPLICATION_JSON_TYPE)
-                        .entity(errorRep)
-                        .build());
+                Errors.USER_DISABLED,
+                "User with presented OID4VP credential is disabled");
+    }
+
+    private void failAuthentication(
+            Context ctx, AuthenticationFlowError flowError, String errorCode, String description) {
+        if (ctx.authenticationFlowContext().getStatus() == FlowStatus.FAILED) {
+            logger.debugf(
+                    "A failure has already been set; skipping '%s' (errorCode=%s) to preserve the "
+                            + "previous failure (authSession = %s)",
+                    description, errorCode, ctx.id());
+            return;
+        }
+
+        var errorRep = new OAuth2ErrorRepresentation(errorCode, description);
+        ctx.authenticationFlowContext()
+                .failure(
+                        flowError,
+                        Response.status(Response.Status.UNAUTHORIZED.getStatusCode())
+                                .type(MediaType.APPLICATION_JSON_TYPE)
+                                .entity(errorRep)
+                                .build());
+    }
+
+    @Override
+    public void action(AuthenticationFlowContext context) {
+        // No form action is relevant for this authenticator
     }
 
     @Override
@@ -438,4 +430,22 @@ public class OID4VPAuthenticator implements Authenticator {
 
     @Override
     public void close() {}
+
+    public record Context(
+            String id,
+            AuthenticationFlowContext authenticationFlowContext,
+            AuthenticationSessionModel authenticationSession,
+            AuthorizationContext authorizationContext,
+            AuthenticationProfile authenticationProfile,
+            AuthRequirements authRequirements,
+            Map<String, String> presentedTokens,
+            Map<String, CredentialVerifier> credentialVerifiers) {
+
+        public Context {
+            presentedTokens = Collections.unmodifiableMap(presentedTokens);
+            credentialVerifiers = Collections.unmodifiableMap(credentialVerifiers);
+        }
+    }
+
+    record AuthenticatingUser(UserModel userModel, JsonNode primaryClaims) {}
 }

@@ -712,7 +712,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid OID4VP credential presentation (Token status verification failed for credential to requirement 'identity')");
+                "Invalid OID4VP credential presentation: Primary credential verification failed: Token status verification failed for credential to requirement 'identity'");
     }
 
     @Test
@@ -837,7 +837,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     opts,
                     HttpStatus.SC_UNAUTHORIZED,
                     ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                    "Supporting credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
+                    "Invalid OID4VP credential presentation: Supporting credential verification failed: Credential 'supporting' failed binding rule 'claim_equals_primary_claim'");
         });
     }
 

@@ -137,7 +137,7 @@ public class AuthenticationProfile {
         return credentials.stream()
                 .filter(credential -> credential.getId().equals(credentialId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new IllegalArgumentException(
                         "Profile does not define credential '%s': %s".formatted(credentialId, id)));
     }
 
