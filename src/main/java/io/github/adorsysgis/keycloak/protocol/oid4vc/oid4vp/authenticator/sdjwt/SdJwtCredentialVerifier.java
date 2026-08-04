@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -15,9 +15,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusList
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-import org.jboss.logging.Logger;
-import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
@@ -30,14 +29,22 @@ import org.keycloak.utils.StringUtil;
  */
 public class SdJwtCredentialVerifier implements CredentialVerifier {
 
-    private static final Logger logger = Logger.getLogger(SdJwtCredentialVerifier.class);
-
     private final SdJwtPresentationConsumer consumer;
     private final ReferencedTokenValidator tokenStatusValidator;
 
     public SdJwtCredentialVerifier(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
+    }
+
+    private SdJwtCredentialVerifier(ReferencedTokenValidator tokenStatusValidator) {
+        this.consumer = new SdJwtPresentationConsumer();
+        this.tokenStatusValidator = tokenStatusValidator;
+    }
+
+    @Override
+    public SdJwtCredentialVerifier copy() {
+        return new SdJwtCredentialVerifier(tokenStatusValidator);
     }
 
     @Override
@@ -47,21 +54,16 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
 
     @Override
     public JsonNode verifyCredential(
-            AuthenticationFlowContext context,
-            AuthorizationContext authorizationContext,
-            AuthRequirements authRequirements,
-            CredentialRequirement credential,
-            String token)
+            OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException {
 
+        KeycloakSession session = context.authenticationFlowContext().getSession();
+        AuthorizationContext authorizationContext = context.authorizationContext();
         RequestObject requestObject = authorizationContext.getRequestObject();
-        String nonce = requestObject.getNonce();
-        String audience = requestObject.getClientId();
+        SdJwtAuthRequirements authReqs =
+                new SdJwtAuthRequirements(session.getContext(), context.authRequirements(), credentialReq);
 
         SdJwtVP sdJwt = parseSdJwt(token);
-
-        SdJwtAuthRequirements authReqs =
-                new SdJwtAuthRequirements(context.getSession().getContext(), authRequirements, credential);
 
         AtomicReference<JsonNode> payloadRef = new AtomicReference<>();
         PresentationRequirements requirements = payload -> {
@@ -72,10 +74,12 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         consumer.verifySdJwtPresentation(
                 sdJwt,
                 requirements,
-                SdJwtTrustedIssuerResolver.resolve(context.getSession(), credential),
+                SdJwtTrustedIssuerResolver.resolve(session, credentialReq),
                 authReqs.getIssuerSignedJwtVerificationOpts(),
                 authReqs.getKeyBindingJwtVerificationOpts(
-                        nonce, audience, authReqs.shouldRequireCryptographicHolderBinding()));
+                        requestObject.getNonce(),
+                        requestObject.getClientId(),
+                        authReqs.shouldRequireCryptographicHolderBinding()));
 
         if (authReqs.shouldEnforceRevocationStatus()) {
             try {
@@ -84,7 +88,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                 throw new VerificationException(
                         String.format(
                                 "Token status verification failed for credential to requirement '%s'",
-                                credential.getId()),
+                                credentialReq.getId()),
                         e);
             }
         }
@@ -93,14 +97,9 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
     }
 
     @Override
-    public String readClaim(JsonNode claims, String claimName) {
-        return Optional.ofNullable(claims.get(claimName)).map(JsonNode::asText).orElse(null);
-    }
-
-    @Override
-    public void validateTransactionData(AuthorizationContext authorizationContext, String presentedToken) {
+    public void validateTransactionData(OID4VPAuthenticator.Context context, String presentedToken) {
         List<String> transactionDataWire =
-                authorizationContext.getRequestObject().getTransactionData();
+                context.authorizationContext().getRequestObject().getTransactionData();
         if (transactionDataWire == null || transactionDataWire.isEmpty()) {
             return;
         }
@@ -113,6 +112,11 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
 
         ObjectNode kbPayload = keyBindingJwt.get().getPayload();
         TransactionDataValidator.validate(transactionDataWire, kbPayload);
+    }
+
+    @Override
+    public String readClaim(JsonNode claims, String claimName) {
+        return Optional.ofNullable(claims.get(claimName)).map(JsonNode::asText).orElse(null);
     }
 
     private static SdJwtVP parseSdJwt(String presentedToken) {

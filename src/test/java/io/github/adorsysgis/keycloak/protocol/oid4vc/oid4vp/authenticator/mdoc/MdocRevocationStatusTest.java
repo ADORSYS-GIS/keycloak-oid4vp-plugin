@@ -23,6 +23,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.ContextBuilder;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -134,12 +135,17 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                 .build();
 
         String validMdoc = buildMdocWithStatus(1, optsFromRequest);
-        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, authReqs, credential, validMdoc));
+        var ctx = new ContextBuilder()
+                .authenticationFlowContext(context)
+                .authorizationContext(authCtx)
+                .authRequirements(authReqs)
+                .build();
+
+        assertDoesNotThrow(() -> verifier.verifyCredential(ctx, credential, validMdoc));
 
         String revokedMdoc = buildMdocWithStatus(0, optsFromRequest);
         VerificationException exception = assertThrows(
-                VerificationException.class,
-                () -> verifier.verifyCredential(context, authCtx, authReqs, credential, revokedMdoc));
+                VerificationException.class, () -> verifier.verifyCredential(ctx, credential, revokedMdoc));
         assertTrue(exception.getMessage().contains("Token status verification failed"));
     }
 
@@ -208,7 +214,13 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         DeviceResponse withStatus = withModifiedMso(dr, mso -> getCborPairList(1, mso));
         String validMdoc = withStatus.encodeToBase64Url();
 
-        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, authReqs, credential, validMdoc));
+        var ctx = new ContextBuilder()
+                .authenticationFlowContext(context)
+                .authorizationContext(authCtx)
+                .authRequirements(authReqs)
+                .build();
+
+        assertDoesNotThrow(() -> verifier.verifyCredential(ctx, credential, validMdoc));
 
         // Build mDoc with revoked status (idx 0) + matching transaction_data_hashes
         DeviceResponse revokedDr =
@@ -217,8 +229,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         String revokedMdoc = withRevokedStatus.encodeToBase64Url();
 
         VerificationException exception = assertThrows(
-                VerificationException.class,
-                () -> verifier.verifyCredential(context, authCtx, authReqs, credential, revokedMdoc));
+                VerificationException.class, () -> verifier.verifyCredential(ctx, credential, revokedMdoc));
         assertTrue(exception.getMessage().contains("Token status verification failed"));
 
         // Build mDoc with matching hashes but unauthorized namespace (DOC_TYPE not in KeyAuthorizations)
@@ -233,9 +244,9 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         DeviceResponse unauthorizedWithStatus = withModifiedMso(unauthorizedDr, mso -> getCborPairList(1, mso));
         String unauthorizedMdoc = unauthorizedWithStatus.encodeToBase64Url();
 
-        assertDoesNotThrow(() -> verifier.verifyCredential(context, authCtx, authReqs, credential, unauthorizedMdoc));
+        assertDoesNotThrow(() -> verifier.verifyCredential(ctx, credential, unauthorizedMdoc));
         VerificationException unauthorizedException = assertThrows(
-                VerificationException.class, () -> verifier.validateTransactionData(authCtx, unauthorizedMdoc));
+                VerificationException.class, () -> verifier.validateTransactionData(ctx, unauthorizedMdoc));
         assertTrue(unauthorizedException.getMessage().contains("not authorized"));
     }
 
