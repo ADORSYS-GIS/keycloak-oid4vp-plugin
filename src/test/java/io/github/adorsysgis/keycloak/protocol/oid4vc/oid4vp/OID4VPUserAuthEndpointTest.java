@@ -773,19 +773,25 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     @Test
     public void shouldFailAuthentication_IfMdocRequiredClaimsMissingOrBlank() throws Exception {
-        Map<Map<String, Object>, String> cases = Map.of(
-                Map.of(MdocBaseTest.NAMESPACE, Map.of()),
-                "Missing required claim: com.example.namespace1/username",
-                Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, "")),
-                "Required claim is blank: com.example.namespace1/username");
+        record FailureCase(
+                Map<String, Object> claims, int httpStatus, ProcessingError error, String errorDescription) {}
 
-        for (var entry : cases.entrySet()) {
-            Map<String, Object> mdocClaims = entry.getKey();
-            String expectedError = entry.getValue();
+        List<FailureCase> cases = List.of(
+                new FailureCase(
+                        Map.of(MdocBaseTest.NAMESPACE, Map.of()),
+                        HttpStatus.SC_BAD_REQUEST,
+                        ProcessingError.INVALID_VP_TOKEN,
+                        "Presented mDoc does not satisfy DCQL claim path: [com.example.namespace1, username]"),
+                new FailureCase(
+                        Map.of(MdocBaseTest.NAMESPACE, Map.of(OAuth2Constants.USERNAME, "")),
+                        HttpStatus.SC_UNAUTHORIZED,
+                        ProcessingError.VP_TOKEN_AUTH_ERROR,
+                        "Required claim is blank: com.example.namespace1/username"));
 
+        for (FailureCase failureCase : cases) {
             withAuthenticationProfile(AuthenticationProfileSamples.sdjwtMdocDual(), (apiFlow, requestObject) -> {
                 String sdJwtVpToken = presentSdJwt(requestObject);
-                String mdocToken = presentMdoc(requestObject, mdocClaims);
+                String mdocToken = presentMdoc(requestObject, failureCase.claims());
 
                 TestOpts opts = TestOpts.getDefault()
                         .setAuthContext(apiFlow.authContext())
@@ -795,9 +801,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 testFailingAuthenticationWithVPTokenMap(
                         Map.of(PRIMARY_CREDENTIAL_ID, sdJwtVpToken, SUPPORTING_CREDENTIAL_ID, mdocToken),
                         opts,
-                        HttpStatus.SC_UNAUTHORIZED,
-                        ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                        expectedError);
+                        failureCase.httpStatus(),
+                        failureCase.error().getErrorString(),
+                        failureCase.errorDescription());
             });
         }
     }

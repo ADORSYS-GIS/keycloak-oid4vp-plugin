@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -79,6 +78,6 @@ class DcqlCredentialCapabilitiesTest {
         DcqlCredentialCapabilities capabilities = DcqlCredentialCapabilities.createDefault();
 
         assertTrue(capabilities.resolve(VCFormat.SD_JWT_VC).supportsPresentationPreValidation());
-        assertFalse(capabilities.resolve("mso_mdoc").supportsPresentationPreValidation());
+        assertTrue(capabilities.resolve("mso_mdoc").supportsPresentationPreValidation());
     }
 }
