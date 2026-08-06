@@ -39,7 +39,7 @@ Confirmed support for OpenID4VP 1.0 is pending further updates, review, and test
 
 ## Build the Plugin
 
-To compile the plugin without running tests (recommended for a first-time build), run:
+To compile the plugin without running tests, run:
 
 ```sh
 ./mvnw clean package -DskipTests
@@ -53,6 +53,11 @@ If you want to run the tests, make sure **Docker is installed and running** beca
 ```sh
 ./mvnw clean verify
 ```
+
+Running the tests from an IDE such as IntelliJ may fail if the JAR has not been built first. By default,
+the IDE does not delegate the build to Maven and therefore does not produce the JAR that the tests deploy
+into the Keycloak container. Build the JAR explicitly (as described above) before running the tests from
+the IDE.
 
 ## Deploying the Plugin
 
