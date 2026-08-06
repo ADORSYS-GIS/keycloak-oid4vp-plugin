@@ -53,14 +53,30 @@ public final class TransactionDataSupport {
      * Returns the wire strings as they must appear on the signed request (re-encoded when normalized).
      */
     public static List<String> prepareWireEntries(List<String> rawWireStrings, String dcqlCredentialId) {
+        return prepareWireEntries(rawWireStrings, List.of(dcqlCredentialId));
+    }
+
+    /**
+     * Validates each entry and ensures {@code credential_ids} references all permitted DCQL credential ids.
+     * Returns the wire strings as they must appear on the signed request (re-encoded when normalized).
+     */
+    public static List<String> prepareWireEntries(List<String> rawWireStrings, List<String> dcqlCredentialIds) {
         List<String> prepared = new ArrayList<>();
         for (String raw : rawWireStrings) {
-            prepared.add(prepareWireEntry(raw, dcqlCredentialId));
+            prepared.add(prepareWireEntry(raw, dcqlCredentialIds));
         }
         return prepared;
     }
 
     public static String prepareWireEntry(String rawWire, String dcqlCredentialId) {
+        return prepareWireEntry(rawWire, List.of(dcqlCredentialId));
+    }
+
+    public static String prepareWireEntry(String rawWire, List<String> dcqlCredentialIds) {
+        if (dcqlCredentialIds == null || dcqlCredentialIds.isEmpty()) {
+            throw new IllegalArgumentException("transaction_data requires at least one DCQL credential id");
+        }
+
         ObjectNode object = decodeWireObject(rawWire);
         if (!object.hasNonNull(TYPE_CLAIM)
                 || StringUtil.isBlank(object.get(TYPE_CLAIM).asText())) {
@@ -70,11 +86,34 @@ public final class TransactionDataSupport {
         if (!object.has(CREDENTIAL_IDS_CLAIM)
                 || !object.get(CREDENTIAL_IDS_CLAIM).isArray()) {
             ArrayNode credentialIds = JsonSerialization.mapper.createArrayNode();
-            credentialIds.add(dcqlCredentialId);
+            dcqlCredentialIds.forEach(credentialIds::add);
             object.set(CREDENTIAL_IDS_CLAIM, credentialIds);
         } else {
             ArrayNode credentialIds = (ArrayNode) object.get(CREDENTIAL_IDS_CLAIM);
             if (credentialIds.isEmpty()) {
+                throw new IllegalArgumentException("transaction_data credential_ids must be a non-empty array");
+            }
+            Set<String> configuredIds = Set.copyOf(dcqlCredentialIds);
+            Set<String> wireIds = new java.util.HashSet<>();
+            credentialIds.forEach(id -> wireIds.add(id.asText()));
+            if (!wireIds.containsAll(configuredIds)) {
+                throw new IllegalArgumentException(String.format(
+                        "transaction_data credential_ids must reference DCQL credential ids %s", configuredIds));
+            }
+        }
+
+        return encodeWireObject(object);
+    }
+
+    public static void requireCredentialIdInAllEntries(List<String> transactionDataWire, String dcqlCredentialId) {
+        if (transactionDataWire == null || transactionDataWire.isEmpty()) {
+            return;
+        }
+
+        for (String wire : transactionDataWire) {
+            ObjectNode object = decodeWireObject(wire);
+            JsonNode credentialIds = object.get(CREDENTIAL_IDS_CLAIM);
+            if (credentialIds == null || !credentialIds.isArray() || credentialIds.isEmpty()) {
                 throw new IllegalArgumentException("transaction_data credential_ids must be a non-empty array");
             }
             boolean matches = false;
@@ -86,11 +125,10 @@ public final class TransactionDataSupport {
             }
             if (!matches) {
                 throw new IllegalArgumentException(String.format(
-                        "transaction_data credential_ids must reference DCQL credential id '%s'", dcqlCredentialId));
+                        "transaction_data credential_ids must reference selected DCQL credential id '%s'",
+                        dcqlCredentialId));
             }
         }
-
-        return encodeWireObject(object);
     }
 
     public static ObjectNode decodeWireObject(String wire) {

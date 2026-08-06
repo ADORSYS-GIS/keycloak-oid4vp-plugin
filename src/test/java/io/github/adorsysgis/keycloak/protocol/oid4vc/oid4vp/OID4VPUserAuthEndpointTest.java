@@ -587,7 +587,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map must contain exactly one token for credential");
+                "Presented vp_token map contains unknown credential(s): [non-matching-dcql-credential-id]");
     }
 
     @Test
@@ -784,7 +784,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     opts,
                     HttpStatus.SC_BAD_REQUEST,
                     ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                    "Presented vp_token map must contain exactly one token for credential 'supporting'");
+                    "Presented vp_token map does not satisfy DCQL credential_sets");
         });
     }
 

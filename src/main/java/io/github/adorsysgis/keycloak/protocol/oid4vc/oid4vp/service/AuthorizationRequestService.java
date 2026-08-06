@@ -20,6 +20,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SpacephobicJwsBuilder;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.VerifierInfoSupport;
@@ -267,17 +268,16 @@ public class AuthorizationRequestService {
         DcqlQuery dcqlQuery =
                 DcqlQueryGenerator.create().buildQuery(profile, config.shouldRequireCryptographicHolderBinding());
 
-        // transaction_data and verifier_info currently reference the primary DCQL
-        // credential id. Multi-credential profile support keeps the selected
-        // profile's first credential as the verifier-scoped credential id.
-        String dcqlCredentialId = dcqlQuery.getCredentials().getFirst().getId();
+        List<String> primaryCredentialIds = profile.getPrimaryCredentials().stream()
+                .map(CredentialRequirement::getId)
+                .toList();
 
         List<String> transactionData = config.getTransactionDataRaw().isEmpty()
                 ? null
-                : TransactionDataSupport.prepareWireEntries(config.getTransactionDataRaw(), dcqlCredentialId);
+                : TransactionDataSupport.prepareWireEntries(config.getTransactionDataRaw(), primaryCredentialIds);
 
         var verifierInfo = VerifierInfoSupport.build(
-                config.getRegistrationCertificate(), config.getVerifierInfoConfig(), dcqlCredentialId);
+                config.getRegistrationCertificate(), config.getVerifierInfoConfig(), primaryCredentialIds);
 
         // Aggregate properties
         RequestObject requestObject = new RequestObject()

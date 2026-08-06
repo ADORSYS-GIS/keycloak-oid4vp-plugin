@@ -7,6 +7,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.Creden
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlResponseCredentialSelector;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -15,7 +16,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirementGroup;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.WebApplicationException;
@@ -23,8 +23,6 @@ import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -162,8 +160,13 @@ public class AuthorizationResponseService {
 
         Map<String, CredentialRequirement> credentialsById = profile.getCredentials().stream()
                 .collect(Collectors.toMap(CredentialRequirement::getId, credential -> credential));
-        Set<String> selectedCredentialIds =
-                selectPresentedCredentialIds(vpTokenMap.keySet(), profile, authContext, store);
+        Set<String> selectedCredentialIds;
+        try {
+            selectedCredentialIds = DcqlResponseCredentialSelector.selectPresentedCredentialIds(
+                    authContext.getRequestObject().getDcqlQuery(), vpTokenMap.keySet());
+        } catch (IllegalArgumentException e) {
+            throw failInvalidVpToken(e.getMessage(), authContext, store);
+        }
 
         for (String credentialId : vpTokenMap.keySet()) {
             if (!credentialsById.containsKey(credentialId)) {
@@ -204,54 +207,6 @@ public class AuthorizationResponseService {
         }
 
         return tokens;
-    }
-
-    private Set<String> selectPresentedCredentialIds(
-            Set<String> presentedCredentialIds,
-            AuthenticationProfile profile,
-            AuthorizationContext authContext,
-            AuthenticationSessionStore store) {
-        Set<String> selectedCredentialIds = new HashSet<>();
-
-        for (CredentialRequirementGroup group : profile.getEffectiveCredentialGroups()) {
-            List<List<String>> selectedOptions = group.getOptions().stream()
-                    .filter(option -> presentedCredentialIds.containsAll(option))
-                    .toList();
-
-            if (group.isRequired() && selectedOptions.size() != 1) {
-                if (selectedOptions.isEmpty() && group.getOptions().size() == 1) {
-                    for (String credentialId : group.getOptions().getFirst()) {
-                        if (!presentedCredentialIds.contains(credentialId)) {
-                            throw failInvalidVpToken(
-                                    String.format(
-                                            "Presented vp_token map must contain exactly one token for credential '%s'. Found: 0",
-                                            credentialId),
-                                    authContext,
-                                    store);
-                        }
-                    }
-                }
-                throw failInvalidVpToken(
-                        String.format(
-                                "Presented vp_token map must satisfy exactly one option for required credential group '%s'. Found: %d",
-                                group.getId(), selectedOptions.size()),
-                        authContext,
-                        store);
-            }
-
-            if (!group.isRequired() && selectedOptions.size() > 1) {
-                throw failInvalidVpToken(
-                        String.format(
-                                "Presented vp_token map must satisfy at most one option for optional credential group '%s'. Found: %d",
-                                group.getId(), selectedOptions.size()),
-                        authContext,
-                        store);
-            }
-
-            selectedOptions.stream().findFirst().ifPresent(selectedCredentialIds::addAll);
-        }
-
-        return selectedCredentialIds;
     }
 
     /**
