@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -10,11 +11,6 @@ public class AuthenticationProfile {
 
     public static final String DEFAULT_PROFILE_ID = "default";
     public static final String DEFAULT_CTA = "Sign in with a wallet";
-
-    // TODO: support groups of credential requirements so the wallet only has to satisfy one
-    //  member per group (e.g. accept a passport OR a national-ID as primary). Today every
-    //  requirement is its own required CredentialSet in the DCQL query, so the wallet must
-    //  present all of them.
 
     @JsonProperty("id")
     private String id;
@@ -30,6 +26,9 @@ public class AuthenticationProfile {
 
     @JsonProperty("credentials")
     private List<CredentialRequirement> credentials;
+
+    @JsonProperty("credentialGroups")
+    private List<CredentialRequirementGroup> credentialGroups;
 
     public String getId() {
         return id;
@@ -76,6 +75,27 @@ public class AuthenticationProfile {
         return this;
     }
 
+    public List<CredentialRequirementGroup> getCredentialGroups() {
+        return credentialGroups;
+    }
+
+    public AuthenticationProfile setCredentialGroups(List<CredentialRequirementGroup> credentialGroups) {
+        this.credentialGroups = credentialGroups;
+        return this;
+    }
+
+    public List<CredentialRequirementGroup> getEffectiveCredentialGroups() {
+        if (credentialGroups != null && !credentialGroups.isEmpty()) {
+            return credentialGroups;
+        }
+
+        return List.of(new CredentialRequirementGroup()
+                .setId("all")
+                .setRequired(Boolean.TRUE)
+                .setOptions(List.of(
+                        credentials.stream().map(CredentialRequirement::getId).toList())));
+    }
+
     public String getDisplayCta(Locale locale) {
         if (displayCta == null || displayCta.isEmpty()) {
             return DEFAULT_CTA;
@@ -92,10 +112,25 @@ public class AuthenticationProfile {
     }
 
     public CredentialRequirement getPrimaryCredential() {
-        return credentials.stream()
-                .filter(CredentialRequirement::isPrimary)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Profile has no primary credential: " + id));
+        List<CredentialRequirement> primaryCredentials = getPrimaryCredentials();
+        if (primaryCredentials.size() != 1) {
+            throw new IllegalStateException("Profile must resolve exactly one primary credential: " + id);
+        }
+        return primaryCredentials.getFirst();
+    }
+
+    public List<CredentialRequirement> getPrimaryCredentials() {
+        return credentials.stream().filter(CredentialRequirement::isPrimary).toList();
+    }
+
+    public CredentialRequirement getPresentedPrimaryCredential(Collection<String> presentedCredentialIds) {
+        List<CredentialRequirement> primaryCredentials = getPrimaryCredentials().stream()
+                .filter(credential -> presentedCredentialIds.contains(credential.getId()))
+                .toList();
+        if (primaryCredentials.size() != 1) {
+            throw new IllegalStateException("Presentation must contain exactly one primary credential: " + id);
+        }
+        return primaryCredentials.getFirst();
     }
 
     public CredentialRequirement getCredential(String credentialId) {

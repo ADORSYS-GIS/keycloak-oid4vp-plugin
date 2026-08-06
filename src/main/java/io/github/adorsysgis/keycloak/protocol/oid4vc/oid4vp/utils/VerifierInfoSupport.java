@@ -18,13 +18,18 @@ public final class VerifierInfoSupport {
 
     public static List<VerifierInfo> build(
             String registrationCertificate, String verifierInfoConfigJson, String dcqlCredentialId) {
+        return build(registrationCertificate, verifierInfoConfigJson, List.of(dcqlCredentialId));
+    }
+
+    public static List<VerifierInfo> build(
+            String registrationCertificate, String verifierInfoConfigJson, List<String> dcqlCredentialIds) {
         List<VerifierInfo> entries = new ArrayList<>();
 
         if (!StringUtil.isBlank(registrationCertificate)) {
             entries.add(new VerifierInfo()
                     .setFormat(REGISTRATION_CERT_FORMAT)
                     .setData(registrationCertificate)
-                    .setCredentialIds(List.of(dcqlCredentialId)));
+                    .setCredentialIds(dcqlCredentialIds));
         }
 
         entries.addAll(parseConfigEntries(verifierInfoConfigJson));
@@ -33,7 +38,7 @@ public final class VerifierInfoSupport {
             return null;
         }
 
-        validate(entries, dcqlCredentialId);
+        validate(entries, dcqlCredentialIds);
         return entries;
     }
 
@@ -52,6 +57,14 @@ public final class VerifierInfoSupport {
     }
 
     public static void validate(List<VerifierInfo> entries, String dcqlCredentialId) {
+        validate(entries, List.of(dcqlCredentialId));
+    }
+
+    public static void validate(List<VerifierInfo> entries, List<String> dcqlCredentialIds) {
+        if (dcqlCredentialIds == null || dcqlCredentialIds.isEmpty()) {
+            throw new IllegalArgumentException("verifier_info requires at least one DCQL credential id");
+        }
+
         for (VerifierInfo entry : entries) {
             if (StringUtil.isBlank(entry.getFormat())) {
                 throw new IllegalArgumentException("verifier_info format must not be blank");
@@ -64,10 +77,11 @@ public final class VerifierInfoSupport {
                 if (credentialIds.isEmpty()) {
                     throw new IllegalArgumentException("verifier_info credential_ids must be non-empty when present");
                 }
-                boolean matches = credentialIds.stream().anyMatch(dcqlCredentialId::equals);
+                boolean matches = credentialIds.stream().anyMatch(dcqlCredentialIds::contains);
                 if (!matches) {
                     throw new IllegalArgumentException(String.format(
-                            "verifier_info credential_ids must reference DCQL credential id '%s'", dcqlCredentialId));
+                            "verifier_info credential_ids must reference one of DCQL credential ids %s",
+                            dcqlCredentialIds));
                 }
             }
         }

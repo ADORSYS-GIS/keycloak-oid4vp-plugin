@@ -7,10 +7,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequireme
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import java.io.IOException;
 import java.security.cert.X509Certificate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.representations.JsonWebToken;
@@ -104,12 +106,14 @@ public class OID4VPProfileConfig {
                         String.format("OpenID4VP profile must request at least one credential: %s", profileId));
             }
 
-            long primaryCount = profile.getCredentials().stream()
-                    .filter(CredentialRequirement::isPrimary)
-                    .count();
-            if (primaryCount != 1) {
-                throw new IllegalStateException(
-                        String.format("OpenID4VP profile must have exactly one primary credential: %s", profileId));
+            boolean hasCredentialGroups = profile.getCredentialGroups() != null
+                    && !profile.getCredentialGroups().isEmpty();
+            long primaryCount = profile.getPrimaryCredentials().size();
+            if (primaryCount == 0 || (!hasCredentialGroups && primaryCount != 1)) {
+                String message = !hasCredentialGroups
+                        ? "OpenID4VP profile must have exactly one primary credential: %s"
+                        : "OpenID4VP profile must have at least one primary credential: %s";
+                throw new IllegalStateException(String.format(message, profileId));
             }
 
             for (CredentialRequirement credential : profile.getCredentials()) {
@@ -162,7 +166,92 @@ public class OID4VPProfileConfig {
                         String.format("OpenID4VP credential ids must be unique in profile: %s", profileId));
             }
 
+            validateCredentialGroups(profile);
             validateBindingRules(profile);
+        }
+    }
+
+    private static void validateCredentialGroups(AuthenticationProfile profile) {
+        if (profile.getCredentialGroups() == null
+                || profile.getCredentialGroups().isEmpty()) {
+            return;
+        }
+
+        String profileId = profile.getId();
+        Map<String, CredentialRequirement> credentialsById = profile.getCredentials().stream()
+                .collect(Collectors.toMap(CredentialRequirement::getId, credential -> credential));
+        Set<String> groupIds = new HashSet<>();
+        int primarySelectionGroups = 0;
+
+        for (CredentialRequirementGroup group : profile.getCredentialGroups()) {
+            if (StringUtil.isBlank(group.getId())) {
+                throw new IllegalStateException(
+                        String.format("OpenID4VP credential group id must not be blank in profile: %s", profileId));
+            }
+            if (!groupIds.add(group.getId())) {
+                throw new IllegalStateException(
+                        String.format("OpenID4VP credential group ids must be unique in profile: %s", profileId));
+            }
+            if (group.getOptions() == null || group.getOptions().isEmpty()) {
+                throw new IllegalStateException(String.format(
+                        "OpenID4VP credential group must define at least one option: %s/%s", profileId, group.getId()));
+            }
+
+            Boolean groupSelectsPrimary = null;
+            for (List<String> option : group.getOptions()) {
+                if (option == null || option.isEmpty()) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP credential group option must not be empty: %s/%s", profileId, group.getId()));
+                }
+
+                Set<String> optionIds = new HashSet<>();
+                int primaryCount = 0;
+                for (String credentialId : option) {
+                    CredentialRequirement credential = credentialsById.get(credentialId);
+                    if (credential == null) {
+                        throw new IllegalStateException(String.format(
+                                "OpenID4VP credential group references unknown credential '%s': %s/%s",
+                                credentialId, profileId, group.getId()));
+                    }
+                    if (!optionIds.add(credentialId)) {
+                        throw new IllegalStateException(String.format(
+                                "OpenID4VP credential group option contains duplicate credential '%s': %s/%s",
+                                credentialId, profileId, group.getId()));
+                    }
+                    if (credential.isPrimary()) {
+                        primaryCount++;
+                    }
+                }
+
+                if (primaryCount > 1) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP credential group option must contain at most one primary credential: %s/%s",
+                            profileId, group.getId()));
+                }
+
+                boolean optionSelectsPrimary = primaryCount == 1;
+                if (groupSelectsPrimary == null) {
+                    groupSelectsPrimary = optionSelectsPrimary;
+                } else if (groupSelectsPrimary != optionSelectsPrimary) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP credential group options must consistently select a primary credential: %s/%s",
+                            profileId, group.getId()));
+                }
+            }
+
+            if (Boolean.TRUE.equals(groupSelectsPrimary)) {
+                if (!group.isRequired()) {
+                    throw new IllegalStateException(String.format(
+                            "OpenID4VP primary credential group must be required: %s/%s", profileId, group.getId()));
+                }
+                primarySelectionGroups++;
+            }
+        }
+
+        if (primarySelectionGroups != 1) {
+            throw new IllegalStateException(String.format(
+                    "OpenID4VP profile must have exactly one credential group selecting a primary credential: %s",
+                    profileId));
         }
     }
 
@@ -205,8 +294,7 @@ public class OID4VPProfileConfig {
 
     private static void validateBindingRules(AuthenticationProfile profile) {
         String profileId = profile.getId();
-        CredentialRequirement primary = profile.getPrimaryCredential();
-        Set<String> primaryClaimNames = Set.copyOf(primary.getClaims());
+        List<CredentialRequirement> primaryCredentials = profile.getPrimaryCredentials();
 
         for (CredentialRequirement credential : profile.getCredentials()) {
             if (credential.isPrimary()) {
@@ -249,11 +337,19 @@ public class OID4VPProfileConfig {
                                 profileId, credential.getId()));
                     }
 
-                    if (!primaryClaimNames.contains(rule.getPrimaryCredentialClaim())) {
-                        throw new IllegalStateException(String.format(
-                                "OpenID4VP binding rule primaryCredentialClaim '%s' must be among the"
-                                        + " primary credential's requested claims: %s/%s",
-                                rule.getPrimaryCredentialClaim(), profileId, credential.getId()));
+                    for (CredentialRequirement primary : primaryCredentials) {
+                        if (!Set.copyOf(primary.getClaims()).contains(rule.getPrimaryCredentialClaim())) {
+                            String primaryCredentialLabel = primaryCredentials.size() == 1
+                                    ? "the primary credential's"
+                                    : "every possible primary credential's";
+                            throw new IllegalStateException(String.format(
+                                    "OpenID4VP binding rule primaryCredentialClaim '%s' must be among %s"
+                                            + " requested claims: %s/%s",
+                                    rule.getPrimaryCredentialClaim(),
+                                    primaryCredentialLabel,
+                                    profileId,
+                                    credential.getId()));
+                        }
                     }
                 }
 

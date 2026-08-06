@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,34 @@ class TransactionDataSupportTest {
         assertEquals(
                 "my-credential",
                 decoded.get(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).get(0).asText());
+    }
+
+    @Test
+    void prepareWireEntryInjectsAllPrimaryCredentialIds() {
+        ObjectNode tx = JsonSerialization.mapper.createObjectNode();
+        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
+        String raw = TransactionDataSupport.encodeWireObject(tx);
+
+        String prepared = TransactionDataSupport.prepareWireEntry(raw, List.of("passport", "national-id"));
+
+        ObjectNode decoded = TransactionDataSupport.decodeWireObject(prepared);
+        assertEquals(
+                List.of("passport", "national-id"),
+                JsonSerialization.mapper.convertValue(
+                        decoded.get(TransactionDataSupport.CREDENTIAL_IDS_CLAIM),
+                        new TypeReference<List<String>>() {}));
+    }
+
+    @Test
+    void rejectsTransactionDataWhenSelectedPrimaryIsNotReferenced() {
+        ObjectNode tx = JsonSerialization.mapper.createObjectNode();
+        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
+        tx.putArray(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("passport");
+        String wire = TransactionDataSupport.encodeWireObject(tx);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TransactionDataSupport.requireCredentialIdInAllEntries(List.of(wire), "national-id"));
     }
 
     @Test

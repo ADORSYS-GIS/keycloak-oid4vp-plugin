@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.ALTERNATIVE_PRIMARY_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.AuthenticationProfileSamples.SUPPORTING_CREDENTIAL_ID;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
@@ -342,6 +343,22 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_WithAlternativePrimaryCredentialGroup() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.alternativePrimary(), (apiFlow, requestObject) -> {
+            assertEquals(2, requestObject.getDcqlQuery().getCredentials().size());
+            assertEquals(
+                    List.of(List.of(PRIMARY_CREDENTIAL_ID), List.of(ALTERNATIVE_PRIMARY_CREDENTIAL_ID)),
+                    requestObject.getDcqlQuery().getCredentialSets().getFirst().getOptions());
+
+            String sdJwtVpToken = presentSdJwt(requestObject);
+            TestOpts opts =
+                    TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
+
+            testSuccessfulAuthenticationWithVPTokenMap(Map.of(ALTERNATIVE_PRIMARY_CREDENTIAL_ID, sdJwtVpToken), opts);
+        });
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential() throws Exception {
         withAuthenticationProfile(AuthenticationProfileSamples.mdocPrimary(), (apiFlow, requestObject) -> {
             Credential mdocCredential =
@@ -570,7 +587,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                 authContext.getTransactionId(),
                 HttpStatus.SC_BAD_REQUEST,
                 ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                "Presented vp_token map must contain exactly one token for credential");
+                "Presented vp_token map contains unknown credential(s): [non-matching-dcql-credential-id]");
     }
 
     @Test
@@ -767,7 +784,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     opts,
                     HttpStatus.SC_BAD_REQUEST,
                     ProcessingError.INVALID_VP_TOKEN.getErrorString(),
-                    "Presented vp_token map must contain exactly one token for credential 'supporting'");
+                    "Presented vp_token map does not satisfy DCQL credential_sets");
         });
     }
 

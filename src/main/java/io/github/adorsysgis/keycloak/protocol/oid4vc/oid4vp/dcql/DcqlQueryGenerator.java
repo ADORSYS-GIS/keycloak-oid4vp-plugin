@@ -9,6 +9,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirementGroup;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -17,8 +18,9 @@ import org.keycloak.utils.StringUtil;
 /**
  * Builds a DCQL query from an {@link AuthenticationProfile}.
  *
- * <p>Each {@link CredentialRequirement} becomes one DCQL credential query. All credentials
- * are required and grouped into a single {@link CredentialSet}.
+ * <p>Each {@link CredentialRequirement} becomes one DCQL credential query. The profile's
+ * credential groups become DCQL credential sets. Profiles without explicit groups keep the
+ * legacy behavior where all configured credentials are required together.
  */
 public final class DcqlQueryGenerator {
 
@@ -33,16 +35,19 @@ public final class DcqlQueryGenerator {
             credentials.add(buildCredential(requirement, requireCryptographicHolderBinding));
         }
 
-        // All credentials are required → one CredentialSet with a single option listing all ids.
-        List<String> allIds = credentials.stream().map(Credential::getId).toList();
-        CredentialSet credentialSet = new CredentialSet();
-        credentialSet.setRequired(true);
-        credentialSet.setOptions(List.of(allIds));
-
         DcqlQuery query = new DcqlQuery();
         query.setCredentials(credentials);
-        query.setCredentialSets(List.of(credentialSet));
+        query.setCredentialSets(profile.getEffectiveCredentialGroups().stream()
+                .map(DcqlQueryGenerator::buildCredentialSet)
+                .toList());
         return query;
+    }
+
+    private static CredentialSet buildCredentialSet(CredentialRequirementGroup group) {
+        CredentialSet credentialSet = new CredentialSet();
+        credentialSet.setRequired(group.isRequired());
+        credentialSet.setOptions(group.getOptions());
+        return credentialSet;
     }
 
     /** Wraps a single credential into a DcqlQuery with its own credential_set, for validators. */

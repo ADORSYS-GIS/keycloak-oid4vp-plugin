@@ -14,6 +14,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRe
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
@@ -125,7 +126,7 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     private AuthenticatingUser verifyPrimaryCredential(Context ctx) throws VerificationException {
-        CredentialRequirement primaryCredentialReq = ctx.authenticationProfile().getPrimaryCredential();
+        CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
         CredentialVerifier primaryVerifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
         String primaryToken = ctx.presentedTokens().get(primaryCredentialReq.getId());
 
@@ -133,8 +134,10 @@ public class OID4VPAuthenticator implements Authenticator {
         JsonNode primaryClaims;
         try {
             primaryClaims = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
+            TransactionDataSupport.requireCredentialIdInAllEntries(
+                    ctx.authorizationContext().getRequestObject().getTransactionData(), primaryCredentialReq.getId());
             primaryVerifier.validateTransactionData(ctx, primaryToken);
-        } catch (VerificationException | IllegalStateException e) {
+        } catch (VerificationException | IllegalArgumentException | IllegalStateException e) {
             String msg = "Primary credential verification failed";
             failRejectingPresentedCredential(ctx, String.format("%s: %s", msg, e.getMessage()));
             throw new VerificationException(msg, e);
@@ -167,8 +170,12 @@ public class OID4VPAuthenticator implements Authenticator {
                 continue;
             }
 
+            String token = ctx.presentedTokens().get(credential.getId());
+            if (StringUtil.isBlank(token)) {
+                continue;
+            }
+
             try {
-                String token = ctx.presentedTokens().get(credential.getId());
                 CredentialVerifier supportingVerifier =
                         ctx.credentialVerifiers().get(credential.getId());
                 JsonNode supportingClaims = supportingVerifier.verifyCredential(ctx, credential, token);
@@ -185,8 +192,6 @@ public class OID4VPAuthenticator implements Authenticator {
             Context ctx, AuthenticatingUser authUser, CredentialRequirement credentialReq, JsonNode claims)
             throws VerificationException {
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
-        CredentialRequirement primaryCredentialReq = ctx.authenticationProfile().getPrimaryCredential();
-        CredentialVerifier primaryVerifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
 
         for (BindingRule rule : credentialReq.getBinding()) {
             CredentialVerifier verifier = ctx.credentialVerifiers().get(credentialReq.getId());
@@ -200,6 +205,9 @@ public class OID4VPAuthenticator implements Authenticator {
                                         "Binding rule '%s' is not applicable to the primary credential '%s'",
                                         rule.getType(), credentialReq.getId()));
                             }
+                            CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
+                            CredentialVerifier primaryVerifier =
+                                    ctx.credentialVerifiers().get(primaryCredentialReq.getId());
                             yield primaryVerifier.readClaim(authUser.primaryClaims(), rule.getPrimaryCredentialClaim());
                         }
                         case BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE ->
@@ -218,7 +226,7 @@ public class OID4VPAuthenticator implements Authenticator {
 
     private UserModel recoverAuthenticatingUser(Context ctx, JsonNode primaryClaims) {
         logger.infof("Recovering authenticating user (authSession = %s)", ctx.id());
-        CredentialRequirement primaryCredentialReq = ctx.authenticationProfile().getPrimaryCredential();
+        CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
 
         UserModel user = primaryCredentialReq.isSessionIdentity()
                 ? recoverPresentationDuringIssuanceUser(ctx)
@@ -237,6 +245,11 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         return user;
+    }
+
+    private CredentialRequirement getPresentedPrimaryCredential(Context ctx) {
+        return ctx.authenticationProfile()
+                .getPresentedPrimaryCredential(ctx.presentedTokens().keySet());
     }
 
     private UserModel recoverUserFromClaims(

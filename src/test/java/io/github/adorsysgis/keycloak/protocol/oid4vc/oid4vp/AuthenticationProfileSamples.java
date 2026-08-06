@@ -16,12 +16,15 @@ public final class AuthenticationProfileSamples {
     public static final String DUAL_PROFILE_ID = "dual";
     public static final String MDOC_PRIMARY_PROFILE_ID = "mdoc-primary";
     public static final String SDJWT_MDOC_DUAL_PROFILE_ID = "sdjwt-mdoc-dual";
+    public static final String ALTERNATIVE_PRIMARY_PROFILE_ID = "alternative-primary";
 
     /** Credential id used for the primary credential in multi-credential profiles and VP token maps. */
     public static final String PRIMARY_CREDENTIAL_ID = "primary";
 
     /** Credential id used for the supporting credential in dual-credential profiles and VP token maps. */
     public static final String SUPPORTING_CREDENTIAL_ID = "supporting";
+
+    public static final String ALTERNATIVE_PRIMARY_CREDENTIAL_ID = "national-id";
 
     /**
      * Bundles a profile's JSON configuration with its identifier, so callers of
@@ -170,5 +173,45 @@ public final class AuthenticationProfileSamples {
                 .replace("{namespace}", MdocBaseTest.NAMESPACE)
                 .replace("{issuerCertBase64}", MdocBaseTest.getIssuerCertBase64());
         return new ProfileSample(json, SDJWT_MDOC_DUAL_PROFILE_ID);
+    }
+
+    /** Profile where either one of two SD-JWT credentials can act as the primary credential. */
+    public static ProfileSample alternativePrimary() {
+        String json = """
+                [
+                  {
+                    "id": "{profileId}",
+                    "displayCta": { "en": "Sign in with an identity credential" },
+                    "credentials": [
+                      {
+                        "id": "{primaryCredentialId}",
+                        "role": "primary",
+                        "credentialTypes": ["{defaultVct}"],
+                        "claims": ["sub", "username"]
+                      },
+                      {
+                        "id": "{alternativeCredentialId}",
+                        "role": "primary",
+                        "credentialTypes": ["{defaultVct}"],
+                        "claims": ["sub", "username"]
+                      }
+                    ],
+                    "credentialGroups": [
+                      {
+                        "id": "primary-identity",
+                        "required": true,
+                        "options": [
+                          ["{primaryCredentialId}"],
+                          ["{alternativeCredentialId}"]
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{profileId}", ALTERNATIVE_PRIMARY_PROFILE_ID)
+                .replace("{primaryCredentialId}", PRIMARY_CREDENTIAL_ID)
+                .replace("{alternativeCredentialId}", ALTERNATIVE_PRIMARY_CREDENTIAL_ID)
+                .replace("{defaultVct}", CREDENTIAL_TYPES_CONFIG_DEFAULT);
+        return new ProfileSample(json, ALTERNATIVE_PRIMARY_PROFILE_ID);
     }
 }
