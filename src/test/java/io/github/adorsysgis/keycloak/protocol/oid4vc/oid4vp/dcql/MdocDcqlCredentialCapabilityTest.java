@@ -6,6 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.authlete.cbor.CBORInteger;
+import com.authlete.cbor.CBORItem;
+import com.authlete.mdoc.DeviceResponse;
+import com.authlete.mdoc.Document;
+import com.authlete.mdoc.IssuerSigned;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
@@ -16,6 +21,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Meta;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -160,11 +167,13 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
                 new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
 
         CBORItemList documents = new CBORItemList(List.of(document));
-        CBORPairList deviceResponse =
-                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+        CBORPairList deviceResponse = new CBORPairList(
+                new CBORPair(new CBORString("version"), new CBORString("1.0")),
+                new CBORPair(new CBORString(MdocConstants.L_STATUS), new CBORInteger(MdocConstants.V_STATUS_OK)),
+                new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
 
         String validCborButInvalidMdoc =
-                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
+                Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
 
         Credential credential = credentialWithClaims(claim("given-name", NAMESPACE, "given_name"));
 
@@ -217,34 +226,35 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
     @Test
     void rejectsPresentationWithMissingDocumentsField() throws Exception {
         Credential credential = credentialWithClaims();
-        String invalidToken = "omdvY3VtZW50c4A";
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class, () -> capability.validatePresentation(credential, invalidToken));
-        assertTrue(error.getMessage().contains("Failed to parse"));
+        CBORPairList deviceResponse = new CBORPairList(
+                new CBORPair(new CBORString("version"), new CBORString("1.0")),
+                new CBORPair(new CBORString(MdocConstants.L_STATUS), new CBORInteger(MdocConstants.V_STATUS_OK)));
+        String invalidToken = Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> capability.validatePresentation(credential, invalidToken));
+        assertTrue(error.getMessage().contains("missing the documents field"));
     }
 
     @Test
     void rejectsPresentationWithZeroDocuments() throws Exception {
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
+        VerificationException error = assertThrows(
+                VerificationException.class,
                 () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithDocumentCount(0)));
-        assertTrue(error.getMessage().contains("Failed to parse"));
+        assertTrue(error.getMessage().contains("exactly one document"));
     }
 
     @Test
     void rejectsPresentationWithMultipleDocuments() throws Exception {
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
+        VerificationException error = assertThrows(
+                VerificationException.class,
                 () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithDocumentCount(2)));
-        assertTrue(error.getMessage().contains("Failed to parse"));
+        assertTrue(error.getMessage().contains("exactly one document"));
     }
 
     @Test
     void handlesPresentationWithMissingNamespaces() throws Exception {
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
-                () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithoutNamespaces()));
-        assertTrue(error.getMessage().contains("Failed to parse"));
+        assertDoesNotThrow(() -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithoutNamespaces()));
     }
 
     @Test
@@ -317,39 +327,46 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
         return claim;
     }
 
-    private static String buildDeviceResponseWithDocumentCount(int documentCount) throws Exception {
-        List<CBORPairList> documentList = new java.util.ArrayList<>();
+    private String buildDeviceResponseWithDocumentCount(int documentCount) throws Exception {
+        DeviceResponse validDr = buildDeviceResponse();
+        Document validDoc = extractDocument(validDr);
 
+        List<CBORItem> documentList = new ArrayList<>();
         for (int i = 0; i < documentCount; i++) {
-            CBORPairList issuerSigned =
-                    new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_NAME_SPACES), new CBORPairList()));
-
-            CBORPairList document = new CBORPairList(
-                    new CBORPair(new CBORString(MdocConstants.L_DOC_TYPE), new CBORString(DOC_TYPE)),
-                    new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
-
-            documentList.add(document);
+            documentList.add(validDoc);
         }
 
         CBORItemList documents = new CBORItemList(documentList);
-        CBORPairList deviceResponse =
-                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+        CBORPairList deviceResponse = new CBORPairList(
+                new CBORPair(new CBORString("version"), new CBORString("1.0")),
+                new CBORPair(new CBORString(MdocConstants.L_STATUS), new CBORInteger(MdocConstants.V_STATUS_OK)),
+                new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
 
-        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
     }
 
-    private static String buildDeviceResponseWithoutNamespaces() throws Exception {
-        CBORPairList issuerSigned = new CBORPairList();
+    private String buildDeviceResponseWithoutNamespaces() throws Exception {
+        DeviceResponse validDr = buildDeviceResponse();
+        Document validDoc = extractDocument(validDr);
 
-        CBORPairList document = new CBORPairList(
-                new CBORPair(new CBORString(MdocConstants.L_DOC_TYPE), new CBORString(DOC_TYPE)),
-                new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
+        IssuerSigned issuerSigned = (IssuerSigned) validDoc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
+        
+        CBORPairList newIssuerSigned = new CBORPairList(
+            new CBORPair(new CBORString(MdocConstants.L_ISSUER_AUTH), issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue())
+        );
 
-        CBORItemList documents = new CBORItemList(List.of(document));
+        CBORPairList newDocument = new CBORPairList(
+                new CBORPair(new CBORString(MdocConstants.L_DOC_TYPE), validDoc.findByKey(MdocConstants.L_DOC_TYPE).getValue()),
+                new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), newIssuerSigned),
+                new CBORPair(new CBORString(MdocConstants.L_DEVICE_SIGNED), validDoc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue()));
 
-        CBORPairList deviceResponse =
-                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+        CBORItemList documents = new CBORItemList(List.of(newDocument));
 
-        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
+        CBORPairList deviceResponse = new CBORPairList(
+                new CBORPair(new CBORString("version"), new CBORString("1.0")),
+                new CBORPair(new CBORString(MdocConstants.L_STATUS), new CBORInteger(MdocConstants.V_STATUS_OK)),
+                new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
     }
 }
