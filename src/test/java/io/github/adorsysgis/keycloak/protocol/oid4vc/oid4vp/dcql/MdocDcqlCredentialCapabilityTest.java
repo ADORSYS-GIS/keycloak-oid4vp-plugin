@@ -6,7 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.authlete.cbor.CBORItemList;
+import com.authlete.cbor.CBORPair;
+import com.authlete.cbor.CBORPairList;
+import com.authlete.cbor.CBORString;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Claim;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
@@ -66,8 +71,7 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
         VerificationException error =
                 assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
         assertEquals(
-                "Unsupported dcql_query credential format for presentation validation: " + VCFormat.SD_JWT_VC,
-                error.getMessage());
+                "Unsupported dcql_query credential format for presentation validation: dc+sd-jwt", error.getMessage());
     }
 
     @Test
@@ -77,7 +81,9 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
 
         VerificationException error =
                 assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
-        assertEquals("Presented mDoc docType does not match meta.doctype_value: com.example.other", error.getMessage());
+        assertEquals(
+                "Presented mDoc docType does not match meta.doctype_value: expected 'com.example.doctype' but got 'com.example.other'",
+                error.getMessage());
     }
 
     @Test
@@ -146,6 +152,29 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
     }
 
     @Test
+    void rejectsValidCborButMissingDocType() throws Exception {
+        CBORPairList issuerSigned =
+                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_NAME_SPACES), new CBORPairList()));
+
+        CBORPairList document =
+                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
+
+        CBORItemList documents = new CBORItemList(List.of(document));
+        CBORPairList deviceResponse =
+                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+
+        String validCborButInvalidMdoc =
+                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
+
+        Credential credential = credentialWithClaims(claim("given-name", NAMESPACE, "given_name"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> capability.validatePresentation(credential, validCborButInvalidMdoc));
+        assertTrue(error.getMessage().contains("Failed to parse"));
+    }
+
+    @Test
     void contributeVpFormatsSupportedConvertsJoseToCoseAlgorithms() {
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
         capability.contributeVpFormatsSupported(vpFormat, List.of("ES256", "ES384"));
@@ -185,6 +214,81 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
         assertEquals(List.of(-8), vpFormat.getMsoMdoc().getDeviceAuthAlgValues());
     }
 
+    @Test
+    void rejectsPresentationWithMissingDocumentsField() throws Exception {
+        Credential credential = credentialWithClaims();
+        String invalidToken = "omdvY3VtZW50c4A";
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> capability.validatePresentation(credential, invalidToken));
+        assertTrue(error.getMessage().contains("Failed to parse"));
+    }
+
+    @Test
+    void rejectsPresentationWithZeroDocuments() throws Exception {
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithDocumentCount(0)));
+        assertTrue(error.getMessage().contains("Failed to parse"));
+    }
+
+    @Test
+    void rejectsPresentationWithMultipleDocuments() throws Exception {
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithDocumentCount(2)));
+        assertTrue(error.getMessage().contains("Failed to parse"));
+    }
+
+    @Test
+    void handlesPresentationWithMissingNamespaces() throws Exception {
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithoutNamespaces()));
+        assertTrue(error.getMessage().contains("Failed to parse"));
+    }
+
+    @Test
+    void rejectsClaimPathWithNullPath() throws Exception {
+        Claim claimWithNullPath = new Claim();
+        claimWithNullPath.setId("test-claim");
+        claimWithNullPath.setPath(null);
+        Credential credential = credentialWithClaims(claimWithNullPath);
+        String token = mdocToken(Map.of(), DOC_TYPE);
+
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
+        assertTrue(error.getMessage().contains("Invalid mDoc claim path"));
+        assertTrue(error.getMessage().contains("null"));
+    }
+
+    @Test
+    void rejectsClaimPathWithSingleElement() throws Exception {
+        String token = mdocToken(Map.of(NAMESPACE, Map.of("given_name", "Alice")), DOC_TYPE);
+        Claim claimWithSingleElement = new Claim();
+        claimWithSingleElement.setId("test-claim");
+        claimWithSingleElement.setPath(List.of("only-one-element"));
+        Credential credential = credentialWithClaims(claimWithSingleElement);
+
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
+        assertTrue(error.getMessage().contains("Invalid mDoc claim path"));
+        assertTrue(error.getMessage().contains("[only-one-element]"));
+    }
+
+    @Test
+    void rejectsClaimPathWithThreeElements() throws Exception {
+        String token = mdocToken(Map.of(NAMESPACE, Map.of("given_name", "Alice")), DOC_TYPE);
+        Claim claimWithThreeElements = new Claim();
+        claimWithThreeElements.setId("test-claim");
+        claimWithThreeElements.setPath(List.of("one", "two", "three"));
+        Credential credential = credentialWithClaims(claimWithThreeElements);
+
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
+        assertTrue(error.getMessage().contains("Invalid mDoc claim path"));
+        assertTrue(error.getMessage().contains("[one, two, three]"));
+    }
+
     private static String mdocToken(Map<String, Object> claims, String docType) throws Exception {
         return buildDeviceResponse(getDefaultMdocVerificationOpts().build(), claims, docType)
                 .encodeToBase64Url();
@@ -211,5 +315,41 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
         claim.setId(id);
         claim.setPath(List.of(namespace, elementIdentifier));
         return claim;
+    }
+
+    private static String buildDeviceResponseWithDocumentCount(int documentCount) throws Exception {
+        List<CBORPairList> documentList = new java.util.ArrayList<>();
+
+        for (int i = 0; i < documentCount; i++) {
+            CBORPairList issuerSigned =
+                    new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_NAME_SPACES), new CBORPairList()));
+
+            CBORPairList document = new CBORPairList(
+                    new CBORPair(new CBORString(MdocConstants.L_DOC_TYPE), new CBORString(DOC_TYPE)),
+                    new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
+
+            documentList.add(document);
+        }
+
+        CBORItemList documents = new CBORItemList(documentList);
+        CBORPairList deviceResponse =
+                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
+    }
+
+    private static String buildDeviceResponseWithoutNamespaces() throws Exception {
+        CBORPairList issuerSigned = new CBORPairList();
+
+        CBORPairList document = new CBORPairList(
+                new CBORPair(new CBORString(MdocConstants.L_DOC_TYPE), new CBORString(DOC_TYPE)),
+                new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
+
+        CBORItemList documents = new CBORItemList(List.of(document));
+
+        CBORPairList deviceResponse =
+                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_DOCUMENTS), documents));
+
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(deviceResponse.encode());
     }
 }

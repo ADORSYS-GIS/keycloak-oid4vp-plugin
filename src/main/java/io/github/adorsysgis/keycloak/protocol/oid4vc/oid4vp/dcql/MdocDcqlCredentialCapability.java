@@ -54,8 +54,11 @@ public final class MdocDcqlCredentialCapability implements DcqlCredentialCapabil
         PresentedMdoc presentation = parsePresentation(presentedToken);
         String expectedDocType = credential.getMeta().getDoctypeValue();
         if (!Objects.equals(expectedDocType, presentation.docType())) {
-            throw new VerificationException(
-                    "Presented mDoc docType does not match meta.doctype_value: " + presentation.docType());
+            throw new VerificationException("Presented mDoc docType does not match meta.doctype_value: expected '"
+                    + expectedDocType
+                    + "' but got '"
+                    + presentation.docType()
+                    + "'");
         }
 
         validateRequestedClaims(credential, presentation.claimPaths());
@@ -121,7 +124,7 @@ public final class MdocDcqlCredentialCapability implements DcqlCredentialCapabil
                 claimPaths.add(new ClaimPath(namespaceIdentifier, elementIdentifier));
             }
         }
-        return Set.copyOf(claimPaths);
+        return claimPaths;
     }
 
     /**
@@ -131,36 +134,29 @@ public final class MdocDcqlCredentialCapability implements DcqlCredentialCapabil
      */
     private static void validateRequestedClaims(Credential credential, Set<ClaimPath> presentedClaimPaths)
             throws VerificationException {
-        List<Claim> claims = credential.getClaims();
-        if (claims == null || claims.isEmpty()) {
-            return;
-        }
-
-        List<List<String>> claimSets = credential.getClaimSets();
-        if (claimSets == null || claimSets.isEmpty()) {
-            for (Claim claim : claims) {
-                if (!isPresented(claim, presentedClaimPaths)) {
-                    throw new VerificationException(
-                            "Presented mDoc does not satisfy DCQL claim path: " + claim.getPath());
-                }
-            }
-            return;
-        }
-
-        boolean satisfiesAnyClaimSet = claimSets.stream()
-                .anyMatch(option -> option.stream().allMatch(claimId -> claims.stream()
-                        .filter(claim -> Objects.equals(claimId, claim.getId()))
-                        .anyMatch(claim -> isPresented(claim, presentedClaimPaths))));
-        if (!satisfiesAnyClaimSet) {
-            throw new VerificationException("Presented mDoc does not satisfy any DCQL claim_sets option");
-        }
+        DcqlClaimSelectionValidator.validate(
+                credential,
+                claim -> {
+                    try {
+                        return isPresented(claim, presentedClaimPaths)
+                                ? DcqlClaimSelectionValidator.ClaimValidationResult.ok()
+                                : DcqlClaimSelectionValidator.ClaimValidationResult.failed(
+                                        "Presented mDoc does not satisfy DCQL claim path: " + claim.getPath());
+                    } catch (VerificationException e) {
+                        return DcqlClaimSelectionValidator.ClaimValidationResult.failed(e.getMessage());
+                    }
+                },
+                "Presented mDoc does not satisfy any DCQL claim_sets option");
     }
 
-    private static boolean isPresented(Claim claim, Set<ClaimPath> presentedClaimPaths) {
+    private static boolean isPresented(Claim claim, Set<ClaimPath> presentedClaimPaths) throws VerificationException {
         List<String> path = claim.getPath();
-        return path != null
-                && path.size() == 2
-                && presentedClaimPaths.contains(new ClaimPath(path.getFirst(), path.get(1)));
+        if (path == null || path.size() != 2) {
+            throw new VerificationException(
+                    "Invalid mDoc claim path: mDoc claims must be [namespace, elementIdentifier], but got: "
+                            + (path == null ? "null" : path));
+        }
+        return presentedClaimPaths.contains(new ClaimPath(path.getFirst(), path.get(1)));
     }
 
     private record PresentedMdoc(String docType, Set<ClaimPath> claimPaths) {}
