@@ -8,13 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.authlete.cbor.CBORInteger;
 import com.authlete.cbor.CBORItem;
-import com.authlete.mdoc.DeviceResponse;
-import com.authlete.mdoc.Document;
-import com.authlete.mdoc.IssuerSigned;
 import com.authlete.cbor.CBORItemList;
 import com.authlete.cbor.CBORPair;
 import com.authlete.cbor.CBORPairList;
 import com.authlete.cbor.CBORString;
+import com.authlete.mdoc.DeviceResponse;
+import com.authlete.mdoc.Document;
+import com.authlete.mdoc.IssuerSigned;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
@@ -254,7 +254,8 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
 
     @Test
     void handlesPresentationWithMissingNamespaces() throws Exception {
-        assertDoesNotThrow(() -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithoutNamespaces()));
+        assertDoesNotThrow(
+                () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithoutNamespaces()));
     }
 
     @Test
@@ -349,16 +350,21 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
         DeviceResponse validDr = buildDeviceResponse();
         Document validDoc = extractDocument(validDr);
 
-        IssuerSigned issuerSigned = (IssuerSigned) validDoc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
-        
-        CBORPairList newIssuerSigned = new CBORPairList(
-            new CBORPair(new CBORString(MdocConstants.L_ISSUER_AUTH), issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue())
-        );
+        IssuerSigned issuerSigned =
+                (IssuerSigned) validDoc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
+
+        CBORPairList newIssuerSigned = new CBORPairList(new CBORPair(
+                new CBORString(MdocConstants.L_ISSUER_AUTH),
+                issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue()));
 
         CBORPairList newDocument = new CBORPairList(
-                new CBORPair(new CBORString(MdocConstants.L_DOC_TYPE), validDoc.findByKey(MdocConstants.L_DOC_TYPE).getValue()),
+                new CBORPair(
+                        new CBORString(MdocConstants.L_DOC_TYPE),
+                        validDoc.findByKey(MdocConstants.L_DOC_TYPE).getValue()),
                 new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), newIssuerSigned),
-                new CBORPair(new CBORString(MdocConstants.L_DEVICE_SIGNED), validDoc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue()));
+                new CBORPair(
+                        new CBORString(MdocConstants.L_DEVICE_SIGNED),
+                        validDoc.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue()));
 
         CBORItemList documents = new CBORItemList(List.of(newDocument));
 
