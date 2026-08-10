@@ -133,6 +133,16 @@ public class AuthenticationProfile {
         return primaryCredentials.getFirst();
     }
 
+    /**
+     * Session-identity profiles are internal flow steps and must not be offered as standalone login choices.
+     */
+    public boolean isSessionIdentityProfile() {
+        return credentials != null
+                && credentials.stream()
+                        .filter(CredentialRequirement::isPrimary)
+                        .anyMatch(CredentialRequirement::isSessionIdentity);
+    }
+
     public CredentialRequirement getCredential(String credentialId) {
         return credentials.stream()
                 .filter(credential -> credential.getId().equals(credentialId))

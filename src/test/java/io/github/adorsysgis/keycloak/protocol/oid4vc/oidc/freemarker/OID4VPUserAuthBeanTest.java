@@ -18,6 +18,8 @@ import static org.mockito.Mockito.verify;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.QRCodeTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
@@ -179,6 +181,27 @@ public class OID4VPUserAuthBeanTest {
     }
 
     @Test
+    public void shouldHideSessionIdentityProfilesFromLoginPage() {
+        Mockito.when(oid4vp.getAuthenticationProfilesForClient(TEST_CLIENT_ID))
+                .thenReturn(List.of(
+                        profile(
+                                "wallet-login",
+                                "Sign in with wallet",
+                                CredentialRequirement.IDENTITY_SOURCE_CREDENTIAL),
+                        profile(
+                                "issuance-step",
+                                "Presentation during issuance",
+                                CredentialRequirement.IDENTITY_SOURCE_SESSION)));
+
+        OID4VPUserAuthBean bean = createTestBean();
+
+        var loginProfiles = bean.getLoginProfiles();
+        assertEquals(1, loginProfiles.size());
+        assertEquals("wallet-login", loginProfiles.getFirst().getId());
+        assertEquals("Sign in with wallet", loginProfiles.getFirst().getDisplayName());
+    }
+
+    @Test
     public void shouldNotInjectAuthContextIfLoginMethodNotExplicit() {
         OID4VPUserAuthBean bean = createTestBean(TEST_CLIENT_ID, false);
         assertNull(bean.getAuthContext()); // Null because no login_method param
@@ -252,6 +275,16 @@ public class OID4VPUserAuthBeanTest {
         mockContextUri(uri);
         String authSessionId = UUID.randomUUID().toString();
         return new OID4VPUserAuthBean(session, realm, oid4vp, uri, authSessionId);
+    }
+
+    private static AuthenticationProfile profile(String id, String displayCta, String identitySource) {
+        return new AuthenticationProfile()
+                .setId(id)
+                .setDisplayCta(Map.of("en", displayCta))
+                .setCredentials(List.of(new CredentialRequirement()
+                        .setId("primary")
+                        .setRole(CredentialRole.PRIMARY)
+                        .setIdentitySource(identitySource)));
     }
 
     private void mockContextUri(URI uri) {
