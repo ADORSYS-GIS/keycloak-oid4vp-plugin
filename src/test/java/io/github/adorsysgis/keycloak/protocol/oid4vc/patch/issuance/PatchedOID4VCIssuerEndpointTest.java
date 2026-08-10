@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -93,7 +94,7 @@ public class PatchedOID4VCIssuerEndpointTest {
 
     @Test
     public void gate_shouldAllow_whenAttributeAbsent() {
-        CredentialScopeModel scope = mock(CredentialScopeModel.class);
+        CredentialScopeModel scope = mockedScope();
         when(scope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR)).thenReturn(null); // attribute not configured
         UserSessionModel session = sessionWithMarker(null);
 
@@ -101,8 +102,18 @@ public class PatchedOID4VCIssuerEndpointTest {
     }
 
     private static CredentialScopeModel gatedScope(boolean requiresPresentation) {
-        CredentialScopeModel scope = mock(CredentialScopeModel.class);
+        CredentialScopeModel scope = mockedScope();
         when(scope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR)).thenReturn(String.valueOf(requiresPresentation));
+        return scope;
+    }
+
+    /**
+     * The {@code CredentialScopeModel} constructor asserts the scope's protocol is {@code oid4vc}, so a
+     * mock must advertise that protocol.
+     */
+    private static CredentialScopeModel mockedScope() {
+        CredentialScopeModel scope = mock(CredentialScopeModel.class);
+        lenient().when(scope.getProtocol()).thenReturn(OID4VC_PROTOCOL);
         return scope;
     }
 

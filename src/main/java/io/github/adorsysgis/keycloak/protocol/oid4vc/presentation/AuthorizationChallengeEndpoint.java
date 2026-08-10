@@ -13,7 +13,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.HardenedCredentialScope;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.PresentationDuringIssuanceMode;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -225,7 +226,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
 
     /**
      * Resolves the OpenID4VP profile that the requested credential mandates via its
-     * {@link OpenId4VpConstants#VC_PRESENTATION_PROFILE_ID_ATTR} scope attribute. The requested credential
+     * {@code vc.presentation_profile_id} scope attribute. The requested credential
      * configuration is derived, in order of preference, from {@code issuer_state} (credential offer),
      * {@code authorization_details}, or the {@code scope} name. Returns {@code null} when no server-side
      * profile can be resolved; the request is then rejected rather than trusting a wallet-selected profile.
@@ -237,13 +238,21 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             if (client == null) {
                 return null;
             }
-            CredentialScopeModel credentialScope =
-                    resolveRequestedCredentialScope(client, scope, authorizationDetails, offerState);
+
+            HardenedCredentialScope credentialScope = HardenedCredentialScope.from(
+                    resolveRequestedCredentialScope(client, scope, authorizationDetails, offerState));
             if (credentialScope == null) {
                 return null;
             }
-            String enforcedProfileId = credentialScope.getAttribute(OpenId4VpConstants.VC_PRESENTATION_PROFILE_ID_ATTR);
-            return StringUtil.isBlank(enforcedProfileId) ? null : enforcedProfileId;
+
+            // This endpoint implements the interactive_authorization mode only. A credential that does
+            // not explicitly support it must not be challenged here, even if it is presentation-gated
+            // via another mode.
+            if (!credentialScope.supportsPresentationMode(PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION)) {
+                return null;
+            }
+
+            return credentialScope.presentationProfileId();
         } catch (RuntimeException e) {
             logger.debugf(e, "Could not resolve an enforced OpenID4VP profile for the requested credential");
             return null;

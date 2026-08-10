@@ -3,11 +3,12 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
+import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.utils.StringUtil;
 
 /**
- * Hardened accessor over an OID4VCI credential configuration (a client scope) that centralizes the
+ * Hardened {@link CredentialScopeModel} for an OID4VCI credential configuration that centralizes the
  * "presentation during issuance" policy.
  *
  * <p>The {@value #VC_REQUIRES_PRESENTATION_ATTR} client-scope attribute is the single authority for
@@ -21,7 +22,7 @@ import org.keycloak.utils.StringUtil;
  *       {@code interactive_authorization,nested_oid4vp_flow}.</li>
  * </ul>
  */
-public final class HardenedCredentialScope {
+public class HardenedCredentialScope extends CredentialScopeModel {
 
     /**
      * Credential-configuration (client-scope) attribute declaring whether the credential requires a
@@ -40,13 +41,16 @@ public final class HardenedCredentialScope {
     private static final EnumSet<PresentationDuringIssuanceMode> ALL_MODES =
             EnumSet.allOf(PresentationDuringIssuanceMode.class);
 
-    private final CredentialScopeModel credentialScope;
-
-    private HardenedCredentialScope(CredentialScopeModel credentialScope) {
-        this.credentialScope = credentialScope;
+    /**
+     * Decorates the underlying {@code ClientScopeModel} with the presentation during issuance policy.
+     * A {@link CredentialScopeModel} is also a {@link ClientScopeModel}, so a credential configuration
+     * can be re-decorated directly.
+     */
+    public HardenedCredentialScope(ClientScopeModel clientScope) {
+        super(clientScope);
     }
 
-    /** Wraps a credential configuration, or returns {@code null} when the scope is {@code null}. */
+    /** Decorates a credential configuration, or returns {@code null} when the scope is {@code null}. */
     public static HardenedCredentialScope from(CredentialScopeModel credentialScope) {
         return credentialScope == null ? null : new HardenedCredentialScope(credentialScope);
     }
@@ -55,7 +59,7 @@ public final class HardenedCredentialScope {
      * Whether the credential requires a Verifiable Presentation prior to issuance.
      */
     public boolean requiresPresentation() {
-        String value = credentialScope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR);
+        String value = getAttribute(VC_REQUIRES_PRESENTATION_ATTR);
         return Boolean.parseBoolean(value) || !parsePresentationModes(value).isEmpty();
     }
 
@@ -73,14 +77,14 @@ public final class HardenedCredentialScope {
         if (mode == null) {
             return false;
         }
-        String value = credentialScope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR);
+        String value = getAttribute(VC_REQUIRES_PRESENTATION_ATTR);
         Set<PresentationDuringIssuanceMode> explicit = parsePresentationModes(value);
         if (explicit.contains(mode)) {
             return true;
         }
         if (mode == PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION
                 && explicit.isEmpty()
-                && StringUtil.isNotBlank(credentialScope.getAttribute(VC_PRESENTATION_PROFILE_ID_ATTR))) {
+                && StringUtil.isNotBlank(getAttribute(VC_PRESENTATION_PROFILE_ID_ATTR))) {
             return true;
         }
         return false;
@@ -91,7 +95,7 @@ public final class HardenedCredentialScope {
      * credential, or {@code null} when none is configured.
      */
     public String presentationProfileId() {
-        String profileId = credentialScope.getAttribute(VC_PRESENTATION_PROFILE_ID_ATTR);
+        String profileId = getAttribute(VC_PRESENTATION_PROFILE_ID_ATTR);
         return StringUtil.isBlank(profileId) ? null : profileId;
     }
 
