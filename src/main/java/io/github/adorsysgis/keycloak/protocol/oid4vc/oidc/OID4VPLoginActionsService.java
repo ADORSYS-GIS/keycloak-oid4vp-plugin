@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -154,6 +155,12 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
+
+        // Mark the user session as presentation-verified so the issuance gate can enforce that the
+        // authorization code was obtained via a Verifiable Presentation prior to issuance. This mirrors
+        // AuthorizationResponseService.produceAuthorizationCode and covers the nested OID4VP flow, which
+        // resumes the OIDC login through this service after the same-device presentation.
+        freshUserSession.setNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE, Boolean.TRUE.toString());
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(

@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.HardenedCredentialScope;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.MediaType;
@@ -40,7 +41,7 @@ import org.keycloak.util.JsonSerialization;
  * </p>
  * <p>
  * Additionally enforces "presentation during issuance" (OID4VCI Interactive Authorization): for a
- * credential configuration flagged with {@link OpenId4VpConstants#VC_REQUIRES_PRESENTATION_ATTR}, the
+ * credential configuration flagged with {@link HardenedCredentialScope#VC_REQUIRES_PRESENTATION_ATTR}, the
  * credential is only issued when the session carries a verified-presentation marker. This guarantees
  * the authorization code was obtained via a Verifiable Presentation and excludes the pre-authorized
  * code path for such credentials.
@@ -148,9 +149,8 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      */
     static boolean isIssuanceGatedWithoutPresentation(
             CredentialScopeModel credentialScope, UserSessionModel userSession) {
-        boolean requiresPresentation =
-                Boolean.parseBoolean(credentialScope.getAttribute(OpenId4VpConstants.VC_REQUIRES_PRESENTATION_ATTR));
-        if (!requiresPresentation) {
+        HardenedCredentialScope hardened = HardenedCredentialScope.from(credentialScope);
+        if (hardened == null || !hardened.requiresPresentation()) {
             return false;
         }
         boolean presentationVerified = userSession != null
