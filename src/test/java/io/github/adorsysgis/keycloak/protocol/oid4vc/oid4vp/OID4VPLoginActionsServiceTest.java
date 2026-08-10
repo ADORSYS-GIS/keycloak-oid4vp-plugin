@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -22,6 +23,7 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -161,6 +163,69 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
             assertNotNull(
                     Jsoup.parse(html).selectFirst("form#kc-oid4vp-completion-form"),
                     "OpenID4VP login should start with OpenID4VP-owned PKCE even without parent OIDC PKCE");
+        }
+    }
+
+    @Test
+    public void shouldHideSessionIdentityProfileButtonOnLoginPage() throws Exception {
+        var originalConfig = getAuthenticatorConfig();
+        try {
+            var updatedConfig = getAuthenticatorConfig();
+            updatedConfig.getConfig().put(PROFILES_CONFIG, """
+                    [
+                      {
+                        "id": "default",
+                        "displayCta": { "en": "Sign in with a wallet" },
+                        "credentials": [
+                          {
+                            "id": "identity",
+                            "role": "primary",
+                            "credentialTypes": ["https://credentials.example.com/identity_credential"],
+                            "claims": ["sub", "username"]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "issuance-step",
+                        "displayCta": { "en": "Presentation during issuance" },
+                        "enabledForClients": ["test-app"],
+                        "credentials": [
+                          {
+                            "id": "pid",
+                            "role": "primary",
+                            "identitySource": "session",
+                            "credentialTypes": ["urn:eudi:pid:de:1"],
+                            "claims": ["given_name", "family_name"],
+                            "binding": [
+                              {
+                                "type": "claim_equals_user_attribute",
+                                "credentialClaim": "family_name",
+                                "userAttribute": "lastName"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                    """);
+            updateAuthenticatorConfig(updatedConfig);
+
+            String authEndpoint = new URIBuilder(getAuthEndpointURI())
+                    .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
+                    .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
+                    .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
+                    .build()
+                    .toString();
+
+            HttpResponse response = httpClient.execute(new HttpGet(authEndpoint));
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+            String html = EntityUtils.toString(response.getEntity());
+            String text = Jsoup.parse(html).text();
+            assertTrue(text.contains("Sign in with a wallet"));
+            assertFalse(text.contains("Presentation during issuance"));
+        } finally {
+            updateAuthenticatorConfig(originalConfig);
         }
     }
 
