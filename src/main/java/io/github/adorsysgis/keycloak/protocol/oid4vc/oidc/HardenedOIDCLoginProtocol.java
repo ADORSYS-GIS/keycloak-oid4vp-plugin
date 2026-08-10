@@ -18,8 +18,9 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
 
 /**
- * OIDC login protocol that derails the naturally constructed redirect to the invoking party's
- * {@code redirect_uri} for "presentation during issuance" requests.
+ * OIDC login protocol extension that requires an additional {@code openid4vp://} same-device
+ * presentation step before answering the invoking party with the final authorization code, for
+ * "presentation during issuance" requests.
  *
  * <p>{@link OIDCLoginProtocol#buildRedirectUri} is the Keycloak-documented extension point for
  * customizing the redirect produced <em>after successful authentication</em> (see
@@ -31,15 +32,16 @@ import org.keycloak.utils.StringUtil;
  *
  * <p>The {@code openid4vp://} same-device link is produced from the {@link OID4VPUserAuthEndpoint}
  * exactly as the login form's cross-/same-device provisioning does, and is bound to the very
- * {@code authSession} whose redirect is being derailed. Once the wallet presents, the well-known
+ * {@code authSession} whose redirect is being intercepted. Once the wallet presents, the well-known
  * same-device {@code callback} &rarr; {@link OID4VPLoginActionsService} machinery resumes the normal
- * OIDC flow on that same session and redirects to the invoking party.
+ * OIDC flow on that same session, records the nested presentation mode, and only then redirects to
+ * the invoking party with the final authorization code.
  */
-public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
+public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
 
-    private static final Logger logger = Logger.getLogger(PatchedOIDCLoginProtocol.class);
+    private static final Logger logger = Logger.getLogger(HardenedOIDCLoginProtocol.class);
 
-    public PatchedOIDCLoginProtocol(OIDCProviderConfig providerConfig) {
+    public HardenedOIDCLoginProtocol(OIDCProviderConfig providerConfig) {
         super(providerConfig);
     }
 
@@ -50,8 +52,8 @@ public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
             UserSessionModel userSession,
             ClientSessionContext clientSessionCtx) {
         if (!PresentationDuringIssuanceSupport.isPresentationGatedCredentialRequestedInSession(authSession)
-                // Guard against the loop: only take control once per authorization request. After the
-                // same-device presentation completes, the normal OIDC login flow resumes on the *same*
+                // Guard against the loop: only require the presentation once per authorization request. After
+                // the same-device presentation completes, the normal OIDC login flow resumes on the *same*
                 // authentication session and its redirect must reach the invoking party untouched.
                 || PresentationDuringIssuanceSupport.isPresentationTakenOver(authSession)) {
             return super.buildRedirectUri(redirectUriBuilder, authSession, userSession, clientSessionCtx);
@@ -62,13 +64,13 @@ public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
         String sameDeviceRequestLink = buildSameDeviceRequestLink(authSession);
         if (StringUtil.isBlank(sameDeviceRequestLink)) {
             logger.warnf(
-                    "Could not derail into a same-device OpenID4VP presentation for a presentation-gated "
+                    "Could not require a same-device OpenID4VP presentation for a presentation-gated "
                             + "issuance request; resuming normal redirect");
             return super.buildRedirectUri(redirectUriBuilder, authSession, userSession, clientSessionCtx);
         }
 
         logger.infof(
-                "Derailing a presentation-gated issuance request into a same-device OpenID4VP presentation");
+                "Requiring a same-device OpenID4VP presentation before issuing the final authorization code");
         return Response.seeOther(URI.create(sameDeviceRequestLink)).build();
     }
 
@@ -78,7 +80,7 @@ public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
      *
      * <p>The profile is resolved from the credential configuration's
      * {@code vc.presentation_profile_id} client-scope attribute (never from a wallet-selected
-     * profile). The same-device request is bound to the OIDC {@code authSession} being derailed and
+     * profile). The same-device request is bound to the OIDC {@code authSession} being intercepted and
      * to the {@code oid4vp-auth-login} action so the resumed redirect completes this OIDC flow.
      *
      * @return the same-device request link, or {@code null} if it could not be produced (e.g. the

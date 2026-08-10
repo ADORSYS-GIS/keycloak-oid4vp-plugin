@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.HardenedCredentialScope.VC_REQUIRES_PRESENTATION_ATTR;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -55,7 +56,7 @@ public class PatchedOID4VCIssuerEndpointTest {
     @Test
     public void gate_shouldBlock_whenGatedAndNoPresentationMarker() {
         CredentialScopeModel scope = gatedScope(true);
-        UserSessionModel session = sessionWithMarker(null); // no marker
+        UserSessionModel session = sessionWithMode(null); // no presentation mode recorded
 
         assertTrue(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -63,7 +64,7 @@ public class PatchedOID4VCIssuerEndpointTest {
     @Test
     public void gate_shouldBlock_whenGatedAndMarkerFalse() {
         CredentialScopeModel scope = gatedScope(true);
-        UserSessionModel session = sessionWithMarker("false");
+        UserSessionModel session = sessionWithMode("false"); // no valid mode recorded
 
         assertTrue(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -79,7 +80,7 @@ public class PatchedOID4VCIssuerEndpointTest {
     @Test
     public void gate_shouldAllow_whenGatedAndPresentationVerified() {
         CredentialScopeModel scope = gatedScope(true);
-        UserSessionModel session = sessionWithMarker("true");
+        UserSessionModel session = sessionWithMode(INTERACTIVE_AUTHORIZATION.wireValue());
 
         assertFalse(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -87,7 +88,7 @@ public class PatchedOID4VCIssuerEndpointTest {
     @Test
     public void gate_shouldAllow_whenNotGated() {
         CredentialScopeModel scope = gatedScope(false); // attribute "false"
-        UserSessionModel session = sessionWithMarker(null);
+        UserSessionModel session = sessionWithMode(null);
 
         assertFalse(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -96,7 +97,7 @@ public class PatchedOID4VCIssuerEndpointTest {
     public void gate_shouldAllow_whenAttributeAbsent() {
         CredentialScopeModel scope = mockedScope();
         when(scope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR)).thenReturn(null); // attribute not configured
-        UserSessionModel session = sessionWithMarker(null);
+        UserSessionModel session = sessionWithMode(null);
 
         assertFalse(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -117,9 +118,9 @@ public class PatchedOID4VCIssuerEndpointTest {
         return scope;
     }
 
-    private static UserSessionModel sessionWithMarker(String markerValue) {
+    private static UserSessionModel sessionWithMode(String modeValue) {
         UserSessionModel session = mock(UserSessionModel.class);
-        lenient().when(session.getNote(PRESENTATION_VERIFIED_NOTE)).thenReturn(markerValue);
+        lenient().when(session.getNote(PRESENTATION_VERIFIED_NOTE)).thenReturn(modeValue);
         return session;
     }
 }

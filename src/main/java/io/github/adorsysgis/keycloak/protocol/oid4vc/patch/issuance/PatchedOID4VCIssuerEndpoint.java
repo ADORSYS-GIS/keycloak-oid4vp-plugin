@@ -5,6 +5,7 @@ import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCreden
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.HardenedCredentialScope;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.PresentationDuringIssuanceMode;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -141,7 +142,9 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
 
     /**
      * Pure gate decision: whether issuance must be blocked because the credential configuration requires
-     * a presentation during issuance but the session carries no verified-presentation marker.
+     * a presentation during issuance but the session carries no verified-presentation marker, or the
+     * {@link PresentationDuringIssuanceMode mode} through which it was obtained is not one the
+     * credential supports.
      *
      * @param credentialScope the resolved credential configuration (client scope)
      * @param userSession the session bound to the access token, may be {@code null}
@@ -149,13 +152,18 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      */
     static boolean isIssuanceGatedWithoutPresentation(
             CredentialScopeModel credentialScope, UserSessionModel userSession) {
+        if (userSession == null) {
+            return true;
+        }
+
         HardenedCredentialScope hardened = HardenedCredentialScope.from(credentialScope);
         if (hardened == null || !hardened.requiresPresentation()) {
             return false;
         }
-        boolean presentationVerified = userSession != null
-                && Boolean.parseBoolean(userSession.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE));
-        return !presentationVerified;
+
+        String modeValue = userSession.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE);
+        PresentationDuringIssuanceMode mode = PresentationDuringIssuanceMode.fromWireValue(modeValue);
+        return !hardened.supportsPresentationMode(mode);
     }
 
     private String resolveRequestedCredentialConfigurationId(AuthenticationManager.AuthResult authResult) {

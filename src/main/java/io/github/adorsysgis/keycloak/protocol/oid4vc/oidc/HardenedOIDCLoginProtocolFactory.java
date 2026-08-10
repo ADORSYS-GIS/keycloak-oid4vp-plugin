@@ -8,10 +8,10 @@ import org.keycloak.protocol.oidc.OIDCProviderConfig;
 
 /**
  * Overrides the default {@link OIDCLoginProtocolFactory} ({@code openid-connect}) with a higher
- * priority to provide the {@link PatchedOIDCLoginProtocol}, keeping the endpoint routing of the
+ * priority to provide the {@link HardenedOIDCLoginProtocol}, keeping the endpoint routing of the
  * base factory untouched.
  */
-public class PatchedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
+public class HardenedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
     private OIDCProviderConfig providerConfig;
 
@@ -23,7 +23,7 @@ public class PatchedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
     @Override
     public LoginProtocol create(KeycloakSession session) {
-        return new PatchedOIDCLoginProtocol(providerConfig).setSession(session);
+        return new HardenedOIDCLoginProtocol(providerConfig).setSession(session);
     }
 
     @Override
