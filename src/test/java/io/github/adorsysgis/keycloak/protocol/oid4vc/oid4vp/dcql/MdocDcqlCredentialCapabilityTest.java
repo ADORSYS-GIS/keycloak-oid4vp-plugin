@@ -160,11 +160,14 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
 
     @Test
     void rejectsValidCborButMissingDocType() throws Exception {
-        CBORPairList issuerSigned =
-                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_NAME_SPACES), new CBORPairList()));
-
-        CBORPairList document =
-                new CBORPairList(new CBORPair(new CBORString(MdocConstants.L_ISSUER_SIGNED), issuerSigned));
+        Document validDocument = extractDocument(buildDeviceResponse());
+        CBORPairList document = new CBORPairList(
+                new CBORPair(
+                        new CBORString(MdocConstants.L_ISSUER_SIGNED),
+                        validDocument.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue()),
+                new CBORPair(
+                        new CBORString(MdocConstants.L_DEVICE_SIGNED),
+                        validDocument.findByKey(MdocConstants.L_DEVICE_SIGNED).getValue()));
 
         CBORItemList documents = new CBORItemList(List.of(document));
         CBORPairList deviceResponse = new CBORPairList(
@@ -181,6 +184,7 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
                 IllegalArgumentException.class,
                 () -> capability.validatePresentation(credential, validCborButInvalidMdoc));
         assertTrue(error.getMessage().contains("Failed to parse"));
+        assertTrue(error.getCause().getMessage().contains("docType"));
     }
 
     @Test
@@ -254,8 +258,15 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
 
     @Test
     void handlesPresentationWithMissingNamespaces() throws Exception {
-        assertDoesNotThrow(
-                () -> capability.validatePresentation(credentialWithClaims(), buildDeviceResponseWithoutNamespaces()));
+        String token = buildDeviceResponseWithoutNamespaces();
+        assertDoesNotThrow(() -> capability.validatePresentation(credentialWithClaims(), token));
+
+        Credential credential = credentialWithClaims(claim("given-name", NAMESPACE, "given_name"));
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
+        assertEquals(
+                "Presented mDoc does not satisfy DCQL claim path: [com.example.namespace1, given_name]",
+                error.getMessage());
     }
 
     @Test
