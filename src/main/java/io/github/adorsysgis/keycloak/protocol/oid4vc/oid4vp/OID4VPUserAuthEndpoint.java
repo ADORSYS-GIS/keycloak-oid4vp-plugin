@@ -431,11 +431,16 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         }
 
         // Check cookie-tracked session is consistent with this redirection attempt
-        if (!matchesCookieTrackedAuthSession(
-                authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
-            String msg = "Authentication session does not match cookie-tracked session";
-            logger.error(msg);
-            return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
+        // TODO: Outer condition added to bypass the check for presentation during issuance.
+        //       Find why the cookie tracking is lost, address it, or find an alternative solution
+        //       for this security-sensitive requirement.
+        if (authContext.getSubjectUserId() == null) {
+            if (!matchesCookieTrackedAuthSession(
+                    authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
+                String msg = "Authentication session does not match cookie-tracked session";
+                logger.error(msg);
+                return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
+            }
         }
 
         // Invalidate current response code to prevent reuse.

@@ -68,7 +68,8 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
             return super.buildRedirectUri(redirectUriBuilder, authSession, userSession, clientSessionCtx);
         }
 
-        logger.infof("Requiring a same-device OpenID4VP presentation before issuing the final authorization code");
+        logger.debugf("Requiring a same-device OpenID4VP presentation before issuing the final authorization code");
+        logger.debugf("Same device request link is %s", sameDeviceRequestLink);
         return Response.seeOther(URI.create(sameDeviceRequestLink)).build();
     }
 

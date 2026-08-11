@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+
 /**
  * Shared OpenID4VP constants used across request building and validation utilities.
  */

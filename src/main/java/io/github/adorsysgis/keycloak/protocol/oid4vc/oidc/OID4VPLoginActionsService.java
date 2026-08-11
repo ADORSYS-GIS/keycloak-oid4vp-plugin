@@ -6,7 +6,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -155,12 +155,12 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 result.getClientSession().getUserSession().getUser());
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
-        UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
 
         // Mark the user session as presentation-verified through the nested OID4VP flow, which resumes
         // the OIDC login through this service after the same-device presentation. This mirrors
         // AuthorizationResponseService.produceAuthorizationCode; the value annotates the exact mode so
         // the issuance gate can assert the credential supports it.
+        UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
         freshUserSession.setNote(
                 OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
                 PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.wireValue());

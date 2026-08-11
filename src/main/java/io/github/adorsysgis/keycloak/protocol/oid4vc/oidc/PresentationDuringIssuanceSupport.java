@@ -2,11 +2,13 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.HardenedCredentialScope;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.HardenedCredentialScope;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider;
 import java.io.IOException;
 import java.util.Map;
+
+import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.ClientScopeModel;
@@ -31,6 +33,8 @@ import org.keycloak.utils.StringUtil;
  * {@code OID4VCAuthorizationDetailsProcessor#handleMissingAuthorizationDetails}).
  */
 public final class PresentationDuringIssuanceSupport {
+
+    private static final Logger logger = Logger.getLogger(PresentationDuringIssuanceSupport.class);
 
     /** Protocol id of OID4VCI credential scopes (see {@code CredentialScopeUtils}). */
     private static final String OID4VC_PROTOCOL = "oid4vc";
@@ -131,6 +135,7 @@ public final class PresentationDuringIssuanceSupport {
      */
     private static CredentialScopeModel resolveFromScope(AuthenticationSessionModel authSession, ClientModel client) {
         String scope = authSession.getClientNote(OAuth2Constants.SCOPE);
+        logger.debugf("scope is %s", scope);
         if (StringUtil.isBlank(scope)) {
             return null;
         }

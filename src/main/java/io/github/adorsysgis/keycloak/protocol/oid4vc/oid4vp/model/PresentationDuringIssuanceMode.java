@@ -1,4 +1,4 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model;
 
 import java.util.Locale;
 

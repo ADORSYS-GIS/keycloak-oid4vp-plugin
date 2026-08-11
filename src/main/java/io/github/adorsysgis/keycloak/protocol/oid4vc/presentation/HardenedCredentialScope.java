@@ -1,8 +1,10 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
+
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.utils.StringUtil;
