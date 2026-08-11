@@ -83,6 +83,7 @@ public class OID4VPUserAuthBean {
         try {
             Locale locale = session.getContext().resolveLocale(null);
             return oid4vp.getAuthenticationProfilesForClient(clientId).stream()
+                    .filter(profile -> !profile.isSessionIdentityProfile())
                     .map(profile -> new LoginProfileBean()
                             .setId(profile.getId())
                             .setDisplayName(profile.getDisplayCta(locale))
