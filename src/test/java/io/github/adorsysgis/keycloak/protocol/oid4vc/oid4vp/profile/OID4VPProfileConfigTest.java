@@ -345,6 +345,54 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldRejectMixedPrimaryIdentitySources() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "mixed-primary",
+                    "credentials": [
+                      {
+                        "id": "wallet-login",
+                        "role": "primary",
+                        "credentialTypes": ["main-vct"],
+                        "claims": ["sub", "username"]
+                      },
+                      {
+                        "id": "issuance-proof",
+                        "role": "primary",
+                        "identitySource": "session",
+                        "credentialTypes": ["pid-vct"],
+                        "claims": ["given_name", "family_name"],
+                        "binding": [
+                          {
+                            "type": "claim_equals_user_attribute",
+                            "credentialClaim": "family_name",
+                            "userAttribute": "lastName"
+                          }
+                        ]
+                      }
+                    ],
+                    "credentialGroups": [
+                      {
+                        "id": "primary",
+                        "required": true,
+                        "options": [
+                          ["wallet-login"],
+                          ["issuance-proof"]
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertEquals(
+                "OpenID4VP primary credentials must use the same identitySource: mixed-primary", error.getMessage());
+    }
+
+    @Test
     void shouldRejectSessionIdentityPrimaryWithoutBindingRules() {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """

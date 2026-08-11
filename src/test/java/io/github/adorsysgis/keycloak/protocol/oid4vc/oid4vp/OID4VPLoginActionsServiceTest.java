@@ -171,43 +171,12 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
         var originalConfig = getAuthenticatorConfig();
         try {
             var updatedConfig = getAuthenticatorConfig();
-            updatedConfig.getConfig().put(PROFILES_CONFIG, """
-                    [
-                      {
-                        "id": "default",
-                        "displayCta": { "en": "Sign in with a wallet" },
-                        "credentials": [
-                          {
-                            "id": "identity",
-                            "role": "primary",
-                            "credentialTypes": ["https://credentials.example.com/identity_credential"],
-                            "claims": ["sub", "username"]
-                          }
-                        ]
-                      },
-                      {
-                        "id": "issuance-step",
-                        "displayCta": { "en": "Presentation during issuance" },
-                        "enabledForClients": ["test-app"],
-                        "credentials": [
-                          {
-                            "id": "pid",
-                            "role": "primary",
-                            "identitySource": "session",
-                            "credentialTypes": ["urn:eudi:pid:de:1"],
-                            "claims": ["given_name", "family_name"],
-                            "binding": [
-                              {
-                                "type": "claim_equals_user_attribute",
-                                "credentialClaim": "family_name",
-                                "userAttribute": "lastName"
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                    """);
+            updatedConfig
+                    .getConfig()
+                    .put(
+                            PROFILES_CONFIG,
+                            AuthenticationProfileSamples.loginPageWithSessionIdentityProfile()
+                                    .json());
             updateAuthenticatorConfig(updatedConfig);
 
             String authEndpoint = new URIBuilder(getAuthEndpointURI())

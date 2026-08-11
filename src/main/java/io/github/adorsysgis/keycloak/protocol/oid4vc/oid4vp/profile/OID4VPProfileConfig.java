@@ -115,6 +115,7 @@ public class OID4VPProfileConfig {
                         : "OpenID4VP profile must have at least one primary credential: %s";
                 throw new IllegalStateException(String.format(message, profileId));
             }
+            validatePrimaryIdentitySources(profile);
 
             for (CredentialRequirement credential : profile.getCredentials()) {
                 String credentialId = credential.getId();
@@ -168,6 +169,17 @@ public class OID4VPProfileConfig {
 
             validateCredentialGroups(profile);
             validateBindingRules(profile);
+        }
+    }
+
+    private static void validatePrimaryIdentitySources(AuthenticationProfile profile) {
+        long identitySourceCount = profile.getPrimaryCredentials().stream()
+                .map(CredentialRequirement::getIdentitySource)
+                .distinct()
+                .count();
+        if (identitySourceCount > 1) {
+            throw new IllegalStateException(
+                    "OpenID4VP primary credentials must use the same identitySource: " + profile.getId());
         }
     }
 

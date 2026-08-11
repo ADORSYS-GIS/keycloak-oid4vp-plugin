@@ -17,6 +17,7 @@ public final class AuthenticationProfileSamples {
     public static final String MDOC_PRIMARY_PROFILE_ID = "mdoc-primary";
     public static final String SDJWT_MDOC_DUAL_PROFILE_ID = "sdjwt-mdoc-dual";
     public static final String ALTERNATIVE_PRIMARY_PROFILE_ID = "alternative-primary";
+    public static final String SESSION_IDENTITY_PROFILE_ID = "issuance-step";
 
     /** Credential id used for the primary credential in multi-credential profiles and VP token maps. */
     public static final String PRIMARY_CREDENTIAL_ID = "primary";
@@ -213,5 +214,48 @@ public final class AuthenticationProfileSamples {
                 .replace("{alternativeCredentialId}", ALTERNATIVE_PRIMARY_CREDENTIAL_ID)
                 .replace("{defaultVct}", CREDENTIAL_TYPES_CONFIG_DEFAULT);
         return new ProfileSample(json, ALTERNATIVE_PRIMARY_PROFILE_ID);
+    }
+
+    /** Login page sample with one standalone profile and one session-identity profile. */
+    public static ProfileSample loginPageWithSessionIdentityProfile() {
+        String json = """
+                [
+                  {
+                    "id": "default",
+                    "displayCta": { "en": "Sign in with a wallet" },
+                    "credentials": [
+                      {
+                        "id": "identity",
+                        "role": "primary",
+                        "credentialTypes": ["{defaultVct}"],
+                        "claims": ["sub", "username"]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "{sessionIdentityProfileId}",
+                    "displayCta": { "en": "Presentation during issuance" },
+                    "enabledForClients": ["test-app"],
+                    "credentials": [
+                      {
+                        "id": "pid",
+                        "role": "primary",
+                        "identitySource": "session",
+                        "credentialTypes": ["urn:eudi:pid:de:1"],
+                        "claims": ["given_name", "family_name"],
+                        "binding": [
+                          {
+                            "type": "claim_equals_user_attribute",
+                            "credentialClaim": "family_name",
+                            "userAttribute": "lastName"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{defaultVct}", CREDENTIAL_TYPES_CONFIG_DEFAULT)
+                .replace("{sessionIdentityProfileId}", SESSION_IDENTITY_PROFILE_ID);
+        return new ProfileSample(json, SESSION_IDENTITY_PROFILE_ID);
     }
 }
