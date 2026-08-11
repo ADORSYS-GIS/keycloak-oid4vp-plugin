@@ -240,7 +240,7 @@ public class OID4VPUserAuthBeanTest {
         assertTrue(sameDeviceSession.enableSameDeviceResponse());
 
         CodeChallengeDetails crossDevicePkce =
-                codeChallengeDetailsCaptor.getAllValues().get(0);
+                codeChallengeDetailsCaptor.getAllValues().getFirst();
         assertNotNull(crossDevicePkce);
         assertNotNull(crossDevicePkce.codeChallenge());
         assertEquals(OAuth2Constants.PKCE_METHOD_S256, crossDevicePkce.codeChallengeMethod());

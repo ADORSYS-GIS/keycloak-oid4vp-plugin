@@ -188,8 +188,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         }
 
         // Propagate OID4VCI authorization so the token grant emits authorization_details.
-        bindCredentialAuthorization(
-                authContext.getTransactionId(), scope, authorizationDetails, issuerState, offerState);
+        bindCredentialAuthorization(authContext.getTransactionId(), scope, authorizationDetails, issuerState);
 
         AuthorizationChallengeResponse body = new AuthorizationChallengeResponse(
                         ERROR_INSUFFICIENT_AUTHORIZATION, authContext.getTransactionId())
@@ -315,11 +314,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
     }
 
     private void bindCredentialAuthorization(
-            String transactionId,
-            String scope,
-            String authorizationDetails,
-            String issuerState,
-            CredentialOfferState offerState) {
+            String transactionId, String scope, String authorizationDetails, String issuerState) {
         AuthenticationSessionModel authSession = getAuthSession(pruneAuthSessionId(transactionId))
                 .orElseThrow(() -> badRequest("Authorization session not found"));
         if (StringUtil.isNotBlank(scope)) {
