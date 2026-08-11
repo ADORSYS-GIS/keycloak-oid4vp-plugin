@@ -105,7 +105,8 @@ public class OID4VPUserAuthBeanTest {
                         eq(TEST_CLIENT_ID),
                         nullable(String.class),
                         nullable(OIDCAuthSession.class),
-                        nullable(CodeChallengeDetails.class)))
+                        nullable(CodeChallengeDetails.class),
+                        nullable(String.class)))
                 .thenReturn(authContext);
     }
 
@@ -229,7 +230,8 @@ public class OID4VPUserAuthBeanTest {
                         eq(TEST_CLIENT_ID),
                         nullable(String.class),
                         oidcAuthSessionCaptor.capture(),
-                        codeChallengeDetailsCaptor.capture());
+                        codeChallengeDetailsCaptor.capture(),
+                        nullable(String.class));
 
         OIDCAuthSession crossDeviceSession =
                 oidcAuthSessionCaptor.getAllValues().get(0);

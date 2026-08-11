@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
+import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
+
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.HardenedCredentialScope;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider;
@@ -14,8 +16,6 @@ import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
-
-import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
 /**
  * Shared detection of "presentation during issuance" requests (OID4VCI Interactive Authorization).
@@ -179,8 +179,7 @@ public final class PresentationDuringIssuanceSupport {
 
     /** Whether the OIDC authentication session has already been derailed into a presentation. */
     public static boolean isPresentationTakenOver(AuthenticationSessionModel authSession) {
-        return authSession != null
-                && Boolean.parseBoolean(authSession.getClientNote(PRESENTATION_TAKEN_OVER_NOTE));
+        return authSession != null && Boolean.parseBoolean(authSession.getClientNote(PRESENTATION_TAKEN_OVER_NOTE));
     }
 
     /** Marks the OIDC authentication session as already derailed into a presentation. */

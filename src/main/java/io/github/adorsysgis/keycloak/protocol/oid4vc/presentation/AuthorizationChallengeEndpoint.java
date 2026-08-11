@@ -167,13 +167,22 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             throw badRequest("The requested credential does not enforce an OpenID4VP presentation profile");
         }
 
+        // The challenge authenticates a specific subject against a Credential Offer that was issued to
+        // that user. Offers that never reached a concrete target user are untrusted here: without a
+        // bound subject there is nobody to authenticate, so starting the challenge would be meaningless.
+        String subjectUserId = offerState != null ? offerState.getTargetUserId() : null;
+        if (StringUtil.isBlank(subjectUserId)) {
+            throw badRequest("The authorization challenge cannot be started without a target user");
+        }
+
         AuthorizationContext authContext;
         try {
             authContext = oid4vpAuth.startInteractiveAuthentication(
                     clientId,
                     enforcedProfileId,
                     new CodeChallengeDetails(codeChallenge, codeChallengeMethod),
-                    challengeResponseUri());
+                    challengeResponseUri(),
+                    subjectUserId);
         } catch (IllegalArgumentException e) {
             throw badRequest(e.getMessage());
         }
@@ -326,28 +335,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
                     AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX
                             + OAuth2Constants.ISSUER_STATE,
                     issuerState);
-            bindPresentationSubject(authSession, transactionId, offerState);
         }
-    }
-
-    /**
-     * Binds the brokered offer user to the authorization context so the OpenID4VP authenticator can take
-     * the authenticating identity from the credential offer (issuer_state) instead of the presented PID,
-     * which carries no Keycloak username. The presented PID is then only matched against this user's
-     * attributes by the profile's binding rules. This path intentionally requires {@code issuer_state}:
-     * it is the OID4VCI credential-offer grant parameter that references the stored offer and its target user;
-     * plain scope and authorization_details requests do not carry a brokered target-user identity.
-     */
-    private void bindPresentationSubject(
-            AuthenticationSessionModel authSession, String transactionId, CredentialOfferState offerState) {
-        String subjectUserId = offerState != null ? offerState.getTargetUserId() : null;
-        if (subjectUserId == null) {
-            return;
-        }
-        AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
-        AuthorizationContext context = store.getAuthorizationContextByTransactionId(transactionId);
-        context.setSubjectUserId(subjectUserId);
-        store.storeAuthorizationContext(context);
     }
 
     /** Resolves and validates the server-side Credential Offer referenced by untrusted {@code issuer_state}. */

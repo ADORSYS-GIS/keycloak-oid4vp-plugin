@@ -287,9 +287,11 @@ public class AuthorizationResponseService {
         // issuance gate. This only applies when the response_mode is the interactive (ia_post) one.
         ResponseMode responseMode = authContext.getRequestObject().getResponseMode();
         if (responseMode.isInteractiveAuthorization()) {
-            clientSession.getUserSession().setNote(
-                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
-                    PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION.wireValue());
+            clientSession
+                    .getUserSession()
+                    .setNote(
+                            OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                            PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION.wireValue());
         }
 
         // Gather code data and generate authorization code

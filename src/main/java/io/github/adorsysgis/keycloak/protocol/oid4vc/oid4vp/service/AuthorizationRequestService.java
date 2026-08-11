@@ -88,20 +88,9 @@ public class AuthorizationRequestService {
     }
 
     /**
-     * Creates a fresh authorization request for user authentication.
-     */
-    public AuthorizationContext createAuthorizationRequest(
-            VerifierConfig config,
-            AuthenticationProfile profile,
-            AuthenticationSessionModel authSession,
-            OIDCAuthSession oidcAuthSession,
-            CodeChallengeDetails codeChallengeParams) {
-        return createAuthorizationRequest(config, profile, authSession, oidcAuthSession, codeChallengeParams, null);
-    }
-
-    /**
      * Creates a fresh authorization request for user authentication, optionally overriding the
-     * response mode and response URI for the OID4VCI interactive authorization (ia_post) flow.
+     * response mode and response URI for the OID4VCI interactive authorization (ia_post) flow, and
+     * binding a session-identity {@code subjectUserId} for "presentation during issuance".
      */
     public AuthorizationContext createAuthorizationRequest(
             VerifierConfig config,
@@ -109,6 +98,7 @@ public class AuthorizationRequestService {
             AuthenticationSessionModel authSession,
             OIDCAuthSession oidcAuthSession,
             CodeChallengeDetails codeChallengeParams,
+            String subjectUserId,
             InteractiveResponseConfig interactive) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
@@ -166,7 +156,8 @@ public class AuthorizationRequestService {
                 .setAuthorizationRequest(authorizationRequestLink)
                 .setRequestUriMethod(config.getRequestUriMethod())
                 .setProfileId(profile.getId())
-                .setResponseCode(responseCode);
+                .setResponseCode(responseCode)
+                .setSubjectUserId(subjectUserId);
 
         // Attach code challenge details for ownership binding if present
         if (codeChallengeParams != null) {

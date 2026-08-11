@@ -61,16 +61,14 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
 
         PresentationDuringIssuanceSupport.markPresentationTakenOver(authSession);
 
-        String sameDeviceRequestLink = buildSameDeviceRequestLink(authSession);
+        String sameDeviceRequestLink = buildSameDeviceRequestLink(authSession, userSession);
         if (StringUtil.isBlank(sameDeviceRequestLink)) {
-            logger.warnf(
-                    "Could not require a same-device OpenID4VP presentation for a presentation-gated "
-                            + "issuance request; resuming normal redirect");
+            logger.warnf("Could not require a same-device OpenID4VP presentation for a presentation-gated "
+                    + "issuance request; resuming normal redirect");
             return super.buildRedirectUri(redirectUriBuilder, authSession, userSession, clientSessionCtx);
         }
 
-        logger.infof(
-                "Requiring a same-device OpenID4VP presentation before issuing the final authorization code");
+        logger.infof("Requiring a same-device OpenID4VP presentation before issuing the final authorization code");
         return Response.seeOther(URI.create(sameDeviceRequestLink)).build();
     }
 
@@ -86,12 +84,11 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
      * @return the same-device request link, or {@code null} if it could not be produced (e.g. the
      *         requested credential carries no enforced profile)
      */
-    private String buildSameDeviceRequestLink(AuthenticationSessionModel authSession) {
+    private String buildSameDeviceRequestLink(AuthenticationSessionModel authSession, UserSessionModel userSession) {
         String profileId = PresentationDuringIssuanceSupport.resolveEnforcedProfileId(authSession);
         if (StringUtil.isBlank(profileId)) {
-            logger.warnf(
-                    "Presentation-gated issuance request resolved no enforced OpenID4VP profile; "
-                            + "cannot build a same-device presentation");
+            logger.warnf("Presentation-gated issuance request resolved no enforced OpenID4VP profile; "
+                    + "cannot build a same-device presentation");
             return null;
         }
 
@@ -100,8 +97,16 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
             OID4VPUserAuthEndpoint oid4vp = new OID4VPUserAuthEndpoint(session, event);
             String authSessionId = OID4VPUserAuthEndpointBase.getAuthSessionId(authSession);
             OIDCAuthSession oidcAuthSession = new OIDCAuthSession(authSessionId, buildOid4vpLoginActionUrl(), true);
+            // Bind the already-authenticated session user as the session-identity subject so the
+            // OpenID4VP authenticator recovers that user (instead of presented-credential claims) and
+            // matches the presented PID against it. The flow runs post-authentication, so the
+            // authenticated user is always available here.
             AuthorizationContext authContext = oid4vp.startAuthentication(
-                    authSession.getClient().getClientId(), profileId, oidcAuthSession, null);
+                    authSession.getClient().getClientId(),
+                    profileId,
+                    oidcAuthSession,
+                    null,
+                    userSession.getUser().getId());
             return authContext.getAuthorizationRequest();
         } catch (RuntimeException e) {
             logger.warnf(e, "Failed to build a same-device OpenID4VP presentation for presentation during issuance");

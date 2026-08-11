@@ -167,7 +167,8 @@ public class OID4VPUserAuthBean {
                 clientId,
                 profileId,
                 new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
-                codeChallengeDetails);
+                codeChallengeDetails,
+                null);
     }
 
     private String buildAuthCodeRedemptionUrl() {
