@@ -10,6 +10,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialC
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
@@ -22,6 +23,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -50,10 +52,10 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.ErrorPage;
-import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
@@ -435,6 +437,34 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         logger.debugf("redirectCallback - loginActionUrl: %s", authContext.getLoginActionUrl());
         logger.debugf("redirectCallback - parentAuthSessionId: %s", authContext.getParentAuthSessionId());
 
+        // Invalidate current response code to prevent reuse.
+        // The field is not voided for it is used as a marker of same-device flows.
+        String newRandomResponseCode = AuthorizationRequestService.generateSessionBoundId(authSession);
+        authContext.setResponseCode(newRandomResponseCode);
+        authStore.storeAuthorizationContext(authContext);
+
+        // Presentation during issuance: the OIDC auth session no longer exists by the time the same-device
+        // presentation completes, so we cannot resume the OIDC flow. Instead we carry the already-authenticated
+        // user session and the final redirect URI in the context; here we simply mark the presentation as
+        // verified and delay the redirection to the kept URI.
+        if (StringUtil.isNotBlank(authContext.getRedirectUri())
+                && StringUtil.isNotBlank(authContext.getUserSessionId())) {
+            UserSessionModel freshUserSession =
+                    session.sessions().getUserSession(realm, authContext.getUserSessionId());
+            if (freshUserSession == null) {
+                String msg = "User session not found for id: " + authContext.getUserSessionId();
+                logger.error(msg);
+                return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
+            }
+            freshUserSession.setNote(
+                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                    PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.wireValue());
+            logger.debugf("Attempting delayed redirection after successful OID4VP presentation");
+            return Response.status(Response.Status.FOUND)
+                    .location(URI.create(authContext.getRedirectUri()))
+                    .build();
+        }
+
         // Check cookie-tracked session is consistent with this redirection attempt
         // TODO: Outer condition added to bypass the check for presentation during issuance.
         //       Find why the cookie tracking is lost, address it, or find an alternative solution
@@ -446,22 +476,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 logger.error(msg);
                 return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
             }
-        } else {
-            // Re-establish the AUTH_SESSION_ID cookie in the resumed browser context. Same-device flows run the
-            // wallet in an in-app browser that does not carry the Keycloak auth-session cookie set during the
-            // original login, so SessionCodeChecks.initialVerifyAuthSession cannot locate the session from the
-            // cookie and bails with "You are already logged in" (falling back to the identity cookie). Writing
-            // the cookie here lets the subsequent oid4vp-auth-login request resolve the session and reach the
-            // nested-presentation completion handler.
-            new AuthenticationSessionManager(session)
-                    .setAuthSessionCookie(authSession.getParentSession().getId());
         }
-
-        // Invalidate current response code to prevent reuse.
-        // The field is not voided for it is used as a marker of same-device flows.
-        String newRandomResponseCode = AuthorizationRequestService.generateSessionBoundId(authSession);
-        authContext.setResponseCode(newRandomResponseCode);
-        authStore.storeAuthorizationContext(authContext);
 
         // Build redirect URI
         URI redirectUri = KeycloakUriBuilder.fromUri(authContext.getLoginActionUrl())

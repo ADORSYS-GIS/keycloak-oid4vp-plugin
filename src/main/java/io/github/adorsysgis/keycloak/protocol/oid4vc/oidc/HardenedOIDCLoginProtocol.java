@@ -5,19 +5,14 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
 import org.jboss.logging.Logger;
-import org.keycloak.authentication.AuthenticationProcessor;
-import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.ClientSessionContext;
-import org.keycloak.models.Constants;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.protocol.oidc.OIDCProviderConfig;
 import org.keycloak.protocol.oidc.utils.OIDCRedirectUriBuilder;
-import org.keycloak.services.managers.ClientSessionCode;
-import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.utils.StringUtil;
 
@@ -49,6 +44,21 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
         super(providerConfig);
     }
 
+    /**
+     * A wallet may send {@code dpop_jkt} in the authorization request even when the client is not
+     * configured for DPoP (see keycloak/keycloak#51573). Keycloak reads the {@code dpop_jkt} client
+     * note and binds it into the issued authorization code, then validates the DPoP thumbprint at the
+     * token endpoint unconditionally, which breaks token exchange for non-DPoP clients.
+     */
+    @Override
+    public Response authenticated(
+            AuthenticationSessionModel authSession,
+            UserSessionModel userSession,
+            ClientSessionContext clientSessionCtx) {
+        handleDpopJktForClient(authSession);
+        return super.authenticated(authSession, userSession, clientSessionCtx);
+    }
+
     @Override
     public Response buildRedirectUri(
             OIDCRedirectUriBuilder redirectUriBuilder,
@@ -65,7 +75,12 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
 
         PresentationDuringIssuanceSupport.markPresentationTakenOver(authSession);
 
-        String sameDeviceRequestLink = buildSameDeviceRequestLink(authSession, userSession);
+        // Capture the final redirect URI to the invoking party (the one that would have been produced
+        // for the completed OIDC login) so the same-device callback can simply delay the redirection to
+        // it after the presentation completes. The parent auth session no longer exists by callback
+        // time, so resuming the OIDC flow to rebuild this redirect is not possible.
+        URI savedRedirectUri = redirectUriBuilder.build().getLocation();
+        String sameDeviceRequestLink = buildSameDeviceRequestLink(authSession, userSession, savedRedirectUri);
         if (StringUtil.isBlank(sameDeviceRequestLink)) {
             logger.warnf("Could not require a same-device OpenID4VP presentation for a presentation-gated "
                     + "issuance request; resuming normal redirect");
@@ -83,13 +98,16 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
      *
      * <p>The profile is resolved from the credential configuration's
      * {@code vc.presentation_profile_id} client-scope attribute (never from a wallet-selected
-     * profile). The same-device request is bound to the OIDC {@code authSession} being intercepted and
-     * to the {@code oid4vp-auth-login} action so the resumed redirect completes this OIDC flow.
+     * profile). The OIDC auth session being intercepted no longer exists once the presentation
+     * completes, so instead of trying to resume it we carry the already-authenticated user session id
+     * and the final redirect URI into the authorization context; the same-device callback then only
+     * marks the presentation as verified and redirects to the kept URI.
      *
      * @return the same-device request link, or {@code null} if it could not be produced (e.g. the
      *         requested credential carries no enforced profile)
      */
-    private String buildSameDeviceRequestLink(AuthenticationSessionModel authSession, UserSessionModel userSession) {
+    private String buildSameDeviceRequestLink(
+            AuthenticationSessionModel authSession, UserSessionModel userSession, URI savedRedirectUri) {
         String profileId = PresentationDuringIssuanceSupport.resolveEnforcedProfileId(authSession);
         if (StringUtil.isBlank(profileId)) {
             logger.warnf("Presentation-gated issuance request resolved no enforced OpenID4VP profile; "
@@ -101,8 +119,12 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
             session.getContext().setAuthenticationSession(authSession);
             OID4VPUserAuthEndpoint oid4vp = new OID4VPUserAuthEndpoint(session, event);
             String authSessionId = OID4VPUserAuthEndpointBase.getAuthSessionId(authSession);
-            OIDCAuthSession oidcAuthSession =
-                    new OIDCAuthSession(authSessionId, buildOid4vpLoginActionUrl(authSession), true);
+            OIDCAuthSession oidcAuthSession = new OIDCAuthSession(
+                    authSessionId,
+                    null,
+                    true,
+                    userSession.getId(),
+                    savedRedirectUri != null ? savedRedirectUri.toString() : null);
             // Bind the already-authenticated session user as the session-identity subject so the
             // OpenID4VP authenticator recovers that user (instead of presented-credential claims) and
             // matches the presented PID against it. The flow runs post-authentication, so the
@@ -121,27 +143,19 @@ public class HardenedOIDCLoginProtocol extends OIDCLoginProtocol {
     }
 
     /**
-     * URL where the same-device OID4VP flow resumes the OIDC login ({@link OID4VPLoginActionsService}).
-     *
-     * <p>Mirrors {@link OID4VPUserAuthBean#getLoginActionUrl()}, which derives the action URL from the
-     * full request {@code actionUri} and thereby keeps its query parameters (session_code, execution,
-     * client_id, tab_id, client_data). Those parameters are required for the resumed
-     * {@code oid4vp-auth-login} request so {@link SessionCodeChecks} can resolve and validate the
-     * pending OIDC auth session; building from the bare base URI drops them.
+     * Removes the {@code dpop_jkt} client note when the client is not configured for DPoP, so the value
+     * is not bound to the issued authorization code (keycloak/keycloak#51573).
      */
-    private String buildOid4vpLoginActionUrl(AuthenticationSessionModel authSession) {
-        String executionId = authSession.getAuthNote(AuthenticationProcessor.CURRENT_AUTHENTICATION_EXECUTION);
-        String sessionCode = new ClientSessionCode<>(session, realm, authSession).getOrGenerateCode();
-        return UriBuilder.fromUri(session.getContext().getUri().getBaseUri())
-                .path(ServiceUrlConstants.REALM_INFO_PATH)
-                .path(OID4VPLoginActionsServiceFactory.PROVIDER_ID)
-                .path(OID4VPLoginActionsService.OID4VP_AUTH_LOGIN_PATH)
-                .queryParam(LoginActionsService.SESSION_CODE, sessionCode)
-                .queryParam(Constants.EXECUTION, executionId)
-                .queryParam(Constants.CLIENT_ID, authSession.getClient().getClientId())
-                .queryParam(Constants.TAB_ID, authSession.getTabId())
-                .queryParam(Constants.CLIENT_DATA, AuthenticationProcessor.getClientData(session, authSession))
-                .build(realm.getName())
-                .toString();
+    private void handleDpopJktForClient(AuthenticationSessionModel authSession) {
+        if (authSession.getClientNote(OIDCLoginProtocol.DPOP_JKT) == null) {
+            return;
+        }
+        boolean dpopEnabled = Boolean.parseBoolean(
+                authSession.getClient().getAttribute(OIDCConfigAttributes.DPOP_BOUND_ACCESS_TOKENS));
+        if (!dpopEnabled) {
+            authSession.removeClientNote(OIDCLoginProtocol.DPOP_JKT);
+            logger.debugf("Removed dpop_jkt client note for client '%s' because DPoP is not enabled",
+                    authSession.getClient().getClientId());
+        }
     }
 }

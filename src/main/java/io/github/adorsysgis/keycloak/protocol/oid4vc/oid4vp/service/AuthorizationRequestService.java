@@ -111,7 +111,7 @@ public class AuthorizationRequestService {
         String transactionId = generateSessionBoundId(authSession);
 
         // Generate response code to attach to context for same-device responses
-        oidcAuthSession = Optional.ofNullable(oidcAuthSession).orElse(new OIDCAuthSession(null, null, false));
+        oidcAuthSession = Optional.ofNullable(oidcAuthSession).orElse(new OIDCAuthSession(null, null, false, null, null));
         String responseCode = oidcAuthSession.enableSameDeviceResponse() ? generateSessionBoundId(authSession) : null;
 
         // Generate ephemeral encryption keys if the response mode requires encryption. Must be done before creating
@@ -151,6 +151,8 @@ public class AuthorizationRequestService {
                 .setTransactionId(transactionId)
                 .setParentAuthSessionId(oidcAuthSession.authSessionId())
                 .setLoginActionUrl(oidcAuthSession.loginActionUrl())
+                .setUserSessionId(oidcAuthSession.userSessionId())
+                .setRedirectUri(oidcAuthSession.redirectUri())
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink)
