@@ -2,12 +2,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.HardenedCredentialScope;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.HardenedCredentialScope;
 import java.io.IOException;
 import java.util.Map;
-
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.ClientModel;

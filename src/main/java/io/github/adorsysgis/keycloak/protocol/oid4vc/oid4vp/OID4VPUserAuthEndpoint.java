@@ -49,14 +49,12 @@ import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
-import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.ErrorPage;
 import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.resource.RealmResourceProvider;
-import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
@@ -205,7 +203,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     private void validateRequestUriPostHeaders() {
-        String accept = session.getContext().getRequestHeaders().getHeaderString(HttpHeaders.ACCEPT);
+        HttpHeaders headers = session.getContext().getHttpRequest().getHttpHeaders();
+        String accept = headers.getHeaderString(HttpHeaders.ACCEPT);
         if (StringUtil.isBlank(accept) || !accept.contains(AUTH_REQ_JWT_MEDIA_TYPE)) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -433,6 +432,9 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             return ErrorPage.error(session, authSession, Response.Status.NOT_FOUND, msg);
         }
 
+        logger.debugf("redirectCallback - loginActionUrl: %s", authContext.getLoginActionUrl());
+        logger.debugf("redirectCallback - parentAuthSessionId: %s", authContext.getParentAuthSessionId());
+
         // Check cookie-tracked session is consistent with this redirection attempt
         // TODO: Outer condition added to bypass the check for presentation during issuance.
         //       Find why the cookie tracking is lost, address it, or find an alternative solution
@@ -444,6 +446,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 logger.error(msg);
                 return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
             }
+        } else {
+            // Re-establish the AUTH_SESSION_ID cookie in the resumed browser context. Same-device flows run the
+            // wallet in an in-app browser that does not carry the Keycloak auth-session cookie set during the
+            // original login, so SessionCodeChecks.initialVerifyAuthSession cannot locate the session from the
+            // cookie and bails with "You are already logged in" (falling back to the identity cookie). Writing
+            // the cookie here lets the subsequent oid4vp-auth-login request resolve the session and reach the
+            // nested-presentation completion handler.
+            new AuthenticationSessionManager(session)
+                    .setAuthSessionCookie(authSession.getParentSession().getId());
         }
 
         // Invalidate current response code to prevent reuse.
@@ -452,40 +463,13 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         authContext.setResponseCode(newRandomResponseCode);
         authStore.storeAuthorizationContext(authContext);
 
-        // Re-establish the AUTH_SESSION_ID cookie in the resumed browser context. Same-device flows run the
-        // wallet in an in-app browser that does not carry the Keycloak auth-session cookie set during the
-        // original login, so SessionCodeChecks.initialVerifyAuthSession cannot locate the session from the
-        // cookie and bails with "You are already logged in" (falling back to the identity cookie). Writing
-        // the cookie here lets the subsequent oid4vp-auth-login request resolve the session and reach the
-        // nested-presentation completion handler.
-        new AuthenticationSessionManager(session).setAuthSessionCookie(authSession.getParentSession().getId());
-
-        // Build redirect URI carrying the full set of parameters that let SessionCodeChecks resolve the
-        // pending OIDC auth session by query parameter (auth_session_id / tab_id...) instead of relying on
-        // the auth-session cookie. Without these the resumed oid4vp-auth-login request cannot locate the
-        // session, and SessionCodeChecks falls back to authenticateIdentityCookie, which surfaces
-        // "You are already logged in" whenever the user holds a valid identity cookie (e.g. SSO).
+        // Build redirect URI
         URI redirectUri = KeycloakUriBuilder.fromUri(authContext.getLoginActionUrl())
-                .queryParam(LoginActionsService.AUTH_SESSION_ID, signAuthSessionId(authSession))
-                .queryParam(Constants.CLIENT_ID, authSession.getClient().getClientId())
-                .queryParam(Constants.TAB_ID, authSession.getTabId())
-                .queryParam(Constants.CLIENT_DATA, AuthenticationProcessor.getClientData(session, authSession))
                 .queryParam(OAuth2Constants.CODE, authContext.getAuthorizationCode())
                 .build();
 
         // Return redirect response
         return Response.status(Response.Status.FOUND).location(redirectUri).build();
-    }
-
-    /**
-     * Signs and base64-encodes the root auth session id exactly as the OIDC flow does
-     * ({@code AuthenticationProcessor#getSignedAuthSessionId}), so that
-     * {@code SessionCodeChecks#getAuthenticationSessionByEncodedIdAndClient} can resolve it from the
-     * {@code auth_session_id} query parameter on the resumed login action.
-     */
-    private String signAuthSessionId(AuthenticationSessionModel authSession) {
-        return new AuthenticationSessionManager(session)
-                .signAndEncodeToBase64AuthSessionId(authSession.getParentSession().getId());
     }
 
     /**

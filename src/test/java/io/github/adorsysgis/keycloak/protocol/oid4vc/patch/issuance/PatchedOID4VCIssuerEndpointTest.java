@@ -1,8 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.HardenedCredentialScope.VC_REQUIRES_PRESENTATION_ATTR;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.HardenedCredentialScope.VC_REQUIRES_PRESENTATION_ATTR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;

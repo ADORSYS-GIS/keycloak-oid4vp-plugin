@@ -5,8 +5,8 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -124,6 +124,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 checksForCode(authSessionId, code, execution, clientId, tabId, clientData, AUTHENTICATE_PATH);
 
         if (!checks.verifyActiveAndValidAction(Action.AUTHENTICATE.name(), ActionType.LOGIN)) {
+            logger.errorf("Session code checks failed");
             return checks.getResponse();
         }
 
