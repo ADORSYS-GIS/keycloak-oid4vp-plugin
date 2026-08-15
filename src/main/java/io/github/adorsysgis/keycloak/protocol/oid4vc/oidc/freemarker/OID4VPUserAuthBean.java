@@ -221,10 +221,7 @@ public class OID4VPUserAuthBean {
      * @param loginActionUrl          the login action URL for resuming the OIDC flow
      * @param enableSameDeviceResponse whether to enable the same-device response flow
      */
-    public record OIDCAuthSession(
-            String authSessionId,
-            String loginActionUrl,
-            boolean enableSameDeviceResponse) {}
+    public record OIDCAuthSession(String authSessionId, String loginActionUrl, boolean enableSameDeviceResponse) {}
 
     public static class LoginProfileBean {
 

@@ -1,9 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
+import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import java.io.IOException;
 import java.util.Map;
@@ -11,38 +11,32 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.ClientScopeModel;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferState;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
+import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
+import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
- * Shared detection of "presentation during issuance" requests (OID4VCI Interactive Authorization).
+ * Resolves OID4VCI presentation-during-issuance state for OIDC authorization requests.
  *
- * <p>The OIDC authorization-request path must kick in whenever the acting party asks an issuance
- * authorization code for a credential whose configuration requires a Verifiable Presentation prior
- * to issuance. This helper exposes that decision from an {@link AuthenticationSessionModel}.
- *
- * <p>{@code authorization_details} are treated as the ultimate ground truth: the note stored on the
- * session (or resolved) yields the {@code credential_configuration_id} from which the credential
- * configuration is derived. When no {@code authorization_details} are available the detection falls
- * back to the {@code scope}-only derivation used by OID4VCI for a "scope only" request (mirroring
- * {@code OID4VCAuthorizationDetailsProcessor#handleMissingAuthorizationDetails}).
+ * <p>The requested credential configuration is resolved from {@code authorization_details}, falling
+ * back to the scope-only form used by OID4VCI.
  */
-public final class PresentationDuringIssuanceSupport {
+public final class PresentationDuringIssuanceService {
 
-    private static final Logger logger = Logger.getLogger(PresentationDuringIssuanceSupport.class);
+    private static final Logger logger = Logger.getLogger(PresentationDuringIssuanceService.class);
 
-    /** Protocol id of OID4VCI credential scopes (see {@code CredentialScopeUtils}). */
-    private static final String OID4VC_PROTOCOL = "oid4vc";
+    private final KeycloakSession session;
 
-    private PresentationDuringIssuanceSupport() {}
-
-    /** Whether realm-level "presentation during issuance" is enabled. */
-    public static boolean isPresentationDuringIssuanceEnabled(RealmModel realm) {
-        return Boolean.parseBoolean(realm.getAttribute(OID4VCIssuerMetadataProvider.ATTR_PRESENTATION_DURING_ISSUANCE));
+    public PresentationDuringIssuanceService(KeycloakSession session) {
+        this.session = session;
     }
 
     /**
@@ -52,7 +46,7 @@ public final class PresentationDuringIssuanceSupport {
      * @return {@code true} when the session targets such a credential; {@code false} for ordinary
      *         OIDC requests and for issuance requests of non-gated credentials
      */
-    public static boolean isPresentationGatedCredentialRequestedInSession(AuthenticationSessionModel authSession) {
+    public boolean isPresentationGatedCredentialRequestedInSession(AuthenticationSessionModel authSession) {
         return resolveRequestedCredentialScope(authSession) != null;
     }
 
@@ -69,7 +63,7 @@ public final class PresentationDuringIssuanceSupport {
      * @return the gated {@link CredentialScopeModel}, or {@code null} when the session does not request
      *         a presentation-gated credential (or it is gated via the nested OID4VP mode)
      */
-    public static CredentialScopeModel resolveRequestedCredentialScope(AuthenticationSessionModel authSession) {
+    public CredentialScopeModel resolveRequestedCredentialScope(AuthenticationSessionModel authSession) {
         if (authSession == null || authSession.getClient() == null) {
             return null;
         }
@@ -88,7 +82,7 @@ public final class PresentationDuringIssuanceSupport {
      * session, or {@code null} when none are present, they cannot be parsed, or the credential is not
      * gated via the nested OID4VP mode.
      */
-    private static CredentialScopeModel resolveFromAuthorizationDetails(
+    private CredentialScopeModel resolveFromAuthorizationDetails(
             AuthenticationSessionModel authSession, ClientModel client, RealmModel realm) {
         String authorizationDetails = authSession.getClientNote(OAuth2Constants.AUTHORIZATION_DETAILS);
         String credentialConfigurationId = credentialConfigurationIdFromAuthorizationDetails(authorizationDetails);
@@ -100,7 +94,7 @@ public final class PresentationDuringIssuanceSupport {
         return isNestedFlowGated(credentialScope) ? credentialScope : null;
     }
 
-    private static String credentialConfigurationIdFromAuthorizationDetails(String authorizationDetails) {
+    private String credentialConfigurationIdFromAuthorizationDetails(String authorizationDetails) {
         if (StringUtil.isBlank(authorizationDetails)) {
             return null;
         }
@@ -122,9 +116,8 @@ public final class PresentationDuringIssuanceSupport {
      * Resolves the requested credential scope from the {@code scope} values (a "scope only" request,
      * mirroring OID4VCI's missing-authorization-details handling).
      */
-    private static CredentialScopeModel resolveFromScope(AuthenticationSessionModel authSession, ClientModel client) {
+    private CredentialScopeModel resolveFromScope(AuthenticationSessionModel authSession, ClientModel client) {
         String scope = authSession.getClientNote(OAuth2Constants.SCOPE);
-        logger.debugf("scope is %s", scope);
         if (StringUtil.isBlank(scope)) {
             return null;
         }
@@ -146,7 +139,7 @@ public final class PresentationDuringIssuanceSupport {
      * nested OID4VP flow (browser/IdP-driven) path only; a credential gated solely via
      * {@code interactive_authorization} must not be derailed here.
      */
-    private static boolean isNestedFlowGated(CredentialScopeModel credentialScope) {
+    private boolean isNestedFlowGated(CredentialScopeModel credentialScope) {
         if (credentialScope == null) {
             return false;
         }
@@ -163,11 +156,32 @@ public final class PresentationDuringIssuanceSupport {
      * @return the enforced profile id, or {@code null} when the session does not request a gated
      *         credential or its configuration carries no enforced profile
      */
-    public static String resolveEnforcedProfileId(AuthenticationSessionModel authSession) {
+    public String resolveEnforcedProfileId(AuthenticationSessionModel authSession) {
         CredentialScopeModel credentialScope = resolveRequestedCredentialScope(authSession);
         if (credentialScope == null) {
             return null;
         }
         return GuardedCredentialScope.from(credentialScope).getPresentationProfileId();
+    }
+
+    public String resolveOfferSubjectUserId(AuthenticationSessionModel authSession) {
+        String issuerState = authSession.getClientNote(
+                AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX + OAuth2Constants.ISSUER_STATE);
+        if (StringUtil.isBlank(issuerState)) {
+            return null;
+        }
+
+        try {
+            String offerId = IssuerState.fromEncodedString(issuerState).getCredentialsOfferId();
+            if (StringUtil.isBlank(offerId)) {
+                return null;
+            }
+            CredentialOfferState offer =
+                    session.getProvider(CredentialOfferStorage.class).getOfferStateById(offerId);
+            return offer == null ? null : offer.getTargetUserId();
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not resolve credential offer subject");
+            return null;
+        }
     }
 }

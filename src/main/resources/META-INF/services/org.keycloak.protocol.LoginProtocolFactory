@@ -1,2 +1,2 @@
 io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance.PatchedOID4VCLoginProtocolFactory
-io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.HardenedOIDCLoginProtocolFactory
+io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.ExtendedOIDCLoginProtocolFactory

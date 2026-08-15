@@ -9,10 +9,10 @@ import org.keycloak.protocol.oidc.OIDCProviderConfig;
 
 /**
  * Overrides the default {@link OIDCLoginProtocolFactory} ({@code openid-connect}) with a higher
- * priority to provide the {@link HardenedOIDCLoginProtocol} and the
- * {@link GatedOIDCLoginProtocolService} endpoint, keeping the rest of the base factory untouched.
+ * priority to provide the {@link ExtendedOIDCLoginProtocol} and the
+ * {@link ExtendedOIDCLoginProtocolService} endpoint, keeping the rest of the base factory untouched.
  */
-public class HardenedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
+public class ExtendedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
     private OIDCProviderConfig providerConfig;
 
@@ -24,16 +24,16 @@ public class HardenedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
     @Override
     public LoginProtocol create(KeycloakSession session) {
-        return new HardenedOIDCLoginProtocol(providerConfig).setSession(session);
+        return new ExtendedOIDCLoginProtocol(providerConfig).setSession(session);
     }
 
     @Override
     public Object createProtocolEndpoint(KeycloakSession session, EventBuilder event) {
-        return new GatedOIDCLoginProtocolService(session, event);
+        return new ExtendedOIDCLoginProtocolService(session, event);
     }
 
     @Override
     public int order() {
-        return super.order() + 9; // Higher than default -> this factory wins for openid-connect
+        return super.order() + 9;
     }
 }

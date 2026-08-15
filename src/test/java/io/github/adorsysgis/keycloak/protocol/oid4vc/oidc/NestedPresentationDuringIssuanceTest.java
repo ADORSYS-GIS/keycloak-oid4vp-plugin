@@ -30,7 +30,7 @@ import org.keycloak.representations.idm.ClientScopeRepresentation;
 /**
  * End-to-end test for the replacement ("nested OID4VP flow") variant of presentation during
  * issuance: an OIDC authorization request targeting a {@code nested_oid4vp_flow}-gated credential
- * is intercepted by {@link GatedOIDCAuthorizationEndpoint} so that the OpenID4VP presentation
+ * is intercepted by {@link ExtendedOIDCAuthorizationEndpoint} so that the OpenID4VP presentation
  * <em>replaces</em> the username/password login — no login form is shown — and the flow resumes
  * through {@link OID4VPLoginActionsService} (LoginActions) to hand back a fresh OIDC code.
  */
@@ -58,11 +58,16 @@ class NestedPresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTes
             scope.setName(NESTED_GATED_CONFIG_ID);
             scope.setProtocol(OID4VC_PROTOCOL);
             scope.setAttributes(Map.of(
-                    "vc.credential_configuration_id", NESTED_GATED_CONFIG_ID,
-                    "vc.verifiable_credential_type", CREDENTIAL_TYPES_CONFIG_DEFAULT.split(",")[0],
-                    "vc.format", "dc+sd-jwt",
-                    "vc.presentation_profile_id", DEFAULT_PROFILE_ID,
-                    "vc.requires_presentation", PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.getValue()));
+                    "vc.credential_configuration_id",
+                    NESTED_GATED_CONFIG_ID,
+                    "vc.verifiable_credential_type",
+                    CREDENTIAL_TYPES_CONFIG_DEFAULT.split(",")[0],
+                    "vc.format",
+                    "dc+sd-jwt",
+                    "vc.presentation_profile_id",
+                    DEFAULT_PROFILE_ID,
+                    "vc.requires_presentation",
+                    PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.getValue()));
             try (var response = realm.clientScopes().create(scope)) {
                 int status = response.getStatus();
                 if (status != HttpStatus.SC_CREATED && status != HttpStatus.SC_CONFLICT) {
@@ -114,13 +119,13 @@ class NestedPresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTes
 
         BasicCookieStore cookieStore = convertCookiesMapToStore(initial.cookies());
 
-        try (CloseableHttpClient httpClient =
-                HttpClientBuilder.create().setDefaultCookieStore(cookieStore).disableRedirectHandling().build()) {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+                .setDefaultCookieStore(cookieStore)
+                .disableRedirectHandling()
+                .build()) {
             // Complete the same-device OpenID4VP presentation.
             AuthorizationContext authContext = new AuthorizationContext().setAuthorizationRequest(location);
-            TestOpts opts = TestOpts.getDefault()
-                    .setAuthContext(authContext)
-                    .setShouldRetrieveAccessToken(false);
+            TestOpts opts = TestOpts.getDefault().setAuthContext(authContext).setShouldRetrieveAccessToken(false);
             TestFlowData flowData = testSuccessfulAuthenticationVerbose(sdJwt, opts);
 
             // Same-device flow hands back a callback redirect URI.
