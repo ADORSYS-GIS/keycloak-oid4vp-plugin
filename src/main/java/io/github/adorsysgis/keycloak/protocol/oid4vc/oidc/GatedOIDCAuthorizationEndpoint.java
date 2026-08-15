@@ -8,6 +8,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
 import org.jboss.logging.Logger;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -17,6 +18,9 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.utils.AuthenticationFlowResolver;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferState;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
+import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.managers.ClientSessionCode;
@@ -88,9 +92,11 @@ public class GatedOIDCAuthorizationEndpoint extends AuthorizationEndpoint {
      * Generates a same-device {@code openid4vp://} authorization request link for the enforced
      * presentation profile of the gated credential requested in this session.
      *
-     * <p>The presentation replaces authentication, so no {@code subjectUserId} is bound: the
-     * OpenID4VP authenticator recovers the user from the presented credential (a credential-identity
-     * profile). The OIDC auth session being intercepted is kept; its {@code login_action_url}
+     * <p>The presentation replaces authentication. When the intercepted OIDC request carries an
+     * {@code issuer_state} for a credential offer, the offer's target user is bound for a
+     * session-identity profile; otherwise the OpenID4VP authenticator recovers the user from the
+     * presented credential (a credential-identity profile). The OIDC auth session being intercepted
+     * is kept; its {@code login_action_url}
      * points to {@link OID4VPLoginActionsService}, which resumes the OIDC flow after presentation.
      *
      * @return the same-device request link, or {@code null} if it could not be produced
@@ -111,17 +117,46 @@ public class GatedOIDCAuthorizationEndpoint extends AuthorizationEndpoint {
                     authSessionId,
                     buildLoginActionUrl(authSession),
                     true);
-            // subjectUserId is intentionally null: the presentation replaces authentication, so the
-            // user is recovered from the presented credential rather than from a prior login.
+            // An OID4VCI authorization-code request may already identify the issuance subject through
+            // issuer_state. Bind that known subject for session-identity profiles, while retaining
+            // credential-identity recovery for ordinary nested presentation requests.
+            String subjectUserId = resolveOfferSubjectUserId(authSession);
             AuthorizationContext authContext = oid4vp.startAuthentication(
                     authSession.getClient().getClientId(),
                     profileId,
                     oidcAuthSession,
                     null,
-                    null);
+                    subjectUserId);
             return authContext.getAuthorizationRequest();
         } catch (RuntimeException e) {
             logger.warnf(e, "Failed to build a same-device OpenID4VP presentation for presentation during issuance");
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the target user from the server-side credential offer carried by the OIDC request.
+     * The issuer state is read from the note populated by {@link AuthorizationEndpoint}; it is
+     * never trusted as a user identifier itself.
+     */
+    private String resolveOfferSubjectUserId(AuthenticationSessionModel authSession) {
+        String issuerState = authSession.getClientNote(
+                AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX
+                        + OAuth2Constants.ISSUER_STATE);
+        if (StringUtil.isBlank(issuerState)) {
+            return null;
+        }
+
+        try {
+            String offerId = IssuerState.fromEncodedString(issuerState).getCredentialsOfferId();
+            if (StringUtil.isBlank(offerId)) {
+                return null;
+            }
+            CredentialOfferState offerState = session.getProvider(CredentialOfferStorage.class)
+                    .getOfferStateById(offerId);
+            return offerState == null ? null : offerState.getTargetUserId();
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not resolve nested-flow credential offer subject");
             return null;
         }
     }
