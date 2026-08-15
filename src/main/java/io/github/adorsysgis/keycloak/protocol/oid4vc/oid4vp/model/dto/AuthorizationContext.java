@@ -113,23 +113,6 @@ public class AuthorizationContext {
     private String subjectUserId;
 
     /**
-     * Id of the already-authenticated user session of the OIDC login that was intercepted for
-     * presentation during issuance. When set together with {@link #redirectUri}, the same-device
-     * callback only needs to mark the presentation as verified and redirect to the kept URI, without
-     * resuming the OIDC flow (whose auth session no longer exists).
-     */
-    @JsonProperty("user_session_id")
-    private String userSessionId;
-
-    /**
-     * The final redirect URI to the invoking party, captured when the OIDC login was intercepted for
-     * presentation during issuance. Kept so the same-device callback can simply delay the redirection
-     * to this URI after the presentation completes, instead of rebuilding the OIDC redirect.
-     */
-    @JsonProperty("redirect_uri")
-    private String redirectUri;
-
-    /**
      * Metadata supplied by the wallet when dereferencing {@code request_uri}
      * via HTTP {@code POST}.
      */
@@ -299,24 +282,6 @@ public class AuthorizationContext {
 
     public AuthorizationContext setSubjectUserId(String subjectUserId) {
         this.subjectUserId = subjectUserId;
-        return this;
-    }
-
-    public String getUserSessionId() {
-        return userSessionId;
-    }
-
-    public AuthorizationContext setUserSessionId(String userSessionId) {
-        this.userSessionId = userSessionId;
-        return this;
-    }
-
-    public String getRedirectUri() {
-        return redirectUri;
-    }
-
-    public AuthorizationContext setRedirectUri(String redirectUri) {
-        this.redirectUri = redirectUri;
         return this;
     }
 

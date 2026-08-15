@@ -38,16 +38,6 @@ public final class PresentationDuringIssuanceSupport {
     /** Protocol id of OID4VCI credential scopes (see {@code CredentialScopeUtils}). */
     private static final String OID4VC_PROTOCOL = "oid4vc";
 
-    /**
-     * Client-session note set on the OIDC authentication session the first time its redirect is
-     * derailed into a same-device OpenID4VP presentation during issuance. It guarantees the
-     * {@code buildRedirectUri} interception runs at most once per authorization request: when the
-     * presentation completes and the normal OIDC login flow resumes on the <em>same</em>
-     * authentication session, the resumed redirect must pass through to the invoking party instead
-     * of being derailed a second time (which would otherwise loop).
-     */
-    public static final String PRESENTATION_TAKEN_OVER_NOTE = "oid4vp.presentation_taken_over";
-
     private PresentationDuringIssuanceSupport() {}
 
     /** Whether realm-level "presentation during issuance" is enabled. */
@@ -179,15 +169,5 @@ public final class PresentationDuringIssuanceSupport {
             return null;
         }
         return GuardedCredentialScope.from(credentialScope).getPresentationProfileId();
-    }
-
-    /** Whether the OIDC authentication session has already been derailed into a presentation. */
-    public static boolean isPresentationTakenOver(AuthenticationSessionModel authSession) {
-        return authSession != null && Boolean.parseBoolean(authSession.getClientNote(PRESENTATION_TAKEN_OVER_NOTE));
-    }
-
-    /** Marks the OIDC authentication session as already derailed into a presentation. */
-    public static void markPresentationTakenOver(AuthenticationSessionModel authSession) {
-        authSession.setClientNote(PRESENTATION_TAKEN_OVER_NOTE, Boolean.TRUE.toString());
     }
 }

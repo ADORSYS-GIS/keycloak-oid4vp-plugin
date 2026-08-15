@@ -7,7 +7,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
@@ -22,7 +21,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.InteractiveResponseConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
@@ -52,7 +50,6 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.ErrorPage;
@@ -443,39 +440,12 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         authContext.setResponseCode(newRandomResponseCode);
         authStore.storeAuthorizationContext(authContext);
 
-        // Presentation during issuance: the OIDC auth session no longer exists by the time the same-device
-        // presentation completes, so we cannot resume the OIDC flow. Instead we carry the already-authenticated
-        // user session and the final redirect URI in the context; here we simply mark the presentation as
-        // verified and delay the redirection to the kept URI.
-        if (StringUtil.isNotBlank(authContext.getRedirectUri())
-                && StringUtil.isNotBlank(authContext.getUserSessionId())) {
-            UserSessionModel freshUserSession =
-                    session.sessions().getUserSession(realm, authContext.getUserSessionId());
-            if (freshUserSession == null) {
-                String msg = "User session not found for id: " + authContext.getUserSessionId();
-                logger.error(msg);
-                return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
-            }
-            freshUserSession.setNote(
-                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
-                    PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.getValue());
-            logger.debugf("Attempting delayed redirection after successful OID4VP presentation");
-            return Response.status(Response.Status.FOUND)
-                    .location(URI.create(authContext.getRedirectUri()))
-                    .build();
-        }
-
         // Check cookie-tracked session is consistent with this redirection attempt
-        // TODO: Outer condition added to bypass the check for presentation during issuance.
-        //       Find why the cookie tracking is lost, address it, or find an alternative solution
-        //       for this security-sensitive requirement.
-        if (authContext.getSubjectUserId() == null) {
-            if (!matchesCookieTrackedAuthSession(
-                    authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
-                String msg = "Authentication session does not match cookie-tracked session";
-                logger.error(msg);
-                return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
-            }
+        if (!matchesCookieTrackedAuthSession(
+                authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
+            String msg = "Authentication session does not match cookie-tracked session";
+            logger.error(msg);
+            return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
         }
 
         // Build redirect URI

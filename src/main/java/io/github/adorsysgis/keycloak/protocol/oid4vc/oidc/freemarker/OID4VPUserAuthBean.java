@@ -166,7 +166,7 @@ public class OID4VPUserAuthBean {
         return oid4vp.startAuthentication(
                 clientId,
                 profileId,
-                new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse, null, null),
+                new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
                 codeChallengeDetails,
                 null);
     }
@@ -220,15 +220,11 @@ public class OID4VPUserAuthBean {
      * @param authSessionId           the OIDC auth session id
      * @param loginActionUrl          the login action URL for resuming the OIDC flow
      * @param enableSameDeviceResponse whether to enable the same-device response flow
-     * @param userSessionId           the id of the already-authenticated user session (presentation during issuance)
-     * @param redirectUri             the final redirect URI to the invoking party, kept to delay the redirection
      */
     public record OIDCAuthSession(
             String authSessionId,
             String loginActionUrl,
-            boolean enableSameDeviceResponse,
-            String userSessionId,
-            String redirectUri) {}
+            boolean enableSameDeviceResponse) {}
 
     public static class LoginProfileBean {
 

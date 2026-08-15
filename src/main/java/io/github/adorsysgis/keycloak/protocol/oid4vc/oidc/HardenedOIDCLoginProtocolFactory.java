@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import org.keycloak.Config;
+import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocolFactory;
@@ -8,8 +9,8 @@ import org.keycloak.protocol.oidc.OIDCProviderConfig;
 
 /**
  * Overrides the default {@link OIDCLoginProtocolFactory} ({@code openid-connect}) with a higher
- * priority to provide the {@link HardenedOIDCLoginProtocol}, keeping the endpoint routing of the
- * base factory untouched.
+ * priority to provide the {@link HardenedOIDCLoginProtocol} and the
+ * {@link GatedOIDCLoginProtocolService} endpoint, keeping the rest of the base factory untouched.
  */
 public class HardenedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
@@ -24,6 +25,11 @@ public class HardenedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
     @Override
     public LoginProtocol create(KeycloakSession session) {
         return new HardenedOIDCLoginProtocol(providerConfig).setSession(session);
+    }
+
+    @Override
+    public Object createProtocolEndpoint(KeycloakSession session, EventBuilder event) {
+        return new GatedOIDCLoginProtocolService(session, event);
     }
 
     @Override

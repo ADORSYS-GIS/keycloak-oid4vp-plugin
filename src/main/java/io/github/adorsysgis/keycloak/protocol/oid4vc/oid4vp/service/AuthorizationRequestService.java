@@ -160,8 +160,6 @@ public class AuthorizationRequestService {
             authorizationContext
                     .setParentAuthSessionId(oidcAuthSession.authSessionId())
                     .setLoginActionUrl(oidcAuthSession.loginActionUrl())
-                    .setUserSessionId(oidcAuthSession.userSessionId())
-                    .setRedirectUri(oidcAuthSession.redirectUri())
                     .setResponseCode(responseCode);
         }
 
