@@ -3,9 +3,11 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
+import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.protocol.oid4vc.model.PreAuthorizedCodeGrant;
@@ -88,34 +91,30 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @BeforeAll
     static void ensureOfferedCredentialScope() {
         var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
-        ensureCredentialScope(realm, IDENTITY_CREDENTIAL_CONFIG_ID, CREDENTIAL_TYPES_CONFIG_DEFAULT, "default", false);
+        ensureCredentialScope(realm, IDENTITY_CREDENTIAL_CONFIG_ID, CREDENTIAL_TYPES_CONFIG_DEFAULT, "default");
         ensureCredentialScope(
                 realm,
                 OFFERED_CREDENTIAL_CONFIG_ID,
                 "https://credentials.example.com/kma_credential",
-                STB_ISSUANCE_PROFILE_ID,
-                true);
+                STB_ISSUANCE_PROFILE_ID);
         grantOfferedCredentialToBrokeredUser();
     }
 
+    @SuppressWarnings("ExtractMethodRecommender")
     private static void ensureCredentialScope(
-            org.keycloak.admin.client.resource.RealmResource realm,
-            String configurationId,
-            String credentialType,
-            String profileId,
-            boolean requiresPresentation) {
+            RealmResource realm, String configurationId, String credentialType, String profileId) {
         boolean exists =
                 realm.clientScopes().findAll().stream().anyMatch(scope -> configurationId.equals(scope.getName()));
         if (!exists) {
             ClientScopeRepresentation scope = new ClientScopeRepresentation();
             scope.setName(configurationId);
-            scope.setProtocol("oid4vc");
+            scope.setProtocol(OID4VC_PROTOCOL);
             scope.setAttributes(Map.of(
                     "vc.credential_configuration_id", configurationId,
                     "vc.verifiable_credential_type", credentialType,
                     "vc.format", "dc+sd-jwt",
                     "vc.presentation_profile_id", profileId,
-                    "vc.requires_presentation", Boolean.toString(requiresPresentation)));
+                    "vc.requires_presentation", PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION.getValue()));
 
             try (Response response = realm.clientScopes().create(scope)) {
                 int status = response.getStatus();
@@ -134,8 +133,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
      * the credential configuration among the client's optional scopes ({@code client.getClientScopes(false)}),
      * so without this assignment the gate cannot see that the credential requires a presentation.
      */
-    private static void assignCredentialScopeToTestClient(
-            org.keycloak.admin.client.resource.RealmResource realm, String configurationId) {
+    private static void assignCredentialScopeToTestClient(RealmResource realm, String configurationId) {
         String scopeId = realm.clientScopes().findAll().stream()
                 .filter(scope -> configurationId.equals(scope.getName()))
                 .map(ClientScopeRepresentation::getId)

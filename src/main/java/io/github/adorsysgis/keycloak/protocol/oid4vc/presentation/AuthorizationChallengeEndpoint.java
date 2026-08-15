@@ -7,13 +7,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -25,6 +25,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
+import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
@@ -152,6 +153,9 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         // the Authorization Code Flow to include it in this initial Authorization Challenge Request.
         // Treat it as untrusted input and resolve it against server-side offer state before creating a session.
         CredentialOfferState offerState = resolveCredentialOffer(issuerState);
+        String subjectUserId = Optional.ofNullable(offerState)
+                .map(CredentialOfferState::getTargetUserId)
+                .orElse(null);
 
         // When the Authorization Server requires a Wallet Attestation, it MUST be included on the
         // Authorization Challenge Request (OID4VCI §6.1, Note). Validate it before starting the challenge.
@@ -172,14 +176,14 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
                     clientId,
                     enforcedProfileId,
                     new CodeChallengeDetails(codeChallenge, codeChallengeMethod),
-                    challengeResponseUri());
+                    challengeResponseUri(),
+                    subjectUserId);
         } catch (IllegalArgumentException e) {
             throw badRequest(e.getMessage());
         }
 
         // Propagate OID4VCI authorization so the token grant emits authorization_details.
-        bindCredentialAuthorization(
-                authContext.getTransactionId(), scope, authorizationDetails, issuerState, offerState);
+        bindCredentialAuthorization(authContext.getTransactionId(), scope, authorizationDetails, issuerState);
 
         AuthorizationChallengeResponse body = new AuthorizationChallengeResponse(
                         ERROR_INSUFFICIENT_AUTHORIZATION, authContext.getTransactionId())
@@ -225,7 +229,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
 
     /**
      * Resolves the OpenID4VP profile that the requested credential mandates via its
-     * {@link OpenId4VpConstants#VC_PRESENTATION_PROFILE_ID_ATTR} scope attribute. The requested credential
+     * {@code vc.presentation_profile_id} scope attribute. The requested credential
      * configuration is derived, in order of preference, from {@code issuer_state} (credential offer),
      * {@code authorization_details}, or the {@code scope} name. Returns {@code null} when no server-side
      * profile can be resolved; the request is then rejected rather than trusting a wallet-selected profile.
@@ -237,13 +241,21 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             if (client == null) {
                 return null;
             }
-            CredentialScopeModel credentialScope =
-                    resolveRequestedCredentialScope(client, scope, authorizationDetails, offerState);
+
+            GuardedCredentialScope credentialScope = GuardedCredentialScope.from(
+                    resolveRequestedCredentialScope(client, scope, authorizationDetails, offerState));
             if (credentialScope == null) {
                 return null;
             }
-            String enforcedProfileId = credentialScope.getAttribute(OpenId4VpConstants.VC_PRESENTATION_PROFILE_ID_ATTR);
-            return StringUtil.isBlank(enforcedProfileId) ? null : enforcedProfileId;
+
+            // This endpoint implements the interactive_authorization mode only. A credential that does
+            // not explicitly support it must not be challenged here, even if it is presentation-gated
+            // via another mode.
+            if (!credentialScope.supportsPresentationMode(PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION)) {
+                return null;
+            }
+
+            return credentialScope.getPresentationProfileId();
         } catch (RuntimeException e) {
             logger.debugf(e, "Could not resolve an enforced OpenID4VP profile for the requested credential");
             return null;
@@ -297,11 +309,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
     }
 
     private void bindCredentialAuthorization(
-            String transactionId,
-            String scope,
-            String authorizationDetails,
-            String issuerState,
-            CredentialOfferState offerState) {
+            String transactionId, String scope, String authorizationDetails, String issuerState) {
         AuthenticationSessionModel authSession = getAuthSession(pruneAuthSessionId(transactionId))
                 .orElseThrow(() -> badRequest("Authorization session not found"));
         if (StringUtil.isNotBlank(scope)) {
@@ -317,28 +325,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
                     AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX
                             + OAuth2Constants.ISSUER_STATE,
                     issuerState);
-            bindPresentationSubject(authSession, transactionId, offerState);
         }
-    }
-
-    /**
-     * Binds the brokered offer user to the authorization context so the OpenID4VP authenticator can take
-     * the authenticating identity from the credential offer (issuer_state) instead of the presented PID,
-     * which carries no Keycloak username. The presented PID is then only matched against this user's
-     * attributes by the profile's binding rules. This path intentionally requires {@code issuer_state}:
-     * it is the OID4VCI credential-offer grant parameter that references the stored offer and its target user;
-     * plain scope and authorization_details requests do not carry a brokered target-user identity.
-     */
-    private void bindPresentationSubject(
-            AuthenticationSessionModel authSession, String transactionId, CredentialOfferState offerState) {
-        String subjectUserId = offerState != null ? offerState.getTargetUserId() : null;
-        if (subjectUserId == null) {
-            return;
-        }
-        AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
-        AuthorizationContext context = store.getAuthorizationContextByTransactionId(transactionId);
-        context.setSubjectUserId(subjectUserId);
-        store.storeAuthorizationContext(context);
     }
 
     /** Resolves and validates the server-side Credential Offer referenced by untrusted {@code issuer_state}. */

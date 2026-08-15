@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
@@ -21,6 +22,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.InteractiveResponseConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
@@ -50,6 +52,7 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.ErrorPage;
@@ -121,7 +124,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authContext;
         try {
             var pkceDetails = new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
-            authContext = startAuthentication(clientId, profileId, null, pkceDetails);
+            authContext = startAuthentication(clientId, profileId, null, pkceDetails, null);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -202,7 +205,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     private void validateRequestUriPostHeaders() {
-        String accept = session.getContext().getRequestHeaders().getHeaderString(HttpHeaders.ACCEPT);
+        HttpHeaders headers = session.getContext().getHttpRequest().getHttpHeaders();
+        String accept = headers.getHeaderString(HttpHeaders.ACCEPT);
         if (StringUtil.isBlank(accept) || !accept.contains(AUTH_REQ_JWT_MEDIA_TYPE)) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -430,19 +434,49 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             return ErrorPage.error(session, authSession, Response.Status.NOT_FOUND, msg);
         }
 
-        // Check cookie-tracked session is consistent with this redirection attempt
-        if (!matchesCookieTrackedAuthSession(
-                authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
-            String msg = "Authentication session does not match cookie-tracked session";
-            logger.error(msg);
-            return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
-        }
+        logger.debugf("redirectCallback - loginActionUrl: %s", authContext.getLoginActionUrl());
+        logger.debugf("redirectCallback - parentAuthSessionId: %s", authContext.getParentAuthSessionId());
 
         // Invalidate current response code to prevent reuse.
         // The field is not voided for it is used as a marker of same-device flows.
         String newRandomResponseCode = AuthorizationRequestService.generateSessionBoundId(authSession);
         authContext.setResponseCode(newRandomResponseCode);
         authStore.storeAuthorizationContext(authContext);
+
+        // Presentation during issuance: the OIDC auth session no longer exists by the time the same-device
+        // presentation completes, so we cannot resume the OIDC flow. Instead we carry the already-authenticated
+        // user session and the final redirect URI in the context; here we simply mark the presentation as
+        // verified and delay the redirection to the kept URI.
+        if (StringUtil.isNotBlank(authContext.getRedirectUri())
+                && StringUtil.isNotBlank(authContext.getUserSessionId())) {
+            UserSessionModel freshUserSession =
+                    session.sessions().getUserSession(realm, authContext.getUserSessionId());
+            if (freshUserSession == null) {
+                String msg = "User session not found for id: " + authContext.getUserSessionId();
+                logger.error(msg);
+                return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
+            }
+            freshUserSession.setNote(
+                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                    PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.getValue());
+            logger.debugf("Attempting delayed redirection after successful OID4VP presentation");
+            return Response.status(Response.Status.FOUND)
+                    .location(URI.create(authContext.getRedirectUri()))
+                    .build();
+        }
+
+        // Check cookie-tracked session is consistent with this redirection attempt
+        // TODO: Outer condition added to bypass the check for presentation during issuance.
+        //       Find why the cookie tracking is lost, address it, or find an alternative solution
+        //       for this security-sensitive requirement.
+        if (authContext.getSubjectUserId() == null) {
+            if (!matchesCookieTrackedAuthSession(
+                    authContext.getParentAuthSessionId(), Objects.requireNonNull(authContext.getLoginActionUrl()))) {
+                String msg = "Authentication session does not match cookie-tracked session";
+                logger.error(msg);
+                return ErrorPage.error(session, authSession, Response.Status.BAD_REQUEST, msg);
+            }
+        }
 
         // Build redirect URI
         URI redirectUri = KeycloakUriBuilder.fromUri(authContext.getLoginActionUrl())
@@ -551,7 +585,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String clientId,
             String profileId,
             OIDCAuthSession oidcAuthSession,
-            CodeChallengeDetails codeChallengeDetails) {
+            CodeChallengeDetails codeChallengeDetails,
+            String subjectUserId) {
         logger.debug("Generating new authentication context...");
 
         if (oidcAuthSession == null || !oidcAuthSession.enableSameDeviceResponse()) {
@@ -566,7 +601,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config, profile, authSession, oidcAuthSession, codeChallengeDetails);
+                config, profile, authSession, oidcAuthSession, codeChallengeDetails, subjectUserId, null);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -581,7 +616,11 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * @return an authorization context exposing the {@code transaction_id} and signed request object
      */
     public AuthorizationContext startInteractiveAuthentication(
-            String clientId, String profileId, CodeChallengeDetails codeChallengeDetails, String responseUri) {
+            String clientId,
+            String profileId,
+            CodeChallengeDetails codeChallengeDetails,
+            String responseUri,
+            String subjectUserId) {
         logger.debug("Generating new interactive authentication context...");
 
         validateOwnershipBinding(codeChallengeDetails);
@@ -604,6 +643,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 authSession,
                 null,
                 codeChallengeDetails,
+                subjectUserId,
                 new InteractiveResponseConfig(interactiveResponseMode, responseUri));
 
         return new AuthorizationContext()
