@@ -1,4 +1,4 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
 import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
@@ -6,11 +6,7 @@ import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocolFactory;
 import org.keycloak.protocol.oidc.OIDCProviderConfig;
 
-/**
- * Overrides the default {@link OIDCLoginProtocolFactory} ({@code openid-connect}) with a higher
- * priority to provide the {@link ExtendedOIDCLoginProtocol}, keeping the default OIDC endpoints.
- */
-public class ExtendedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
+public class PatchedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
     private OIDCProviderConfig providerConfig;
 
@@ -22,7 +18,7 @@ public class ExtendedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
 
     @Override
     public LoginProtocol create(KeycloakSession session) {
-        return new ExtendedOIDCLoginProtocol(providerConfig).setSession(session);
+        return new PatchedOIDCLoginProtocol(providerConfig).setSession(session);
     }
 
     @Override

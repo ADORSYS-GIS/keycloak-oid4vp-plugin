@@ -20,3 +20,13 @@ When the realm attribute `oid4vci.presentation_during_issuance` is `true`, the p
 
 - the Credential Issuer Metadata, as required by the German EUDI Wallet ecosystem profile; and
 - the OAuth Authorization Server Metadata, as defined by OAuth 2.0 for First-Party Applications.
+
+### OIDC DPoP compatibility patch
+
+`PatchedOIDCLoginProtocol` removes the `dpop_jkt` client-session note when the client has not
+enabled DPoP. This prevents Keycloak from binding an unsolicited wallet-supplied thumbprint to
+the authorization code and subsequently requiring a matching DPoP proof at the token endpoint.
+
+This works around [Keycloak issue #51573](https://github.com/keycloak/keycloak/issues/51573),
+which describes Valera Wallet sending `dpop_jkt` for clients that do not use DPoP. The patch
+is to be removed once Valera addresses the issue.

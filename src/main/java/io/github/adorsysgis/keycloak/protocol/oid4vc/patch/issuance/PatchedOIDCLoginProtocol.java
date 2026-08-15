@@ -1,4 +1,4 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
@@ -9,16 +9,19 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.OIDCProviderConfig;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
-/** OIDC protocol extension combining DPoP handling with nested issuance authorization. */
-public class ExtendedOIDCLoginProtocol extends OIDCLoginProtocol {
+/**
+ * OIDC patch for clients that send {@code dpop_jkt} without enabling DPoP.
+ *
+ * <p>See <a href="https://github.com/keycloak/keycloak/issues/51573">Keycloak issue #51573</a>.
+ */
+public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
 
-    private static final Logger logger = Logger.getLogger(ExtendedOIDCLoginProtocol.class);
+    private static final Logger logger = Logger.getLogger(PatchedOIDCLoginProtocol.class);
 
-    public ExtendedOIDCLoginProtocol(OIDCProviderConfig providerConfig) {
+    public PatchedOIDCLoginProtocol(OIDCProviderConfig providerConfig) {
         super(providerConfig);
     }
 
-    /** Prevents an unsolicited DPoP thumbprint from being bound to a non-DPoP client. */
     @Override
     public Response authenticated(
             AuthenticationSessionModel authSession,
@@ -28,7 +31,6 @@ public class ExtendedOIDCLoginProtocol extends OIDCLoginProtocol {
         return super.authenticated(authSession, userSession, clientSessionCtx);
     }
 
-    /** Removes an unsolicited DPoP thumbprint from the authorization session. */
     private void handleDpopJktForClient(AuthenticationSessionModel authSession) {
         if (authSession.getClientNote(OIDCLoginProtocol.DPOP_JKT) == null) {
             return;
