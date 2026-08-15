@@ -30,9 +30,8 @@ import org.keycloak.representations.idm.ClientScopeRepresentation;
 /**
  * End-to-end test for the replacement ("nested OID4VP flow") variant of presentation during
  * issuance: an OIDC authorization request targeting a {@code nested_oid4vp_flow}-gated credential
- * is intercepted by {@link ExtendedOIDCAuthorizationEndpoint} so that the OpenID4VP presentation
- * <em>replaces</em> the username/password login — no login form is shown — and the flow resumes
- * through {@link OID4VPLoginActionsService} (LoginActions) to hand back a fresh OIDC code.
+ * is rendered as a same-device OpenID4VP login view instead of a username/password form, then
+ * resumes through {@link OID4VPLoginActionsService} (LoginActions) to hand back a fresh OIDC code.
  */
 class NestedPresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
 
@@ -109,13 +108,17 @@ class NestedPresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTes
                 .ignoreContentType(true)
                 .ignoreHttpErrors(true)
                 .execute();
-        assertEquals(HttpStatus.SC_SEE_OTHER, initial.statusCode());
+        assertEquals(HttpStatus.SC_OK, initial.statusCode());
 
-        String location = initial.header("Location");
-        assertNotNull(location, "Intercepted authorize request must redirect to a same-device link");
+        String location = initial.parse().select("a").attr("href");
+        assertNotNull(location, "Intercepted authorize request must render a same-device link");
+        assertFalse(location.isBlank(), "Same-device link must not be empty");
         assertTrue(
                 location.startsWith("openid4vp://"),
                 "Intercepted authorize request must redirect to an openid4vp:// link, got: " + location);
+        assertTrue(
+                location.contains("&request_uri=http%3A%2F%2F"),
+                "Nested request_uri must remain an encoded HTTP URL inside the openid4vp link: " + location);
 
         BasicCookieStore cookieStore = convertCookiesMapToStore(initial.cookies());
 

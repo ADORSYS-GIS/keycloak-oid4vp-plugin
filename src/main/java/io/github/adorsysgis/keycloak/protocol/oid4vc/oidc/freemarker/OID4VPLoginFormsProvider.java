@@ -36,7 +36,9 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
                 .orElse(null);
 
         // Inject OID4VP specific attributes
-        this.attributes.put("oid4vp", new OID4VPUserAuthBean(session, realm, oid4vp, this.actionUri, authSessionId));
+        this.attributes.put(
+                "oid4vp",
+                new OID4VPUserAuthBean(session, realm, oid4vp, this.actionUri, authSessionId, authenticationSession));
         logger.debugf("Injected OID4VPUserAuthBean into login form attributes for realm %s", realm.getName());
     }
 }

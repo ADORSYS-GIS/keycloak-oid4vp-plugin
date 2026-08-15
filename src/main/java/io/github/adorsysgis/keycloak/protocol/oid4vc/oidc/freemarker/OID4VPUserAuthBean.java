@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.PresentationDuringIssuanceService;
 import jakarta.ws.rs.core.UriBuilder;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,6 +28,7 @@ import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
@@ -45,8 +47,10 @@ public class OID4VPUserAuthBean {
     private final RealmModel realm;
     private final URI actionUri;
     private final String authSessionId;
+    private final AuthenticationSessionModel authenticationSession;
 
     private final OID4VPUserAuthEndpoint oid4vp;
+    private final PresentationDuringIssuanceService presentationService;
     private AuthContextBean authContextBean;
 
     public OID4VPUserAuthBean(
@@ -54,12 +58,24 @@ public class OID4VPUserAuthBean {
             RealmModel realm,
             OID4VPUserAuthEndpoint oid4vp,
             URI actionUri,
-            String authSessionId) {
+            String authSessionId,
+            AuthenticationSessionModel authenticationSession) {
         this.session = session;
         this.realm = realm;
         this.oid4vp = oid4vp;
         this.actionUri = actionUri;
         this.authSessionId = authSessionId;
+        this.authenticationSession = authenticationSession;
+        this.presentationService = new PresentationDuringIssuanceService(session);
+    }
+
+    public OID4VPUserAuthBean(
+            KeycloakSession session,
+            RealmModel realm,
+            OID4VPUserAuthEndpoint oid4vp,
+            URI actionUri,
+            String authSessionId) {
+        this(session, realm, oid4vp, actionUri, authSessionId, null);
     }
 
     /**
@@ -119,9 +135,10 @@ public class OID4VPUserAuthBean {
     public AuthContextBean getAuthContext() {
         var params = session.getContext().getUri().getQueryParameters();
 
-        // Skip if OID4VP login method not requested
+        boolean presentationDuringIssuance =
+                presentationService.isPresentationGatedCredentialRequestedInSession(authenticationSession);
         String loginMethod = params.getFirst(PARAM_LOGIN_METHOD);
-        if (!LOGIN_METHOD_OID4VP.equals(loginMethod)) {
+        if (!presentationDuringIssuance && !LOGIN_METHOD_OID4VP.equals(loginMethod)) {
             logger.debugf("OpenID4VP login method not requested. Skipping auth context provisioning");
             return null;
         }
@@ -133,7 +150,24 @@ public class OID4VPUserAuthBean {
 
         // Initiate OID4VP authentication (cross-device QR flow drives status polling + /code redemption)
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
-        String profileId = params.getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM);
+        String profileId = presentationDuringIssuance
+                ? presentationService.resolveEnforcedProfileId(authenticationSession)
+                : params.getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM);
+        if (presentationDuringIssuance && profileId == null) {
+            return null;
+        }
+        if (presentationDuringIssuance) {
+            AuthorizationContext authContext = startOpenID4VPAuthentication(
+                    clientId,
+                    profileId,
+                    true,
+                    null,
+                    presentationService.resolveOfferSubjectUserId(authenticationSession));
+            authContextBean = new AuthContextBean()
+                    .setAuthReqLink(authContext.getAuthorizationRequest())
+                    .setSameDeviceOnly(true);
+            return authContextBean;
+        }
         OpenId4vpPkce crossDevicePkce = OpenId4vpPkce.generate();
         AuthorizationContext authContext =
                 startOpenID4VPAuthentication(clientId, profileId, false, crossDevicePkce.challengeDetails());
@@ -169,6 +203,20 @@ public class OID4VPUserAuthBean {
                 new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
                 codeChallengeDetails,
                 null);
+    }
+
+    private AuthorizationContext startOpenID4VPAuthentication(
+            String clientId,
+            String profileId,
+            boolean enableSameDeviceResponse,
+            CodeChallengeDetails codeChallengeDetails,
+            String subjectUserId) {
+        return oid4vp.startAuthentication(
+                clientId,
+                profileId,
+                new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
+                codeChallengeDetails,
+                subjectUserId);
     }
 
     private String buildAuthCodeRedemptionUrl() {
@@ -268,6 +316,7 @@ public class OID4VPUserAuthBean {
         private String authCodeRedemptionUrl;
         private String transactionId;
         private String codeVerifier;
+        private boolean sameDeviceOnly;
 
         public String getAuthReqLink() {
             return authReqLink;
@@ -320,6 +369,15 @@ public class OID4VPUserAuthBean {
 
         public AuthContextBean setCodeVerifier(String codeVerifier) {
             this.codeVerifier = codeVerifier;
+            return this;
+        }
+
+        public boolean isSameDeviceOnly() {
+            return sameDeviceOnly;
+        }
+
+        public AuthContextBean setSameDeviceOnly(boolean sameDeviceOnly) {
+            this.sameDeviceOnly = sameDeviceOnly;
             return this;
         }
 
