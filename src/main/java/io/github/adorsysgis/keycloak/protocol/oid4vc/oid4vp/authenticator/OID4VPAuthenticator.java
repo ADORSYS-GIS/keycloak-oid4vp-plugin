@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jboss.logging.Logger;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
@@ -33,7 +32,6 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
-import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
@@ -255,8 +253,8 @@ public class OID4VPAuthenticator implements Authenticator {
     private UserModel recoverUserFromClaims(
             Context ctx, CredentialRequirement primaryCredentialReq, JsonNode primaryClaims) {
         CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
-        String subject = verifier.readClaim(primaryClaims, JsonWebToken.SUBJECT);
-        String username = verifier.readClaim(primaryClaims, OAuth2Constants.USERNAME);
+        String subject = verifier.readClaim(primaryClaims, primaryCredentialReq.getSubjectClaim());
+        String username = verifier.readClaim(primaryClaims, primaryCredentialReq.getUsernameClaim());
         logger.debugf("Attempting user recovery with subject '%s' and username '%s'", subject, username);
 
         KeycloakSession session = ctx.authenticationFlowContext().getSession();

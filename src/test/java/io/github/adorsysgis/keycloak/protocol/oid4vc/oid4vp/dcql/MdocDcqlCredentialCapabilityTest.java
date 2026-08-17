@@ -62,6 +62,31 @@ class MdocDcqlCredentialCapabilityTest extends MdocBaseTest {
     }
 
     @Test
+    void validatesStandardIsoMdlWithoutSubOrUsernameClaims() {
+        // Regression for issue 001: a standard ISO 18013-5 mDL (spec sample) carries no
+        // sub/username claims, so requesting standard mDL claims only must pass pre-validation.
+        String token = readResource("/mdoc/spec-sample.txt");
+        Credential credential = credentialWithDocTypeAndClaims(
+                "org.iso.18013.5.1.mDL",
+                claim("document-number", "org.iso.18013.5.1", "document_number"),
+                claim("given-name", "org.iso.18013.5.1", "given_name"));
+
+        assertDoesNotThrow(() -> capability.validatePresentation(credential, token));
+    }
+
+    @Test
+    void rejectsStandardIsoMdlWhenSubClaimIsRequested() {
+        // The pre-fix behavior: requesting the sub claim path rejects every standard ISO mDL.
+        String token = readResource("/mdoc/spec-sample.txt");
+        Credential credential =
+                credentialWithDocTypeAndClaims("org.iso.18013.5.1.mDL", claim("sub", "org.iso.18013.5.1", "sub"));
+
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> capability.validatePresentation(credential, token));
+        assertEquals("Presented mDoc does not satisfy DCQL claim path: [org.iso.18013.5.1, sub]", error.getMessage());
+    }
+
+    @Test
     void validatesPresentationWithNoRequestedClaims() throws Exception {
         String token = mdocToken(Map.of(NAMESPACE, Map.of("given_name", "Alice")), DOC_TYPE);
         Credential credential = credentialWithClaims();

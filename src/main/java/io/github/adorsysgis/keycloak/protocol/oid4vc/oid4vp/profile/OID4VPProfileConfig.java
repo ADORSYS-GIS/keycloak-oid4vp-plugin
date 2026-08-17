@@ -382,7 +382,8 @@ public class OID4VPProfileConfig {
      *
      * <ul>
      *   <li>{@code credential} (login): the identity is derived from the presented credential, so it must
-     *       request {@code sub} and {@code username}.
+     *       request the configured identity claims ({@link CredentialRequirement#getSubjectClaim()} and
+     *       {@link CredentialRequirement#getUsernameClaim()}, defaulting to {@code sub} and {@code username}).
      *   <li>{@code session} (presentation during issuance): the identity comes from the brokered offer
      *       user, so {@code sub}/{@code username} are not required; instead binding rules are mandatory so
      *       the presented credential is actually matched against the user (otherwise the presentation
@@ -398,12 +399,39 @@ public class OID4VPProfileConfig {
             }
             return;
         }
-        List<ClaimReference> primaryRefs = credential.getClaimReferences();
-        boolean hasSubject = primaryRefs.stream().anyMatch(ref -> JsonWebToken.SUBJECT.equals(ref.name()));
-        boolean hasUsername = primaryRefs.stream().anyMatch(ref -> OAuth2Constants.USERNAME.equals(ref.name()));
-        if (!hasSubject || !hasUsername) {
-            throw new IllegalStateException("OpenID4VP primary credential must request sub and username: "
-                    + profile.getId() + "/" + credential.getId());
+        if (StringUtil.isBlank(credential.getSubjectClaim()) || StringUtil.isBlank(credential.getUsernameClaim())) {
+            throw new IllegalStateException(
+                    "OpenID4VP primary credential subjectClaim and usernameClaim must not be blank: " + profile.getId()
+                            + "/" + credential.getId());
         }
+        List<ClaimReference> primaryRefs = credential.getClaimReferences();
+        ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
+        ClaimReference usernameRef = ClaimReference.parse(credential.getUsernameClaim());
+        boolean hasSubject = containsIdentityClaim(primaryRefs, subjectRef);
+        boolean hasUsername = containsIdentityClaim(primaryRefs, usernameRef);
+        if (!hasSubject || !hasUsername) {
+            String message = isDefaultIdentityClaims(credential)
+                    ? "OpenID4VP primary credential must request sub and username"
+                    : "OpenID4VP primary credential must request identity claims " + subjectRef + " and " + usernameRef;
+            throw new IllegalStateException(message + ": " + profile.getId() + "/" + credential.getId());
+        }
+    }
+
+    private static boolean isDefaultIdentityClaims(CredentialRequirement credential) {
+        return JsonWebToken.SUBJECT.equals(credential.getSubjectClaim())
+                && OAuth2Constants.USERNAME.equals(credential.getUsernameClaim());
+    }
+
+    /**
+     * Whether {@code refs} contains the configured identity claim. An un-namespaced configured claim
+     * matches by name under any namespace (so mDoc profiles requesting e.g.
+     * {@code org.iso.18013.5.1/sub} still satisfy the default {@code sub}); a namespaced configured
+     * claim must match the exact namespace/name pair.
+     */
+    private static boolean containsIdentityClaim(List<ClaimReference> refs, ClaimReference configured) {
+        if (configured.isNamespaced()) {
+            return refs.contains(configured);
+        }
+        return refs.stream().anyMatch(ref -> configured.name().equals(ref.name()));
     }
 }

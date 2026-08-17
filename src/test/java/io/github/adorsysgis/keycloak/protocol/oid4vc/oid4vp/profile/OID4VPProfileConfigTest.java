@@ -310,6 +310,85 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldAcceptCredentialIdentityPrimaryWithConfiguredIdentityClaims() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["org.iso.18013.5.1.mDL"],
+                        "claims": ["org.iso.18013.5.1/document_number", "org.iso.18013.5.1/given_name"],
+                        "subjectClaim": "org.iso.18013.5.1/document_number",
+                        "usernameClaim": "org.iso.18013.5.1/document_number",
+                        "trust": [{ "type": "x5c", "anchors": ["%s"] }]
+                      }
+                    ]
+                  }
+                ]
+                """.formatted(MdocBaseTest.getIssuerCertBase64())));
+
+        assertDoesNotThrow(() -> new OID4VPProfileConfig(config));
+    }
+
+    @Test
+    void shouldRejectCredentialIdentityPrimaryMissingConfiguredIdentityClaim() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "credentialTypes": ["main-vct"],
+                        "claims": ["given_name"],
+                        "subjectClaim": "given_name",
+                        "usernameClaim": "family_name"
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertEquals(
+                "OpenID4VP primary credential must request identity claims given_name and family_name: login/primary",
+                error.getMessage());
+    }
+
+    @Test
+    void shouldRejectCredentialIdentityPrimaryWithBlankConfiguredIdentityClaim() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "credentialTypes": ["main-vct"],
+                        "claims": ["sub", "username"],
+                        "usernameClaim": ""
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertEquals(
+                "OpenID4VP primary credential subjectClaim and usernameClaim must not be blank: login/primary",
+                error.getMessage());
+    }
+
+    @Test
     void shouldAcceptSessionIdentityPrimaryWithoutSubUsernameWhenBindingRulesPresent() {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """
