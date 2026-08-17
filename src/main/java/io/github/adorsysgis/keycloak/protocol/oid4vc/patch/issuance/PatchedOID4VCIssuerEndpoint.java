@@ -3,11 +3,14 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakContext;
@@ -39,11 +42,11 @@ import org.keycloak.util.JsonSerialization;
  * and all security checks remain fully intact.
  * </p>
  * <p>
- * Additionally enforces "presentation during issuance" (OID4VCI Interactive Authorization): for a
- * credential configuration flagged with {@link OpenId4VpConstants#VC_REQUIRES_PRESENTATION_ATTR}, the
- * credential is only issued when the session carries a verified-presentation marker. This guarantees
- * the authorization code was obtained via a Verifiable Presentation and excludes the pre-authorized
- * code path for such credentials.
+ * Additionally enforces "presentation during issuance": for credential configurations with
+ * {@link GuardedCredentialScope#VC_REQUIRES_PRESENTATION_ATTR}, the credential is only issued when
+ * the session carries a matching verified-presentation marker of the accepted presentation during
+ * issuance mode(s). This guarantees the authorization code was obtained via a Verifiable Presentation
+ * and excludes the pre-authorized code path for such credentials.
  * </p>
  */
 public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
@@ -139,8 +142,10 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
     }
 
     /**
-     * Pure gate decision: whether issuance must be blocked because the credential configuration requires
-     * a presentation during issuance but the session carries no verified-presentation marker.
+     * Pure gate decision: whether issuance must be blocked because the credential configuration
+     * requires presentation during issuance but the session carries no verified-presentation
+     * marker, or the {@link PresentationDuringIssuanceMode mode} through which it was obtained
+     * is not one the credential configuration allows.
      *
      * @param credentialScope the resolved credential configuration (client scope)
      * @param userSession the session bound to the access token, may be {@code null}
@@ -148,14 +153,20 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      */
     static boolean isIssuanceGatedWithoutPresentation(
             CredentialScopeModel credentialScope, UserSessionModel userSession) {
-        boolean requiresPresentation =
-                Boolean.parseBoolean(credentialScope.getAttribute(OpenId4VpConstants.VC_REQUIRES_PRESENTATION_ATTR));
-        if (!requiresPresentation) {
+        if (credentialScope == null) {
+            return true;
+        }
+
+        GuardedCredentialScope config = GuardedCredentialScope.from(credentialScope);
+        if (!config.requiresPresentation()) {
             return false;
         }
-        boolean presentationVerified = userSession != null
-                && Boolean.parseBoolean(userSession.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE));
-        return !presentationVerified;
+
+        String mode = Optional.ofNullable(userSession)
+                .map(s -> s.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE))
+                .orElse(null);
+
+        return !config.supportsPresentationMode(mode);
     }
 
     private String resolveRequestedCredentialConfigurationId(AuthenticationManager.AuthResult authResult) {
@@ -178,8 +189,7 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
     private BadRequestException presentationRequired(String credentialConfigurationId) {
         OAuth2ErrorRepresentation error = new OAuth2ErrorRepresentation(
                 "invalid_credential_request",
-                "Credential '" + credentialConfigurationId
-                        + "' requires a verified presentation during issuance (OID4VCI Interactive Authorization).");
+                "Credential '" + credentialConfigurationId + "' requires a verified presentation during issuance");
         return new BadRequestException(Response.status(Response.Status.BAD_REQUEST)
                 .entity(error)
                 .type(MediaType.APPLICATION_JSON_TYPE)

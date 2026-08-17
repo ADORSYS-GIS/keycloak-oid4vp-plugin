@@ -5,27 +5,24 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseUserAuthEndpointTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.PresentationDuringIssuanceBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
-import jakarta.ws.rs.core.Response;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,11 +30,8 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.jose.jws.JWSInput;
-import org.keycloak.protocol.oid4vc.model.PreAuthorizedCodeGrant;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
-import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.util.JsonSerialization;
 
 /**
  * End-to-end tests for the OID4VCI "presentation during issuance" flow (OID4VCI §6) implemented by the
@@ -61,7 +55,7 @@ import org.keycloak.util.JsonSerialization;
  * No test-only seeding is used. Both the login path (credential identity) and this issuance path
  * (session identity) run against the same shared realm.
  */
-class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
+class PresentationDuringIssuanceTest extends PresentationDuringIssuanceBaseTest {
 
     /** Session-identity profile configured in the shared test realm (see test-realm.json). */
     private static final String STB_ISSUANCE_PROFILE_ID = "stb-issuance";
@@ -88,65 +82,20 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @BeforeAll
     static void ensureOfferedCredentialScope() {
         var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
-        ensureCredentialScope(realm, IDENTITY_CREDENTIAL_CONFIG_ID, CREDENTIAL_TYPES_CONFIG_DEFAULT, "default", false);
+        assertPresentationDuringIssuanceEnabled(realm);
+        ensureCredentialScope(
+                realm,
+                IDENTITY_CREDENTIAL_CONFIG_ID,
+                CREDENTIAL_TYPES_CONFIG_DEFAULT,
+                PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION,
+                AuthenticationProfile.DEFAULT_PROFILE_ID);
         ensureCredentialScope(
                 realm,
                 OFFERED_CREDENTIAL_CONFIG_ID,
                 "https://credentials.example.com/kma_credential",
-                STB_ISSUANCE_PROFILE_ID,
-                true);
+                PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION,
+                STB_ISSUANCE_PROFILE_ID);
         grantOfferedCredentialToBrokeredUser();
-    }
-
-    private static void ensureCredentialScope(
-            org.keycloak.admin.client.resource.RealmResource realm,
-            String configurationId,
-            String credentialType,
-            String profileId,
-            boolean requiresPresentation) {
-        boolean exists =
-                realm.clientScopes().findAll().stream().anyMatch(scope -> configurationId.equals(scope.getName()));
-        if (!exists) {
-            ClientScopeRepresentation scope = new ClientScopeRepresentation();
-            scope.setName(configurationId);
-            scope.setProtocol("oid4vc");
-            scope.setAttributes(Map.of(
-                    "vc.credential_configuration_id", configurationId,
-                    "vc.verifiable_credential_type", credentialType,
-                    "vc.format", "dc+sd-jwt",
-                    "vc.presentation_profile_id", profileId,
-                    "vc.requires_presentation", Boolean.toString(requiresPresentation)));
-
-            try (Response response = realm.clientScopes().create(scope)) {
-                int status = response.getStatus();
-                if (status != HttpStatus.SC_CREATED && status != HttpStatus.SC_CONFLICT) {
-                    throw new IllegalStateException("Failed to create credential scope: HTTP " + status);
-                }
-            }
-        }
-
-        assignCredentialScopeToTestClient(realm, configurationId);
-    }
-
-    /**
-     * Assigns the offered (KMA) credential scope to the {@code test-app} client as an <em>optional</em> client
-     * scope. The issuance gate ({@code PatchedOID4VCIssuerEndpoint#enforcePresentationDuringIssuance}) resolves
-     * the credential configuration among the client's optional scopes ({@code client.getClientScopes(false)}),
-     * so without this assignment the gate cannot see that the credential requires a presentation.
-     */
-    private static void assignCredentialScopeToTestClient(
-            org.keycloak.admin.client.resource.RealmResource realm, String configurationId) {
-        String scopeId = realm.clientScopes().findAll().stream()
-                .filter(scope -> configurationId.equals(scope.getName()))
-                .map(ClientScopeRepresentation::getId)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Credential scope not found for assignment"));
-
-        var clients = realm.clients().findByClientId(TEST_CLIENT_ID);
-        if (clients.isEmpty()) {
-            throw new IllegalStateException("Test client not found: " + TEST_CLIENT_ID);
-        }
-        realm.clients().get(clients.getFirst().getId()).addOptionalClientScope(scopeId);
     }
 
     /**
@@ -245,7 +194,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @DisplayName("should issue authorization_code when the presented PID matches the brokered offer user")
     void should_IssueAuthorizationCode_When_PidMatchesBrokeredUser() throws Exception {
         // The credential offer binds the issuance to the brokered SAFE user (targetUserId = test-user).
-        String issuerState = createRealCredentialOffer();
+        String issuerState = createAuthorizationCodeCredentialOffer(OFFERED_CREDENTIAL_CONFIG_ID);
 
         // The presented PID carries the same identity as the brokered user (Tom Brady).
         var pidSdJwt = sdJwtVPTestUtils.requestPidSdJwtCredential(PID_VCT, "Tom", "Brady", "1990-01-01");
@@ -262,7 +211,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     @DisplayName("should reject the presentation when the presented PID does not match the brokered offer user")
     void should_RejectPresentation_When_PidDoesNotMatchBrokeredUser() throws Exception {
-        String issuerState = createRealCredentialOffer();
+        String issuerState = createAuthorizationCodeCredentialOffer(OFFERED_CREDENTIAL_CONFIG_ID);
 
         // The presented PID belongs to a different person than the brokered user (family_name mismatch).
         var pidSdJwt = sdJwtVPTestUtils.requestPidSdJwtCredential(PID_VCT, "Tom", "Manning", "1990-01-01");
@@ -277,9 +226,8 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     @DisplayName("should refuse issuance via the pre-authorized code flow for a presentation-gated credential")
     void should_RefuseIssuance_When_PreAuthorizedCodeFlowForGatedCredential() throws Exception {
-        String preAuthorizedCode = createRealPreAuthorizedCredentialOffer();
-
-        String accessToken = redeemPreAuthorizedCode(preAuthorizedCode);
+        JsonNode offer = createCredentialOffer(OFFERED_CREDENTIAL_CONFIG_ID, true);
+        String accessToken = requestPreAuthorizedAccessToken(offer);
 
         HttpResponse credentialResponse = requestOfferedCredential(accessToken);
         assertEquals(
@@ -287,8 +235,7 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
         var error = parseHttpResponse(credentialResponse, OAuth2ErrorRepresentation.class);
         assertEquals("invalid_credential_request", error.getError());
         assertEquals(
-                "Credential 'kma_credential' requires a verified presentation during issuance "
-                        + "(OID4VCI Interactive Authorization).",
+                "Credential 'kma_credential' requires a verified presentation during issuance",
                 error.getErrorDescription());
     }
 
@@ -552,104 +499,10 @@ class PresentationDuringIssuanceTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     /**
-     * Creates a real OID4VCI credential offer bound to {@code test-user} through Keycloak's own
-     * {@code create-credential-offer} endpoint (authorization_code grant) and returns the resulting
-     * {@code issuer_state}. This is the exact production path the Selfservice UI uses.
-     *
-     * <ol>
-     *   <li>authenticate as {@code test-user} (real login) and obtain an access token,
-     *   <li>{@code GET create-credential-offer} (authenticated) → credential offer URI (issuer + nonce),
-     *   <li>{@code GET credential-offer/{nonce}} → credential offer with the authorization_code grant.
-     * </ol>
-     */
-    private String createRealCredentialOffer() throws Exception {
-        JsonNode offer = fetchCredentialOffer(false);
-        JsonNode issuerStateNode =
-                offer.path("grants").path(OAuth2Constants.AUTHORIZATION_CODE).path(OAuth2Constants.ISSUER_STATE);
-        assertNotNull(issuerStateNode, "credential offer must carry an authorization_code grant issuer_state");
-        String issuerState = issuerStateNode.asText(null);
-        assertNotNull(issuerState, "issuer_state must be present in the credential offer");
-        return issuerState;
-    }
-
-    /**
-     * Creates a real <em>pre-authorized</em> OID4VCI credential offer bound to {@code test-user} through
-     * Keycloak's own {@code create-credential-offer} endpoint and returns the {@code pre-authorized_code}
-     * from the resulting credential offer.
-     */
-    private String createRealPreAuthorizedCredentialOffer() throws Exception {
-        JsonNode offer = fetchCredentialOffer(true);
-        JsonNode preAuthCodeNode = offer.path("grants")
-                .path(PreAuthorizedCodeGrant.PRE_AUTH_GRANT_TYPE)
-                .path(PreAuthorizedCodeGrant.CODE_REQUEST_PARAM);
-        assertNotNull(preAuthCodeNode, "credential offer must carry a pre-authorized_code grant");
-        String preAuthorizedCode = preAuthCodeNode.asText(null);
-        assertNotNull(preAuthorizedCode, "pre-authorized_code must be present in the credential offer");
-        return preAuthorizedCode;
-    }
-
-    /**
-     * Authenticates as {@code test-user}, creates a credential offer for the offered (gated) credential via
-     * {@code create-credential-offer} and dereferences it to the full credential offer JSON.
-     *
-     * @param preAuthorized whether to request a {@code pre-authorized_code} grant instead of the
-     *                      {@code authorization_code} grant
-     */
-    private JsonNode fetchCredentialOffer(boolean preAuthorized) throws Exception {
-        String authCode = getFreshAuthorizationCode();
-        String accessToken = requestAccessToken(authCode, true);
-
-        String createOfferUrl = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
-                .path("protocol/oid4vc/create-credential-offer")
-                .queryParam("credential_configuration_id", OFFERED_CREDENTIAL_CONFIG_ID)
-                .queryParam("pre_authorized", Boolean.toString(preAuthorized))
-                .queryParam("target_user", TEST_USER)
-                .build()
-                .toString();
-        HttpGet createOfferReq = new HttpGet(createOfferUrl);
-        createOfferReq.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
-        HttpResponse createOfferResp = httpClient.execute(createOfferReq);
-        assertEquals(HttpStatus.SC_OK, createOfferResp.getStatusLine().getStatusCode());
-        JsonNode offerUri = readJson(createOfferResp);
-        String issuer = offerUri.get("issuer").asText();
-        String nonce = offerUri.get("nonce").asText();
-
-        HttpResponse offerResp = httpClient.execute(new HttpGet(issuer + "/" + nonce));
-        assertEquals(HttpStatus.SC_OK, offerResp.getStatusLine().getStatusCode());
-        return readJson(offerResp);
-    }
-
-    /**
-     * Redeems a {@code pre-authorized_code} at the token endpoint and returns the issued access token
-     * (bound to the credential endpoint audience).
-     */
-    private String redeemPreAuthorizedCode(String preAuthorizedCode) throws Exception {
-        var params = getDefaultHttpParams();
-        params.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, PreAuthorizedCodeGrant.PRE_AUTH_GRANT_TYPE));
-        params.add(new BasicNameValuePair(PreAuthorizedCodeGrant.CODE_REQUEST_PARAM, preAuthorizedCode));
-
-        return requestAccessToken(params);
-    }
-
-    /**
      * Requests the offered (presentation-gated) credential at the OID4VCI credential endpoint using the
      * given access token.
      */
     private HttpResponse requestOfferedCredential(String accessToken) throws Exception {
-        String credentialUrl = KeycloakUriBuilder.fromUri(getTestRealmEndpoint())
-                .path("protocol/oid4vc/credential")
-                .build()
-                .toString();
-        HttpPost credentialReq = new HttpPost(credentialUrl);
-        credentialReq.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
-        credentialReq.setEntity(new StringEntity(
-                "{\"credential_configuration_id\":\"" + OFFERED_CREDENTIAL_CONFIG_ID + "\"}",
-                ContentType.APPLICATION_JSON));
-        return httpClient.execute(credentialReq);
-    }
-
-    private JsonNode readJson(HttpResponse response) throws IOException {
-        String payload = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-        return JsonSerialization.mapper.readTree(payload);
+        return requestCredentialWithConfigurationId(accessToken, OFFERED_CREDENTIAL_CONFIG_ID);
     }
 }

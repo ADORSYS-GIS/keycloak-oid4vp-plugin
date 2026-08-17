@@ -5,6 +5,8 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -122,6 +124,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 checksForCode(authSessionId, code, execution, clientId, tabId, clientData, AUTHENTICATE_PATH);
 
         if (!checks.verifyActiveAndValidAction(Action.AUTHENTICATE.name(), ActionType.LOGIN)) {
+            logger.errorf("Session code checks failed");
             return checks.getResponse();
         }
 
@@ -130,7 +133,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         AuthenticationSessionModel authSession = checks.getAuthenticationSession();
 
         // Validate authorization code
-        logger.debug("Validating authorization code");
+        logger.debug("Validating authorization code...");
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, authorizationCode, realm, event);
         if (result.isIllegalCode() || result.isExpiredCode()) {
             return failOnInvalidCode(authSession, "Authorization code validation failed");
@@ -153,7 +156,15 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 result.getClientSession().getUserSession().getUser());
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
+
+        // Mark the user session as presentation-verified through the nested OID4VP flow, which
+        // resumes the OIDC login through this service after the same-device presentation. This
+        // mirrors `AuthorizationResponseService.produceAuthorizationCode` for presentation
+        // during issuance via interactive authorization.
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
+        freshUserSession.setNote(
+                OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.getValue());
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
