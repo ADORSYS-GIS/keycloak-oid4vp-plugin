@@ -25,6 +25,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
@@ -903,6 +904,30 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
                     "Validity information verification failed");
         });
+    }
+
+    @Test
+    public void shouldIncludeRedirectUriInDirectPostResponse_ForApiInitiatedFlow() throws Exception {
+        // HAIP 1.0 §5.1 requires the verifier to include redirect_uri in the direct_post
+        // response, regardless of how the flow was started. API-initiated flows (no same-device
+        // responseCode) must still produce a non-null redirect_uri.
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+
+        ApiFlowData apiFlow = startApiAuthorizationRequest();
+        AuthorizationContext authContext = apiFlow.authContext();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationResponse(
+                sdJwt, requestObject, TestOpts.getDefault().setAuthContext(authContext));
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        ResponseToWallet responseToWallet = parseHttpResponse(response, ResponseToWallet.class);
+        assertNotNull(
+                responseToWallet.getRedirectUri(),
+                "HAIP §5.1: redirect_uri must be present in the direct_post response");
+        assertTrue(
+                responseToWallet.getRedirectUri().contains("/response/"),
+                "Fallback redirect_uri should point to the response URI endpoint");
     }
 
     private String presentSdJwt(RequestObject requestObject) throws Exception {

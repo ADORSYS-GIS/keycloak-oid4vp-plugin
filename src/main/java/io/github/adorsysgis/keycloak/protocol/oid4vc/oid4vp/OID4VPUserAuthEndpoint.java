@@ -395,16 +395,47 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     private Response walletResponse(AuthorizationContext authorizationContext) {
-        String responseCode = authorizationContext.getResponseCode();
-        String redirectUri = StringUtil.isNotBlank(responseCode)
-                ? KeycloakUriBuilder.fromUri(openID4VPRootUrl)
-                        .path(CALLBACK_URI_PATH)
-                        .path(responseCode)
-                        .build()
-                        .toString()
-                : null;
+        String redirectUri = resolveRedirectUri(authorizationContext);
         ResponseToWallet response = new ResponseToWallet(redirectUri);
         return CorsService.open().add(Response.ok(response, MediaType.APPLICATION_JSON));
+    }
+
+    /**
+     * Resolves the {@code redirect_uri} to include in the direct_post response to the wallet.
+     *
+     * <p>HAIP 1.0 §5.1 requires the verifier to always include a {@code redirect_uri} value,
+     * regardless of how the flow was started. The resolution order is:
+     *
+     * <ol>
+     *   <li>Same-device callback URL ({@code /callback/<responseCode>}) when a response code is
+     *       present.
+     *   <li>Login action URL from the authentication session, if available.
+     *   <li>The response URI itself — the endpoint the wallet just POSTed to — as a last resort,
+     *       which is always a valid, verifier-owned URL.
+     * </ol>
+     */
+    private String resolveRedirectUri(AuthorizationContext authorizationContext) {
+        String responseCode = authorizationContext.getResponseCode();
+        if (StringUtil.isNotBlank(responseCode)) {
+            return KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                    .path(CALLBACK_URI_PATH)
+                    .path(responseCode)
+                    .build()
+                    .toString();
+        }
+
+        String loginActionUrl = authorizationContext.getLoginActionUrl();
+        if (StringUtil.isNotBlank(loginActionUrl)) {
+            return loginActionUrl;
+        }
+
+        // Fallback: the response URI the wallet just posted to — always a valid,
+        // verifier-owned URL that satisfies HAIP §5.1.
+        return KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                .path(RESPONSE_URI_PATH)
+                .path(authorizationContext.getRequestId())
+                .build()
+                .toString();
     }
 
     /**

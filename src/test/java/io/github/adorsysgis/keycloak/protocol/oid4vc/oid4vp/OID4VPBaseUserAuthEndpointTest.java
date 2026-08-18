@@ -105,13 +105,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
                 response.getEntity().getContentType().getValue().startsWith("application/json"),
                 "response_uri endpoint should reply with application/json");
 
-        // If auth context acquired in place, then cross-device flow assumed.
-        // Assert that response to wallet does not contain a redirect URI.
-        if (opts.getAuthContext() == null) {
-            assertNull(
-                    responseToWallet.getRedirectUri(),
-                    "Response to wallet should not contain a redirect URI in cross-device flow");
-        }
+        // HAIP 1.0 §5.1 requires the verifier to always include redirect_uri in the
+        // direct_post response, regardless of how the flow was started.
+        assertNotNull(
+                responseToWallet.getRedirectUri(), "Response to wallet must always contain a redirect_uri (HAIP §5.1)");
 
         // Check auth status and redeem authorization code via PKCE-protected endpoint
         String authCode = null;
