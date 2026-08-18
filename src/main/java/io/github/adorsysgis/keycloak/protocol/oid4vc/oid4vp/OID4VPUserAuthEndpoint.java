@@ -121,7 +121,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authContext;
         try {
             var pkceDetails = new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
-            authContext = startAuthentication(clientId, profileId, null, pkceDetails);
+            authContext = startAuthentication(clientId, profileId, null, pkceDetails, null);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -202,7 +202,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     private void validateRequestUriPostHeaders() {
-        String accept = session.getContext().getRequestHeaders().getHeaderString(HttpHeaders.ACCEPT);
+        HttpHeaders headers = session.getContext().getHttpRequest().getHttpHeaders();
+        String accept = headers.getHeaderString(HttpHeaders.ACCEPT);
         if (StringUtil.isBlank(accept) || !accept.contains(AUTH_REQ_JWT_MEDIA_TYPE)) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -551,7 +552,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String clientId,
             String profileId,
             OIDCAuthSession oidcAuthSession,
-            CodeChallengeDetails codeChallengeDetails) {
+            CodeChallengeDetails codeChallengeDetails,
+            String subjectUserId) {
         logger.debug("Generating new authentication context...");
 
         if (oidcAuthSession == null || !oidcAuthSession.enableSameDeviceResponse()) {
@@ -566,7 +568,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config, profile, authSession, oidcAuthSession, codeChallengeDetails);
+                config, profile, authSession, oidcAuthSession, codeChallengeDetails, subjectUserId, null);
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
@@ -581,7 +583,11 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * @return an authorization context exposing the {@code transaction_id} and signed request object
      */
     public AuthorizationContext startInteractiveAuthentication(
-            String clientId, String profileId, CodeChallengeDetails codeChallengeDetails, String responseUri) {
+            String clientId,
+            String profileId,
+            CodeChallengeDetails codeChallengeDetails,
+            String responseUri,
+            String subjectUserId) {
         logger.debug("Generating new interactive authentication context...");
 
         validateOwnershipBinding(codeChallengeDetails);
@@ -604,6 +610,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                 authSession,
                 null,
                 codeChallengeDetails,
+                subjectUserId,
                 new InteractiveResponseConfig(interactiveResponseMode, responseUri));
 
         return new AuthorizationContext()

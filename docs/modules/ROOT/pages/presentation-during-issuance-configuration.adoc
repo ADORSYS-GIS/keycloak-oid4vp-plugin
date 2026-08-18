@@ -1,0 +1,111 @@
+= Configuring presentation during credential issuance
+
+This page describes how to require a verified OpenID4VP presentation before Keycloak issues a
+specific OpenID4VCI credential. Presentation during issuance is configured at two levels:
+
+* the realm feature flag enables the capability;
+* the credential configuration declares which presentation mode or modes are required.
+
+The plugin supports two presentation-during-issuance modes:
+
+* `interactive_authorization`, where the wallet presents through the OID4VCI authorization challenge endpoint;
+* `nested_oid4vp_flow`, where the presentation is nested inside the normal OIDC authorization flow.
+
+The gate applies only to credential configurations that explicitly require a presentation. Other
+credentials continue to use their normal issuance flow.
+
+== Prerequisites
+
+* An OpenID4VP authentication flow and profile configured for the presentation.
+* An issuing client configured to request the credential.
+
+== Enable the realm capability
+
+Set the following realm attribute:
+
+[source,json]
+----
+{
+  "attributes": {
+    "oid4vci.presentation_during_issuance": "true"
+  }
+}
+----
+
+The same attribute can be set through the Admin REST API or by including it in a realm import.
+The value is a string and must be `"true"`.
+
+When enabled, the realm exposes the OID4VCI authorization challenge endpoint and permits the
+issuance flows described below. The realm flag alone does not gate any credential.
+
+== Configure a gated credential
+
+Update the configuration of the credential with these relevant attributes:
+
+[source,text]
+----
+vc.requires_presentation: interactive_authorization
+vc.presentation_profile_id: dual-german-pid
+----
+
+`vc.requires_presentation` declares the accepted presentation-during-issuance modes. Omitting the
+attribute means that the credential is not gated. A present but empty value accepts any supported
+mode.
+
+`vc.presentation_profile_id` identifies the OpenID4VP authentication profile that validates the
+required presentation. The profile defines the requested credential, claims, holder binding, and
+trust policy. If the profile uses session identity, start with an authorization-code credential offer
+that contains `issuer_state`; Keycloak uses that state to resolve the offer's target user before
+validating the presentation.
+
+== Select a presentation mode
+
+`vc.requires_presentation` accepts one or more comma-separated values:
+
+* `interactive_authorization`
+* `nested_oid4vp_flow`
+
+For example, to accept either mode:
+
+[source,text]
+----
+vc.requires_presentation: interactive_authorization,nested_oid4vp_flow
+----
+
+=== Interactive authorization
+
+Use `interactive_authorization` when the wallet starts at the OID4VCI authorization challenge
+endpoint. The challenge returns an OpenID4VP request. The wallet presents the required credential,
+and the resulting authorization code can then be used to request the issued credential.
+
+The credential endpoint rejects issuance if the access-token session does not contain a verified
+presentation obtained through an accepted mode.
+
+=== Nested OID4VP flow
+
+Use `nested_oid4vp_flow` when the presentation is nested inside the normal OIDC authorization
+request. When an authorization request targets a credential configuration with this mode, the
+normal username/password login view is replaced by a same-device OpenID4VP presentation. After
+verification, Keycloak resumes the OIDC authorization flow and issues the authorization code.
+
+== Runtime behavior
+
+For a gated credential, the expected flow is:
+
+. The client requests the gated credential configuration.
+. Keycloak creates or resumes the required authorization flow.
+. The wallet presents the credential described by the configured OpenID4VP profile.
+. Keycloak verifies the presentation, including its format, claims, holder binding, and trust policy.
+. Keycloak records the verified presentation mode in the authenticated session.
+. The wallet requests the credential from the OID4VCI credential endpoint.
+. Keycloak issues the credential only when the recorded mode is accepted by `vc.requires_presentation`.
+
+Issuance is rejected when the presentation is missing, invalid, or was obtained through a mode not
+listed in the credential configuration. The pre-authorized-code path cannot bypass this requirement
+for a gated credential.
+
+== References
+
+* https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html[OpenID4VCI specification]
+* xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials]
+* xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration]

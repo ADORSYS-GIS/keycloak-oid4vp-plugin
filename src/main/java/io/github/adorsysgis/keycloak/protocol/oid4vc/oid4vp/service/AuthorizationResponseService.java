@@ -8,6 +8,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlResponseCredentialSelector;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -35,6 +37,7 @@ import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
@@ -279,20 +282,27 @@ public class AuthorizationResponseService {
 
         clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
 
-        // Mark the user session as presentation-verified so the issuance gate can enforce that the
-        // authorization code was obtained via a Verifiable Presentation (OID4VCI Interactive
-        // Authorization). This marker is the carrier consumed at the credential endpoint.
-        clientSession.getUserSession().setNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE, Boolean.TRUE.toString());
+        // Mark the user session as presentation-verified through the interactive authorization mode
+        // (Authorization Challenge Endpoint / OID4VCI §6). Presence verifies that the authorization code
+        // was obtained via a Verifiable Presentation, and the value annotates the exact mode for the
+        // issuance gate. This only applies when the response_mode is explicitly interactive authorization.
+        ResponseMode responseMode = authContext.getRequestObject().getResponseMode();
+        if (responseMode.isInteractiveAuthorization()) {
+            UserSessionModel userSession = clientSession.getUserSession();
+            userSession.setNote(
+                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                    PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION.getValue());
+        }
 
         // Gather code data and generate authorization code
 
         String code = UUID.randomUUID().toString();
         String nonce = SecretGenerator.getInstance().randomString();
-        int expiration = Time.currentTime() + clientSession.getRealm().getAccessCodeLifespan();
+        long expiration = Time.currentTimeSeconds() + clientSession.getRealm().getAccessCodeLifespan();
 
         OAuth2Code codeData = new OAuth2Code(
                 code,
-                expiration,
+                (int) expiration,
                 nonce,
                 OAuth2Constants.SCOPE_OPENID,
                 clientSession.getUserSession().getId());

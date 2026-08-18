@@ -33,7 +33,6 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -88,20 +87,9 @@ public class AuthorizationRequestService {
     }
 
     /**
-     * Creates a fresh authorization request for user authentication.
-     */
-    public AuthorizationContext createAuthorizationRequest(
-            VerifierConfig config,
-            AuthenticationProfile profile,
-            AuthenticationSessionModel authSession,
-            OIDCAuthSession oidcAuthSession,
-            CodeChallengeDetails codeChallengeParams) {
-        return createAuthorizationRequest(config, profile, authSession, oidcAuthSession, codeChallengeParams, null);
-    }
-
-    /**
      * Creates a fresh authorization request for user authentication, optionally overriding the
-     * response mode and response URI for the OID4VCI interactive authorization (ia_post) flow.
+     * response mode and response URI for the OID4VCI interactive authorization (ia_post) flow, and
+     * binding a session-identity {@code subjectUserId} for "presentation during issuance".
      */
     public AuthorizationContext createAuthorizationRequest(
             VerifierConfig config,
@@ -109,6 +97,7 @@ public class AuthorizationRequestService {
             AuthenticationSessionModel authSession,
             OIDCAuthSession oidcAuthSession,
             CodeChallengeDetails codeChallengeParams,
+            String subjectUserId,
             InteractiveResponseConfig interactive) {
         logger.debug("Creating a fresh authorization request for user authentication...");
 
@@ -119,10 +108,6 @@ public class AuthorizationRequestService {
         // Different IDs are used to prevent unintended access to the status of this request.
         String requestId = generateSessionBoundId(authSession);
         String transactionId = generateSessionBoundId(authSession);
-
-        // Generate response code to attach to context for same-device responses
-        oidcAuthSession = Optional.ofNullable(oidcAuthSession).orElse(new OIDCAuthSession(null, null, false));
-        String responseCode = oidcAuthSession.enableSameDeviceResponse() ? generateSessionBoundId(authSession) : null;
 
         // Generate ephemeral encryption keys if the response mode requires encryption. Must be done before creating
         // the request object, so updated client metadata are picked up as intended.
@@ -159,14 +144,24 @@ public class AuthorizationRequestService {
                 .setStatus(AuthorizationContextStatus.PENDING)
                 .setRequestId(requestId)
                 .setTransactionId(transactionId)
-                .setParentAuthSessionId(oidcAuthSession.authSessionId())
-                .setLoginActionUrl(oidcAuthSession.loginActionUrl())
                 .setRequestObject(requestObject)
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink)
                 .setRequestUriMethod(config.getRequestUriMethod())
                 .setProfileId(profile.getId())
-                .setResponseCode(responseCode);
+                .setSubjectUserId(subjectUserId);
+
+        // Attach parent OIDC auth session data if provided
+        // Generate response code to attach to context for same-device responses
+        if (oidcAuthSession != null) {
+            String responseCode =
+                    oidcAuthSession.enableSameDeviceResponse() ? generateSessionBoundId(authSession) : null;
+
+            authorizationContext
+                    .setParentAuthSessionId(oidcAuthSession.authSessionId())
+                    .setLoginActionUrl(oidcAuthSession.loginActionUrl())
+                    .setResponseCode(responseCode);
+        }
 
         // Attach code challenge details for ownership binding if present
         if (codeChallengeParams != null) {

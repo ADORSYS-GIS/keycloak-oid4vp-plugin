@@ -7,11 +7,13 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.PresentationDuringIssuanceService;
 import jakarta.ws.rs.core.UriBuilder;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -21,15 +23,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.constants.ServiceUrlConstants;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
- * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
+ * View data for OpenID4VP login and authentication.
  */
 public class OID4VPUserAuthBean {
 
@@ -42,24 +45,26 @@ public class OID4VPUserAuthBean {
     public static final int QR_CODE_IMAGE_SIZE = 300;
 
     private final KeycloakSession session;
-    private final RealmModel realm;
+    private final AuthenticationSessionModel authSession;
     private final URI actionUri;
-    private final String authSessionId;
 
     private final OID4VPUserAuthEndpoint oid4vp;
+    private final PresentationDuringIssuanceService pdiService;
+    private final boolean presentationDuringIssuanceRequired;
+
     private AuthContextBean authContextBean;
 
     public OID4VPUserAuthBean(
             KeycloakSession session,
-            RealmModel realm,
-            OID4VPUserAuthEndpoint oid4vp,
+            AuthenticationSessionModel authSession,
             URI actionUri,
-            String authSessionId) {
+            OID4VPUserAuthEndpoint oid4vp) {
         this.session = session;
-        this.realm = realm;
-        this.oid4vp = oid4vp;
+        this.authSession = authSession;
         this.actionUri = actionUri;
-        this.authSessionId = authSessionId;
+        this.oid4vp = oid4vp;
+        this.pdiService = new PresentationDuringIssuanceService(session, authSession);
+        this.presentationDuringIssuanceRequired = pdiService.requiresNestedPresentationDuringIssuance();
     }
 
     /**
@@ -100,6 +105,14 @@ public class OID4VPUserAuthBean {
     }
 
     /**
+     * Drive view to display consent page for redirecting to the wallet
+     * with a same-device authorization request.
+     */
+    public boolean isPresentationDuringIssuance() {
+        return presentationDuringIssuanceRequired;
+    }
+
+    /**
      * URL to continue OIDC flow upon successful OID4VP authentication
      */
     public String getLoginActionUrl() {
@@ -109,7 +122,7 @@ public class OID4VPUserAuthBean {
                 .path(ServiceUrlConstants.REALM_INFO_PATH)
                 .path(OID4VPLoginActionsServiceFactory.PROVIDER_ID)
                 .path(OID4VPLoginActionsService.OID4VP_AUTH_LOGIN_PATH)
-                .build(realm.getName())
+                .build(authSession.getRealm().getName())
                 .toString();
     }
 
@@ -117,27 +130,37 @@ public class OID4VPUserAuthBean {
      * Initiate OID4VP authentication and pass authorization context to UI.
      */
     public AuthContextBean getAuthContext() {
-        var params = session.getContext().getUri().getQueryParameters();
-
-        // Skip if OID4VP login method not requested
-        String loginMethod = params.getFirst(PARAM_LOGIN_METHOD);
-        if (!LOGIN_METHOD_OID4VP.equals(loginMethod)) {
-            logger.debugf("OpenID4VP login method not requested. Skipping auth context provisioning");
-            return null;
-        }
-
         // Return cached context if already initiated
         if (authContextBean != null) {
             return authContextBean;
         }
 
-        // Initiate OID4VP authentication (cross-device QR flow drives status polling + /code redemption)
+        // Provision auth context for presentation during issuance
+        if (isPresentationDuringIssuance()) {
+            return getPdiAuthContext();
+        }
+
+        // Skip provisioning auth context if not login method OpenID4VP
+        var params = session.getContext().getUri().getQueryParameters();
+        if (!LOGIN_METHOD_OID4VP.equals(params.getFirst(PARAM_LOGIN_METHOD))) {
+            logger.debugf("OpenID4VP login method not requested. Skipping auth context provisioning");
+            return null;
+        }
+
+        // Initiate cross-device flow (cross-device QR flow drives status polling + /code redemption)
         String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
         String profileId = params.getFirst(OID4VPUserAuthEndpoint.PROFILE_ID_PARAM);
         OpenId4vpPkce crossDevicePkce = OpenId4vpPkce.generate();
-        AuthorizationContext authContext =
-                startOpenID4VPAuthentication(clientId, profileId, false, crossDevicePkce.challengeDetails());
-        AuthorizationContext authContextSameDevice = startOpenID4VPAuthentication(clientId, profileId, true, null);
+        AuthorizationContext authContext = oid4vp.startAuthentication(
+                clientId,
+                profileId,
+                new OIDCAuthSession(authSessionId(), getLoginActionUrl(), false),
+                crossDevicePkce.challengeDetails(),
+                null);
+
+        // Initiate same-device flow
+        AuthorizationContext authContextSameDevice = oid4vp.startAuthentication(
+                clientId, profileId, new OIDCAuthSession(authSessionId(), getLoginActionUrl(), true), null, null);
 
         // Convert authorization request to QR code (cross-device)
         String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
@@ -158,16 +181,33 @@ public class OID4VPUserAuthBean {
         return authContextBean;
     }
 
-    private AuthorizationContext startOpenID4VPAuthentication(
-            String clientId,
-            String profileId,
-            boolean enableSameDeviceResponse,
-            CodeChallengeDetails codeChallengeDetails) {
-        return oid4vp.startAuthentication(
+    /**
+     * Initiate same-device auth context for presentation during issuance
+     */
+    private AuthContextBean getPdiAuthContext() {
+        var params = session.getContext().getUri().getQueryParameters();
+        String clientId = params.getFirst(OAuth2Constants.CLIENT_ID);
+        String profileId = pdiService.resolveEnforcedProfileId();
+        if (profileId == null) {
+            logger.error("Presentation during issuance requested without an enforced presentation profile");
+            return new AuthContextBean().setError(true);
+        }
+
+        String subjectUserId = pdiService.resolveOfferSubjectUserId();
+        AuthorizationContext authContext = oid4vp.startAuthentication(
                 clientId,
                 profileId,
-                new OIDCAuthSession(authSessionId, getLoginActionUrl(), enableSameDeviceResponse),
-                codeChallengeDetails);
+                new OIDCAuthSession(authSessionId(), getLoginActionUrl(), true),
+                null,
+                subjectUserId);
+
+        return new AuthContextBean().setAuthReqLink(authContext.getAuthorizationRequest());
+    }
+
+    private String authSessionId() {
+        return Optional.ofNullable(authSession)
+                .map(OID4VPUserAuthEndpointBase::getAuthSessionId)
+                .orElse(null);
     }
 
     private String buildAuthCodeRedemptionUrl() {
@@ -176,7 +216,7 @@ public class OID4VPUserAuthBean {
                 .path(ServiceUrlConstants.REALM_INFO_PATH)
                 .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
                 .path(OID4VPUserAuthEndpoint.AUTH_CODE_PATH)
-                .build(realm.getName())
+                .build(authSession.getRealm().getName())
                 .toString();
     }
 
@@ -186,7 +226,7 @@ public class OID4VPUserAuthBean {
                 .path(ServiceUrlConstants.REALM_INFO_PATH)
                 .path(OID4VPUserAuthEndpointFactory.PROVIDER_ID)
                 .path(OID4VPUserAuthEndpoint.AUTH_STATUS_PATH)
-                .build(realm.getName(), transactionId)
+                .build(authSession.getRealm().getName(), transactionId)
                 .toString();
     }
 
@@ -214,7 +254,11 @@ public class OID4VPUserAuthBean {
     }
 
     /**
-     * Track session data of OIDC authentication
+     * Track session data of OIDC authentication.
+     *
+     * @param authSessionId           the OIDC auth session id
+     * @param loginActionUrl          the login action URL for resuming the OIDC flow
+     * @param enableSameDeviceResponse whether to enable the same-device response flow
      */
     public record OIDCAuthSession(String authSessionId, String loginActionUrl, boolean enableSameDeviceResponse) {}
 
@@ -263,6 +307,7 @@ public class OID4VPUserAuthBean {
         private String authCodeRedemptionUrl;
         private String transactionId;
         private String codeVerifier;
+        private boolean error;
 
         public String getAuthReqLink() {
             return authReqLink;
@@ -318,6 +363,15 @@ public class OID4VPUserAuthBean {
             return this;
         }
 
+        public boolean getError() {
+            return error;
+        }
+
+        public AuthContextBean setError(boolean error) {
+            this.error = error;
+            return this;
+        }
+
         @Override
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
@@ -327,7 +381,8 @@ public class OID4VPUserAuthBean {
                     && Objects.equals(getAuthStatusUrl(), that.getAuthStatusUrl())
                     && Objects.equals(getAuthCodeRedemptionUrl(), that.getAuthCodeRedemptionUrl())
                     && Objects.equals(getTransactionId(), that.getTransactionId())
-                    && Objects.equals(getCodeVerifier(), that.getCodeVerifier());
+                    && Objects.equals(getCodeVerifier(), that.getCodeVerifier())
+                    && Objects.equals(getError(), that.getError());
         }
 
         @Override
@@ -338,7 +393,8 @@ public class OID4VPUserAuthBean {
                     getAuthStatusUrl(),
                     getAuthCodeRedemptionUrl(),
                     getTransactionId(),
-                    getCodeVerifier());
+                    getCodeVerifier(),
+                    getError());
         }
     }
 

@@ -2,4 +2,5 @@
 * xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials]
 * xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference]
 * xref:german-wallet-pid-verification-configuration.adoc[German wallet PID verification configuration]
+* xref:presentation-during-issuance-configuration.adoc[Presentation during credential issuance]
 * xref:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration]
