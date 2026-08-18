@@ -64,11 +64,13 @@ public class PatchedOID4VCIssuerEndpointTest {
 
     static Stream<Arguments> unsupportedPresentationModes() {
         return Stream.of(
-                // No verified-presentation marker at all (covers both a fixed and an any-mode credential).
+                // No verified-presentation marker on the session at all.
                 Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), null),
-                Arguments.of(List.of(), null),
-                // A marker for a mode the credential does not support (nested vs interactive).
-                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), NESTED_OID4VP_FLOW));
+                // A session verified via a mode the credential does not allow.
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), NESTED_OID4VP_FLOW),
+                // A credential that accepts several modes still blocks a session with no marker.
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW), null),
+                Arguments.of(List.of(), null));
     }
 
     @ParameterizedTest(name = "gate_shouldBlock when scopeModes={0} and sessionMode={1}")
