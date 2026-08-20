@@ -277,6 +277,8 @@ public class OID4VPProfileConfigTest {
                         "format": "mso_mdoc",
                         "credentialTypes": ["com.example.doctype"],
                         "claims": ["com.example.namespace1/sub", "com.example.namespace1/username"],
+                        "subjectClaim": "com.example.namespace1/sub",
+                        "usernameClaim": "com.example.namespace1/username",
                         "trust": [{ "type": "x5c", "anchors": ["%s"] }]
                       }
                     ]
@@ -306,7 +308,9 @@ public class OID4VPProfileConfigTest {
                 """));
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
-        assertEquals("OpenID4VP primary credential must request sub and username: login/primary", error.getMessage());
+        assertEquals(
+                "OpenID4VP primary credential must request identity claims subjectClaim='sub' and usernameClaim='username': login/primary",
+                error.getMessage());
     }
 
     @Test
@@ -358,12 +362,13 @@ public class OID4VPProfileConfigTest {
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
         assertEquals(
-                "OpenID4VP primary credential must request identity claims given_name and family_name: login/primary",
+                "OpenID4VP primary credential must request identity claims subjectClaim='given_name' and usernameClaim='family_name': login/primary",
                 error.getMessage());
     }
 
     @Test
-    void shouldRejectCredentialIdentityPrimaryWithBlankConfiguredIdentityClaim() {
+    void shouldAcceptCredentialIdentityPrimaryWithBlankUsernameClaim() {
+        // usernameClaim is optional — a blank value means subjectClaim alone is sufficient.
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """
                 [
@@ -382,10 +387,63 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
+        assertDoesNotThrow(() -> new OID4VPProfileConfig(config));
+    }
+
+    @Test
+    void shouldRejectMdocPrimaryCredentialWithBareSubjectClaim() {
+        // forkimenjeckayang comment: bare subjectClaim is ambiguous for mso_mdoc because
+        // MdocCredentialVerifier.readClaim() searches every namespace and returns the first match.
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["org.iso.18013.5.1.mDL"],
+                        "claims": ["org.iso.18013.5.1/document_number", "org.iso.18013.5.1/given_name"],
+                        "subjectClaim": "document_number",
+                        "usernameClaim": "org.iso.18013.5.1/document_number",
+                        "trust": [{ "type": "x5c", "anchors": ["%s"] }]
+                      }
+                    ]
+                  }
+                ]
+                """.formatted(MdocBaseTest.getIssuerCertBase64())));
+
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
-        assertEquals(
-                "OpenID4VP primary credential subjectClaim and usernameClaim must not be blank: login/primary",
-                error.getMessage());
+        assertTrue(error.getMessage().contains("mDoc primary credential subjectClaim must be namespace-qualified"));
+    }
+
+    @Test
+    void shouldRejectMdocPrimaryCredentialWithBareUsernameClaim() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["org.iso.18013.5.1.mDL"],
+                        "claims": ["org.iso.18013.5.1/document_number", "org.iso.18013.5.1/given_name"],
+                        "subjectClaim": "org.iso.18013.5.1/document_number",
+                        "usernameClaim": "document_number",
+                        "trust": [{ "type": "x5c", "anchors": ["%s"] }]
+                      }
+                    ]
+                  }
+                ]
+                """.formatted(MdocBaseTest.getIssuerCertBase64())));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertTrue(error.getMessage().contains("mDoc primary credential usernameClaim must be namespace-qualified"));
     }
 
     @Test
@@ -612,6 +670,8 @@ public class OID4VPProfileConfigTest {
                     "format": "mso_mdoc",
                     "credentialTypes": ["com.example.doctype"],
                     "claims": ["com.example.ns/sub", "com.example.ns/username"],
+                    "subjectClaim": "com.example.ns/sub",
+                    "usernameClaim": "com.example.ns/username",
                     {trust}
                   }
                 ]

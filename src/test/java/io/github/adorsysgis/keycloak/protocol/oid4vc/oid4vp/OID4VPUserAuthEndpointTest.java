@@ -385,6 +385,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // Regression for issue 001: a standard ISO 18013-5 mDL carries no sub/username claims, so
         // identity must be derivable from a configured standard mDL claim (document_number). The
         // presented mDoc below deliberately contains no sub/username claims.
+        //
+        // Both subjectClaim and usernameClaim resolve to the same value (TEST_USER = document_number)
+        // because mDocs have only one identity value. Authentication works because the recovery
+        // fallback tries getUserById(subject) first (misses, not a UUID), then falls back to
+        // getUserByUsername(username) which hits the user created with that document number.
         withAuthenticationProfile(
                 AuthenticationProfileSamples.mdocPrimaryWithMdlIdentity(), (apiFlow, requestObject) -> {
                     Map<String, Object> mdocClaims =

@@ -399,27 +399,43 @@ public class OID4VPProfileConfig {
             }
             return;
         }
-        if (StringUtil.isBlank(credential.getSubjectClaim()) || StringUtil.isBlank(credential.getUsernameClaim())) {
-            throw new IllegalStateException(
-                    "OpenID4VP primary credential subjectClaim and usernameClaim must not be blank: " + profile.getId()
-                            + "/" + credential.getId());
+        if (StringUtil.isBlank(credential.getSubjectClaim())) {
+            throw new IllegalStateException("OpenID4VP primary credential subjectClaim must not be blank: "
+                    + profile.getId() + "/" + credential.getId());
         }
-        List<ClaimReference> primaryRefs = credential.getClaimReferences();
-        ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
-        ClaimReference usernameRef = ClaimReference.parse(credential.getUsernameClaim());
-        boolean hasSubject = containsIdentityClaim(primaryRefs, subjectRef);
-        boolean hasUsername = containsIdentityClaim(primaryRefs, usernameRef);
-        if (!hasSubject || !hasUsername) {
-            String message = isDefaultIdentityClaims(credential)
-                    ? "OpenID4VP primary credential must request sub and username"
-                    : "OpenID4VP primary credential must request identity claims " + subjectRef + " and " + usernameRef;
-            throw new IllegalStateException(message + ": " + profile.getId() + "/" + credential.getId());
-        }
-    }
 
-    private static boolean isDefaultIdentityClaims(CredentialRequirement credential) {
-        return JsonWebToken.SUBJECT.equals(credential.getSubjectClaim())
-                && OAuth2Constants.USERNAME.equals(credential.getUsernameClaim());
+        boolean isMdoc = CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat());
+
+        ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
+        if (isMdoc && !subjectRef.isNamespaced()) {
+            throw new IllegalStateException(
+                    "mDoc primary credential subjectClaim must be namespace-qualified (\"namespace/name\")," + " got: "
+                            + subjectRef + ": " + profile.getId() + "/" + credential.getId());
+        }
+
+        ClaimReference usernameRef = null;
+        if (StringUtil.isNotBlank(credential.getUsernameClaim())) {
+            usernameRef = ClaimReference.parse(credential.getUsernameClaim());
+            if (isMdoc && !usernameRef.isNamespaced()) {
+                throw new IllegalStateException(
+                        "mDoc primary credential usernameClaim must be namespace-qualified (\"namespace/name\"),"
+                                + " got: " + usernameRef + ": " + profile.getId() + "/" + credential.getId());
+            }
+        }
+
+        List<ClaimReference> primaryRefs = credential.getClaimReferences();
+        boolean hasSubject = containsIdentityClaim(primaryRefs, subjectRef);
+        boolean hasUsername = true;
+        if (usernameRef != null) {
+            hasUsername = containsIdentityClaim(primaryRefs, usernameRef);
+        }
+        if (!hasSubject || !hasUsername) {
+            String required = usernameRef != null
+                    ? "subjectClaim='" + subjectRef + "' and usernameClaim='" + usernameRef + "'"
+                    : "subjectClaim='" + subjectRef + "'";
+            throw new IllegalStateException("OpenID4VP primary credential must request identity claims " + required
+                    + ": " + profile.getId() + "/" + credential.getId());
+        }
     }
 
     /**

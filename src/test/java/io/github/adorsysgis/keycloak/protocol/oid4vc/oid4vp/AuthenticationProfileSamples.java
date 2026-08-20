@@ -107,6 +107,8 @@ public final class AuthenticationProfileSamples {
                         "format": "mso_mdoc",
                         "credentialTypes": ["{docType}"],
                         "claims": ["{namespace}/sub", "{namespace}/username"],
+                        "subjectClaim": "{namespace}/sub",
+                        "usernameClaim": "{namespace}/username",
                         "trust": [
                           { "type": "x5c", "anchors": ["{anchorBase64}"] }
                         ]

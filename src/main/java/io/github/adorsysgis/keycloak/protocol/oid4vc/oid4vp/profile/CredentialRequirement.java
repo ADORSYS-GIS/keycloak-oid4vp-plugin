@@ -39,13 +39,16 @@ public class CredentialRequirement {
     /**
      * Claim (optionally namespaced, e.g. {@code "org.iso.18013.5.1/document_number"}) carrying the
      * credential subject used to resolve the Keycloak user by user id. Defaults to {@code sub}.
+     * Required for login credentials.
      */
     @JsonProperty("subjectClaim")
     private String subjectClaim = JsonWebToken.SUBJECT;
 
     /**
-     * Claim (optionally namespaced, e.g. {@code "org.iso.18013.5.1/document_number"}) carrying the
-     * credential subject used to resolve the Keycloak user by username. Defaults to {@code username}.
+     * Optional claim (optionally namespaced) used as a fallback to resolve the Keycloak user by
+     * username when {@code subjectClaim} does not match a user ID. Defaults to {@code username}.
+     * Set to blank or omit to skip the username fallback (subjectClaim alone is sufficient).
+     * Temporary workaround until the SubjectID mapper is in place.
      */
     @JsonProperty("usernameClaim")
     private String usernameClaim = OAuth2Constants.USERNAME;
