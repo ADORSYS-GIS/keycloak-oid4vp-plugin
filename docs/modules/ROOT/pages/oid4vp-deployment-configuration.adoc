@@ -4,6 +4,8 @@
 The following `oid4vp-authenticator` settings control how the verifier builds
 OpenID4VP authorization requests and validates responses.
 
+=== Core settings
+
 [cols="1,1,2"]
 |===
 |Setting |Example |Purpose
@@ -28,6 +30,12 @@ The `oid4vp-authenticator` configuration UI only offers `direct_post` (default) 
 Use `direct_post` for a conventional form post (`vp_token`, `state`, and related fields).
 Use `direct_post.jwt` when the wallet must post a single encrypted JWE in the `response` form field; the verifier then advertises an ephemeral encryption key via `client_metadata.jwks`.
 
+|`requestUriMethod`
+|`get`
+a|How wallets should dereference `request_uri`.
+Supported values: `get` (default) and `post`.
+When set to `post`, the wallet sends an HTTP POST to the request URI with `wallet_nonce` and optional `wallet_metadata` form parameters.
+
 |`customUrlScheme`
 |`openid4vp://`
 |Wallet invocation URL scheme embedded in authorization request links.
@@ -41,13 +49,89 @@ Use `direct_post.jwt` when the wallet must post a single encrypted JWE in the `r
 |Opaque registration certificate value exposed via `verifier_info`.
 |===
 
-Specification-driven notes:
+=== Authentication profiles
 
-- Per OpenID4VP Final 1.0, with `responseMode=direct_post.jwt`, wallets return the encrypted `response` parameter.
-- The plugin advertises an ephemeral ECDH encryption key via `client_metadata.jwks`.
-- If `accessCertificate` is omitted, the plugin falls back to a self-signed certificate strategy.
+[cols="1,1,2"]
+|===
+|Setting |Example |Purpose
 
-Generic example authenticator configuration (realm JSON import format):
+|`profiles`
+|`(JSON array)`
+|JSON array of authentication profiles that define which credentials are requested and how they are verified.
+When empty, a legacy single-credential profile is generated from `credentialTypes`.
+See xref:oid4vp-user-authentication.adoc#oid4vp-authentication[Authentication profiles] for the full format.
+
+|`credentialTypes`
+|`https://credentials.example.com/identity_credential`
+|Comma-separated list of credential types accepted by the authenticator.
+Only applies when no authentication profile is configured.
+Interpreted per credential format (for example `vct` for SD-JWT VC, `docType` for mDoc).
+|===
+
+=== Request and response settings
+
+[cols="1,1,2"]
+|===
+|Setting |Example |Purpose
+
+|`transactionData`
+|`(base64url-encoded JSON)`
+|Optional comma-separated or newline-separated base64url-encoded `transaction_data` JSON objects (OpenID4VP Final section 5.1).
+Requires holder binding.
+Entries are normalized before signing; use the signed request JWT payload as the canonical wire form when debugging hash mismatches.
+Only `sha-256` is supported for `transaction_data_hashes`.
+
+|`verifierInfo`
+|`(JSON array)`
+|Optional JSON array of `verifier_info` objects (`{format, data, credential_ids?}`) merged with the registration certificate entry.
+|===
+
+=== Holder binding settings
+
+[cols="1,1,2"]
+|===
+|Setting |Default |Purpose
+
+|`requireCryptographicHolderBinding`
+|`true`
+|When true, the DCQL query requests a presentation with a Key Binding JWT.
+When false, the request omits the KB-JWT requirement and state binding is enforced on the response (OpenID4VP Final section 5.3).
+
+|`holderBindingProofMaxAge`
+|`60`
+|Maximum age in seconds of accepted holder-binding proofs (for example KB-JWT for SD-JWT VC).
+Used as a replay protection measure.
+Currently only applies to SD-JWT VC; mDoc does not specify a device-signed timestamp that would allow a holder-binding age check.
+|===
+
+=== Verification policy settings
+
+[cols="1,1,2"]
+|===
+|Setting |Default |Purpose
+
+|`requireNbfClaim`
+|`false`
+|Require the `nbf` (Not Before) time claim to be present in presented SD-JWT VC credentials.
+
+|`requireExpClaim`
+|`false`
+|Require the `exp` (Expiration) time claim to be present in presented SD-JWT VC credentials.
+
+|`verifyIssuerClaim`
+|`true`
+|Require the `iss` claim in presented SD-JWT VC credentials to match this realm's issuer URL.
+
+|`fallbackToIsoSpecSessionTranscript`
+|`false`
+|Allow falling back to the ISO-spec session transcript algorithm when verification with the OpenID4VP-spec session transcript algorithm fails (mDoc only).
+
+|`enforceRevocationStatus`
+|`false`
+|Reject credentials whose status indicates they are no longer valid, as per the Token Status List mechanism.
+|===
+
+=== Generic example (realm JSON import format)
 
 [source,json]
 ----
@@ -56,9 +140,17 @@ Generic example authenticator configuration (realm JSON import format):
     "clientIdentifierPrefix": "x509_hash",
     "queryLanguage": "dcql_query",
     "responseMode": "direct_post.jwt",
+    "requestUriMethod": "get",
     "customUrlScheme": "openid4vp://",
     "accessCertificate": "<base64-der-x509-cert>",
-    "registrationCertificate": "<registration-certificate-jwt-or-token>"
+    "registrationCertificate": "<registration-certificate-jwt-or-token>",
+    "requireCryptographicHolderBinding": true,
+    "holderBindingProofMaxAge": 60,
+    "requireNbfClaim": false,
+    "requireExpClaim": false,
+    "verifyIssuerClaim": true,
+    "fallbackToIsoSpecSessionTranscript": false,
+    "enforceRevocationStatus": false
   }
 }
 ----
