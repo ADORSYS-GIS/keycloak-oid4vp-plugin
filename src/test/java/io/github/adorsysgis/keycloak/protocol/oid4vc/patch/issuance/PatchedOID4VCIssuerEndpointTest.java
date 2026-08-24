@@ -7,13 +7,19 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.Guarded
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import jakarta.ws.rs.BadRequestException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -22,9 +28,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.models.KeycloakContext;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationDetailsProcessor;
+import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.CredentialBuilder;
 import org.keycloak.protocol.oid4vc.model.CredentialRequest;
+import org.keycloak.protocol.oid4vc.model.ErrorType;
+import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
+import org.keycloak.protocol.oidc.rar.AuthorizationDetailsProcessor;
+import org.keycloak.representations.AccessToken;
+import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.util.JsonSerialization;
 
 public class PatchedOID4VCIssuerEndpointTest {
@@ -110,6 +129,31 @@ public class PatchedOID4VCIssuerEndpointTest {
         assertFalse(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
 
+    @Test
+    public void resolve_shouldRejectImmediately_whenAccessTokenGrantsMultipleCredentials() {
+        MockPatchedOID4VCIssuerEndpoint endpoint = new MockPatchedOID4VCIssuerEndpoint();
+
+        OID4VCAuthorizationDetailsProcessor processor = mock(OID4VCAuthorizationDetailsProcessor.class);
+        when(processor.getSupportedAuthorizationDetails(any()))
+                .thenReturn(List.of(new OID4VCAuthorizationDetail(), new OID4VCAuthorizationDetail()));
+        when(endpoint.getSession().getProvider(AuthorizationDetailsProcessor.class, OPENID_CREDENTIAL))
+                .thenReturn(processor);
+
+        AuthenticationManager.AuthResult authResult = mock(AuthenticationManager.AuthResult.class);
+        when(authResult.token()).thenReturn(mock(AccessToken.class));
+        EventBuilder eventBuilder = endpoint.getEventBuilder();
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> endpoint.resolveRequestedCredentialConfigurationId(authResult, eventBuilder));
+
+        OAuth2ErrorRepresentation error =
+                (OAuth2ErrorRepresentation) ex.getResponse().getEntity();
+        assertEquals(ErrorType.INVALID_CREDENTIAL_REQUEST.getValue(), error.getError());
+        assertTrue(error.getErrorDescription().contains("Multiple authorization_details not supported"));
+        verify(eventBuilder).error(ErrorType.INVALID_CREDENTIAL_REQUEST.getValue());
+    }
+
     private static CredentialScopeModel mockedScope(List<PresentationDuringIssuanceMode> modes) {
         CredentialScopeModel scope = mock(CredentialScopeModel.class);
         lenient().when(scope.getProtocol()).thenReturn(OID4VC_PROTOCOL);
@@ -132,5 +176,40 @@ public class PatchedOID4VCIssuerEndpointTest {
         return Optional.ofNullable(mode)
                 .map(PresentationDuringIssuanceMode::getValue)
                 .orElse(null);
+    }
+
+    /**
+     * Test double that extends {@link PatchedOID4VCIssuerEndpoint} with a mocked {@link KeycloakSession}.
+     */
+    static class MockPatchedOID4VCIssuerEndpoint extends PatchedOID4VCIssuerEndpoint {
+
+        MockPatchedOID4VCIssuerEndpoint() {
+            super(stubSession());
+        }
+
+        static KeycloakSession stubSession() {
+            KeycloakSessionFactory factory = mock(KeycloakSessionFactory.class);
+            lenient()
+                    .when(factory.getProviderFactoriesStream(CredentialBuilder.class))
+                    .thenReturn(Stream.of());
+
+            KeycloakContext context = mock(KeycloakContext.class);
+            lenient().when(context.getRealm()).thenReturn(mock(RealmModel.class));
+
+            KeycloakSession session = mock(KeycloakSession.class);
+            lenient().when(session.getKeycloakSessionFactory()).thenReturn(factory);
+            lenient().when(session.getContext()).thenReturn(context);
+            return session;
+        }
+
+        public KeycloakSession getSession() {
+            return keycloakSession;
+        }
+
+        public EventBuilder getEventBuilder() {
+            EventBuilder eventBuilder = mock(EventBuilder.class);
+            when(eventBuilder.detail(anyString(), anyString())).thenReturn(eventBuilder);
+            return eventBuilder;
+        }
     }
 }
