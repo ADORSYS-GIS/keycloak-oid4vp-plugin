@@ -17,8 +17,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseTo
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -30,13 +30,13 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
@@ -48,9 +48,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.resource.RealmResource;
-import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oid4vc.model.ErrorType;
 import org.keycloak.protocol.oid4vc.model.IssuerState;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.util.JsonSerialization;
@@ -407,8 +407,8 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     private String buildAuthorizationEndpoint(String scope, String authorizationDetails, String issuerState)
             throws Exception {
         // Build the parent OIDC request while allowing tests to vary its credential binding.
-        URIBuilder builder = new URIBuilder(getAuthEndpointURI())
-                .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID);
+        URIBuilder builder =
+                new URIBuilder(getAuthEndpointURI()).addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID);
         for (BasicNameValuePair param : baseAuthorizationRequestParams(issuerState, scope)) {
             builder.addParameter(param.getName(), param.getValue());
         }

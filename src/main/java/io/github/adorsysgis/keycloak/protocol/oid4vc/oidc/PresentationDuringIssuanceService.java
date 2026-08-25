@@ -65,8 +65,9 @@ public final class PresentationDuringIssuanceService {
     }
 
     private boolean presentationDuringIssuanceEnabled() {
-        return realm != null && Boolean.parseBoolean(
-                realm.getAttribute(OID4VCIssuerMetadataProvider.ATTR_PRESENTATION_DURING_ISSUANCE));
+        return realm != null
+                && Boolean.parseBoolean(
+                        realm.getAttribute(OID4VCIssuerMetadataProvider.ATTR_PRESENTATION_DURING_ISSUANCE));
     }
 
     /**
