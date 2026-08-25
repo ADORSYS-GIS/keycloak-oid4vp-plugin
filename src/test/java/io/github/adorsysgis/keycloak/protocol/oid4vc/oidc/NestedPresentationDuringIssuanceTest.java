@@ -49,6 +49,7 @@ import org.keycloak.util.JsonSerialization;
 class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBaseTest {
 
     private static final String CREDENTIAL_IDENTITY_CONFIG_ID = "nested_gated_credential";
+    private static final String INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID = "ia_gated_credential";
     private static final String SESSION_IDENTITY_CONFIG_ID = "nested_session_gated_credential";
     private static final String UNGATED_CREDENTIAL_CONFIG_ID = "nested_ungated_credential";
     private static final String MISSING_PROFILE_CONFIG_ID = "nested_missing_profile_credential";
@@ -87,10 +88,17 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
                 CREDENTIAL_TYPES_CONFIG_DEFAULT,
                 PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW,
                 null);
+        ensureCredentialScope(
+                realm,
+                INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID,
+                CREDENTIAL_TYPES_CONFIG_DEFAULT,
+                PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION,
+                AuthenticationProfile.DEFAULT_PROFILE_ID);
         grantCredentialToTestUser(CREDENTIAL_IDENTITY_CONFIG_ID);
         grantCredentialToTestUser(SESSION_IDENTITY_CONFIG_ID);
         grantCredentialToTestUser(UNGATED_CREDENTIAL_CONFIG_ID);
         grantCredentialToTestUser(MISSING_PROFILE_CONFIG_ID);
+        grantCredentialToTestUser(INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID);
     }
 
     @Test
@@ -207,9 +215,12 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     @Test
     @DisplayName("should not issue a nested-only credential after ordinary OID4VP login")
     void shouldNotIssueNestedCredentialAfterOrdinaryOid4vpLogin() throws Exception {
-        // Complete an ordinary OID4VP login without a credential authorization binding.
-        FormData formData = getFreshOid4vpFormActionUrl(false);
-        String identityCredential = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+        // Request an optional credential scope whose policy allows interactive authorization rather
+        // than nested OID4VP. The scope is therefore available for token-request authorization_details,
+        // but does not turn this ordinary same-device login into a nested PDI flow.
+        FormData formData = getFreshOid4vpFormActionUrl(false, INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID);
+        String identityCredential =
+                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         TestFlowData flowData = testSuccessfulAuthenticationVerbose(
                 identityCredential,
@@ -230,14 +241,15 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
             String authorizationCode = extractAuthCodeInRedirect(client.execute(new HttpGet(loginActionUrl)));
             String accessToken = requestAccessToken(authorizationCode, true);
 
+            // The session carries no verified-presentation marker: the gate must refuse issuance.
             HttpResponse credentialResponse =
-                    requestCredentialWithConfigurationId(accessToken, CREDENTIAL_IDENTITY_CONFIG_ID);
-            // The access token must not be accepted as a credential-issuance token.
+                    requestCredentialWithConfigurationId(accessToken, INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID);
             assertErrorResponse(
                     credentialResponse,
                     HttpStatus.SC_BAD_REQUEST,
-                    ErrorType.UNKNOWN_CREDENTIAL_CONFIGURATION.getValue(),
-                    "Invalid AccessToken for credential request. No authorization_details");
+                    ErrorType.INVALID_CREDENTIAL_REQUEST.getValue(),
+                    "Credential '%s' requires a verified presentation during issuance"
+                            .formatted(INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID));
         }
     }
 
