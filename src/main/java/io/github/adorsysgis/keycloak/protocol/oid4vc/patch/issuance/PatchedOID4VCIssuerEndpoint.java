@@ -4,6 +4,7 @@ import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import jakarta.ws.rs.BadRequestException;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
@@ -67,7 +69,8 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
     @Override
     public Response requestCredential(String requestPayload) {
         KeycloakContext context = keycloakSession.getContext();
-        EventBuilder eventBuilder = new EventBuilder(context.getRealm(), keycloakSession, context.getConnection());
+        EventBuilder eventBuilder = new EventBuilder(context.getRealm(), keycloakSession, context.getConnection())
+                .event(EventType.VERIFIABLE_CREDENTIAL_REQUEST);
 
         // Enforce presentation-marked access tokens on requested
         // credentials that require presentation during issuance
@@ -158,8 +161,9 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
     /**
      * Pure gate decision: whether issuance must be blocked because the credential configuration
      * requires presentation during issuance but the session carries no verified-presentation
-     * marker, or the {@link PresentationDuringIssuanceMode mode} through which it was obtained
-     * is not one the credential configuration allows.
+     * marker, the {@link PresentationDuringIssuanceMode mode} through which it was obtained is not one
+     * the credential configuration allows, or the OpenID4VP profile that was used does not match the
+     * profile enforced by the credential configuration.
      *
      * @param credentialScope the resolved credential configuration (client scope)
      * @param userSession the session bound to the access token, may be {@code null}
@@ -176,11 +180,18 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
             return false;
         }
 
-        String mode = Optional.ofNullable(userSession)
+        PresentationVerifiedNote note = Optional.ofNullable(userSession)
                 .map(s -> s.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE))
+                .map(PresentationVerifiedNote::fromJson)
                 .orElse(null);
 
-        return !config.supportsPresentationMode(mode);
+        // The session must record a verified presentation that was obtained through a mode allowed
+        // by the credential configuration and bound to the concrete authentication profile enforced
+        // by the credential.
+        return note == null
+                || !config.supportsPresentationMode(note.mode())
+                || (config.getPresentationProfileId() != null
+                        && !config.getPresentationProfileId().equals(note.profileId()));
     }
 
     /**

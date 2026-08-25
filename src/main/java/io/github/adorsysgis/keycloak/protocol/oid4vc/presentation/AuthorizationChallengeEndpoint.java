@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceSession;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -172,12 +173,15 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
 
         AuthorizationContext authContext;
         try {
-            authContext = oid4vpAuth.startInteractiveAuthentication(
+            authContext = oid4vpAuth.startAuthentication(
                     clientId,
                     enforcedProfileId,
+                    null,
                     new CodeChallengeDetails(codeChallenge, codeChallengeMethod),
-                    challengeResponseUri(),
-                    subjectUserId);
+                    new PresentationDuringIssuanceSession(
+                            PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION,
+                            subjectUserId,
+                            challengeResponseUri()));
         } catch (IllegalArgumentException e) {
             throw badRequest(e.getMessage());
         }

@@ -9,6 +9,8 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceSession;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
@@ -199,7 +201,8 @@ public class OID4VPUserAuthBean {
                 profileId,
                 new OIDCAuthSession(authSessionId(), getLoginActionUrl(), true),
                 null,
-                subjectUserId);
+                new PresentationDuringIssuanceSession(
+                        PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW, subjectUserId, null));
 
         return new AuthContextBean().setAuthReqLink(authContext.getAuthorizationRequest());
     }

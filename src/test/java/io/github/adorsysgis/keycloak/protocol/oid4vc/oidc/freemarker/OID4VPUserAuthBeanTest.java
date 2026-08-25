@@ -16,6 +16,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceSession;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -123,7 +125,7 @@ public class OID4VPUserAuthBeanTest {
                         nullable(String.class),
                         nullable(OIDCAuthSession.class),
                         nullable(CodeChallengeDetails.class),
-                        nullable(String.class)))
+                        nullable(PresentationDuringIssuanceSession.class)))
                 .thenReturn(authContext);
     }
 
@@ -248,7 +250,7 @@ public class OID4VPUserAuthBeanTest {
                         nullable(String.class),
                         oidcAuthSessionCaptor.capture(),
                         codeChallengeDetailsCaptor.capture(),
-                        nullable(String.class));
+                        nullable(PresentationDuringIssuanceSession.class));
 
         OIDCAuthSession crossDeviceSession =
                 oidcAuthSessionCaptor.getAllValues().get(0);
@@ -280,7 +282,8 @@ public class OID4VPUserAuthBeanTest {
                         eq(AuthenticationProfile.DEFAULT_PROFILE_ID),
                         oidcAuthSessionCaptor.capture(),
                         nullable(CodeChallengeDetails.class),
-                        nullable(String.class));
+                        eq(new PresentationDuringIssuanceSession(
+                                PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW, null, null)));
 
         // Must be same-device context
         assertTrue(oidcAuthSessionCaptor.getValue().enableSameDeviceResponse());

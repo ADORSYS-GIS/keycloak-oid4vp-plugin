@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope.VC_PRESENTATION_PROFILE_ID_ATTR;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope.VC_REQUIRES_PRESENTATION_ATTR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import jakarta.ws.rs.BadRequestException;
 import java.util.List;
 import java.util.Optional;
@@ -81,41 +83,56 @@ public class PatchedOID4VCIssuerEndpointTest {
         assertEquals(whitespace, PatchedOID4VCIssuerEndpoint.patchWalletRequest(whitespace));
     }
 
-    static Stream<Arguments> unsupportedPresentationModes() {
+    static Stream<Arguments> unsupportedPresentations() {
         return Stream.of(
                 // No verified-presentation marker on the session at all.
-                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), null),
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), null, null, null),
                 // A session verified via a mode the credential does not allow.
-                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), NESTED_OID4VP_FLOW),
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), NESTED_OID4VP_FLOW, null, null),
                 // A credential that accepts several modes still blocks a session with no marker.
-                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW), null),
-                Arguments.of(List.of(), null));
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW), null, null, null),
+                Arguments.of(List.of(), null, null, null),
+                // A supported mode does not save a presentation bound to another authentication profile.
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), INTERACTIVE_AUTHORIZATION, "enforced", "other"),
+                // A supported mode without any bound profile fails when a profile is enforced.
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), INTERACTIVE_AUTHORIZATION, "enforced", null));
     }
 
-    @ParameterizedTest(name = "gate_shouldBlock when scopeModes={0} and sessionMode={1}")
-    @MethodSource("unsupportedPresentationModes")
+    @ParameterizedTest(
+            name = "gate_shouldBlock when scopeModes={0}, sessionMode={1}, scopeProfile={2}, noteProfile={3}")
+    @MethodSource("unsupportedPresentations")
     public void gate_shouldBlock_WhenSessionLacksSupportedPresentation(
-            List<PresentationDuringIssuanceMode> scopeModes, PresentationDuringIssuanceMode sessionMode) {
-        CredentialScopeModel scope = mockedScope(scopeModes);
-        UserSessionModel session = sessionWithMode(sessionMode);
+            List<PresentationDuringIssuanceMode> scopeModes,
+            PresentationDuringIssuanceMode sessionMode,
+            String scopeProfileId,
+            String noteProfileId) {
+        CredentialScopeModel scope = mockedScope(scopeModes, scopeProfileId);
+        UserSessionModel session = sessionWithNote(sessionMode, noteProfileId);
 
         assertTrue(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
 
-    static Stream<Arguments> supportedPresentationModes() {
+    static Stream<Arguments> supportedPresentations() {
         return Stream.of(
-                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), INTERACTIVE_AUTHORIZATION),
-                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW), INTERACTIVE_AUTHORIZATION),
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), INTERACTIVE_AUTHORIZATION, null, null),
+                Arguments.of(
+                        List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW), INTERACTIVE_AUTHORIZATION, null, null),
                 // Empty list = accept any mode, so the verified interactive mode is supported.
-                Arguments.of(List.of(), INTERACTIVE_AUTHORIZATION));
+                Arguments.of(List.of(), INTERACTIVE_AUTHORIZATION, null, null),
+                // The presentation matches the concrete authentication profile enforced by the credential.
+                Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), INTERACTIVE_AUTHORIZATION, "enforced", "enforced"));
     }
 
-    @ParameterizedTest(name = "gate_shouldAllow when scopeModes={0} and sessionMode={1}")
-    @MethodSource("supportedPresentationModes")
+    @ParameterizedTest(
+            name = "gate_shouldAllow when scopeModes={0}, sessionMode={1}, scopeProfile={2}, noteProfile={3}")
+    @MethodSource("supportedPresentations")
     public void gate_shouldAllow_WhenSessionHasSupportedPresentation(
-            List<PresentationDuringIssuanceMode> scopeModes, PresentationDuringIssuanceMode sessionMode) {
-        CredentialScopeModel scope = mockedScope(scopeModes);
-        UserSessionModel session = sessionWithMode(sessionMode);
+            List<PresentationDuringIssuanceMode> scopeModes,
+            PresentationDuringIssuanceMode sessionMode,
+            String scopeProfileId,
+            String noteProfileId) {
+        CredentialScopeModel scope = mockedScope(scopeModes, scopeProfileId);
+        UserSessionModel session = sessionWithNote(sessionMode, noteProfileId);
 
         assertFalse(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -123,8 +140,8 @@ public class PatchedOID4VCIssuerEndpointTest {
     @Test
     public void gate_shouldAllow_whenNotGated() {
         // no requires_presentation attribute configured
-        CredentialScopeModel scope = mockedScope(null);
-        UserSessionModel session = sessionWithMode(null);
+        CredentialScopeModel scope = mockedScope(null, null);
+        UserSessionModel session = sessionWithNote(null, null);
 
         assertFalse(PatchedOID4VCIssuerEndpoint.isIssuanceGatedWithoutPresentation(scope, session));
     }
@@ -154,7 +171,7 @@ public class PatchedOID4VCIssuerEndpointTest {
         verify(eventBuilder).error(ErrorType.INVALID_CREDENTIAL_REQUEST.getValue());
     }
 
-    private static CredentialScopeModel mockedScope(List<PresentationDuringIssuanceMode> modes) {
+    private static CredentialScopeModel mockedScope(List<PresentationDuringIssuanceMode> modes, String profileId) {
         CredentialScopeModel scope = mock(CredentialScopeModel.class);
         lenient().when(scope.getProtocol()).thenReturn(OID4VC_PROTOCOL);
         when(scope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR))
@@ -163,12 +180,16 @@ public class PatchedOID4VCIssuerEndpointTest {
                                 .map(PatchedOID4VCIssuerEndpointTest::toValue)
                                 .collect(Collectors.joining(",")))
                         .orElse(null));
+        when(scope.getAttribute(VC_PRESENTATION_PROFILE_ID_ATTR)).thenReturn(profileId);
         return scope;
     }
 
-    private static UserSessionModel sessionWithMode(PresentationDuringIssuanceMode mode) {
+    private static UserSessionModel sessionWithNote(PresentationDuringIssuanceMode mode, String profileId) {
         UserSessionModel session = mock(UserSessionModel.class);
-        lenient().when(session.getNote(PRESENTATION_VERIFIED_NOTE)).thenReturn(toValue(mode));
+        String note = mode == null
+                ? null
+                : PresentationVerifiedNote.of(mode, profileId).toJson();
+        lenient().when(session.getNote(PRESENTATION_VERIFIED_NOTE)).thenReturn(note);
         return session;
     }
 

@@ -9,7 +9,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialC
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlResponseCredentialSelector;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -54,7 +54,12 @@ public class AuthorizationResponseService {
 
     private static final Logger logger = Logger.getLogger(AuthorizationResponseService.class);
 
-    public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
+    /**
+     * Client-session note carrying the id of the parent OIDC authentication session that this
+     * OpenID4VP authorization is bound to. Used by {@code OID4VPLoginActionsService} to verify that
+     * a redeemed authorization code belongs to the OIDC session resuming the login.
+     */
+    public static final String PARENT_AUTH_SESSION_ID = "oid4vp.parent_auth_session_id";
 
     private final KeycloakSession session;
     private final DcqlCredentialCapabilities dcqlCapabilities;
@@ -268,31 +273,9 @@ public class AuthorizationResponseService {
      */
     private String produceAuthorizationCode(
             AuthenticatedClientSessionModel clientSession, AuthorizationContext authContext) {
-        // Decorate client session with contextual notes
-
-        if (authContext.getParentAuthSessionId() != null) {
-            clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
-        }
-
-        clientSession.setNote(
-                OIDCLoginProtocol.ISSUER,
-                Urls.realmIssuer(
-                        session.getContext().getUri().getBaseUri(),
-                        session.getContext().getRealm().getName()));
-
-        clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
-
-        // Mark the user session as presentation-verified through the interactive authorization mode
-        // (Authorization Challenge Endpoint / OID4VCI §6). Presence verifies that the authorization code
-        // was obtained via a Verifiable Presentation, and the value annotates the exact mode for the
-        // issuance gate. This only applies when the response_mode is explicitly interactive authorization.
-        ResponseMode responseMode = authContext.getRequestObject().getResponseMode();
-        if (responseMode.isInteractiveAuthorization()) {
-            UserSessionModel userSession = clientSession.getUserSession();
-            userSession.setNote(
-                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
-                    PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION.getValue());
-        }
+        // Decorate sessions with contextual notes
+        decorateClientSession(clientSession, authContext);
+        decorateUserSession(clientSession.getUserSession(), authContext);
 
         // Gather code data and generate authorization code
 
@@ -308,6 +291,45 @@ public class AuthorizationResponseService {
                 clientSession.getUserSession().getId());
 
         return OAuth2CodeParser.persistCode(session, clientSession, codeData);
+    }
+
+    /**
+     * Decorates the client session with contextual notes for the completed authorization.
+     */
+    private void decorateClientSession(
+            AuthenticatedClientSessionModel clientSession, AuthorizationContext authContext) {
+        clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
+
+        clientSession.setNote(
+                OIDCLoginProtocol.ISSUER,
+                Urls.realmIssuer(
+                        session.getContext().getUri().getBaseUri(),
+                        session.getContext().getRealm().getName()));
+
+        if (authContext.getParentAuthSessionId() != null) {
+            clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
+        }
+    }
+
+    /**
+     * Decorates the user session with the presentation-verified marker when the authorization serves
+     * credential issuance.
+     */
+    private void decorateUserSession(UserSessionModel userSession, AuthorizationContext authContext) {
+        // Mark the user session as presentation-verified through the mode recorded on the
+        // authorization context (Authorization Challenge Endpoint / OID4VCI §6). Presence verifies
+        // that the authorization code was obtained via a Verifiable Presentation, and the value binds
+        // the exact mode and OpenID4VP authentication profile for the issuance gate. Only sessions
+        // started as presentation-during-issuance carry a mode.
+        if (authContext.getPresentationDuringIssuanceMode() != null) {
+            PresentationDuringIssuanceMode mode =
+                    PresentationDuringIssuanceMode.fromValue(authContext.getPresentationDuringIssuanceMode());
+
+            userSession.setNote(
+                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                    PresentationVerifiedNote.of(mode, authContext.getProfileId())
+                            .toJson());
+        }
     }
 
     /**

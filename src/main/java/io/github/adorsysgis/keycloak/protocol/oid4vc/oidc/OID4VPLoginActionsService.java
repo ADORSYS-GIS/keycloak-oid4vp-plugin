@@ -5,7 +5,6 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -157,14 +156,17 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
 
-        // Mark the user session as presentation-verified through the nested OID4VP flow, which
-        // resumes the OIDC login through this service after the same-device presentation. This
-        // mirrors `AuthorizationResponseService.produceAuthorizationCode` for presentation
-        // during issuance via interactive authorization.
+        // The parent OIDC login resumes with a fresh user session, so propagate the
+        // presentation-verified marker recorded on the user session of the redeemed authorization
+        // code (see AuthorizationResponseService#decorateUserSession). Presence binds the exact
+        // presentation-during-issuance mode and OpenID4VP authentication profile for the issuance gate;
+        // ordinary same-device OpenID4VP logins carry no such marker.
+        UserSessionModel userSession = result.getClientSession().getUserSession();
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
-        freshUserSession.setNote(
-                OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
-                PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW.getValue());
+        String presentationVerifiedNote = userSession.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE);
+        if (presentationVerifiedNote != null) {
+            freshUserSession.setNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE, presentationVerifiedNote);
+        }
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
