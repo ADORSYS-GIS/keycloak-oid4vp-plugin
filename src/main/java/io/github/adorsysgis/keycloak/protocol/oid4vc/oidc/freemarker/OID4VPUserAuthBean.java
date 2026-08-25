@@ -139,7 +139,8 @@ public class OID4VPUserAuthBean {
 
         // Provision auth context for presentation during issuance
         if (isPresentationDuringIssuance()) {
-            return getPdiAuthContext();
+            authContextBean = getPdiAuthContext();
+            return authContextBean;
         }
 
         // Skip provisioning auth context if not login method OpenID4VP

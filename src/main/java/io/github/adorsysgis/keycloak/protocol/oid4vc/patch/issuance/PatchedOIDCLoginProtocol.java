@@ -11,9 +11,12 @@ import org.keycloak.protocol.oidc.OIDCProviderConfig;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
- * OIDC patch for clients that send {@code dpop_jkt} without enabling DPoP.
+ * OIDC protocol customizations required by this plugin.
  *
- * <p>See <a href="https://github.com/keycloak/keycloak/issues/51573">Keycloak issue #51573</a>.
+ * <p>It removes an unsupported {@code dpop_jkt} client note when DPoP is disabled (see
+ * <a href="https://github.com/keycloak/keycloak/issues/51573">Keycloak issue #51573</a>) and
+ * forces reauthentication when the parent OIDC transaction requires nested presentation during
+ * issuance, preventing an existing login from bypassing that presentation step.
  */
 public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
 

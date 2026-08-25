@@ -17,6 +17,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.protocol.oid4vc.model.ErrorType;
+import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -163,6 +165,34 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         assertTrue(
                 response.parse().select("a[href^=openid4vp://]").isEmpty(),
                 "An ungated authorization_details request must not start nested presentation");
+    }
+
+    @Test
+    @DisplayName("should not start nested presentation for an unknown issuer_state")
+    void shouldNotGateCredentialUsingUnknownIssuerState() throws Exception {
+        String unknownIssuerState = new IssuerState()
+                .setCredentialsOfferId("unknown-offer-" + UUID.randomUUID())
+                .encodeToString();
+
+        Connection.Response response = requestAuthorizationPage(
+                buildAuthorizationEndpoint(null, null, unknownIssuerState));
+
+        assertEquals(HttpStatus.SC_OK, response.statusCode(), "Unexpected authorization response");
+        assertTrue(
+                response.parse().select("a[href^=openid4vp://]").isEmpty(),
+                "An unknown issuer_state must not start nested presentation");
+    }
+
+    @Test
+    @DisplayName("should ignore malformed issuer_state without starting nested presentation")
+    void shouldIgnoreMalformedIssuerState() throws Exception {
+        Connection.Response response = requestAuthorizationPage(
+                buildAuthorizationEndpoint(null, null, "not-a-valid-issuer-state"));
+
+        assertEquals(HttpStatus.SC_OK, response.statusCode());
+        assertTrue(
+                response.parse().select("a[href^=openid4vp://]").isEmpty(),
+                "A malformed issuer_state must not start nested presentation");
     }
 
     @Test

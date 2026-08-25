@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -235,7 +236,7 @@ public class OID4VPUserAuthBeanTest {
         assertNotNull(authContext1);
 
         var authContext2 = bean.getAuthContext();
-        assertEquals(authContext1, authContext2);
+        assertSame(authContext1, authContext2);
     }
 
     @Test
@@ -287,6 +288,23 @@ public class OID4VPUserAuthBeanTest {
 
         // Must be same-device context
         assertTrue(oidcAuthSessionCaptor.getValue().enableSameDeviceResponse());
+    }
+
+    @Test
+    public void shouldCachePresentationDuringIssuanceContext() {
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+
+        var first = bean.getAuthContext();
+        var second = bean.getAuthContext();
+
+        assertSame(first, second);
+        verify(oid4vp, times(1))
+                .startAuthentication(
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class),
+                        nullable(PresentationDuringIssuanceSession.class));
     }
 
     private OID4VPUserAuthBean createTestBean() {
