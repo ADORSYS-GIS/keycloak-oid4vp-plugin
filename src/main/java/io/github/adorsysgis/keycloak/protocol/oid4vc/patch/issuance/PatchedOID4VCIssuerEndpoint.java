@@ -190,8 +190,7 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
         // by the credential.
         return note == null
                 || !config.supportsPresentationMode(note.mode())
-                || (config.getPresentationProfileId() != null
-                        && !config.getPresentationProfileId().equals(note.profileId()));
+                || !config.acceptPresentationProfile(note.profileId());
     }
 
     /**

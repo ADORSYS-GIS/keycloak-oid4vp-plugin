@@ -1,8 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
+import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
+
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
-import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import org.keycloak.models.ClientScopeModel;
+import org.keycloak.models.RealmModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.utils.StringUtil;
 
@@ -24,7 +29,8 @@ public class GuardedCredentialScope extends CredentialScopeModel {
 
     /**
      * Configures the ID of the OpenID4VP authentication profile that MUST be enforced
-     * when a presentation is required during issuance of this credential.
+     * when a presentation is required during issuance of this credential. It must be nonblank
+     * whenever {@link #VC_REQUIRES_PRESENTATION_ATTR} is configured.
      */
     public static final String VC_PRESENTATION_PROFILE_ID_ATTR = "vc.presentation_profile_id";
 
