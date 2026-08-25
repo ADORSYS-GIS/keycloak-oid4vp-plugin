@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider.ATTR_PRESENTATION_DURING_ISSUANCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -14,20 +15,30 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
@@ -36,9 +47,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oid4vc.model.ErrorType;
 import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
+import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -110,6 +124,23 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         String pid = sdJwtVPTestUtils.requestPidSdJwtCredential(PID_VCT, "Tom", "Brady", "1990-01-01");
 
         String authCode = completeNestedAuthorization(SESSION_IDENTITY_CONFIG_ID, null, issuerState, pid);
+        assertCredentialIssued(authCode);
+    }
+
+    @Test
+    @DisplayName("should preserve nested issuance authorization through PAR and request_uri processing")
+    void shouldCompleteNestedAuthorizationThroughPar() throws Exception {
+        String issuerState = createAuthorizationCodeCredentialOffer(CREDENTIAL_IDENTITY_CONFIG_ID);
+        String requestUri = submitPar(issuerState);
+
+        String authEndpoint = new URIBuilder(getAuthEndpointURI())
+                .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
+                .addParameter(OIDCLoginProtocol.REQUEST_URI_PARAM, requestUri)
+                .build()
+                .toString();
+
+        String identityCredential = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+        String authCode = completeNestedAuthorization(authEndpoint, identityCredential);
         assertCredentialIssued(authCode);
     }
 
@@ -193,6 +224,40 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         assertTrue(
                 response.parse().select("a[href^=openid4vp://]").isEmpty(),
                 "A malformed issuer_state must not start nested presentation");
+    }
+
+    @Test
+    @DisplayName("should not start nested presentation when presentation during issuance is disabled")
+    void shouldNotStartNestedPresentationWhenRealmFeatureDisabled() throws Exception {
+        RealmResource realm = getActiveTestRealmResource();
+        RealmRepresentation rep = realm.toRepresentation();
+        Map<String, String> attributes =
+                new HashMap<>(Optional.ofNullable(rep.getAttributes()).orElseGet(Map::of));
+        String original = attributes.get(ATTR_PRESENTATION_DURING_ISSUANCE);
+
+        try {
+            attributes.put(ATTR_PRESENTATION_DURING_ISSUANCE, "false");
+            rep.setAttributes(attributes);
+            realm.update(rep);
+
+            // The gated credential binding remains in place, but the disabled realm feature must
+            // keep the login flow ordinary instead of starting a nested presentation.
+            Connection.Response response =
+                    requestAuthorizationPage(buildAuthorizationEndpoint(CREDENTIAL_IDENTITY_CONFIG_ID, null, null));
+
+            assertEquals(HttpStatus.SC_OK, response.statusCode(), "Unexpected authorization response");
+            assertTrue(
+                    response.parse().select("a[href^=openid4vp://]").isEmpty(),
+                    "Nested presentation must not start while the realm feature is disabled");
+        } finally {
+            if (original == null) {
+                attributes.remove(ATTR_PRESENTATION_DURING_ISSUANCE);
+            } else {
+                attributes.put(ATTR_PRESENTATION_DURING_ISSUANCE, original);
+            }
+            rep.setAttributes(attributes);
+            realm.update(rep);
+        }
     }
 
     @Test
@@ -343,22 +408,52 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
             throws Exception {
         // Build the parent OIDC request while allowing tests to vary its credential binding.
         URIBuilder builder = new URIBuilder(getAuthEndpointURI())
-                .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
-                .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
-                .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
-                .addParameter(
-                        OAuth2Constants.SCOPE,
-                        scope == null ? OAuth2Constants.SCOPE_OPENID : OAuth2Constants.SCOPE_OPENID + " " + scope);
+                .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID);
+        for (BasicNameValuePair param : baseAuthorizationRequestParams(issuerState, scope)) {
+            builder.addParameter(param.getName(), param.getValue());
+        }
 
         if (authorizationDetails != null) {
             builder.addParameter(OAuth2Constants.AUTHORIZATION_DETAILS, authorizationDetails);
         }
 
-        if (issuerState != null) {
-            builder.addParameter(OAuth2Constants.ISSUER_STATE, issuerState);
-        }
-
         return builder.build().toString();
+    }
+
+    private String submitPar(String issuerState) throws Exception {
+        String parEndpoint = new URIBuilder(getTestRealmEndpoint() + "/protocol/openid-connect/ext/par/request")
+                .build()
+                .toString();
+
+        var params = new ArrayList<>(getDefaultHttpParams());
+        params.addAll(baseAuthorizationRequestParams(issuerState, CREDENTIAL_IDENTITY_CONFIG_ID));
+
+        HttpPost request = new HttpPost(parEndpoint);
+        request.setEntity(new UrlEncodedFormEntity(params));
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            assertEquals(HttpStatus.SC_CREATED, response.getStatusLine().getStatusCode());
+            JsonNode body = JsonSerialization.mapper.readTree(EntityUtils.toString(response.getEntity()));
+            String requestUri = body.path("request_uri").asText(null);
+            assertNotNull(requestUri, "PAR response must contain request_uri");
+            return requestUri;
+        }
+    }
+
+    /**
+     * The authorization parameters shared by the direct authorize endpoint and its PAR variant,
+     * excluding the client authentication parameters each transport adds itself.
+     */
+    private List<BasicNameValuePair> baseAuthorizationRequestParams(String issuerState, String scope) {
+        var params = new ArrayList<BasicNameValuePair>();
+        params.add(new BasicNameValuePair(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE));
+        params.add(new BasicNameValuePair(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI));
+        params.add(new BasicNameValuePair(
+                OAuth2Constants.SCOPE,
+                scope == null ? OAuth2Constants.SCOPE_OPENID : OAuth2Constants.SCOPE_OPENID + " " + scope));
+        if (issuerState != null) {
+            params.add(new BasicNameValuePair(OAuth2Constants.ISSUER_STATE, issuerState));
+        }
+        return params;
     }
 
     private String authorizationDetails(String... configurationIds) {
@@ -381,19 +476,40 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         assertEquals(
                 HttpStatus.SC_OK,
                 initial.statusCode(),
-                "Unexpected authorization response: " + initial.statusCode() + " " + initial.header("Location"));
+                "Unexpected authorization response: " + initial.statusCode() + " "
+                        + initial.header("Location") + " "
+                        + initial.body().replaceAll("\\s+", " "));
         return initial;
     }
 
     private Connection.Response requestAuthorizationPage(String authEndpoint) throws Exception {
-        // Keep redirects and HTTP errors visible so callers can assert the returned response.
-        return Jsoup.connect(authEndpoint)
-                .method(Connection.Method.GET)
-                .header(HttpHeaders.ACCEPT, ContentType.TEXT_HTML.getMimeType())
-                .followRedirects(false)
-                .ignoreContentType(true)
-                .ignoreHttpErrors(true)
-                .execute();
+        return requestAuthorizationPage(authEndpoint, new HashMap<>());
+    }
+
+    private Connection.Response requestAuthorizationPage(String authEndpoint, Map<String, String> cookieSink)
+            throws Exception {
+        // Follow redirects hop-by-hop while accumulating session cookies (e.g. across the PAR
+        // request_uri hop), keeping HTTP errors visible so callers can assert the returned response.
+        String url = authEndpoint;
+        for (int hop = 0; hop < 5; hop++) {
+            Connection.Response response = Jsoup.connect(url)
+                    .method(Connection.Method.GET)
+                    .header(HttpHeaders.ACCEPT, ContentType.TEXT_HTML.getMimeType())
+                    .cookies(cookieSink)
+                    .followRedirects(false)
+                    .ignoreContentType(true)
+                    .ignoreHttpErrors(true)
+                    .execute();
+            cookieSink.putAll(response.cookies());
+            if (response.statusCode() < HttpStatus.SC_MULTIPLE_CHOICES
+                    || response.statusCode() >= HttpStatus.SC_BAD_REQUEST) {
+                return response;
+            }
+            String location = response.header(HttpHeaders.LOCATION);
+            assertNotNull(location, "Redirect response without Location header");
+            url = URI.create(url).resolve(location).toString();
+        }
+        throw new IllegalStateException("Too many redirects fetching authorization page: " + authEndpoint);
     }
 
     private String nestedLink(Connection.Response response) throws Exception {
@@ -412,10 +528,15 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
             String scope, String authorizationDetails, String issuerState, String presentedCredential)
             throws Exception {
         // Drive the nested presentation, callback, and parent OIDC authorization-code steps.
-        String authEndpoint = buildAuthorizationEndpoint(scope, authorizationDetails, issuerState);
-        Connection.Response initial = startNestedAuthorization(authEndpoint);
+        return completeNestedAuthorization(
+                buildAuthorizationEndpoint(scope, authorizationDetails, issuerState), presentedCredential);
+    }
+
+    private String completeNestedAuthorization(String authEndpoint, String presentedCredential) throws Exception {
+        Map<String, String> browserCookies = new HashMap<>();
+        Connection.Response initial = requestAuthorizationPage(authEndpoint, browserCookies);
         String location = nestedLink(initial);
-        BasicCookieStore cookieStore = convertCookiesMapToStore(initial.cookies());
+        BasicCookieStore cookieStore = convertCookiesMapToStore(browserCookies);
 
         TestFlowData flowData = testSuccessfulAuthenticationVerbose(
                 presentedCredential,

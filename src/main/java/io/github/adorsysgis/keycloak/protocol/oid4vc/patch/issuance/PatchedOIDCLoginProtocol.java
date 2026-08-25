@@ -11,12 +11,14 @@ import org.keycloak.protocol.oidc.OIDCProviderConfig;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
- * OIDC protocol customizations required by this plugin.
+ * OIDC protocol customizations required by this plugin:
  *
- * <p>It removes an unsupported {@code dpop_jkt} client note when DPoP is disabled (see
- * <a href="https://github.com/keycloak/keycloak/issues/51573">Keycloak issue #51573</a>) and
- * forces reauthentication when the parent OIDC transaction requires nested presentation during
- * issuance, preventing an existing login from bypassing that presentation step.
+ * <ul>
+ *   <li>remove an unsupported {@code dpop_jkt} client note when DPoP is disabled (see
+ *       <a href="https://github.com/keycloak/keycloak/issues/51573">Keycloak issue #51573</a>),</li>
+ *   <li>force reauthentication when the parent OIDC transaction requires nested presentation during
+ *       issuance, preventing an existing login from bypassing that presentation step.</li>
+ * </ul>
  */
 public class PatchedOIDCLoginProtocol extends OIDCLoginProtocol {
 

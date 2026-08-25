@@ -6,6 +6,7 @@ import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import jakarta.ws.rs.BadRequestException;
 import java.util.Arrays;
@@ -17,6 +18,7 @@ import org.jboss.logging.Logger;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferState;
 import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
@@ -29,6 +31,11 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Detects and resolves presentation-during-issuance state from a running OIDC authentication session.
+ *
+ * <p>All runtime detection is gated on the realm attribute
+ * {@code oid4vci.presentation_during_issuance}: when it is unset or false, no session is treated as
+ * requiring nested presentation, so the login flow renders an ordinary login and the issuance gate
+ * still refuses gated credentials for want of a verified-presentation marker.
  */
 public final class PresentationDuringIssuanceService {
 
@@ -37,10 +44,12 @@ public final class PresentationDuringIssuanceService {
     private static final String ISSUER_STATE_NOTE =
             AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX + OAuth2Constants.ISSUER_STATE;
 
+    private final RealmModel realm;
     private final GuardedCredentialScope requestedCredentialScope;
     private final CredentialOfferState requestedCredentialOfferState;
 
     public PresentationDuringIssuanceService(KeycloakSession session, AuthenticationSessionModel authSession) {
+        this.realm = authSession == null ? null : authSession.getRealm();
         this.requestedCredentialOfferState = resolveCredentialOffer(session, authSession);
         this.requestedCredentialScope = resolveRequestedCredential(authSession, requestedCredentialOfferState);
     }
@@ -49,9 +58,15 @@ public final class PresentationDuringIssuanceService {
      * Whether this session requires a nested presentation for credential issuance.
      */
     public boolean requiresNestedPresentationDuringIssuance() {
-        return requestedCredentialScope != null
+        return presentationDuringIssuanceEnabled()
+                && requestedCredentialScope != null
                 && requestedCredentialScope.requiresPresentation()
                 && requestedCredentialScope.supportsPresentationMode(NESTED_OID4VP_FLOW);
+    }
+
+    private boolean presentationDuringIssuanceEnabled() {
+        return realm != null && Boolean.parseBoolean(
+                realm.getAttribute(OID4VCIssuerMetadataProvider.ATTR_PRESENTATION_DURING_ISSUANCE));
     }
 
     /**
