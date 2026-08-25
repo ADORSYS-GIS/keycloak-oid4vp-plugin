@@ -3,15 +3,13 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope.VC_PRESENTATION_PROFILE_ID_ATTR;
-import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope.VC_REQUIRES_PRESENTATION_ATTR;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScopeTest.clientScope;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
-import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -171,17 +169,14 @@ public class PatchedOID4VCIssuerEndpointTest {
         verify(eventBuilder).error(ErrorType.INVALID_CREDENTIAL_REQUEST.getValue());
     }
 
-    private static CredentialScopeModel mockedScope(List<PresentationDuringIssuanceMode> modes, String profileId) {
-        CredentialScopeModel scope = mock(CredentialScopeModel.class);
-        lenient().when(scope.getProtocol()).thenReturn(OID4VC_PROTOCOL);
-        when(scope.getAttribute(VC_REQUIRES_PRESENTATION_ATTR))
-                .thenReturn(Optional.ofNullable(modes)
-                        .map(l -> l.stream()
-                                .map(PatchedOID4VCIssuerEndpointTest::toValue)
+    public static CredentialScopeModel mockedScope(List<PresentationDuringIssuanceMode> modes, String profileId) {
+        return new CredentialScopeModel(clientScope(
+                Optional.ofNullable(modes)
+                        .map(values -> values.stream()
+                                .map(v -> v != null ? v.getValue() : null)
                                 .collect(Collectors.joining(",")))
-                        .orElse(null));
-        when(scope.getAttribute(VC_PRESENTATION_PROFILE_ID_ATTR)).thenReturn(profileId);
-        return scope;
+                        .orElse(null),
+                profileId));
     }
 
     private static UserSessionModel sessionWithNote(PresentationDuringIssuanceMode mode, String profileId) {
@@ -191,12 +186,6 @@ public class PatchedOID4VCIssuerEndpointTest {
                 : PresentationVerifiedNote.of(mode, profileId).toJson();
         lenient().when(session.getNote(PRESENTATION_VERIFIED_NOTE)).thenReturn(note);
         return session;
-    }
-
-    private static String toValue(PresentationDuringIssuanceMode mode) {
-        return Optional.ofNullable(mode)
-                .map(PresentationDuringIssuanceMode::getValue)
-                .orElse(null);
     }
 
     /**
