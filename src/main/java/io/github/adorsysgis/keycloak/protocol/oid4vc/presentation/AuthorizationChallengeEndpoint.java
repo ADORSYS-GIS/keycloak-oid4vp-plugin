@@ -15,6 +15,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.PresentationDuringIssuanceService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -36,8 +37,6 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferState;
-import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
-import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
@@ -153,7 +152,14 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         // OID4VCI 1.1 requires a Wallet that received issuer_state in a Credential Offer and selected
         // the Authorization Code Flow to include it in this initial Authorization Challenge Request.
         // Treat it as untrusted input and resolve it against server-side offer state before creating a session.
-        CredentialOfferState offerState = resolveCredentialOffer(issuerState);
+        CredentialOfferState offerState;
+        try {
+            offerState = PresentationDuringIssuanceService.resolveCredentialOffer(session, issuerState);
+        } catch (IllegalArgumentException e) {
+            logger.debugf(e, "Could not resolve credential offer from issuer_state");
+            throw badRequest("Invalid issuer_state");
+        }
+
         String subjectUserId = Optional.ofNullable(offerState)
                 .map(CredentialOfferState::getTargetUserId)
                 .orElse(null);
@@ -329,30 +335,6 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
                     AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX
                             + OAuth2Constants.ISSUER_STATE,
                     issuerState);
-        }
-    }
-
-    /** Resolves and validates the server-side Credential Offer referenced by untrusted {@code issuer_state}. */
-    private CredentialOfferState resolveCredentialOffer(String issuerState) {
-        if (StringUtil.isBlank(issuerState)) {
-            return null;
-        }
-        try {
-            String offerId = IssuerState.fromEncodedString(issuerState).getCredentialsOfferId();
-            if (StringUtil.isBlank(offerId)) {
-                throw badRequest("Invalid issuer_state");
-            }
-            CredentialOfferState offerState =
-                    session.getProvider(CredentialOfferStorage.class).getOfferStateById(offerId);
-            if (offerState == null) {
-                throw badRequest("Unknown or expired issuer_state");
-            }
-            return offerState;
-        } catch (BadRequestException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            logger.debugf(e, "Could not resolve credential offer from issuer_state");
-            throw badRequest("Invalid issuer_state");
         }
     }
 

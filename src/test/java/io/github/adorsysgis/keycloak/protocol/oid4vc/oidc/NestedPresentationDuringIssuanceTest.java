@@ -174,8 +174,8 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
                 .setCredentialsOfferId("unknown-offer-" + UUID.randomUUID())
                 .encodeToString();
 
-        Connection.Response response = requestAuthorizationPage(
-                buildAuthorizationEndpoint(null, null, unknownIssuerState));
+        Connection.Response response =
+                requestAuthorizationPage(buildAuthorizationEndpoint(null, null, unknownIssuerState));
 
         assertEquals(HttpStatus.SC_OK, response.statusCode(), "Unexpected authorization response");
         assertTrue(
@@ -186,8 +186,8 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     @Test
     @DisplayName("should ignore malformed issuer_state without starting nested presentation")
     void shouldIgnoreMalformedIssuerState() throws Exception {
-        Connection.Response response = requestAuthorizationPage(
-                buildAuthorizationEndpoint(null, null, "not-a-valid-issuer-state"));
+        Connection.Response response =
+                requestAuthorizationPage(buildAuthorizationEndpoint(null, null, "not-a-valid-issuer-state"));
 
         assertEquals(HttpStatus.SC_OK, response.statusCode());
         assertTrue(
@@ -249,8 +249,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         // than nested OID4VP. The scope is therefore available for token-request authorization_details,
         // but does not turn this ordinary same-device login into a nested PDI flow.
         FormData formData = getFreshOid4vpFormActionUrl(false, INTERACTIVE_GATED_CREDENTIAL_CONFIG_ID);
-        String identityCredential =
-                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+        String identityCredential = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
 
         TestFlowData flowData = testSuccessfulAuthenticationVerbose(
                 identityCredential,

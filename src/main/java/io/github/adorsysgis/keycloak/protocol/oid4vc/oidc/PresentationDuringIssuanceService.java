@@ -41,7 +41,7 @@ public final class PresentationDuringIssuanceService {
     private final CredentialOfferState requestedCredentialOfferState;
 
     public PresentationDuringIssuanceService(KeycloakSession session, AuthenticationSessionModel authSession) {
-        this.requestedCredentialOfferState = resolveCredentialOfferState(session, authSession);
+        this.requestedCredentialOfferState = resolveCredentialOffer(session, authSession);
         this.requestedCredentialScope = resolveRequestedCredential(authSession, requestedCredentialOfferState);
     }
 
@@ -108,8 +108,7 @@ public final class PresentationDuringIssuanceService {
     private static List<CredentialScopeModel> resolveFromIssuerState(
             AuthenticationSessionModel authSession, CredentialOfferState requestedCredentialOfferState) {
         if (requestedCredentialOfferState == null) {
-            String issuerState = authSession.getClientNote(ISSUER_STATE_NOTE);
-            return StringUtil.isBlank(issuerState) ? null : List.of();
+            return null;
         }
 
         return requestedCredentialOfferState.getAuthorizationDetails().stream()
@@ -160,29 +159,51 @@ public final class PresentationDuringIssuanceService {
     }
 
     /**
-     * Resolves credential offer state from expected issuer state client note.
+     * Resolves the credential offer referenced by an issuer state note. Invalid or unknown issuer
+     * states are treated as absent so they cannot turn ordinary login into presentation during issuance.
      */
-    private static CredentialOfferState resolveCredentialOfferState(
+    public static CredentialOfferState resolveCredentialOffer(
             KeycloakSession session, AuthenticationSessionModel authSession) {
-        String offerId = Optional.ofNullable(authSession)
+        String issuerState = Optional.ofNullable(authSession)
                 .map(s -> s.getClientNote(ISSUER_STATE_NOTE))
-                .filter(StringUtil::isNotBlank)
-                .map(IssuerState::fromEncodedString)
-                .map(IssuerState::getCredentialsOfferId)
                 .orElse(null);
 
-        if (StringUtil.isBlank(offerId)) {
+        try {
+            return resolveCredentialOffer(session, issuerState);
+        } catch (IllegalArgumentException e) {
+            logger.debugf(e, "Could not resolve credential offer from issuer_state");
+            return null;
+        }
+    }
+
+    /**
+     * Resolves a credential offer from an issuer state note.
+     *
+     * @return resolved offer state or {@code null} if no issuer state provided
+     * @throws IllegalArgumentException if invalid issuer_state
+     */
+    public static CredentialOfferState resolveCredentialOffer(KeycloakSession session, String issuerState) {
+        if (StringUtil.isBlank(issuerState)) {
             return null;
         }
 
-        CredentialOfferState offer =
-                session.getProvider(CredentialOfferStorage.class).getOfferStateById(offerId);
+        try {
+            String offerId = IssuerState.fromEncodedString(issuerState).getCredentialsOfferId();
+            if (StringUtil.isBlank(offerId)) {
+                throw new IllegalArgumentException("No credentials_offer_id from issuer_state");
+            }
 
-        if (offer == null) {
-            logger.debugf("No credential offer found for attached offerId=%s", offerId);
+            CredentialOfferState offerState =
+                    session.getProvider(CredentialOfferStorage.class).getOfferStateById(offerId);
+            if (offerState == null) {
+                throw new IllegalArgumentException("Unknown or expired issuer_state");
+            }
+
+            return offerState;
+        } catch (RuntimeException e) {
+            logger.debugf(e, "Could not resolve credential offer from issuer_state");
+            throw new IllegalArgumentException("Invalid issuer_state", e);
         }
-
-        return offer;
     }
 
     private static List<String> findCredentialConfigurationIds(String authorizationDetails) {
