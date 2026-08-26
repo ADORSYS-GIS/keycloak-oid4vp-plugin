@@ -27,22 +27,22 @@ public final class KeycloakTestContainer {
     public static KeycloakContainer create(List<String> realmImports, Consumer<String> logConsumer) {
         // noinspection resource
         return new KeycloakContainer(TEST_KEYCLOAK_IMAGE)
-               .withImagePullPolicy(PullPolicy.alwaysPull())
-               .withProviderLibsFrom(List.of(loadShadedPluginJar()))
-               .withProviderClassesFrom("target/classes", "target/test-classes")
-               .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
-               .withRealmImportFiles(realmImports.toArray(String[]::new))
-               .withEnv("JAVA_OPTS_APPEND", "-Xms1g -Xmx2g")
-               .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
-               .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
-               .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
-               .withCopyToContainer(
-                       MountableFile.forHostPath("src/test/resources/truststore.jks"),
-                       "/opt/keycloak/conf/truststore.jks")
-               .withEnv("KC_SPI_TRUSTSTORE_FILE_FILE", "/opt/keycloak/conf/truststore.jks")
-               .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
-               .withEnv("KC_TLS_HOSTNAME_VERIFIER", "ANY")
-               .withLogConsumer(frame -> logConsumer.accept(frame.getUtf8String()));
+                .withImagePullPolicy(PullPolicy.alwaysPull())
+                .withProviderLibsFrom(List.of(loadShadedPluginJar()))
+                .withProviderClassesFrom("target/classes", "target/test-classes")
+                .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
+                .withRealmImportFiles(realmImports.toArray(String[]::new))
+                .withEnv("JAVA_OPTS_APPEND", "-Xms1g -Xmx2g")
+                .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
+                .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
+                .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
+                .withCopyToContainer(
+                        MountableFile.forHostPath("src/test/resources/truststore.jks"),
+                        "/opt/keycloak/conf/truststore.jks")
+                .withEnv("KC_SPI_TRUSTSTORE_FILE_FILE", "/opt/keycloak/conf/truststore.jks")
+                .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
+                .withEnv("KC_TLS_HOSTNAME_VERIFIER", "ANY")
+                .withLogConsumer(frame -> logConsumer.accept(frame.getUtf8String()));
     }
 
     private static File loadShadedPluginJar() {

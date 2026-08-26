@@ -114,7 +114,10 @@ public class PatchedOID4VCIssuerEndpointTest {
         return Stream.of(
                 Arguments.of(List.of(INTERACTIVE_AUTHORIZATION), INTERACTIVE_AUTHORIZATION, "enforced", "enforced"),
                 Arguments.of(
-                        List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW), INTERACTIVE_AUTHORIZATION, "enforced", "enforced"),
+                        List.of(INTERACTIVE_AUTHORIZATION, NESTED_OID4VP_FLOW),
+                        INTERACTIVE_AUTHORIZATION,
+                        "enforced",
+                        "enforced"),
                 // Empty list = accept any mode, so the verified interactive mode is supported.
                 Arguments.of(List.of(), INTERACTIVE_AUTHORIZATION, "enforced", "enforced"),
                 // The presentation matches the concrete authentication profile enforced by the credential.

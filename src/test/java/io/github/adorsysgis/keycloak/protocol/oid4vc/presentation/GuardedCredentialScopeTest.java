@@ -1,13 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
-import org.junit.jupiter.api.Test;
-import org.keycloak.models.ClientScopeModel;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.oid4vci.CredentialScopeModel;
-
-import java.util.stream.Stream;
-
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode.NESTED_OID4VP_FLOW;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,6 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.keycloak.models.ClientScopeModel;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.oid4vci.CredentialScopeModel;
 
 public class GuardedCredentialScopeTest {
 
