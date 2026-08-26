@@ -5,6 +5,7 @@ import static org.keycloak.constants.OID4VCIConstants.OID4VC_PROTOCOL;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import java.util.Arrays;
 import java.util.stream.Collectors;
+import org.jboss.logging.Logger;
 import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
@@ -16,6 +17,8 @@ import org.keycloak.utils.StringUtil;
  * Encodes the "presentation during issuance" policy.
  */
 public class GuardedCredentialScope extends CredentialScopeModel {
+
+    private static final Logger logger = Logger.getLogger(GuardedCredentialScope.class);
 
     /**
      * Configures whether the credential requires a Verifiable Presentation prior to issuance,
@@ -35,6 +38,12 @@ public class GuardedCredentialScope extends CredentialScopeModel {
 
     public GuardedCredentialScope(ClientScopeModel clientScope) {
         super(clientScope);
+
+        try {
+            this.validateConfiguration();
+        } catch (IllegalStateException e) {
+            logger.warnf(e, "Guarded credential scope is misconfigured");
+        }
     }
 
     public static GuardedCredentialScope from(CredentialScopeModel credentialScope) {
