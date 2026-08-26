@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfi
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGenerator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceSession;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
@@ -97,12 +98,8 @@ public class AuthorizationRequestService {
             AuthenticationSessionModel authSession,
             OIDCAuthSession oidcAuthSession,
             CodeChallengeDetails codeChallengeParams,
-            String subjectUserId,
-            InteractiveResponseConfig interactive) {
+            PresentationDuringIssuanceSession pdiSession) {
         logger.debug("Creating a fresh authorization request for user authentication...");
-
-        ResponseMode effectiveResponseMode =
-                interactive != null ? interactive.responseMode() : config.getResponseMode();
 
         // Generate random request and transaction IDs.
         // Different IDs are used to prevent unintended access to the status of this request.
@@ -111,7 +108,7 @@ public class AuthorizationRequestService {
 
         // Generate ephemeral encryption keys if the response mode requires encryption. Must be done before creating
         // the request object, so updated client metadata are picked up as intended.
-        EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(effectiveResponseMode);
+        EphemeralKey encryptionKey = generateEncryptionKeyIfNeeded(config.getResponseMode());
 
         // Discover signing key
         KeyWrapper signingKey = discoverSigningKey(config);
@@ -125,12 +122,13 @@ public class AuthorizationRequestService {
 
         // Build request object with DCQL query from the selected authentication profile.
         RequestObject requestObject =
-                buildRequestObject(clientId, clientMetadata, config, profile, requestId, interactive);
+                buildRequestObject(clientId, clientMetadata, config, profile, requestId, pdiSession);
 
         // Sign request object initially, unless we know request_uri_method = post.
         // The interactive (ia_post) flow always embeds the signed request object inline.
         String requestObjectJwt = null;
-        if (interactive != null || !RequestUriMethod.POST.equals(config.getRequestUriMethod())) {
+        if (pdiSession != null && pdiSession.isInteractive()
+                || !RequestUriMethod.POST.equals(config.getRequestUriMethod())) {
             requestObjectJwt = signRequestObject(requestObject, signingKey, certificate);
         }
 
@@ -148,8 +146,15 @@ public class AuthorizationRequestService {
                 .setRequestObjectJwt(requestObjectJwt)
                 .setAuthorizationRequest(authorizationRequestLink)
                 .setRequestUriMethod(config.getRequestUriMethod())
-                .setProfileId(profile.getId())
-                .setSubjectUserId(subjectUserId);
+                .setProfileId(profile.getId());
+
+        // Attach presentation-during-issuance session data if provided
+        if (pdiSession != null) {
+            authorizationContext
+                    .setSubjectUserId(pdiSession.subjectUserId())
+                    .setPresentationDuringIssuanceMode(
+                            pdiSession.mode() == null ? null : pdiSession.mode().getValue());
+        }
 
         // Attach parent OIDC auth session data if provided
         // Generate response code to attach to context for same-device responses
@@ -243,17 +248,7 @@ public class AuthorizationRequestService {
             VerifierConfig config,
             AuthenticationProfile profile,
             String requestId,
-            InteractiveResponseConfig interactive) {
-        String responseUri = interactive != null
-                ? interactive.responseUri()
-                : KeycloakUriBuilder.fromUri(openID4VPRootUrl)
-                        .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
-                        .path(requestId)
-                        .build()
-                        .toString();
-
-        ResponseMode responseMode = interactive != null ? interactive.responseMode() : config.getResponseMode();
-
+            PresentationDuringIssuanceSession pdiSession) {
         // Generate nonce
         String nonce = Stream.generate(AuthorizationRequestService::generateRandomString)
                 .limit(2)
@@ -274,6 +269,21 @@ public class AuthorizationRequestService {
         var verifierInfo = VerifierInfoSupport.build(
                 config.getRegistrationCertificate(), config.getVerifierInfoConfig(), primaryCredentialIds);
 
+        // Resolve effective response mode
+        boolean isInteractive = pdiSession != null && pdiSession.isInteractive();
+        ResponseMode responseMode = isInteractive
+                ? (config.getResponseMode().isEncrypted() ? ResponseMode.IA_POST_JWT : ResponseMode.IA_POST)
+                : config.getResponseMode();
+
+        // Resolve effective response URI
+        String responseUri = pdiSession != null && StringUtil.isNotBlank(pdiSession.responseUri())
+                ? pdiSession.responseUri()
+                : KeycloakUriBuilder.fromUri(openID4VPRootUrl)
+                        .path(OID4VPUserAuthEndpoint.RESPONSE_URI_PATH)
+                        .path(requestId)
+                        .build()
+                        .toString();
+
         // Aggregate properties
         RequestObject requestObject = new RequestObject()
                 .setIssuer(clientId)
@@ -291,7 +301,7 @@ public class AuthorizationRequestService {
 
         // OID4VCI §6.2.1.1/§6.2.1.5: bind the request to the Authorization Challenge Endpoint
         // origin to prevent forwarding of the presentation request to another Authorization Server.
-        if (interactive != null) {
+        if (isInteractive) {
             requestObject.setExpectedOrigins(List.of(deriveOrigin(responseUri)));
         }
 
@@ -425,14 +435,9 @@ public class AuthorizationRequestService {
             throw new RuntimeException("Failed to extract issuer CN from certificate", e);
         }
     }
+
     /**
      * Record to hold PKCE parameters for passing around concisely.
      */
     public record CodeChallengeDetails(String codeChallenge, String codeChallengeMethod) {}
-
-    /**
-     * Overrides for the OID4VCI interactive authorization (ia_post) flow, where the OpenID4VP
-     * Authorization Response is submitted back to the Authorization Challenge Endpoint.
-     */
-    public record InteractiveResponseConfig(ResponseMode responseMode, String responseUri) {}
 }
