@@ -5,14 +5,12 @@ Welcome to the documentation hub for the Keycloak OpenID4VP plugin. Use this pag
 == What you’ll find here
 
 * OpenID4VP user authentication: how to enable the feature, initiate the flow, poll for status, and finish login.
-* Authentication profiles: how to configure credential requirements, trust policies, and binding rules.
-* Deployment configuration: complete reference for all authenticator settings.
+* Deployment configuration: complete reference for all authenticator settings, including credential formats, authentication profiles, trust policies, and binding rules.
 * German wallet PID verification: configuration for dual-credential authentication with the German EUDI wallet.
 
 == Quick links
 
 * xref:oid4vp-user-authentication.adoc[Authenticate users with verifiable credentials]
-* xref:oid4vp-user-authentication.adoc#_authentication_profiles[Authentication profiles]
 * xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference]
 * xref:german-wallet-pid-verification-configuration.adoc[German wallet PID verification configuration]
 * xref:non-functional-requirements.adoc[Non-Functional Requirements and Technical Configuration]
