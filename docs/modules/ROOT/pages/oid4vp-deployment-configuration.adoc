@@ -66,6 +66,57 @@ Generic example authenticator configuration (realm JSON import format):
 If you provision Keycloak using Terraform or similar tooling, map these settings to your own
 module/input variable names according to your deployment conventions.
 
+=== Configuring primary credential identity claims
+
+When the primary credential is used to identify the Keycloak user, two optional properties control which claims are used for user resolution.
+
+`subjectClaim`::
+  The claim used to resolve the Keycloak user by *user id*.
+  Defaults to `sub`.
+
+`usernameClaim`::
+  An optional fallback claim used to resolve the Keycloak user by *username* when `subjectClaim` does not match a Keycloak user id.
+  Defaults to `username`.
+  Omit or set to blank to skip the username fallback.
+
+For mDoc credentials, claims are namespaced using the `namespace/element` format defined by ISO 18013-5.
+For example, a PID mDoc identifies a person by:
+
+[source,text]
+----
+namespace: eu.europa.ec.eudi.pid.1
+element:   given_name
+Namespaced form: eu.europa.ec.eudi.pid.1/given_name
+----
+
+When configuring a primary mDoc credential for authentication, set `subjectClaim` to a namespaced claim that uniquely identifies the user (e.g. `eu.europa.ec.eudi.pid.1/personal_administrative_number`).
+Do *not* set `subjectClaim` to a bare element like `document_number` unless it is globally unique across issuers.
+
+The following example shows the identity claim configuration for a primary mDoc credential.
+The `trust` configuration is omitted for brevity — refer to the trust configuration sections above.
+
+[source,json]
+----
+{
+  "id": "main",
+  "role": "primary",
+  "format": "mso_mdoc",
+  "credentialTypes": [
+    "eu.europa.ec.eudi.pid.1"
+  ],
+  "subjectClaim": "eu.europa.ec.eudi.pid.1/personal_administrative_number",
+  "usernameClaim": "eu.europa.ec.eudi.pid.1/given_name",
+  "claims": [
+    "eu.europa.ec.eudi.pid.1/personal_administrative_number",
+    "eu.europa.ec.eudi.pid.1/given_name",
+    "eu.europa.ec.eudi.pid.1/family_name"
+  ],
+  "trust": [ ... ]
+}
+----
+
+For SD-JWT VC credentials, use standard claim names such as `sub` and `username` — no namespace is needed.
+
 === SPRIN-D wallet sandbox profile (example)
 
 For the German wallet ecosystem profile (HAIP/OpenID4VP PID presentation), use the

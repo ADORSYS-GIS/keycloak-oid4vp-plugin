@@ -181,55 +181,9 @@ Use a single-credential profile when only a self-issued primary credential is re
 
 == Primary credential identity claim configuration
 
-A primary credential must carry at least one claim that identifies the Keycloak user.
-Two optional properties control which claims are used for user resolution:
+When a primary mDoc credential identifies the Keycloak user, use a namespaced `subjectClaim` (e.g. `eu.europa.ec.eudi.pid.1/personal_administrative_number`) rather than a bare element like `document_number`, which may not be globally unique across issuers.
 
-`subjectClaim`::
-  The claim used to resolve the Keycloak user by *user id*.
-  Defaults to `sub`.
-
-`usernameClaim`::
-  An optional fallback claim used to resolve the Keycloak user by *username* when `subjectClaim` does not match a Keycloak user id.
-  Defaults to `username`.
-  Omit or set to blank to skip the username fallback.
-
-For mDoc credentials, claims are namespaced using the `namespace/element` format defined by ISO 18013-5.
-For example, a PID mDoc identifies a person by:
-
-[source,text]
-----
-namespace: eu.europa.ec.eudi.pid.1
-element:   given_name
-Namespaced form: eu.europa.ec.eudi.pid.1/given_name
-----
-
-When configuring a primary mDoc credential for authentication, set `subjectClaim` to a namespaced claim that uniquely identifies the user (e.g. `eu.europa.ec.eudi.pid.1/personal_administrative_number`).
-Do *not* set `subjectClaim` to a bare element like `document_number` unless it is globally unique across issuers.
-
-The following example shows the identity claim configuration for a primary mDoc credential.
-The `trust` configuration is omitted for brevity — refer to the x5c trust or EUDI PID trust-list sections above.
-
-[source,json]
-----
-{
-  "id": "main",
-  "role": "primary",
-  "format": "mso_mdoc",
-  "credentialTypes": [
-    "eu.europa.ec.eudi.pid.1"
-  ],
-  "subjectClaim": "eu.europa.ec.eudi.pid.1/personal_administrative_number",
-  "usernameClaim": "eu.europa.ec.eudi.pid.1/given_name",
-  "claims": [
-    "eu.europa.ec.eudi.pid.1/personal_administrative_number",
-    "eu.europa.ec.eudi.pid.1/given_name",
-    "eu.europa.ec.eudi.pid.1/family_name"
-  ],
-  "trust": [ ... ]
-}
-----
-
-For SD-JWT VC credentials, use standard claim names such as `sub` and `username` — no namespace is needed.
+For full details on `subjectClaim`, `usernameClaim`, and the namespace/element format, see xref:oid4vp-deployment-configuration.adoc#oid4vp-deployment-configuration[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
 
 == Authentication flow
 

@@ -392,8 +392,9 @@ public class OID4VPProfileConfigTest {
 
     @Test
     void shouldRejectMdocPrimaryCredentialWithBareSubjectClaim() {
-        // forkimenjeckayang comment: bare subjectClaim is ambiguous for mso_mdoc because
-        // MdocCredentialVerifier.readClaim() searches every namespace and returns the first match.
+        // Bare subjectClaim is rejected for mso_mdoc because
+        // MdocCredentialVerifier.readClaim() searches all namespaces,
+        // so a bare name like "document_number" could match in the wrong namespace.
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """
                 [
