@@ -37,6 +37,15 @@ public enum ResponseMode {
         return this == DIRECT_POST_JWT || this == IA_POST_JWT;
     }
 
+    /**
+     * Whether this response mode signals an OID4VCI <em>interactive authorization</em> flow
+     * (OID4VCI §6, presentation during issuance), i.e., the {@code ia_post} or {@code ia_post.jwt}
+     * response mode.
+     */
+    public boolean isInteractiveAuthorization() {
+        return this == IA_POST || this == IA_POST_JWT;
+    }
+
     public static ResponseMode fromValue(String value) {
         for (ResponseMode mode : ResponseMode.values()) {
             if (mode.value.equalsIgnoreCase(value)) {

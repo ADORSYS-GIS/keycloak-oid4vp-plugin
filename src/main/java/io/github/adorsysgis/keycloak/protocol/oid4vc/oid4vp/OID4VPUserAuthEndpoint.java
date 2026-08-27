@@ -7,8 +7,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceSession;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
@@ -18,7 +18,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.InteractiveResponseConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
@@ -121,7 +120,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authContext;
         try {
             var pkceDetails = new CodeChallengeDetails(codeChallenge, codeChallengeMethod);
-            authContext = startAuthentication(clientId, profileId, null, pkceDetails);
+            authContext = startAuthentication(clientId, profileId, null, pkceDetails, null);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(
                     errorResponse(
@@ -202,7 +201,8 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     private void validateRequestUriPostHeaders() {
-        String accept = session.getContext().getRequestHeaders().getHeaderString(HttpHeaders.ACCEPT);
+        HttpHeaders headers = session.getContext().getHttpRequest().getHttpHeaders();
+        String accept = headers.getHeaderString(HttpHeaders.ACCEPT);
         if (StringUtil.isBlank(accept) || !accept.contains(AUTH_REQ_JWT_MEDIA_TYPE)) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
@@ -545,13 +545,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     }
 
     /**
-     * Initializes OpenID4VP authentication and return authorization context
+     * Initializes OpenID4VP authentication and returns an authorization context. Pass a
+     * {@link PresentationDuringIssuanceSession} to bind the authorization to credential issuance.
      */
     public AuthorizationContext startAuthentication(
             String clientId,
             String profileId,
             OIDCAuthSession oidcAuthSession,
-            CodeChallengeDetails codeChallengeDetails) {
+            CodeChallengeDetails codeChallengeDetails,
+            PresentationDuringIssuanceSession pdiSession) {
         logger.debug("Generating new authentication context...");
 
         if (oidcAuthSession == null || !oidcAuthSession.enableSameDeviceResponse()) {
@@ -566,49 +568,18 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         // Call delegate service to create an authorization request
         AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config, profile, authSession, oidcAuthSession, codeChallengeDetails);
+                config, profile, authSession, oidcAuthSession, codeChallengeDetails, pdiSession);
+
+        if (pdiSession != null && pdiSession.isInteractive()) {
+            // OID4VCI interactive authorization (ia_post) flow. The signed request object is embedded inline.
+            return new AuthorizationContext()
+                    .setRequestObjectJwt(authorizationContext.getRequestObjectJwt())
+                    .setTransactionId(authorizationContext.getTransactionId());
+        }
 
         return new AuthorizationContext()
                 .setAuthorizationRequest(authorizationContext.getAuthorizationRequest())
                 .setTransactionId(authorizationContext.getTransactionId());
-    }
-
-    /**
-     * Initializes OpenID4VP authentication for the OID4VCI interactive authorization (ia_post)
-     * flow. The signed request object is embedded inline and its {@code response_uri} points to
-     * the supplied Authorization Challenge Endpoint, where the wallet posts its response.
-     *
-     * @return an authorization context exposing the {@code transaction_id} and signed request object
-     */
-    public AuthorizationContext startInteractiveAuthentication(
-            String clientId, String profileId, CodeChallengeDetails codeChallengeDetails, String responseUri) {
-        logger.debug("Generating new interactive authentication context...");
-
-        validateOwnershipBinding(codeChallengeDetails);
-
-        ClientModel client = checkClient(clientId);
-        AuthenticationSessionModel authSession = createAuthSession(client);
-        AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(authConfig);
-        AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
-
-        // Honor the configured response mode: an encrypted verifier configuration (direct_post.jwt)
-        // maps to the encrypted interactive mode ia_post.jwt, otherwise the unencrypted ia_post
-        // is used (OID4VCI §6.2.1.1).
-        ResponseMode interactiveResponseMode =
-                config.getResponseMode().isEncrypted() ? ResponseMode.IA_POST_JWT : ResponseMode.IA_POST;
-
-        AuthorizationContext authorizationContext = authorizationRequestService.createAuthorizationRequest(
-                config,
-                profile,
-                authSession,
-                null,
-                codeChallengeDetails,
-                new InteractiveResponseConfig(interactiveResponseMode, responseUri));
-
-        return new AuthorizationContext()
-                .setTransactionId(authorizationContext.getTransactionId())
-                .setRequestObjectJwt(authorizationContext.getRequestObjectJwt());
     }
 
     /**

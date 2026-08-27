@@ -108,8 +108,7 @@ To automatically create the supplied `oid4vp auth` authentication flow during st
 realms for which the flow should be created as a comma-separated list:
 
 ```bash
-bin/kc.sh start \
-  --spi-realm-restapi-extension-oid4vp-auth-managed-realms='test,dev'
+bin/kc.sh start --spi-realm-restapi-extension-oid4vp-auth-managed-realms='test,dev'
 ```
 
 This plugin equally supports a `verbose-errors` setting to control whether detailed verification errors
@@ -120,10 +119,12 @@ flags), see:
 
 - Authentication flow and provider configuration:
   [`docs/modules/ROOT/pages/oid4vp-user-authentication.adoc`](./docs/modules/ROOT/pages/oid4vp-user-authentication.adoc)
-- Technical performance/security tuning:
-  [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
 - German wallet PID verification configuration:
   [`docs/modules/ROOT/pages/german-wallet-pid-verification-configuration.adoc`](./docs/modules/ROOT/pages/german-wallet-pid-verification-configuration.adoc)
+- Presentation during credential issuance:
+  [`docs/modules/ROOT/pages/presentation-during-issuance-configuration.adoc`](./docs/modules/ROOT/pages/presentation-during-issuance-configuration.adoc)
+- Technical performance/security tuning:
+  [`docs/modules/ROOT/pages/non-functional-requirements.adoc`](./docs/modules/ROOT/pages/non-functional-requirements.adoc)
 
 ### OID4VP authenticator configuration
 

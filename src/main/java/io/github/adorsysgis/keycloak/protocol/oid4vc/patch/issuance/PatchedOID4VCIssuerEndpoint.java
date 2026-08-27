@@ -3,20 +3,29 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Optional;
 import org.jboss.logging.Logger;
+import org.keycloak.events.Details;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationDetailsProcessor;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint;
 import org.keycloak.protocol.oid4vc.model.CredentialRequest;
+import org.keycloak.protocol.oid4vc.model.ErrorType;
 import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
 import org.keycloak.protocol.oidc.rar.AuthorizationDetailsProcessor;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
@@ -39,18 +48,18 @@ import org.keycloak.util.JsonSerialization;
  * and all security checks remain fully intact.
  * </p>
  * <p>
- * Additionally enforces "presentation during issuance" (OID4VCI Interactive Authorization): for a
- * credential configuration flagged with {@link OpenId4VpConstants#VC_REQUIRES_PRESENTATION_ATTR}, the
- * credential is only issued when the session carries a verified-presentation marker. This guarantees
- * the authorization code was obtained via a Verifiable Presentation and excludes the pre-authorized
- * code path for such credentials.
+ * Additionally enforces "presentation during issuance": for credential configurations with
+ * {@link GuardedCredentialScope#VC_REQUIRES_PRESENTATION_ATTR}, the credential is only issued when
+ * the session carries a matching verified-presentation marker of the accepted presentation during
+ * issuance mode(s). This guarantees the authorization code was obtained via a Verifiable Presentation
+ * and excludes the pre-authorized code path for such credentials.
  * </p>
  */
 public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
 
     private static final Logger logger = Logger.getLogger(PatchedOID4VCIssuerEndpoint.class);
 
-    private final KeycloakSession keycloakSession;
+    protected final KeycloakSession keycloakSession;
 
     public PatchedOID4VCIssuerEndpoint(KeycloakSession session) {
         super(session);
@@ -59,7 +68,14 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
 
     @Override
     public Response requestCredential(String requestPayload) {
-        enforcePresentationDuringIssuance();
+        KeycloakContext context = keycloakSession.getContext();
+        EventBuilder eventBuilder = new EventBuilder(context.getRealm(), keycloakSession, context.getConnection())
+                .event(EventType.VERIFIABLE_CREDENTIAL_REQUEST);
+
+        // Enforce presentation-marked access tokens on requested
+        // credentials that require presentation during issuance
+        enforcePresentationDuringIssuance(eventBuilder);
+
         return super.requestCredential(patchWalletRequest(requestPayload));
     }
 
@@ -68,13 +84,13 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      * Presentation was verified. Non-gated credentials and cases the core endpoint rejects on its own
      * are left untouched.
      */
-    private void enforcePresentationDuringIssuance() {
+    private void enforcePresentationDuringIssuance(EventBuilder eventBuilder) {
         AuthenticationManager.AuthResult authResult = resolveAuthResultWithoutConsumingDPoP();
         if (authResult == null || authResult.token() == null) {
             return; // Let the core endpoint emit the standard invalid-token error.
         }
 
-        String credentialConfigurationId = resolveRequestedCredentialConfigurationId(authResult);
+        String credentialConfigurationId = resolveRequestedCredentialConfigurationId(authResult, eventBuilder);
         if (credentialConfigurationId == null) {
             return; // Core endpoint validates authorization_details and rejects if missing.
         }
@@ -92,7 +108,11 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
                     "Refusing to issue credential '%s': it requires presentation during issuance but the session"
                             + " carries no verified presentation.",
                     credentialConfigurationId);
-            throw presentationRequired(credentialConfigurationId);
+            throw rejectCredentialRequest(
+                    String.format(
+                            "Credential '%s' requires a verified presentation during issuance",
+                            credentialConfigurationId),
+                    eventBuilder);
         }
     }
 
@@ -139,8 +159,11 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
     }
 
     /**
-     * Pure gate decision: whether issuance must be blocked because the credential configuration requires
-     * a presentation during issuance but the session carries no verified-presentation marker.
+     * Pure gate decision: whether issuance must be blocked because the credential configuration
+     * requires presentation during issuance but the session carries no verified-presentation
+     * marker, the {@link PresentationDuringIssuanceMode mode} through which it was obtained is not one
+     * the credential configuration allows, or the OpenID4VP profile that was used does not match the
+     * profile enforced by the credential configuration.
      *
      * @param credentialScope the resolved credential configuration (client scope)
      * @param userSession the session bound to the access token, may be {@code null}
@@ -148,38 +171,75 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      */
     static boolean isIssuanceGatedWithoutPresentation(
             CredentialScopeModel credentialScope, UserSessionModel userSession) {
-        boolean requiresPresentation =
-                Boolean.parseBoolean(credentialScope.getAttribute(OpenId4VpConstants.VC_REQUIRES_PRESENTATION_ATTR));
-        if (!requiresPresentation) {
+        if (credentialScope == null) {
+            return true;
+        }
+
+        GuardedCredentialScope config = GuardedCredentialScope.from(credentialScope);
+        if (!config.requiresPresentation()) {
             return false;
         }
-        boolean presentationVerified = userSession != null
-                && Boolean.parseBoolean(userSession.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE));
-        return !presentationVerified;
+
+        PresentationVerifiedNote note = Optional.ofNullable(userSession)
+                .map(s -> s.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE))
+                .map(PresentationVerifiedNote::fromJson)
+                .orElse(null);
+
+        // The session must record a verified presentation that was obtained through a mode allowed
+        // by the credential configuration and bound to the concrete authentication profile enforced
+        // by the credential.
+        return note == null
+                || !config.supportsPresentationMode(note.mode())
+                || !config.acceptPresentationProfile(note.profileId());
     }
 
-    private String resolveRequestedCredentialConfigurationId(AuthenticationManager.AuthResult authResult) {
+    /**
+     * Resolves the single credential configuration id granted by the access token.
+     *
+     * @param authResult the verified authentication result
+     * @param eventBuilder event builder to record a rejection
+     * @return the single credential configuration id, or {@code null} if there are none
+     */
+    String resolveRequestedCredentialConfigurationId(
+            AuthenticationManager.AuthResult authResult, EventBuilder eventBuilder) {
+        List<OID4VCAuthorizationDetail> details;
         try {
-            @SuppressWarnings("unchecked")
-            AuthorizationDetailsProcessor<OID4VCAuthorizationDetail> processor =
+            OID4VCAuthorizationDetailsProcessor processor = (OID4VCAuthorizationDetailsProcessor)
                     keycloakSession.getProvider(AuthorizationDetailsProcessor.class, OPENID_CREDENTIAL);
-            List<OID4VCAuthorizationDetail> details = processor.getSupportedAuthorizationDetails(
+            details = processor.getSupportedAuthorizationDetails(
                     authResult.token().getAuthorizationDetails());
-            if (details == null || details.isEmpty()) {
-                return null;
-            }
-            return details.getFirst().getCredentialConfigurationId();
         } catch (RuntimeException e) {
             logger.debugf(e, "Could not resolve credential_configuration_id from access token for the issuance gate");
             return null;
         }
+
+        if (details == null || details.isEmpty()) {
+            // Let core endpoint validate authorization_details and reject accordingly
+            return null;
+        }
+
+        if (details.size() > 1) {
+            // Rejects tokens granting more than one authorization detail, matching the core endpoint's
+            // so the gate cannot be bypassed if upstream later supports multiple credentials
+            throw rejectCredentialRequest(
+                    String.format("Multiple authorization_details not supported: %s", details), eventBuilder);
+        }
+
+        return details.getFirst().getCredentialConfigurationId();
     }
 
-    private BadRequestException presentationRequired(String credentialConfigurationId) {
-        OAuth2ErrorRepresentation error = new OAuth2ErrorRepresentation(
-                "invalid_credential_request",
-                "Credential '" + credentialConfigurationId
-                        + "' requires a verified presentation during issuance (OID4VCI Interactive Authorization).");
+    /**
+     * Builds the standard {@code invalid_credential_request} rejection: fires the event and returns the
+     * {@link BadRequestException}, mirroring the core endpoint's error type and response shape.
+     *
+     * @param errorMessage the human-readable reason, also recorded on the event
+     * @param eventBuilder event builder to record the rejection
+     * @return the {@link BadRequestException} to throw
+     */
+    private static BadRequestException rejectCredentialRequest(String errorMessage, EventBuilder eventBuilder) {
+        eventBuilder.detail(Details.REASON, errorMessage).error(ErrorType.INVALID_CREDENTIAL_REQUEST.getValue());
+        OAuth2ErrorRepresentation error =
+                new OAuth2ErrorRepresentation(ErrorType.INVALID_CREDENTIAL_REQUEST.getValue(), errorMessage);
         return new BadRequestException(Response.status(Response.Status.BAD_REQUEST)
                 .entity(error)
                 .type(MediaType.APPLICATION_JSON_TYPE)

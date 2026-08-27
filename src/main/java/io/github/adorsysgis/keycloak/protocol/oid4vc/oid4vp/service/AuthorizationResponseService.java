@@ -8,6 +8,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapability;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlResponseCredentialSelector;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
@@ -35,6 +37,7 @@ import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
@@ -51,7 +54,12 @@ public class AuthorizationResponseService {
 
     private static final Logger logger = Logger.getLogger(AuthorizationResponseService.class);
 
-    public static final String PARENT_AUTH_SESSION_ID = "parent_auth_session_id";
+    /**
+     * Client-session note carrying the id of the parent OIDC authentication session that this
+     * OpenID4VP authorization is bound to. Used by {@code OID4VPLoginActionsService} to verify that
+     * a redeemed authorization code belongs to the OIDC session resuming the login.
+     */
+    public static final String PARENT_AUTH_SESSION_ID = "oid4vp.parent_auth_session_id";
 
     private final KeycloakSession session;
     private final DcqlCredentialCapabilities dcqlCapabilities;
@@ -265,11 +273,32 @@ public class AuthorizationResponseService {
      */
     private String produceAuthorizationCode(
             AuthenticatedClientSessionModel clientSession, AuthorizationContext authContext) {
-        // Decorate client session with contextual notes
+        // Decorate sessions with contextual notes
+        decorateClientSession(clientSession, authContext);
+        decorateUserSession(clientSession.getUserSession(), authContext);
 
-        if (authContext.getParentAuthSessionId() != null) {
-            clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
-        }
+        // Gather code data and generate authorization code
+
+        String code = UUID.randomUUID().toString();
+        String nonce = SecretGenerator.getInstance().randomString();
+        long expiration = Time.currentTimeSeconds() + clientSession.getRealm().getAccessCodeLifespan();
+
+        OAuth2Code codeData = new OAuth2Code(
+                code,
+                (int) expiration,
+                nonce,
+                OAuth2Constants.SCOPE_OPENID,
+                clientSession.getUserSession().getId());
+
+        return OAuth2CodeParser.persistCode(session, clientSession, codeData);
+    }
+
+    /**
+     * Decorates the client session with contextual notes for the completed authorization.
+     */
+    private void decorateClientSession(
+            AuthenticatedClientSessionModel clientSession, AuthorizationContext authContext) {
+        clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
 
         clientSession.setNote(
                 OIDCLoginProtocol.ISSUER,
@@ -277,27 +306,30 @@ public class AuthorizationResponseService {
                         session.getContext().getUri().getBaseUri(),
                         session.getContext().getRealm().getName()));
 
-        clientSession.setNote(PARAM_LOGIN_METHOD, LOGIN_METHOD_OID4VP);
+        if (authContext.getParentAuthSessionId() != null) {
+            clientSession.setNote(PARENT_AUTH_SESSION_ID, authContext.getParentAuthSessionId());
+        }
+    }
 
-        // Mark the user session as presentation-verified so the issuance gate can enforce that the
-        // authorization code was obtained via a Verifiable Presentation (OID4VCI Interactive
-        // Authorization). This marker is the carrier consumed at the credential endpoint.
-        clientSession.getUserSession().setNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE, Boolean.TRUE.toString());
+    /**
+     * Decorates the user session with the presentation-verified marker when the authorization serves
+     * credential issuance.
+     */
+    private void decorateUserSession(UserSessionModel userSession, AuthorizationContext authContext) {
+        // Mark the user session as presentation-verified through the mode recorded on the
+        // authorization context (Authorization Challenge Endpoint / OID4VCI §6). Presence verifies
+        // that the authorization code was obtained via a Verifiable Presentation, and the value binds
+        // the exact mode and OpenID4VP authentication profile for the issuance gate. Only sessions
+        // started as presentation-during-issuance carry a mode.
+        if (authContext.getPresentationDuringIssuanceMode() != null) {
+            PresentationDuringIssuanceMode mode =
+                    PresentationDuringIssuanceMode.fromValue(authContext.getPresentationDuringIssuanceMode());
 
-        // Gather code data and generate authorization code
-
-        String code = UUID.randomUUID().toString();
-        String nonce = SecretGenerator.getInstance().randomString();
-        int expiration = Time.currentTime() + clientSession.getRealm().getAccessCodeLifespan();
-
-        OAuth2Code codeData = new OAuth2Code(
-                code,
-                expiration,
-                nonce,
-                OAuth2Constants.SCOPE_OPENID,
-                clientSession.getUserSession().getId());
-
-        return OAuth2CodeParser.persistCode(session, clientSession, codeData);
+            userSession.setNote(
+                    OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE,
+                    PresentationVerifiedNote.of(mode, authContext.getProfileId())
+                            .toJson());
+        }
     }
 
     /**

@@ -104,6 +104,14 @@ public class AuthorizationContext {
     private String profileId;
 
     /**
+     * The presentation-during-issuance mode through which this authorization session was started,
+     * when it serves credential issuance rather than ordinary OpenID4VP login. {@code null} when the
+     * session is not bound to a presentation-during-issuance flow.
+     */
+    @JsonProperty("presentation_during_issuance_mode")
+    private String presentationDuringIssuanceMode;
+
+    /**
      * Id of the brokered user the credential offer is bound to (OID4VCI presentation during issuance).
      * When set, the authenticating identity is taken from this user instead of being derived from the
      * presented credential (a PID carries no Keycloak username); the presented credential is only
@@ -273,6 +281,15 @@ public class AuthorizationContext {
 
     public AuthorizationContext setProfileId(String profileId) {
         this.profileId = profileId;
+        return this;
+    }
+
+    public String getPresentationDuringIssuanceMode() {
+        return presentationDuringIssuanceMode;
+    }
+
+    public AuthorizationContext setPresentationDuringIssuanceMode(String presentationDuringIssuanceMode) {
+        this.presentationDuringIssuanceMode = presentationDuringIssuanceMode;
         return this;
     }
 

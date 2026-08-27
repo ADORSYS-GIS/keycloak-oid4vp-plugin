@@ -4,6 +4,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.ExtendedCertificateU
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.migration.OID4VPMigrationManager;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.events.EventBuilder;
@@ -56,9 +57,12 @@ public class OID4VPUserAuthEndpointFactory implements RealmResourceProviderFacto
         factory.register(event -> {
             if (event instanceof PostMigrationEvent) {
                 logger.debugf("Migrating existing realms to add OpenID4VP user auth flow...");
-                KeycloakModelUtils.runJobInTransaction(factory, session -> session.realms()
-                        .getRealmsStream()
-                        .forEach(realm -> migrationManager.migrate(session, realm)));
+                KeycloakModelUtils.runJobInTransaction(
+                        factory, session -> session.realms().getRealmsStream().forEach(realm -> {
+                            migrationManager.migrate(session, realm);
+                            logger.debugf("Validating credential scope configurations for realm %s", realm.getName());
+                            GuardedCredentialScope.validateRealm(realm);
+                        }));
             } else if (event instanceof RealmModel.RealmPostCreateEvent realmEvent) {
                 logger.debugf("Migrating newly created realm to add OpenID4VP user auth flow...");
                 RealmModel realm = realmEvent.getCreatedRealm();

@@ -152,7 +152,8 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
 
     @Test
     public void shouldProvisionOid4vpLogin_WhenOidcAuthorizeWithoutPkce() throws Exception {
-        String authEndpoint = buildWrappedOidcAuthorizeRequest(false).uri().toString();
+        String authEndpoint =
+                buildWrappedOidcAuthorizeRequest(false, null).uri().toString();
 
         HttpGet httpGet = new HttpGet(authEndpoint);
         try (CloseableHttpClient client = HttpClientBuilder.create().build()) {

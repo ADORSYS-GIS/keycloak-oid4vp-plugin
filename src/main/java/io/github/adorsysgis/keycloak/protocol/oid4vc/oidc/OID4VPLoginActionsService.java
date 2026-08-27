@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.PARAM_LOGIN_METHOD;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -122,6 +123,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 checksForCode(authSessionId, code, execution, clientId, tabId, clientData, AUTHENTICATE_PATH);
 
         if (!checks.verifyActiveAndValidAction(Action.AUTHENTICATE.name(), ActionType.LOGIN)) {
+            logger.errorf("Session code checks failed");
             return checks.getResponse();
         }
 
@@ -130,7 +132,7 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
         AuthenticationSessionModel authSession = checks.getAuthenticationSession();
 
         // Validate authorization code
-        logger.debug("Validating authorization code");
+        logger.debug("Validating authorization code...");
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, authorizationCode, realm, event);
         if (result.isIllegalCode() || result.isExpiredCode()) {
             return failOnInvalidCode(authSession, "Authorization code validation failed");
@@ -153,7 +155,18 @@ public class OID4VPLoginActionsService extends LoginActionsService implements Re
                 result.getClientSession().getUserSession().getUser());
         ClientSessionContext clientSessionCtx =
                 AuthenticationProcessor.attachSession(authSession, null, session, realm, clientConnection, event);
+
+        // The parent OIDC login resumes with a fresh user session, so propagate the
+        // presentation-verified marker recorded on the user session of the redeemed authorization
+        // code (see AuthorizationResponseService#decorateUserSession). Presence binds the exact
+        // presentation-during-issuance mode and OpenID4VP authentication profile for the issuance gate;
+        // ordinary same-device OpenID4VP logins carry no such marker.
+        UserSessionModel userSession = result.getClientSession().getUserSession();
         UserSessionModel freshUserSession = clientSessionCtx.getClientSession().getUserSession();
+        String presentationVerifiedNote = userSession.getNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE);
+        if (presentationVerifiedNote != null) {
+            freshUserSession.setNote(OpenId4VpConstants.PRESENTATION_VERIFIED_NOTE, presentationVerifiedNote);
+        }
 
         logger.debugf("Attempting redirection after successful OID4VP authentication");
         return AuthenticationManager.redirectAfterSuccessfulFlow(
