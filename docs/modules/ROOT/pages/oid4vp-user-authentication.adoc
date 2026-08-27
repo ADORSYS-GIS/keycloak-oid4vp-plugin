@@ -3,14 +3,13 @@
 [[oid4vp-authentication]]
 == Authenticate users with verifiable credentials over OpenID4VP
 
-{project_name} implements experimental support for authenticating users as they present verifiable credentials issued to them by itself.
+{project_name} implements support for authenticating users as they present verifiable credentials issued to them by itself.
 This is done over https://openid.net/specs/openid-4-verifiable-presentations-1_0.html[OpenID for Verifiable Presentation (OpenID4VP)].
 This chapter describes how to interact with this feature.
 
 [IMPORTANT]
 ====
-This is an experimental feature and should not be used in production.
-Backward compatibility is not guaranteed, and future updates may introduce breaking changes.
+This feature is experimental. Backward compatibility is not guaranteed, and future updates may introduce breaking changes.
 ====
 
 === What is covered in this chapter
@@ -18,8 +17,10 @@ Backward compatibility is not guaranteed, and future updates may introduce break
 - Enabling user authentication over OpenID4VP
 - Initiating the flow by retrieving an authentication request
 - Polling for the status of the authentication session
-- Complete OIDC login with OpenID4VP authentication
-- Configuring the verifier policy for OpenID4VP authentication
+- Redeeming an authorization code (API-driven flows)
+- Completing OIDC login with OpenID4VP authentication
+
+For detailed configuration of credential formats, authentication profiles, trust policies, binding rules, and presentation during issuance, see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
 
 === Enabling user authentication over OpenID4VP
 
@@ -31,7 +32,7 @@ To enable user authentication over OpenID4VP, make sure to add the following fla
 ----
 
 Verify activation by checking the server logs.
-The second `oid4vc-vci` feature must equally be activated because the feature relies on {project_name} being able to link:../oid4vci/vc-issuer-configuration.adoc[issue verifiable credentials] to users itself.
+The `oid4vc-vci` feature must equally be activated because the feature relies on {project_name} being able to https://www.keycloak.org/docs/latest/server_admin/index.html#_oid4vci[issue verifiable credentials] to users itself.
 
 === Initiating the flow by retrieving an authentication request
 
@@ -42,6 +43,27 @@ The request must carry a `client_id` query parameter to indicate the client to l
 ----
 GET /realms/<realm>/oid4vp-auth/request?client_id=<client_id>
 ----
+
+==== Optional parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`profile_id`
+|String
+|Selects which authentication profile to use. When omitted, the default profile is selected.
+
+|`code_challenge`
+|String
+|PKCE code challenge (S256). Required for API-driven flows that use the `/code` endpoint for authorization code redemption.
+
+|`code_challenge_method`
+|String
+|Must be `S256` when `code_challenge` is provided.
+|===
+
+==== Response
 
 The endpoint returns an object containing:
 
@@ -97,6 +119,27 @@ In case of an error, the response contains error details.
 }
 ----
 
+=== Redeeming an authorization code (API-driven flows)
+
+For API-driven flows that use PKCE, the client must exchange the authorization code obtained from the status endpoint by calling the `/oid4vp-auth/code` endpoint.
+
+[source,bash]
+----
+POST /realms/<realm>/oid4vp-auth/code
+Content-Type: application/x-www-form-urlencoded
+
+transaction_id=<transaction_id>&code_verifier=<code_verifier>
+----
+
+The response contains the authorization code that can be exchanged for an access token:
+
+[source,json]
+----
+{
+  "authorization_code": "<code>"
+}
+----
+
 === Complete OIDC login with OpenID4VP authentication
 
 The integration of OpenID4VP authentication into the OIDC login flow is readily available provided you enable the `keycloak.v2+oid4vp` login theme that supports the feature.
@@ -104,9 +147,12 @@ The integration of OpenID4VP authentication into the OIDC login flow is readily 
 === Configuring the verifier policy for OpenID4VP authentication
 
 Find the authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
-The single SdJwt authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs, including the accepted credential types, the maximum age of VP tokens presented, and related verifier-policy settings.
-These policy settings are deployed through the same authenticator configuration surface.
-For detailed deployment options (`x509_hash`, `direct_post.jwt`, injected certificates, and infrastructure-as-code mapping guidance), see link:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
+The OpenID4VP authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs.
+
+These settings include the accepted credential types, the maximum age of VP tokens presented, and related verifier-policy settings.
+These policy settings are deployed through the authenticator configuration surface.
+
+For the complete set of authenticator configuration properties, including credential formats, authentication profiles, trust policies, and binding rules, see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
 
 === Configuring primary credential identity claims
 
@@ -116,5 +162,4 @@ For the full configuration reference — including the mDoc namespace/element fo
 
 === Technical Configuration (Performance & Security)
 
-For details on certificate caching, lifespan, and other performance/security configurations, see link:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].
-
+For details on certificate caching, lifespan, and other performance/security configurations, see xref:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].
