@@ -381,6 +381,31 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential_MdlIdentityClaim() throws Exception {
+        // Regression for issue 001: a standard ISO 18013-5 mDL carries no sub/username claims, so
+        // identity must be derivable from a configured standard mDL claim (document_number). The
+        // presented mDoc below deliberately contains no sub/username claims.
+        //
+        // Both subjectClaim and usernameClaim resolve to the same value (TEST_USER = document_number)
+        // because mDocs have only one identity value. Authentication works because the recovery
+        // fallback tries getUserById(subject) first (misses, not a UUID), then falls back to
+        // getUserByUsername(username) which hits the user created with that document number.
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.mdocPrimaryWithMdlIdentity(), (apiFlow, requestObject) -> {
+                    Map<String, Object> mdocClaims =
+                            Map.of(MdocBaseTest.NAMESPACE, Map.of("document_number", TEST_USER, "given_name", "Alice"));
+                    String mdocToken = presentMdoc(requestObject, mdocClaims);
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+
+                    testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+                });
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential_EncryptedResponse_IsoTranscript()
             throws Exception {
         // Wallet-generated nonce, conveyed Base64URL-encoded in the JWE `apu` header. The server

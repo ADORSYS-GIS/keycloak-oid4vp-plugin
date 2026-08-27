@@ -108,6 +108,12 @@ The single SdJwt authenticator in the flow is pre-configured with sensible defau
 These policy settings are deployed through the same authenticator configuration surface.
 For detailed deployment options (`x509_hash`, `direct_post.jwt`, injected certificates, and infrastructure-as-code mapping guidance), see link:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
 
+=== Configuring primary credential identity claims
+
+When a primary credential is used to identify the Keycloak user, use `subjectClaim` and `usernameClaim` to control which claims are read from the presented credential.
+
+For the full configuration reference — including the mDoc namespace/element format, defaults, and examples — see link:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
+
 === Technical Configuration (Performance & Security)
 
 For details on certificate caching, lifespan, and other performance/security configurations, see link:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].

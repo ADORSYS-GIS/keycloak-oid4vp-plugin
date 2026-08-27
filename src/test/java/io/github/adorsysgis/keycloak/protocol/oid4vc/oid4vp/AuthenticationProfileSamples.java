@@ -107,6 +107,49 @@ public final class AuthenticationProfileSamples {
                         "format": "mso_mdoc",
                         "credentialTypes": ["{docType}"],
                         "claims": ["{namespace}/sub", "{namespace}/username"],
+                        "subjectClaim": "{namespace}/sub",
+                        "usernameClaim": "{namespace}/username",
+                        "trust": [
+                          { "type": "x5c", "anchors": ["{anchorBase64}"] }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{mdocPrimaryProfileId}", MDOC_PRIMARY_PROFILE_ID)
+                .replace("{docType}", MdocBaseTest.DOC_TYPE)
+                .replace("{namespace}", MdocBaseTest.NAMESPACE)
+                .replace("{anchorBase64}", anchorBase64);
+        return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
+    }
+
+    /**
+     * Single primary mso_mdoc credential whose identity is derived from the standard ISO 18013-5
+     * mDL {@code document_number} claim instead of {@code sub}/{@code username} (issue 001).
+     */
+    public static ProfileSample mdocPrimaryWithMdlIdentity() {
+        return mdocPrimaryWithMdlIdentity(MdocBaseTest.getIssuerCertBase64());
+    }
+
+    /**
+     * Like {@link #mdocPrimaryWithMdlIdentity()} but secures the primary mDoc credential with the
+     * given x5c trust anchor (Base64) instead of the default issuer certificate.
+     */
+    public static ProfileSample mdocPrimaryWithMdlIdentity(String anchorBase64) {
+        String json = """
+                [
+                  {
+                    "id": "{mdocPrimaryProfileId}",
+                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["{docType}"],
+                        "claims": ["{namespace}/document_number", "{namespace}/given_name"],
+                        "subjectClaim": "{namespace}/document_number",
+                        "usernameClaim": "{namespace}/document_number",
                         "trust": [
                           { "type": "x5c", "anchors": ["{anchorBase64}"] }
                         ]

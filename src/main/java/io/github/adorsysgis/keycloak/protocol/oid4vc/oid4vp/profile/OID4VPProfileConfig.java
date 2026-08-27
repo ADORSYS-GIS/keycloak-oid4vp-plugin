@@ -382,7 +382,8 @@ public class OID4VPProfileConfig {
      *
      * <ul>
      *   <li>{@code credential} (login): the identity is derived from the presented credential, so it must
-     *       request {@code sub} and {@code username}.
+     *       request the configured identity claims ({@link CredentialRequirement#getSubjectClaim()} and
+     *       {@link CredentialRequirement#getUsernameClaim()}, defaulting to {@code sub} and {@code username}).
      *   <li>{@code session} (presentation during issuance): the identity comes from the brokered offer
      *       user, so {@code sub}/{@code username} are not required; instead binding rules are mandatory so
      *       the presented credential is actually matched against the user (otherwise the presentation
@@ -398,12 +399,55 @@ public class OID4VPProfileConfig {
             }
             return;
         }
-        List<ClaimReference> primaryRefs = credential.getClaimReferences();
-        boolean hasSubject = primaryRefs.stream().anyMatch(ref -> JsonWebToken.SUBJECT.equals(ref.name()));
-        boolean hasUsername = primaryRefs.stream().anyMatch(ref -> OAuth2Constants.USERNAME.equals(ref.name()));
-        if (!hasSubject || !hasUsername) {
-            throw new IllegalStateException("OpenID4VP primary credential must request sub and username: "
+        if (StringUtil.isBlank(credential.getSubjectClaim())) {
+            throw new IllegalStateException("OpenID4VP primary credential subjectClaim must not be blank: "
                     + profile.getId() + "/" + credential.getId());
         }
+
+        boolean isMdoc = CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat());
+
+        ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
+        if (isMdoc && !subjectRef.isNamespaced()) {
+            throw new IllegalStateException(
+                    "mDoc primary credential subjectClaim must be namespace-qualified (\"namespace/name\")," + " got: "
+                            + subjectRef + ": " + profile.getId() + "/" + credential.getId());
+        }
+
+        ClaimReference usernameRef = null;
+        if (StringUtil.isNotBlank(credential.getUsernameClaim())) {
+            usernameRef = ClaimReference.parse(credential.getUsernameClaim());
+            if (isMdoc && !usernameRef.isNamespaced()) {
+                throw new IllegalStateException(
+                        "mDoc primary credential usernameClaim must be namespace-qualified (\"namespace/name\"),"
+                                + " got: " + usernameRef + ": " + profile.getId() + "/" + credential.getId());
+            }
+        }
+
+        List<ClaimReference> primaryRefs = credential.getClaimReferences();
+        boolean hasSubject = containsIdentityClaim(primaryRefs, subjectRef);
+        boolean hasUsername = true;
+        if (usernameRef != null) {
+            hasUsername = containsIdentityClaim(primaryRefs, usernameRef);
+        }
+        if (!hasSubject || !hasUsername) {
+            String required = usernameRef != null
+                    ? "subjectClaim='" + subjectRef + "' and usernameClaim='" + usernameRef + "'"
+                    : "subjectClaim='" + subjectRef + "'";
+            throw new IllegalStateException("OpenID4VP primary credential must request identity claims " + required
+                    + ": " + profile.getId() + "/" + credential.getId());
+        }
+    }
+
+    /**
+     * Whether {@code refs} contains the configured identity claim. An un-namespaced configured claim
+     * matches by name under any namespace (so mDoc profiles requesting e.g.
+     * {@code org.iso.18013.5.1/sub} still satisfy the default {@code sub}); a namespaced configured
+     * claim must match the exact namespace/name pair.
+     */
+    private static boolean containsIdentityClaim(List<ClaimReference> refs, ClaimReference configured) {
+        if (configured.isNamespaced()) {
+            return refs.contains(configured);
+        }
+        return refs.stream().anyMatch(ref -> configured.name().equals(ref.name()));
     }
 }
