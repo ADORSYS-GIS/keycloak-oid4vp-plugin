@@ -1,8 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
-import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByConfigurationId;
-import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCredentialScopeModelByName;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
@@ -15,7 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.PresentationDuringIssuanceService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.CredentialRequestResolver;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -35,9 +32,7 @@ import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferState;
-import org.keycloak.protocol.oid4vc.model.OID4VCAuthorizationDetail;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.Urls;
@@ -154,7 +149,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         // Treat it as untrusted input and resolve it against server-side offer state before creating a session.
         CredentialOfferState offerState;
         try {
-            offerState = PresentationDuringIssuanceService.resolveCredentialOffer(session, issuerState);
+            offerState = CredentialRequestResolver.resolveCredentialOffer(session, issuerState);
         } catch (IllegalArgumentException e) {
             logger.debugf(e, "Could not resolve credential offer from issuer_state");
             throw badRequest("Invalid issuer_state");
@@ -252,8 +247,8 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
                 return null;
             }
 
-            GuardedCredentialScope credentialScope = GuardedCredentialScope.from(
-                    resolveRequestedCredentialScope(client, scope, authorizationDetails, offerState));
+            GuardedCredentialScope credentialScope = CredentialRequestResolver.resolveCredentialScope(
+                    realm, client, scope, authorizationDetails, offerState);
             if (credentialScope == null) {
                 return null;
             }
@@ -268,52 +263,6 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             return credentialScope.getPresentationProfileId();
         } catch (RuntimeException e) {
             logger.debugf(e, "Could not resolve an enforced OpenID4VP profile for the requested credential");
-            return null;
-        }
-    }
-
-    private CredentialScopeModel resolveRequestedCredentialScope(
-            ClientModel client, String scope, String authorizationDetails, CredentialOfferState offerState) {
-        String credentialConfigurationId = credentialConfigurationIdFromOffer(offerState);
-        if (StringUtil.isBlank(credentialConfigurationId)) {
-            credentialConfigurationId = credentialConfigurationIdFromAuthorizationDetails(authorizationDetails);
-        }
-        if (StringUtil.isNotBlank(credentialConfigurationId)) {
-            CredentialScopeModel byConfigId = findCredentialScopeModelByConfigurationId(
-                    realm, () -> client.getClientScopes(false).values().stream(), credentialConfigurationId);
-            if (byConfigId != null) {
-                return byConfigId;
-            }
-        }
-        return findCredentialScopeModelByName(realm, () -> client.getClientScopes(false).values().stream(), scope);
-    }
-
-    private String credentialConfigurationIdFromOffer(CredentialOfferState offerState) {
-        if (offerState == null) {
-            return null;
-        }
-        return offerState.getAuthorizationDetails().stream()
-                .map(OID4VCAuthorizationDetail::getCredentialConfigurationId)
-                .filter(StringUtil::isNotBlank)
-                .findFirst()
-                .orElse(null);
-    }
-
-    private String credentialConfigurationIdFromAuthorizationDetails(String authorizationDetails) {
-        if (StringUtil.isBlank(authorizationDetails)) {
-            return null;
-        }
-        try {
-            OID4VCAuthorizationDetail[] details =
-                    JsonSerialization.mapper.readValue(authorizationDetails, OID4VCAuthorizationDetail[].class);
-            for (OID4VCAuthorizationDetail detail : details) {
-                if (detail != null && StringUtil.isNotBlank(detail.getCredentialConfigurationId())) {
-                    return detail.getCredentialConfigurationId();
-                }
-            }
-            return null;
-        } catch (IOException | RuntimeException e) {
-            logger.debugf(e, "Could not resolve credential_configuration_id from authorization_details");
             return null;
         }
     }
