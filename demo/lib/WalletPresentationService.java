@@ -31,7 +31,7 @@ public final class WalletPresentationService {
     }
 
     private String buildCredential(CredentialScenario scenario) throws Exception {
-        long now = Time.currentTime();
+        long now = Time.currentTimeSeconds();
 
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
         claimSet.put(OAuth2Constants.ISSUER, cfg.issuer());
@@ -64,7 +64,7 @@ public final class WalletPresentationService {
         // The wallet proves possession of the bound holder key with a KB-JWT that echoes
         // the verifier-provided nonce and audience from the request object.
         JsonWebToken kbJwtClaims = new JsonWebToken();
-        long now = Time.currentTime();
+        long now = Time.currentTimeSeconds();
         kbJwtClaims.iat(now);
         kbJwtClaims.exp(now + KB_JWT_LIFESPAN_SECS);
         kbJwtClaims.getOtherClaims().put("nonce", requestObject.getNonce());
