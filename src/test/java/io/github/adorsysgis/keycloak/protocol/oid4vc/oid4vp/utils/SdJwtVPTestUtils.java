@@ -231,7 +231,7 @@ public class SdJwtVPTestUtils {
         ObjectNode claimSet = JsonSerialization.mapper.createObjectNode();
         claimSet.put(OAuth2Constants.ISSUER, iss);
         claimSet.put(CLAIM_NAME_VCT, vct);
-        claimSet.put(CLAIM_NAME_EXP, Time.currentTime() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
+        claimSet.put(CLAIM_NAME_EXP, Time.currentTimeSeconds() + ISSUER_SIGNED_JWT_LIFESPAN_SECS);
         if (setStatusClaim) {
             claimSet.set(
                     STATUS_FIELD,
@@ -286,7 +286,7 @@ public class SdJwtVPTestUtils {
             throws Exception {
         JsonWebToken kbJwtClaims = new JsonWebToken();
 
-        long currentTime = Time.currentTime();
+        long currentTime = Time.currentTimeSeconds();
         kbJwtClaims.iat(currentTime);
         kbJwtClaims.exp(currentTime + kbJwtLifespan);
 

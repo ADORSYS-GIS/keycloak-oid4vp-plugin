@@ -1,7 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
-import org.keycloak.broker.provider.util.SimpleHttp;
+import org.keycloak.http.simple.SimpleHttp;
 import org.keycloak.models.KeycloakSession;
 
 /**
@@ -30,7 +30,8 @@ public class SimpleStatusListJwtFetcher implements StatusListJwtFetcher {
 
     protected String fetchStatusListFromUri(String uri) throws ReferencedTokenValidationException {
         try {
-            return SimpleHttp.doGet(uri, session)
+            return SimpleHttp.create(session)
+                    .doGet(uri)
                     .header("Accept", STATUS_LIST_JWT_ACCEPT_HEADER)
                     .asString();
         } catch (Exception e) {
