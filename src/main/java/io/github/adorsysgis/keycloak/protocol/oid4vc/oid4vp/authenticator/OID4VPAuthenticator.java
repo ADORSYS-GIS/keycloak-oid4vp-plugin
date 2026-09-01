@@ -103,9 +103,7 @@ public class OID4VPAuthenticator implements Authenticator {
         AuthenticationSessionModel authSession = authFlowContext.getAuthenticationSession();
         AuthorizationContext authContext = new AuthenticationSessionStore(authSession).getAuthorizationContext();
 
-        // TODO: Access the profile config reliably without full parsing on every iteration.
-        //       Issue also applies to VerifierConfig.
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(authFlowContext.getAuthenticatorConfig());
+        OID4VPProfileConfig profileConfig = OID4VPProfileConfig.resolve(authFlowContext.getAuthenticatorConfig());
         AuthenticationProfile authProfile = profileConfig.getProfile(authContext.getProfileId());
 
         Map<String, String> presentedTokens = getPresentedTokens(authSession);

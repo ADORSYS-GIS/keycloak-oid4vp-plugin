@@ -13,17 +13,24 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
 
 /**
  * Access configurations that modulate the verifier's behavior.
- * <p></p>
- * Read full descriptions of configurations in {@link OID4VPAuthenticatorFactory}.
+ *
+ * <p>Use {@link #resolve(AuthenticatorConfigModel)} to avoid re-parsing and re-validating
+ * the same configuration on every request. The constructor remains public for direct use
+ * in tests.
+ *
+ * <p>Read full descriptions of configurations in {@link OID4VPAuthenticatorFactory}.
  */
 public class VerifierConfig {
 
     private static final Logger logger = Logger.getLogger(VerifierConfig.class);
+
+    private static final ConcurrentHashMap<Map<String, String>, VerifierConfig> CACHE = new ConcurrentHashMap<>();
 
     private final ClientIdentifierPrefix clientIdentifierPrefix;
     private final ResponseMode responseMode;
@@ -36,13 +43,23 @@ public class VerifierConfig {
     private final List<String> transactionDataRaw;
     private final String verifierInfoConfig;
 
+    /**
+     * Returns a cached {@code VerifierConfig} for the given authenticator config.
+     * The cache key is the config map content, so updates to the config are picked up immediately.
+     */
+    public static VerifierConfig resolve(AuthenticatorConfigModel authConfig) {
+        Map<String, String> config =
+                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        return CACHE.computeIfAbsent(config, k -> new VerifierConfig(authConfig));
+    }
+
     public VerifierConfig(AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting verifier config properties");
 
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
 
-        this.profileConfig = new OID4VPProfileConfig(authConfig);
+        this.profileConfig = OID4VPProfileConfig.resolve(authConfig);
 
         this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
                 OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,

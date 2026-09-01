@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -21,10 +22,26 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Parses and validates OpenID4VP authentication profiles.
+ *
+ * <p>Use {@link #resolve(AuthenticatorConfigModel)} to avoid re-parsing and re-validating
+ * the same configuration on every request. The constructor remains public for direct use
+ * in tests.
  */
 public class OID4VPProfileConfig {
 
+    private static final ConcurrentHashMap<Map<String, String>, OID4VPProfileConfig> CACHE = new ConcurrentHashMap<>();
+
     private final List<AuthenticationProfile> profiles;
+
+    /**
+     * Returns a cached {@code OID4VPProfileConfig} for the given authenticator config.
+     * The cache key is the config map content, so updates to the config are picked up immediately.
+     */
+    public static OID4VPProfileConfig resolve(AuthenticatorConfigModel authConfig) {
+        Map<String, String> config =
+                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        return CACHE.computeIfAbsent(config, k -> new OID4VPProfileConfig(authConfig));
+    }
 
     public OID4VPProfileConfig(AuthenticatorConfigModel authConfig) {
         Map<String, String> config =

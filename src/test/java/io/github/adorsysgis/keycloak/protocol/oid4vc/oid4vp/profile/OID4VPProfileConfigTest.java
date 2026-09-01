@@ -4,6 +4,8 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -11,6 +13,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -54,7 +57,7 @@ public class OID4VPProfileConfigTest {
 
         AuthenticationProfile profile = profileConfig.getProfile("dual");
         assertEquals("dual", profile.getId());
-        assertEquals("Sign in with two credentials", profile.getDisplayCta(java.util.Locale.ENGLISH));
+        assertEquals("Sign in with two credentials", profile.getDisplayCta(Locale.ENGLISH));
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
@@ -758,5 +761,65 @@ public class OID4VPProfileConfigTest {
         assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
                 "trust": [{ "type": "x5c", "anchors": ["{anchor}"] }]
                 """));
+    }
+
+    // ---- Caching -----------------------------------------------------------
+
+    @Test
+    void resolveShouldReturnSameInstanceForSameConfig() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "cached",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct"], "claims": ["sub", "username"] }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig first = OID4VPProfileConfig.resolve(config);
+        OID4VPProfileConfig second = OID4VPProfileConfig.resolve(config);
+        assertSame(first, second);
+    }
+
+    @Test
+    void resolveShouldReturnDifferentInstanceForDifferentConfig() {
+        AuthenticatorConfigModel configA = new AuthenticatorConfigModel();
+        configA.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "profile-a",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct-a"], "claims": ["sub", "username"] }
+                    ]
+                  }
+                ]
+                """));
+
+        AuthenticatorConfigModel configB = new AuthenticatorConfigModel();
+        configB.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "profile-b",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct-b"], "claims": ["sub", "username"] }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig fromA = OID4VPProfileConfig.resolve(configA);
+        OID4VPProfileConfig fromB = OID4VPProfileConfig.resolve(configB);
+        assertNotSame(fromA, fromB);
+        assertEquals("profile-a", fromA.getProfile("profile-a").getId());
+        assertEquals("profile-b", fromB.getProfile("profile-b").getId());
+    }
+
+    @Test
+    void resolveShouldHandleNullConfig() {
+        OID4VPProfileConfig result = OID4VPProfileConfig.resolve(null);
+        assertDoesNotThrow(() -> result.getProfile(null));
     }
 }
