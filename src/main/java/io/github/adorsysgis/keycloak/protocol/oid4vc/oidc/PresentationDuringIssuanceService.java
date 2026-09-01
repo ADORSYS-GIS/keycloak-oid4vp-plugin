@@ -82,8 +82,8 @@ public final class PresentationDuringIssuanceService {
         return CredentialRequestResolver.resolveCredentialScope(
                 authSession.getClient().getRealm(),
                 authSession.getClient(),
-                authSession.getClientNote(OAuth2Constants.SCOPE),
+                requestedCredentialOfferState,
                 authSession.getClientNote(OAuth2Constants.AUTHORIZATION_DETAILS),
-                requestedCredentialOfferState);
+                authSession.getClientNote(OAuth2Constants.SCOPE));
     }
 }

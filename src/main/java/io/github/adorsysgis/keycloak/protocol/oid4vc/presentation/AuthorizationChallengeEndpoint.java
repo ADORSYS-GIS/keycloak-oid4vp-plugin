@@ -248,7 +248,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
             }
 
             GuardedCredentialScope credentialScope = CredentialRequestResolver.resolveCredentialScope(
-                    realm, client, scope, authorizationDetails, offerState);
+                    realm, client, offerState, authorizationDetails, scope);
             if (credentialScope == null) {
                 return null;
             }

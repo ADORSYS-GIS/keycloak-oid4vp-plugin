@@ -37,7 +37,7 @@ import org.keycloak.utils.StringUtil;
  * </ol>
  *
  * <p><strong>Cardinality contract:</strong> this resolver rejects requests that reference
- * multiple credential configurations. The OID4VCI credential endpoint issues one credential
+ * multiple credential configurations. The OID4VCI credential endpoint processes one credential type
  * at a time, so multiple configurations in a single request are not supported. Callers
  * relying on this resolver can assume a single credential scope or {@code null}.
  */
@@ -59,18 +59,18 @@ public final class CredentialRequestResolver {
      *
      * @param realm the realm to search client scopes in
      * @param client the client the request is for
-     * @param scope the OAuth 2.0 scope parameter, or {@code null}
-     * @param authorizationDetails the OID4VCI authorization_details JSON, or {@code null}
      * @param offerState the resolved credential offer state (from issuer_state), or {@code null}
+     * @param authorizationDetails the OID4VCI authorization_details JSON, or {@code null}
+     * @param scope the OAuth 2.0 scope parameter, or {@code null}
      * @return the resolved guarded credential scope, or {@code null} when no credential is requested
      * @throws BadRequestException when multiple credential configurations are requested
      */
     public static GuardedCredentialScope resolveCredentialScope(
             RealmModel realm,
             ClientModel client,
-            String scope,
+            CredentialOfferState offerState,
             String authorizationDetails,
-            CredentialOfferState offerState) {
+            String scope) {
 
         if (client == null) {
             return null;
