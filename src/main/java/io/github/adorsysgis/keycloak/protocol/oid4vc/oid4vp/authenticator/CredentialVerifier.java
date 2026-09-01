@@ -29,7 +29,7 @@ public interface CredentialVerifier {
      * Verifies a credential presentation and returns the verified claims.
      *
      * <p>The orchestrator uses the returned claims for binding-rule evaluation and
-     * subject/username extraction.
+     * subject extraction.
      *
      * @return the verified claims (fully disclosed if needed)
      * @throws VerificationException if cryptographic verification, claim requirements, or trust

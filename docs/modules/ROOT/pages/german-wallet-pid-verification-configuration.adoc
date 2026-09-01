@@ -183,8 +183,7 @@ Use a single-credential profile when only a self-issued primary credential is re
 
 When a primary mDoc credential identifies the Keycloak user, use a namespaced `subjectClaim` (e.g. `eu.europa.ec.eudi.pid.1/personal_administrative_number`) rather than a bare element like `document_number`, which may not be globally unique across issuers.
 
-For full details on `subjectClaim`, `usernameClaim`, and the namespace/element format, see xref:oid4vp-deployment-configuration.adoc#oid4vp-deployment-configuration[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
-
+For full details on `subjectClaim` and the namespace/element format, see xref:oid4vp-deployment-configuration.adoc#oid4vp-deployment-configuration[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
 == Authentication flow
 
 At runtime:

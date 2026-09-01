@@ -254,8 +254,7 @@ public class OID4VPAuthenticator implements Authenticator {
             Context ctx, CredentialRequirement primaryCredentialReq, JsonNode primaryClaims) {
         CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
         String subject = verifier.readClaim(primaryClaims, primaryCredentialReq.getSubjectClaim());
-        String username = verifier.readClaim(primaryClaims, primaryCredentialReq.getUsernameClaim());
-        logger.debugf("Attempting user recovery with subject '%s' and username '%s'", subject, username);
+        logger.debugf("Attempting user recovery with subject '%s'", subject);
 
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
         RealmModel realm = ctx.authenticationFlowContext().getRealm();
@@ -266,23 +265,9 @@ public class OID4VPAuthenticator implements Authenticator {
             user = userProvider.getUserById(realm, subject);
         }
 
-        if (user == null && StringUtil.isNotBlank(username)) {
-            // TODO: Remove username-only fallback once SubjectID mapper is fixed and stable.
-            logger.warn("Subject did not resolve to a user. Falling back to username lookup");
-            user = userProvider.getUserByUsername(realm, username);
-        }
-
         if (user == null) {
             logger.debugf("Authentication passed but authenticating user is unknown");
             failDenyingAuthenticatingUser(ctx);
-            return null;
-        }
-
-        if (StringUtil.isNotBlank(username) && !username.equals(user.getUsername())) {
-            logger.warnf(
-                    "Username mismatch for subject '%s': credential='%s', user='%s'",
-                    subject, username, user.getUsername());
-            failRejectingPresentedCredential(ctx, "Username mismatch");
             return null;
         }
 

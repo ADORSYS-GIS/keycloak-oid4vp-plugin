@@ -108,7 +108,6 @@ public final class AuthenticationProfileSamples {
                         "credentialTypes": ["{docType}"],
                         "claims": ["{namespace}/sub", "{namespace}/username"],
                         "subjectClaim": "{namespace}/sub",
-                        "usernameClaim": "{namespace}/username",
                         "trust": [
                           { "type": "x5c", "anchors": ["{anchorBase64}"] }
                         ]
@@ -149,7 +148,6 @@ public final class AuthenticationProfileSamples {
                         "credentialTypes": ["{docType}"],
                         "claims": ["{namespace}/document_number", "{namespace}/given_name"],
                         "subjectClaim": "{namespace}/document_number",
-                        "usernameClaim": "{namespace}/document_number",
                         "trust": [
                           { "type": "x5c", "anchors": ["{anchorBase64}"] }
                         ]

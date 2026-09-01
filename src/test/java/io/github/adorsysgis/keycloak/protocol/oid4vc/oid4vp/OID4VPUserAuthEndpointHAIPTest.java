@@ -37,7 +37,6 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.PemUtils;
 import org.keycloak.crypto.KeyType;
@@ -111,9 +110,7 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
 
         // Assert: Ensure the request object contains a DCQL query
         DcqlQueryGeneratorTest.assertDcqlQuery(
-                requestObject.getDcqlQuery(),
-                List.of(CREDENTIAL_TYPES_CONFIG_DEFAULT),
-                List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
+                requestObject.getDcqlQuery(), List.of(CREDENTIAL_TYPES_CONFIG_DEFAULT), List.of(JsonWebToken.SUBJECT));
 
         // Signed request object must embed access certificate in X5C header
         assertTrue(accessCertificate.startsWith("MIIDITCCAgmgAwIBAgIUcQyt0bvRf7/e4/Gtfw0OHRIBJfU"));

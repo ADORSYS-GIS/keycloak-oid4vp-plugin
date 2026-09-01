@@ -382,18 +382,12 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     @Test
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential_MdlIdentityClaim() throws Exception {
-        // Regression for issue 001: a standard ISO 18013-5 mDL carries no sub/username claims, so
-        // identity must be derivable from a configured standard mDL claim (document_number). The
-        // presented mDoc below deliberately contains no sub/username claims.
-        //
-        // Both subjectClaim and usernameClaim resolve to the same value (TEST_USER = document_number)
-        // because mDocs have only one identity value. Authentication works because the recovery
-        // fallback tries getUserById(subject) first (misses, not a UUID), then falls back to
-        // getUserByUsername(username) which hits the user created with that document number.
+        // Regression for issue 001: a standard ISO 18013-5 mDL carries no sub claim, so
+        // identity must be derivable from a configured standard mDL claim (document_number).
         withAuthenticationProfile(
                 AuthenticationProfileSamples.mdocPrimaryWithMdlIdentity(), (apiFlow, requestObject) -> {
-                    Map<String, Object> mdocClaims =
-                            Map.of(MdocBaseTest.NAMESPACE, Map.of("document_number", TEST_USER, "given_name", "Alice"));
+                    Map<String, Object> mdocClaims = Map.of(
+                            MdocBaseTest.NAMESPACE, Map.of("document_number", TEST_USER_ID, "given_name", "Alice"));
                     String mdocToken = presentMdoc(requestObject, mdocClaims);
 
                     TestOpts opts = TestOpts.getDefault()
@@ -688,27 +682,27 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
-    public void shouldAuthenticateSuccessfully_WithUsernameFallback() throws Exception {
+    public void shouldFailAuthentication_WhenSubjectIsUnknownEvenWithValidUsername() throws Exception {
         // Request SD-JWT credentials with an unknown subject but valid username
         String testSubject = "unknown-user-id";
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, testSubject, TEST_USER);
 
-        testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
-    }
-
-    @Test
-    public void shouldFailAuthentication_SdJwtWithMismatchedUsername() throws Exception {
-        // Request SD-JWT credentials from Keycloak with a correct subject but mismatched username
-        String sdJwt =
-                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
-
-        // Proceed to authentication
         testFailingAuthentication(
                 sdJwt,
                 TestOpts.getDefault(),
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Username mismatch");
+                "User with presented OID4VP credential is unknown");
+    }
+
+    @Test
+    public void shouldIgnoreUsernameClaim_WhenSubjectResolvesUser() throws Exception {
+        // A legacy or custom profile may still request username, but it is not used
+        // for user resolution or identity validation.
+        String sdJwt =
+                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
+
+        testSuccessfulAuthentication(sdJwt, TestOpts.getDefault());
     }
 
     @Test
