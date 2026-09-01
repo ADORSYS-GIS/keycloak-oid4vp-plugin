@@ -1,0 +1,48 @@
+# Dependabot configuration for keycloak-oid4vp-plugin
+#
+# Monitors: Maven dependencies, GitHub Actions, and npm
+
+version: 2
+updates:
+  # Maven dependencies and plugins
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 10
+    groups:
+      # Only group Keycloak patches — minor/major upgrades can break SPI
+      keycloak:
+        patterns: ["org.keycloak:*"]
+        update-types:
+          - "patch"
+      # Group minor and patch updates to reduce PR noise
+      maven-dependencies:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Keycloak major upgrades require manual migration work
+      - dependency-name: "org.keycloak:*"
+        update-types:
+          - "version-update:semver-major"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+
+  # Documentation npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/docs"
+    schedule:
+      interval: "monthly"
+      time: "06:00"
+    open-pull-requests-limit: 5
