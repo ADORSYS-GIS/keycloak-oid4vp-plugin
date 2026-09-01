@@ -35,12 +35,13 @@ public class OID4VPProfileConfig {
 
     /**
      * Returns a cached {@code OID4VPProfileConfig} for the given authenticator config.
-     * The cache key is the config map content, so updates to the config are picked up immediately.
+     * The cache key is an immutable snapshot of the config map, so updates to the config are
+     * picked up immediately while mutations to the source map cannot corrupt the cache.
      */
     public static OID4VPProfileConfig resolve(AuthenticatorConfigModel authConfig) {
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
-        return CACHE.computeIfAbsent(config, k -> new OID4VPProfileConfig(authConfig));
+        return CACHE.computeIfAbsent(Map.copyOf(config), k -> new OID4VPProfileConfig(authConfig));
     }
 
     public OID4VPProfileConfig(AuthenticatorConfigModel authConfig) {
