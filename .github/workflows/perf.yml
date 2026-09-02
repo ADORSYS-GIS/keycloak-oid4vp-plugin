@@ -1,9 +1,6 @@
 name: Load Testing
 
 on:
-  push:
-    branches:
-      - 161-stress-testing
   schedule:
     # Every night at 02:00 UTC
     - cron: '0 2 * * *'
