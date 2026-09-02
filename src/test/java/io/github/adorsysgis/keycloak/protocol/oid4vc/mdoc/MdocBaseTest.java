@@ -444,8 +444,8 @@ public class MdocBaseTest {
                 (IssuerSigned) doc.findByKey(MdocConstants.L_ISSUER_SIGNED).getValue();
         CBORItemList issuerAuthList = (CBORItemList)
                 issuerSigned.findByKey(MdocConstants.L_ISSUER_AUTH).getValue();
-        CBORPairList originalMso =
-                (CBORPairList) CborUtil.unwrap(COSESign1.build(issuerAuthList).getPayload());
+        CBORPairList originalMso = (CBORPairList)
+                CborUtil.unwrapEmbeddedCbor(COSESign1.build(issuerAuthList).getPayload());
 
         CBORPairList modifiedMso = msoCustomizer.apply(originalMso);
         COSESign1 newIssuerAuth = signRawCbor(modifiedMso, getIssuerKeyRef1(), List.of(getIssuerCertRef1()));
