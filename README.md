@@ -59,6 +59,13 @@ the IDE does not delegate the build to Maven and therefore does not produce the 
 into the Keycloak container. Build the JAR explicitly (as described above) before running the tests from
 the IDE.
 
+Additionally, Gatling load tests are provided in the codebase to monitor the plugin's performance and
+behavior under heavy load. Run them with (as they are run in the CI/CD pipeline):
+
+```sh
+./mvnw gatling:test
+```
+
 ## Deploying the Plugin
 
 Copy the JAR file to the `providers` directory of your Keycloak installation. For example:

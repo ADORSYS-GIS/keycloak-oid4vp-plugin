@@ -1,0 +1,91 @@
+name: Load Testing
+
+on:
+  push:
+    branches:
+      - 161-stress-testing
+  schedule:
+    # Every night at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      virtualUsers:
+        description: 'Peak number of concurrent virtual users'
+        required: false
+        default: '1000'
+      rampDurationSeconds:
+        description: 'Duration of the ramp-up phase in seconds'
+        required: false
+        default: '15'
+      steadyDurationSeconds:
+        description: 'Duration of the steady-state phase in seconds'
+        required: false
+        default: '60'
+
+permissions:
+  contents: read
+
+jobs:
+  load-test:
+    name: Run Gatling Simulations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
+
+      - name: Build shaded plugin JAR
+        run: ./mvnw clean package -DskipTests --batch-mode
+
+      - name: Run all Gatling simulations
+        run: |
+          ./mvnw gatling:test --batch-mode \
+            -Dgatling.virtualUsers=${{ inputs.virtualUsers || '1000' }} \
+            -Dgatling.rampDurationSeconds=${{ inputs.rampDurationSeconds || '15' }} \
+            -Dgatling.steadyDurationSeconds=${{ inputs.steadyDurationSeconds || '60' }} \
+            -Dgatling.runMultipleSimulations=true
+
+      - name: Notify Discord on failure
+        if: failure()
+        run: |
+          curl -fsSL -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "Load testing failed",
+                "description": "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "color": 15158332,
+                "fields": [
+                  {
+                    "name": "Repository",
+                    "value": "`${{ github.repository }}`",
+                    "inline": true
+                  },
+                  {
+                    "name": "Branch",
+                    "value": "`${{ github.ref_name }}`",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions"
+                }
+              }]
+            }'

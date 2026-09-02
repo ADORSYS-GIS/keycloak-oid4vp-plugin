@@ -56,6 +56,8 @@ import org.keycloak.utils.StringUtil;
  */
 public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
 
+    public static String TRANSACTION_ID_PARAM = "transaction_id";
+
     /**
      * Request a fresh OpenID4VP authorization request from Keycloak.
      * A request is sent to the endpoint for this purpose.
@@ -173,12 +175,12 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         return httpClient.execute(new HttpGet(requestUri));
     }
 
-    protected String getQueryParam(String authRequest, String name) {
+    public static String getQueryParam(String authRequest, String name) {
         ResteasyUriInfo uriInfo = new ResteasyUriInfo(URI.create(authRequest));
         return uriInfo.getQueryParameters().getFirst(name);
     }
 
-    protected String getRequiredQueryParam(String authRequest, String name) {
+    public static String getRequiredQueryParam(String authRequest, String name) {
         String val = getQueryParam(authRequest, name);
         if (val == null) {
             throw new AssertionError("Missing query param: " + name);
@@ -219,7 +221,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
         HttpPost httpPost = new HttpPost(url);
 
         List<BasicNameValuePair> formParams = new ArrayList<>();
-        formParams.add(new BasicNameValuePair("transaction_id", transactionId));
+        formParams.add(new BasicNameValuePair(TRANSACTION_ID_PARAM, transactionId));
         if (codeVerifier != null) {
             formParams.add(new BasicNameValuePair(OAuth2Constants.CODE_VERIFIER, codeVerifier));
         }
@@ -419,7 +421,7 @@ public abstract class OID4VPBaseKeycloakTest extends BaseKeycloakTest {
     /**
      * Extracts the next redirect URI from the response.
      */
-    protected static String captureNextRedirect(HttpResponse response) throws IOException {
+    protected static String captureNextRedirect(HttpResponse response) {
         assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusLine().getStatusCode());
         return response.getFirstHeader(HttpHeaders.LOCATION).getValue();
     }
