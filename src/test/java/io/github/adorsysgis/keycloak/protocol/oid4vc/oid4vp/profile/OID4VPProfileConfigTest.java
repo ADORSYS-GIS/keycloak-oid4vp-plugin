@@ -703,4 +703,45 @@ public class OID4VPProfileConfigTest {
                 "trust": [{ "type": "x5c", "anchors": ["{anchor}"] }]
                 """));
     }
+
+    @Test
+    void shouldAcceptPrimaryMdocWithOneConfiguredPidProvider() {
+        assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
+                "trust": [{
+                  "type": "eudi_pid_trust_list",
+                  "trustListUrl": "https://example.eu/pid-providers.lote",
+                  "trustListSigningCertificate": "base64-der-signing-certificate",
+                  "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance",
+                  "issuer": "PSDDE-PID-PROVIDER-1"
+                }]
+                """));
+    }
+
+    @Test
+    void shouldRejectPrimaryMdocTrustListWithoutConfiguredPidProvider() {
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                "trust": [{
+                  "type": "eudi_pid_trust_list",
+                  "trustListUrl": "https://example.eu/pid-providers.lote",
+                  "trustListSigningCertificate": "base64-der-signing-certificate"
+                }]
+                """));
+
+        assertTrue(error.getMessage().contains("must configure issuer"));
+    }
+
+    @Test
+    void shouldRejectPrimaryMdocTrustListWithNonIssuanceService() {
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                "trust": [{
+                  "type": "eudi_pid_trust_list",
+                  "trustListUrl": "https://example.eu/pid-providers.lote",
+                  "trustListSigningCertificate": "base64-der-signing-certificate",
+                  "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Revocation",
+                  "issuer": "PSDDE-PID-PROVIDER-1"
+                }]
+                """));
+
+        assertTrue(error.getMessage().contains("must use the PID issuance service type"));
+    }
 }

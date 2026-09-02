@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
@@ -129,9 +130,10 @@ public class OID4VPAuthenticator implements Authenticator {
         String primaryToken = ctx.presentedTokens().get(primaryCredentialReq.getId());
 
         // Run credential verification and capture claims
-        JsonNode primaryClaims;
+        VerifiedCredential primaryCredential;
         try {
-            primaryClaims = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
+            primaryCredential = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
+            enforceConfiguredPrimaryIssuer(primaryCredentialReq, primaryCredential);
             TransactionDataSupport.requireCredentialIdInAllEntries(
                     ctx.authorizationContext().getRequestObject().getTransactionData(), primaryCredentialReq.getId());
             primaryVerifier.validateTransactionData(ctx, primaryToken);
@@ -142,7 +144,8 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         // Recover authenticating user from Keycloak
-        UserModel user = recoverAuthenticatingUser(ctx, primaryClaims);
+        JsonNode primaryClaims = primaryCredential.claims();
+        UserModel user = recoverAuthenticatingUser(ctx, primaryCredential);
         if (user == null) {
             throw new VerificationException("Failure recovering authenticating user");
         }
@@ -176,7 +179,9 @@ public class OID4VPAuthenticator implements Authenticator {
             try {
                 CredentialVerifier supportingVerifier =
                         ctx.credentialVerifiers().get(credential.getId());
-                JsonNode supportingClaims = supportingVerifier.verifyCredential(ctx, credential, token);
+                JsonNode supportingClaims = supportingVerifier
+                        .verifyCredential(ctx, credential, token)
+                        .claims();
                 applyBindingRules(ctx, authUser, credential, supportingClaims);
             } catch (VerificationException | IllegalStateException e) {
                 String msg = "Supporting credential verification failed";
@@ -222,13 +227,13 @@ public class OID4VPAuthenticator implements Authenticator {
         }
     }
 
-    private UserModel recoverAuthenticatingUser(Context ctx, JsonNode primaryClaims) {
+    private UserModel recoverAuthenticatingUser(Context ctx, VerifiedCredential primaryCredential) {
         logger.infof("Recovering authenticating user (authSession = %s)", ctx.id());
         CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
 
         UserModel user = primaryCredentialReq.isSessionIdentity()
                 ? recoverPresentationDuringIssuanceUser(ctx)
-                : recoverUserFromClaims(ctx, primaryCredentialReq, primaryClaims);
+                : recoverUserFromClaims(ctx, primaryCredentialReq, primaryCredential);
 
         if (user == null) {
             return null;
@@ -251,18 +256,21 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     private UserModel recoverUserFromClaims(
-            Context ctx, CredentialRequirement primaryCredentialReq, JsonNode primaryClaims) {
+            Context ctx, CredentialRequirement primaryCredentialReq, VerifiedCredential primaryCredential) {
         CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
-        String subject = verifier.readClaim(primaryClaims, primaryCredentialReq.getSubjectClaim());
-        logger.debugf("Attempting user recovery with subject '%s'", subject);
+        String subject = verifier.readClaim(primaryCredential.claims(), primaryCredentialReq.getSubjectClaim());
+        CredentialIdentity identity = new CredentialIdentity(primaryCredential.issuer(), subject);
+        logger.debugf(
+                "Attempting user recovery with credential issuer '%s' and subject '%s'",
+                identity.issuer(), identity.subject());
 
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
         RealmModel realm = ctx.authenticationFlowContext().getRealm();
         UserProvider userProvider = session.users();
 
         UserModel user = null;
-        if (StringUtil.isNotBlank(subject)) {
-            user = userProvider.getUserById(realm, subject);
+        if (StringUtil.isNotBlank(identity.subject())) {
+            user = userProvider.getUserById(realm, identity.subject());
         }
 
         if (user == null) {
@@ -272,6 +280,28 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         return user;
+    }
+
+    /**
+     * Defense in depth for the mDoc trust-list flow. The mDoc verifier returns the PID Provider
+     * identifier whose entity-specific certificates were used for PKIX verification. Authentication
+     * must not proceed unless that identifier is the issuer configured for this credential profile.
+     */
+    void enforceConfiguredPrimaryIssuer(CredentialRequirement credential, VerifiedCredential verifiedCredential)
+            throws VerificationException {
+        if (!credential.isPrimary() || credential.isSessionIdentity() || credential.getTrust() == null) {
+            return;
+        }
+
+        for (TrustPolicy trustPolicy : credential.getTrust()) {
+            if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trustPolicy.getType())) {
+                continue;
+            }
+            if (StringUtil.isBlank(verifiedCredential.issuer())
+                    || !trustPolicy.getIssuer().equals(verifiedCredential.issuer())) {
+                throw new VerificationException("Verified mDoc issuer does not match the configured PID Provider");
+            }
+        }
     }
 
     private UserModel recoverPresentationDuringIssuanceUser(Context ctx) {

@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.KeycloakTestContainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGeneratorTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -25,6 +26,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListTestServer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
@@ -377,6 +379,66 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     .setShouldForceUnencryptedResponse(true);
 
             testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+        });
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_WithMdocIssuerResolvedFromSignedPidTrustList() throws Exception {
+        EudiPidTrustListTestServer trustListServer = KeycloakTestContainer.eudiPidTrustListServer();
+        trustListServer.serveSignedTrustList();
+
+        AuthenticationProfileSamples.ProfileSample profile =
+                AuthenticationProfileSamples.mdocPrimaryWithEudiPidTrustList(
+                        trustListServer.urlFromKeycloakContainer(),
+                        MdocBaseTest.getIssuerCertBase64(),
+                        EudiPidTrustListTestServer.PROVIDER_A_ID);
+
+        withAuthenticationProfile(profile, (apiFlow, requestObject) -> {
+            Map<String, Object> claims = Map.of(MdocBaseTest.NAMESPACE, Map.of(JsonWebToken.SUBJECT, TEST_USER_ID));
+            String mdocToken = presentMdoc(requestObject, claims);
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+        });
+    }
+
+    @Test
+    public void shouldRejectSameSubjectMdocFromDifferentProviderInSignedPidTrustList() throws Exception {
+        EudiPidTrustListTestServer trustListServer = KeycloakTestContainer.eudiPidTrustListServer();
+        trustListServer.serveSignedTrustList();
+
+        AuthenticationProfileSamples.ProfileSample profile =
+                AuthenticationProfileSamples.mdocPrimaryWithEudiPidTrustList(
+                        trustListServer.urlFromKeycloakContainer(),
+                        MdocBaseTest.getIssuerCertBase64(),
+                        EudiPidTrustListTestServer.PROVIDER_A_ID);
+
+        withAuthenticationProfile(profile, (apiFlow, requestObject) -> {
+            // Provider B is trusted by the same LoTE and deliberately carries Alice's exact
+            // subject. It must still fail because this profile selected Provider A.
+            Map<String, Object> claims = Map.of(MdocBaseTest.NAMESPACE, Map.of(JsonWebToken.SUBJECT, TEST_USER_ID));
+            String mdocToken = MdocBaseTest.buildMdocVpToken(
+                    requestObject,
+                    claims,
+                    MdocBaseTest.DOC_TYPE,
+                    MdocBaseTest.getIssuerKeyRef2(),
+                    MdocBaseTest.getIssuerCertRef2());
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
+                    opts,
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "Certificate chain validation failed");
         });
     }
 

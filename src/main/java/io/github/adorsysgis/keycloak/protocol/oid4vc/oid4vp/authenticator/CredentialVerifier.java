@@ -26,16 +26,17 @@ public interface CredentialVerifier {
     CredentialVerifier copy();
 
     /**
-     * Verifies a credential presentation and returns the verified claims.
+     * Verifies a credential presentation and returns its verified issuer and claims.
      *
      * <p>The orchestrator uses the returned claims for binding-rule evaluation and
      * subject extraction.
      *
-     * @return the verified claims (fully disclosed if needed)
+     * @return the verified credential result
      * @throws VerificationException if cryptographic verification, claim requirements, or trust
      *         policy validation fails
      */
-    JsonNode verifyCredential(OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
+    VerifiedCredential verifyCredential(
+            OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException;
 
     /**

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -53,7 +54,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
     }
 
     @Override
-    public JsonNode verifyCredential(
+    public VerifiedCredential verifyCredential(
             OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException {
 
@@ -93,7 +94,8 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        return payloadRef.get();
+        String issuer = sdJwt.getIssuerSignedJWT().getPayload().path("iss").asText(null);
+        return new VerifiedCredential(issuer, payloadRef.get());
     }
 
     @Override

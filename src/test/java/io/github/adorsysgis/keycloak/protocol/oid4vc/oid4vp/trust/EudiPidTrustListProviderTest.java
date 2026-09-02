@@ -13,6 +13,7 @@ import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,15 @@ class EudiPidTrustListProviderTest {
 
         assertFalse(snapshot.isExpired());
         assertEquals(2, snapshot.trustedIssuerCertificates().size());
+        assertEquals(2, snapshot.providers().size());
+        assertEquals(
+                "Bundesdruckerei GmbH",
+                snapshot.resolveIssuer("Bundesdruckerei GmbH").providerName());
+        assertEquals(
+                1,
+                snapshot.resolveIssuer("Bundesdruckerei GmbH")
+                        .trustedCertificates()
+                        .size());
     }
 
     @Test
@@ -58,6 +68,69 @@ class EudiPidTrustListProviderTest {
 
         assertEquals(1, snapshot.trustedIssuerCertificates().size());
         assertEquals(issuerCertificate, snapshot.trustedIssuerCertificates().get(0));
+        EudiPidTrustListProvider.TrustedPidProvider pidProvider = snapshot.resolveIssuer("PSDDE-PID-PROVIDER-1");
+        assertEquals("Example PID Provider", pidProvider.providerName());
+        assertEquals(issuerCertificate, pidProvider.trustedCertificates().getFirst());
+        assertThrows(EudiPidTrustException.class, () -> snapshot.resolveIssuer("Example PID Provider"));
+    }
+
+    @Test
+    void shouldRejectUnknownProviderIdentifier() throws Exception {
+        KeyPair signerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate signerCertificate = TestCryptoUtils.createSelfSignedCaCert(signerKeyPair);
+        KeyPair issuerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate issuerCertificate =
+                TestCryptoUtils.createLeafCert(issuerKeyPair, signerKeyPair, signerCertificate, "CN=PID Issuer");
+
+        EudiPidTrustListProvider provider = new StubTrustListProvider(
+                trustListJwt(signerCertificate, issuerCertificate, Instant.now().plusSeconds(3600)), true);
+        EudiPidTrustListProvider.TrustListSnapshot snapshot = provider.resolve(policy(signerCertificate));
+
+        EudiPidTrustException error =
+                assertThrows(EudiPidTrustException.class, () -> snapshot.resolveIssuer("unknown-provider"));
+        assertEquals(
+                "Configured issuer does not identify a PID Provider in the EUDI trust list: unknown-provider",
+                error.getMessage());
+    }
+
+    @Test
+    void shouldRejectNonPidProviderLoteType() throws Exception {
+        KeyPair signerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate signerCertificate = TestCryptoUtils.createSelfSignedCaCert(signerKeyPair);
+        KeyPair issuerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate issuerCertificate =
+                TestCryptoUtils.createLeafCert(issuerKeyPair, signerKeyPair, signerCertificate, "CN=PID Issuer");
+
+        String trustListJwt = trustListJwt(
+                signerCertificate,
+                issuerCertificate,
+                Instant.now().plusSeconds(3600),
+                "http://uri.etsi.org/19602/LoTEType/EUWalletProvidersList");
+
+        EudiPidTrustException error =
+                assertThrows(EudiPidTrustException.class, () -> new StubTrustListProvider(trustListJwt, true)
+                        .resolve(policy(signerCertificate)));
+        assertEquals("EUDI trust list is not an ETSI TS 119 602 PID Providers LoTE", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectAmbiguousProviderIdentifier() throws Exception {
+        KeyPair signerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate signerCertificate = TestCryptoUtils.createSelfSignedCaCert(signerKeyPair);
+        EudiPidTrustListProvider.TrustedPidIssuanceService service =
+                new EudiPidTrustListProvider.TrustedPidIssuanceService("PID issuance", List.of(signerCertificate));
+        EudiPidTrustListProvider.TrustedPidProvider providerA = new EudiPidTrustListProvider.TrustedPidProvider(
+                "Provider A", List.of("PSDDE-DUPLICATE"), List.of(service));
+        EudiPidTrustListProvider.TrustedPidProvider providerB = new EudiPidTrustListProvider.TrustedPidProvider(
+                "Provider B", List.of("PSDDE-DUPLICATE"), List.of(service));
+        EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider.TrustListSnapshot(
+                Instant.now().plusSeconds(3600), List.of(signerCertificate), List.of(providerA, providerB));
+
+        EudiPidTrustException error =
+                assertThrows(EudiPidTrustException.class, () -> snapshot.resolveIssuer("PSDDE-DUPLICATE"));
+        assertEquals(
+                "Configured issuer identifies multiple PID Providers in the EUDI trust list: PSDDE-DUPLICATE",
+                error.getMessage());
     }
 
     @Test
@@ -131,19 +204,35 @@ class EudiPidTrustListProviderTest {
 
     private String trustListJwt(
             X509Certificate signerCertificate, X509Certificate issuerCertificate, Instant nextUpdate) throws Exception {
+        return trustListJwt(
+                signerCertificate, issuerCertificate, nextUpdate, EudiPidTrustListProvider.PID_PROVIDERS_LOTE_TYPE);
+    }
+
+    private String trustListJwt(
+            X509Certificate signerCertificate, X509Certificate issuerCertificate, Instant nextUpdate, String loteType)
+            throws Exception {
         String header = """
                 {"typ":"trustlist+jwt","alg":"ES256","x5c":["%s"]}
                 """.formatted(encodeCertificate(signerCertificate));
         String payload = """
                 {
                   "LoTE": {
-                    "ListAndSchemeInformation": { "NextUpdate": "%s" },
+                    "ListAndSchemeInformation": {
+                      "LoTEType": "%s",
+                      "ListIssueDateTime": "2026-01-01T00:00:00Z",
+                      "NextUpdate": "%s"
+                    },
                     "TrustedEntitiesList": [
                       {
+                        "TrustedEntityInformation": {
+                          "TEName": [ { "lang": "en", "value": "Example PID Provider" } ],
+                          "TETradeName": [ { "lang": "en", "value": "PSDDE-PID-PROVIDER-1" } ]
+                        },
                         "TrustedEntityServices": [
                           {
                             "ServiceInformation": {
                               "ServiceTypeIdentifier": "%s",
+                              "ServiceName": [ { "lang": "en", "value": "PID issuance" } ],
                               "ServiceDigitalIdentity": {
                                 "X509Certificates": [ { "val": "%s" } ]
                               }
@@ -155,7 +244,10 @@ class EudiPidTrustListProviderTest {
                   }
                 }
                 """.formatted(
-                nextUpdate, EudiPidTrustListProvider.PID_ISSUANCE_SERVICE_TYPE, encodeCertificate(issuerCertificate));
+                        loteType,
+                        nextUpdate,
+                        EudiPidTrustListProvider.PID_ISSUANCE_SERVICE_TYPE,
+                        encodeCertificate(issuerCertificate));
 
         return base64Url(header) + "." + base64Url(payload) + "." + base64Url("signature");
     }

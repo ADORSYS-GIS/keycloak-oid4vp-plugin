@@ -18,12 +18,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
@@ -73,12 +73,12 @@ public class MdocCredentialVerifier implements CredentialVerifier {
     }
 
     @Override
-    public JsonNode verifyCredential(
+    public VerifiedCredential verifyCredential(
             OID4VPAuthenticator.Context context, CredentialRequirement credentialReq, String token)
             throws VerificationException {
 
         KeycloakSession session = context.authenticationFlowContext().getSession();
-        TrustAnchorProvider truststore = TrustedProviderResolver.resolve(session, credentialReq);
+        TrustedProviderResolver.ResolvedMdocTrust trust = TrustedProviderResolver.resolve(session, credentialReq);
         MdocAuthRequirements authReqs = new MdocAuthRequirements(context.authRequirements(), credentialReq);
 
         AuthorizationContext authorizationContext = context.authorizationContext();
@@ -101,7 +101,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         };
 
         verificationContext = new MdocVerificationContext(token);
-        verificationContext.verifyPresentation(opts, requirements, truststore);
+        verificationContext.verifyPresentation(opts, requirements, trust.trustAnchors());
 
         if (authReqs.shouldEnforceRevocationStatus()) {
             try {
@@ -119,7 +119,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        return payloadRef.get().get(L_NAME_SPACES);
+        return new VerifiedCredential(trust.issuer(), payloadRef.get().get(L_NAME_SPACES));
     }
 
     @Override

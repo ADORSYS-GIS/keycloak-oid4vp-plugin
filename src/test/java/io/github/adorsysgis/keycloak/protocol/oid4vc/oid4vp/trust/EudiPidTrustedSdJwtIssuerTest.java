@@ -112,7 +112,7 @@ class EudiPidTrustedSdJwtIssuerTest {
 
         @Override
         public TrustListSnapshot resolve(TrustPolicy policy) {
-            return new TrustListSnapshot(Instant.now().plusSeconds(3600), trustedCertificates);
+            return new TrustListSnapshot(Instant.now().plusSeconds(3600), trustedCertificates, List.of());
         }
 
         @Override

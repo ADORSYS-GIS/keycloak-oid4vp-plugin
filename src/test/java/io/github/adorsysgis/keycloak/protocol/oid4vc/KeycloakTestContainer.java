@@ -1,7 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc;
 
 import dasniko.testcontainers.keycloak.KeycloakContainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListTestServer;
 import java.io.File;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 import org.jboss.logging.Logger;
@@ -17,6 +19,8 @@ public final class KeycloakTestContainer {
 
     public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.0";
     public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar";
+    private static final EudiPidTrustListTestServer EUDI_PID_TRUST_LIST_SERVER =
+            EudiPidTrustListTestServer.start(Path.of("src/test/resources/truststore.jks"));
 
     private KeycloakTestContainer() {}
 
@@ -37,12 +41,16 @@ public final class KeycloakTestContainer {
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
                 .withCopyToContainer(
-                        MountableFile.forHostPath("src/test/resources/truststore.jks"),
+                        MountableFile.forHostPath(EUDI_PID_TRUST_LIST_SERVER.keycloakTruststore()),
                         "/opt/keycloak/conf/truststore.jks")
                 .withEnv("KC_SPI_TRUSTSTORE_FILE_FILE", "/opt/keycloak/conf/truststore.jks")
                 .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
                 .withEnv("KC_TLS_HOSTNAME_VERIFIER", "ANY")
                 .withLogConsumer(frame -> logConsumer.accept(frame.getUtf8String()));
+    }
+
+    public static EudiPidTrustListTestServer eudiPidTrustListServer() {
+        return EUDI_PID_TRUST_LIST_SERVER;
     }
 
     private static File loadShadedPluginJar() {

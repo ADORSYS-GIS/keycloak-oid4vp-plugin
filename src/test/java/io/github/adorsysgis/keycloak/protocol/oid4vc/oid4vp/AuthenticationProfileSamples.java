@@ -123,6 +123,47 @@ public final class AuthenticationProfileSamples {
     }
 
     /**
+     * Single primary mDoc credential whose issuer certificate is resolved from one provider entry
+     * in a signed ETSI PID Provider LoTE.
+     */
+    public static ProfileSample mdocPrimaryWithEudiPidTrustList(
+            String trustListUrl, String trustListSigningCertificate, String issuer) {
+        String json = """
+                [
+                  {
+                    "id": "{mdocPrimaryProfileId}",
+                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["{docType}"],
+                        "claims": ["{namespace}/sub"],
+                        "subjectClaim": "{namespace}/sub",
+                        "trust": [
+                          {
+                            "type": "eudi_pid_trust_list",
+                            "trustListUrl": "{trustListUrl}",
+                            "trustListSigningCertificate": "{trustListSigningCertificate}",
+                            "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance",
+                            "issuer": "{issuer}"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{mdocPrimaryProfileId}", MDOC_PRIMARY_PROFILE_ID)
+                .replace("{docType}", MdocBaseTest.DOC_TYPE)
+                .replace("{namespace}", MdocBaseTest.NAMESPACE)
+                .replace("{trustListUrl}", trustListUrl)
+                .replace("{trustListSigningCertificate}", trustListSigningCertificate)
+                .replace("{issuer}", issuer);
+        return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
+    }
+
+    /**
      * Single primary mso_mdoc credential whose identity is derived from the standard ISO 18013-5
      * mDL {@code document_number} claim instead of {@code sub}/{@code username} (issue 001).
      */
