@@ -32,7 +32,6 @@ public final class KeycloakTestContainer {
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
                 .withRealmImportFiles(realmImports.toArray(String[]::new))
-                .withEnv("JAVA_OPTS_APPEND", "-Xms1g -Xmx2g")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
