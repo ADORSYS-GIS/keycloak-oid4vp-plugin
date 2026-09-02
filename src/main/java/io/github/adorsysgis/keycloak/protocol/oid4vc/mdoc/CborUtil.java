@@ -29,6 +29,13 @@ public class CborUtil {
     }
 
     /**
+     * Unwraps a field whose schema defines the byte string as embedded CBOR.
+     */
+    public static CBORItem unwrapEmbeddedCbor(CBORItem item) {
+        return unwrap(item, null, CBOR_TAG_EMBEDDED);
+    }
+
+    /**
      * Deeply unwrap CBORItem tree for convenience.
      *
      * @param item      Root of CBOR tree to unwrap
@@ -40,22 +47,15 @@ public class CborUtil {
             // Always untag tagged items
             case CBORTaggedItem tagged -> unwrap(tagged.getTagContent(), null, tagged.getTagNumber());
 
-            // Always attempt to unwrap byte arrays
+            // Only tag 24 carries encoded CBOR; ordinary mDoc byte strings are opaque
+            // values such as salts, digests and signatures and must not be parsed.
             case CBORByteArray byteArray -> {
+                if (!numericEquals(CBOR_TAG_EMBEDDED, tagNumber)) {
+                    yield byteArray;
+                }
+
                 try {
-                    // Treat as CBOR and decode to unwrap
-                    byte[] nestedBytes = byteArray.getValue();
-                    CBORItem decodedInnerItem = new CBORDecoder(nestedBytes).next();
-
-                    if (decodedInnerItem == null
-                            || !numericEquals(CBOR_TAG_EMBEDDED, tagNumber)
-                                    && !(decodedInnerItem instanceof CBORTaggedItem taggedItem
-                                            && numericEquals(CBOR_TAG_EMBEDDED, taggedItem.getTagNumber()))) {
-                        yield byteArray;
-                    }
-
-                    // Continue unwrapping in case there are nested unwrapped values
-                    yield unwrap(decodedInnerItem);
+                    yield unwrap(new CBORDecoder(byteArray.getValue()).next());
                 } catch (IOException e) {
                     yield byteArray;
                 }

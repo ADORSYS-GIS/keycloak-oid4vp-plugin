@@ -86,7 +86,7 @@ public class MdocVerificationContext {
         this.deviceNameSpaces = extractDeviceNamespaces(document);
 
         // Verify device key binding
-        CBORPairList mso = (CBORPairList) CborUtil.unwrap(issuerAuth.getPayload());
+        CBORPairList mso = (CBORPairList) CborUtil.unwrapEmbeddedCbor(issuerAuth.getPayload());
         verifyDeviceKeyBinding(document, mso, opts);
         storeVerifiedMsoPayload(mso);
 
