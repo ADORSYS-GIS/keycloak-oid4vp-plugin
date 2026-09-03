@@ -103,7 +103,9 @@ public class OID4VPAuthenticator implements Authenticator {
         AuthenticationSessionModel authSession = authFlowContext.getAuthenticationSession();
         AuthorizationContext authContext = new AuthenticationSessionStore(authSession).getAuthorizationContext();
 
-        OID4VPProfileConfig profileConfig = OID4VPProfileConfig.resolve(authFlowContext.getAuthenticatorConfig());
+        String realmId = authFlowContext.getRealm().getId();
+        OID4VPProfileConfig profileConfig =
+                OID4VPProfileConfig.resolve(realmId, authFlowContext.getAuthenticatorConfig());
         AuthenticationProfile authProfile = profileConfig.getProfile(authContext.getProfileId());
 
         Map<String, String> presentedTokens = getPresentedTokens(authSession);

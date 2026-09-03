@@ -1,6 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
 import com.apicatalog.jsonld.StringUtils;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
@@ -13,14 +15,13 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
 
 /**
  * Access configurations that modulate the verifier's behavior.
  *
- * <p>Use {@link #resolve(AuthenticatorConfigModel)} to avoid re-parsing and re-validating
+ * <p>Use {@link #resolve(String, AuthenticatorConfigModel)} to avoid re-parsing and re-validating
  * the same configuration on every request. The constructor remains public for direct use
  * in tests.
  *
@@ -30,7 +31,10 @@ public class VerifierConfig {
 
     private static final Logger logger = Logger.getLogger(VerifierConfig.class);
 
-    private static final ConcurrentHashMap<Map<String, String>, VerifierConfig> CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_CACHE_SIZE = 50;
+
+    private static final Cache<CacheKey, VerifierConfig> CACHE =
+            Caffeine.newBuilder().maximumSize(MAX_CACHE_SIZE).build();
 
     private final ClientIdentifierPrefix clientIdentifierPrefix;
     private final ResponseMode responseMode;
@@ -45,22 +49,24 @@ public class VerifierConfig {
 
     /**
      * Returns a cached {@code VerifierConfig} for the given authenticator config.
-     * The cache key is an immutable snapshot of the config map, so updates to the config are
-     * picked up immediately while mutations to the source map cannot corrupt the cache.
+     * The cache is scoped by realm ID and bounded by {@link #MAX_CACHE_SIZE} entries.
      */
-    public static VerifierConfig resolve(AuthenticatorConfigModel authConfig) {
+    public static VerifierConfig resolve(String realmId, AuthenticatorConfigModel authConfig) {
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
-        return CACHE.computeIfAbsent(Map.copyOf(config), k -> new VerifierConfig(authConfig));
+        CacheKey key = new CacheKey(realmId, Map.copyOf(config));
+        return CACHE.get(key, k -> new VerifierConfig(realmId, authConfig));
     }
 
-    public VerifierConfig(AuthenticatorConfigModel authConfig) {
+    private record CacheKey(String realmId, Map<String, String> config) {}
+
+    public VerifierConfig(String realmId, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting verifier config properties");
 
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
 
-        this.profileConfig = OID4VPProfileConfig.resolve(authConfig);
+        this.profileConfig = OID4VPProfileConfig.resolve(realmId, authConfig);
 
         this.clientIdentifierPrefix = validateClientIdentifierPrefix(config.getOrDefault(
                 OID4VPAuthenticatorFactory.CLIENT_IDENTIFIER_PREFIX_CONFIG,

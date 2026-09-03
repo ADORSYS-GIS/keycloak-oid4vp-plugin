@@ -293,7 +293,7 @@ public class OID4VPProfileConfigTest {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(configMap);
 
-        assertDoesNotThrow(() -> new VerifierConfig(config));
+        assertDoesNotThrow(() -> new VerifierConfig(null, config));
     }
 
     @Test
@@ -779,8 +779,8 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig first = OID4VPProfileConfig.resolve(config);
-        OID4VPProfileConfig second = OID4VPProfileConfig.resolve(config);
+        OID4VPProfileConfig first = OID4VPProfileConfig.resolve("realm-1", config);
+        OID4VPProfileConfig second = OID4VPProfileConfig.resolve("realm-1", config);
         assertSame(first, second);
     }
 
@@ -810,8 +810,8 @@ public class OID4VPProfileConfigTest {
                 ]
                 """));
 
-        OID4VPProfileConfig fromA = OID4VPProfileConfig.resolve(configA);
-        OID4VPProfileConfig fromB = OID4VPProfileConfig.resolve(configB);
+        OID4VPProfileConfig fromA = OID4VPProfileConfig.resolve("realm-1", configA);
+        OID4VPProfileConfig fromB = OID4VPProfileConfig.resolve("realm-1", configB);
         assertNotSame(fromA, fromB);
         assertEquals("profile-a", fromA.getProfile("profile-a").getId());
         assertEquals("profile-b", fromB.getProfile("profile-b").getId());
@@ -819,7 +819,7 @@ public class OID4VPProfileConfigTest {
 
     @Test
     void resolveShouldHandleNullConfig() {
-        OID4VPProfileConfig result = OID4VPProfileConfig.resolve(null);
+        OID4VPProfileConfig result = OID4VPProfileConfig.resolve(null, null);
         assertDoesNotThrow(() -> result.getProfile(null));
     }
 }
