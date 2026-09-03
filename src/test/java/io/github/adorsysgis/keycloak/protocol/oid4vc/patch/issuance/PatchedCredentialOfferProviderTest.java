@@ -31,12 +31,7 @@ class PatchedCredentialOfferProviderTest {
         CredentialOfferState expected = mock(CredentialOfferState.class);
         UserModel user = mock(UserModel.class);
         when(delegate.createCredentialOffer(
-                        user,
-                        AUTH_CODE_GRANT_TYPE,
-                        CREDENTIAL_CONFIGURATION_IDS,
-                        null,
-                        TARGET_USER_ID,
-                        EXPIRE_AT))
+                        user, AUTH_CODE_GRANT_TYPE, CREDENTIAL_CONFIGURATION_IDS, null, TARGET_USER_ID, EXPIRE_AT))
                 .thenReturn(expected);
 
         CredentialOfferState actual = new PatchedCredentialOfferProvider(delegate)
@@ -51,12 +46,7 @@ class PatchedCredentialOfferProviderTest {
         assertSame(expected, actual);
         verify(delegate)
                 .createCredentialOffer(
-                        user,
-                        AUTH_CODE_GRANT_TYPE,
-                        CREDENTIAL_CONFIGURATION_IDS,
-                        null,
-                        TARGET_USER_ID,
-                        EXPIRE_AT);
+                        user, AUTH_CODE_GRANT_TYPE, CREDENTIAL_CONFIGURATION_IDS, null, TARGET_USER_ID, EXPIRE_AT);
         verifyNoMoreInteractions(delegate);
     }
 
@@ -71,32 +61,17 @@ class PatchedCredentialOfferProviderTest {
         CredentialOfferState expected = mock(CredentialOfferState.class);
         UserModel user = mock(UserModel.class);
         when(delegate.createCredentialOffer(
-                        user,
-                        grantType,
-                        CREDENTIAL_CONFIGURATION_IDS,
-                        TARGET_CLIENT_ID,
-                        TARGET_USER_ID,
-                        EXPIRE_AT))
+                        user, grantType, CREDENTIAL_CONFIGURATION_IDS, TARGET_CLIENT_ID, TARGET_USER_ID, EXPIRE_AT))
                 .thenReturn(expected);
 
         CredentialOfferState actual = new PatchedCredentialOfferProvider(delegate)
                 .createCredentialOffer(
-                        user,
-                        grantType,
-                        CREDENTIAL_CONFIGURATION_IDS,
-                        TARGET_CLIENT_ID,
-                        TARGET_USER_ID,
-                        EXPIRE_AT);
+                        user, grantType, CREDENTIAL_CONFIGURATION_IDS, TARGET_CLIENT_ID, TARGET_USER_ID, EXPIRE_AT);
 
         assertSame(expected, actual);
         verify(delegate)
                 .createCredentialOffer(
-                        user,
-                        grantType,
-                        CREDENTIAL_CONFIGURATION_IDS,
-                        TARGET_CLIENT_ID,
-                        TARGET_USER_ID,
-                        EXPIRE_AT);
+                        user, grantType, CREDENTIAL_CONFIGURATION_IDS, TARGET_CLIENT_ID, TARGET_USER_ID, EXPIRE_AT);
         verifyNoMoreInteractions(delegate);
     }
 
@@ -110,4 +85,3 @@ class PatchedCredentialOfferProviderTest {
         verifyNoMoreInteractions(delegate);
     }
 }
-

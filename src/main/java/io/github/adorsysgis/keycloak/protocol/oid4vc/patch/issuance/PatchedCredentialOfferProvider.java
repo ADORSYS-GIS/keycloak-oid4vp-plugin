@@ -33,12 +33,7 @@ public final class PatchedCredentialOfferProvider implements CredentialOfferProv
             Integer expireAt) {
         String effectiveTargetClientId = AUTH_CODE_GRANT_TYPE.equals(grantType) ? null : targetClientId;
         return delegate.createCredentialOffer(
-                user,
-                grantType,
-                credentialConfigurationIds,
-                effectiveTargetClientId,
-                targetUserId,
-                expireAt);
+                user, grantType, credentialConfigurationIds, effectiveTargetClientId, targetUserId, expireAt);
     }
 
     @Override
@@ -46,4 +41,3 @@ public final class PatchedCredentialOfferProvider implements CredentialOfferProv
         delegate.close();
     }
 }
-
