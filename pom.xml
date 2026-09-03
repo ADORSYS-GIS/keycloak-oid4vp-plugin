@@ -44,6 +44,9 @@
         <keycloak.version>26.7.3</keycloak.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <gatling.virtualUsers>30</gatling.virtualUsers>
+        <gatling.rampDurationSeconds>15</gatling.rampDurationSeconds>
+        <gatling.steadyDurationSeconds>60</gatling.steadyDurationSeconds>
     </properties>
 
     <dependencies>
@@ -147,7 +150,42 @@
             <version>1.21.2</version>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>io.gatling.highcharts</groupId>
+            <artifactId>gatling-charts-highcharts</artifactId>
+            <version>3.15.1</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
     </dependencies>
+
+    <dependencyManagement>
+        <!--
+          Gatling 3.15 requires Netty 4.2, but keycloak-services pulls quarkus-opentelemetry ->
+          quarkus-vertx, which brings netty-codec and netty-codec-haproxy in at 4.1.135. Mixing 4.1 and
+          4.2 on the test classpath makes Gatling's HTTP engine fail at write time. We ping the netty
+          modules to avoid this conflict. If the leak list changes (e.g. after a Keycloak upgrade),
+          re-check with `./mvnw dependency:tree -Dincludes="io.netty:*"` and adjust.
+        -->
+        <dependencies>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-codec</artifactId>
+                <version>4.2.14.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-codec-haproxy</artifactId>
+                <version>4.2.14.Final</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>
@@ -181,6 +219,18 @@
                         <forbidModuleImports/>
                         <formatAnnotations/>
                     </java>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.gatling</groupId>
+                <artifactId>gatling-maven-plugin</artifactId>
+                <version>4.21.10</version>
+                <configuration>
+                    <jvmArgs>
+                        <arg>-Dgatling.virtualUsers=${gatling.virtualUsers}</arg>
+                        <arg>-Dgatling.rampDurationSeconds=${gatling.rampDurationSeconds}</arg>
+                        <arg>-Dgatling.steadyDurationSeconds=${gatling.steadyDurationSeconds}</arg>
+                    </jvmArgs>
                 </configuration>
             </plugin>
             <plugin>
@@ -288,8 +338,10 @@
                                 </filter>
                             </filters>
                             <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"/>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                         </configuration>
                     </execution>

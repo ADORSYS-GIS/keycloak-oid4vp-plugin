@@ -33,11 +33,11 @@ import org.keycloak.util.JsonSerialization;
 /**
  * Base Keycloak test class for leveraging the TestContainers infrastructure.
  *
- * <p>The Keycloak container is a JVM-wide <strong>singleton</strong>: it is started once (lazily, on
- * first class load) and reused across all test classes in the same Surefire fork, instead of being
- * restarted per test class. It is never stopped explicitly; the Testcontainers Ryuk reaper tears it
- * down at JVM shutdown. This drastically reduces the total test time (one Quarkus augmentation +
- * bootstrap instead of one per test class).
+ * <p>The Keycloak container is a JVM-wide <strong>singleton</strong>: it is started once (in
+ * {@code @BeforeAll}, lazily on first test run) and reused across all test classes in the same
+ * Surefire fork, instead of being restarted per test class. It is never stopped explicitly; the
+ * Testcontainers Ryuk reaper tears it down at JVM shutdown. This drastically reduces the total test
+ * time (one Quarkus augmentation + bootstrap instead of one per test class).
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
@@ -59,10 +59,6 @@ public abstract class BaseKeycloakTest {
 
     protected static final KeycloakContainer keycloak = createKeycloak();
 
-    static {
-        keycloak.start();
-    }
-
     private static KeycloakContainer createKeycloak() {
         return KeycloakTestContainer.create(List.of(
                 "/realms/test-realm.json",
@@ -73,6 +69,7 @@ public abstract class BaseKeycloakTest {
 
     @BeforeAll
     public static void setup() {
+        keycloak.start();
         CryptoIntegration.init(BaseKeycloakTest.class.getClassLoader());
     }
 

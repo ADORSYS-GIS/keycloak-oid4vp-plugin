@@ -25,8 +25,20 @@ public final class KeycloakTestContainer {
     }
 
     public static KeycloakContainer create(List<String> realmImports, Consumer<String> logConsumer) {
-        // noinspection resource
-        return new KeycloakContainer(TEST_KEYCLOAK_IMAGE)
+        return configure(new KeycloakContainer(TEST_KEYCLOAK_IMAGE), realmImports, logConsumer);
+    }
+
+    /**
+     * Like {@link #create(List)} but binds a fixed host port to the container JMX port so the JVM
+     * heap can be sampled remotely via {@link JmxKeycloakContainer#JMX_PORT}.
+     */
+    public static KeycloakContainer createJmx(List<String> realmImports) {
+        return configure(new JmxKeycloakContainer(TEST_KEYCLOAK_IMAGE), realmImports, ignored -> {});
+    }
+
+    private static KeycloakContainer configure(
+            KeycloakContainer container, List<String> realmImports, Consumer<String> logConsumer) {
+        return container
                 .withImagePullPolicy(PullPolicy.alwaysPull())
                 .withProviderLibsFrom(List.of(loadShadedPluginJar()))
                 .withProviderClassesFrom("target/classes", "target/test-classes")
@@ -54,5 +66,19 @@ public final class KeycloakTestContainer {
             throw new IllegalStateException(message);
         }
         return shadedJar;
+    }
+
+    /**
+     * {@link KeycloakContainer} that binds a fixed host port to the container JMX port so the JVM
+     * heap can be read via {@code service:jmx:rmi:///jndi/rmi://localhost:<port>/jmxrmi}.
+     */
+    public static final class JmxKeycloakContainer extends KeycloakContainer {
+
+        public static final int JMX_PORT = 9099;
+
+        JmxKeycloakContainer(String image) {
+            super(image);
+            addFixedExposedPort(JMX_PORT, JMX_PORT);
+        }
     }
 }

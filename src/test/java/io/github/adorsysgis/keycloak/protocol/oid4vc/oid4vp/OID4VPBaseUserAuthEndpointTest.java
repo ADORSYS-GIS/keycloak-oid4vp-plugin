@@ -47,7 +47,7 @@ import org.keycloak.util.JsonSerialization;
  */
 public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
-    private static final String TEST_REALM_OID4VP_AUTH_CONFIG_ID = "oid4vp-auth-config-id";
+    public static final String TEST_REALM_OID4VP_AUTH_CONFIG_ID = "oid4vp-auth-config-id";
 
     protected final SdJwtVPTestUtils sdJwtVPTestUtils = new SdJwtVPTestUtils(keycloak, getActiveTestRealm());
 
