@@ -20,6 +20,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -215,7 +216,14 @@ public class OID4VPAuthenticator implements Authenticator {
                                     String.format("Unsupported binding rule type: %s", rule.getType()));
                     };
 
-            if (!resolveComparator(session, rule).matches(actualValue, expectedValue)) {
+            String normalizedActual = actualValue != null ? actualValue.strip() : actualValue;
+            String normalizedExpected = expectedValue != null ? expectedValue.strip() : expectedValue;
+            if (rule.getCaseInsensitive() && normalizedActual != null && normalizedExpected != null) {
+                normalizedActual = normalizedActual.toLowerCase(Locale.ROOT);
+                normalizedExpected = normalizedExpected.toLowerCase(Locale.ROOT);
+            }
+
+            if (!resolveComparator(session, rule).matches(normalizedActual, normalizedExpected)) {
                 throw new VerificationException(String.format(
                         "Credential '%s' failed binding rule '%s'", credentialReq.getId(), rule.getType()));
             }
