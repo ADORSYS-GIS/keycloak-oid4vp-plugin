@@ -106,6 +106,13 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String actualSessionId = pruneAuthSessionId(requestObject.getState());
         assertEquals(expectedSessionId, actualSessionId);
 
+        // Assert: The nonce must not exceed 43 characters (OID4VP-1FINAL-5.2 interop limit —
+        // the conformance suite warns for longer nonces, which strict wallets may reject).
+        assertNotNull(requestObject.getNonce(), "Nonce should be present");
+        assertTrue(
+                requestObject.getNonce().length() <= 43,
+                "Nonce must not exceed 43 characters, but was: " + requestObject.getNonce());
+
         // Assert: Ensure the request object contains a final-spec DCQL query.
         DcqlQueryGeneratorTest.assertDcqlQuery(
                 requestObject.getDcqlQuery(),
