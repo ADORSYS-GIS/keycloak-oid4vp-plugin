@@ -35,8 +35,6 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
 import org.jboss.logging.Logger;
@@ -63,8 +61,12 @@ public class AuthorizationRequestService {
     public static final String AUTH_REQ_JWT = "oauth-authz-req+jwt";
     public static final String X509_ATTR_CN = "CN";
     // The number of bytes to generate for secure random strings,
-    // including request IDs, transaction IDs, and nonces (doubled).
+    // including the random component of request IDs and transaction IDs.
     public static final int SECURE_RANDOM_ENTROPY = 20;
+    // Entropy of the OID4VP request nonce in bytes. 32 bytes encode to exactly 43 base64url
+    // characters (no padding), the longest nonce the OID4VP conformance suite accepts
+    // (OID4VP-1FINAL-5.2 warns for anything longer), while providing 256 bits of entropy.
+    public static final int NONCE_RANDOM_ENTROPY = 32;
 
     // Note: "https://self-issued.me/v2" is a symbolic string and can be used
     // as an aud Claim value even when this specification is used standalone,
@@ -209,11 +211,18 @@ public class AuthorizationRequestService {
     }
 
     /**
-     * Generates a cryptographically secure random string.
+     * Generates a cryptographically secure random string from {@link #SECURE_RANDOM_ENTROPY} bytes.
      */
     private static String generateRandomString() {
+        return generateRandomString(SECURE_RANDOM_ENTROPY);
+    }
+
+    /**
+     * Generates a cryptographically secure random string from the given number of bytes.
+     */
+    private static String generateRandomString(int entropyBytes) {
         // Generate a cryptographically secure random byte array
-        byte[] randomBytes = JWEUtils.generateSecret(SECURE_RANDOM_ENTROPY);
+        byte[] randomBytes = JWEUtils.generateSecret(entropyBytes);
 
         // Convert the random number to a Base64 string
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
@@ -249,10 +258,11 @@ public class AuthorizationRequestService {
             AuthenticationProfile profile,
             String requestId,
             PresentationDuringIssuanceSession pdiSession) {
-        // Generate nonce
-        String nonce = Stream.generate(AuthorizationRequestService::generateRandomString)
-                .limit(2)
-                .collect(Collectors.joining("."));
+        // Generate nonce. A single 32-byte segment (43 base64url characters, 256-bit entropy) stays
+        // within the 43-character interoperability limit for wallets. Two 20-byte segments joined
+        // with '.' produced 55 characters, which the OID4VP conformance suite flags as too long
+        // (OID4VP-1FINAL-5.2) and strict wallets may reject.
+        String nonce = generateRandomString(NONCE_RANDOM_ENTROPY);
 
         // Build DCQL query from the selected authentication profile
         DcqlQuery dcqlQuery =
