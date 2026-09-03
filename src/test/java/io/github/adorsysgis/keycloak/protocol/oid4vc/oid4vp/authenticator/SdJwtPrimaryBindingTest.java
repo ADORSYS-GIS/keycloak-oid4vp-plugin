@@ -97,6 +97,32 @@ class SdJwtPrimaryBindingTest {
         authenticator.applyBindingRules(ctx, authenticatingUser, primary, claims);
     }
 
+    @Test
+    void passesWhenClaimMatchesWithTrailingSpaces() {
+        when(user.getUsername()).thenReturn("  test-user  ");
+        assertDoesNotThrow(() -> apply(primaryWithUserAttributeBinding()));
+    }
+
+    @Test
+    void passesWhenClaimMatchesCaseInsensitive() {
+        when(user.getUsername()).thenReturn("TEST-USER");
+        assertDoesNotThrow(() -> apply(primaryWithCaseInsensitiveBinding()));
+    }
+
+    @Test
+    void throwsWhenClaimDoesNotMatchCaseInsensitive() {
+        when(user.getUsername()).thenReturn("someone-else");
+        VerificationException error =
+                assertThrows(VerificationException.class, () -> apply(primaryWithCaseInsensitiveBinding()));
+        assertEquals("Credential 'pid' failed binding rule 'claim_equals_user_attribute'", error.getMessage());
+    }
+
+    @Test
+    void passesWhenClaimMatchesWithTrailingSpacesAndCaseInsensitive() {
+        when(user.getUsername()).thenReturn("  TEST-USER  ");
+        assertDoesNotThrow(() -> apply(primaryWithCaseInsensitiveBinding()));
+    }
+
     private static CredentialRequirement primaryWithUserAttributeBinding() {
         return new CredentialRequirement()
                 .setId("pid")
@@ -105,5 +131,16 @@ class SdJwtPrimaryBindingTest {
                         .setType(BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE)
                         .setCredentialClaim("username")
                         .setUserAttribute("username")));
+    }
+
+    private static CredentialRequirement primaryWithCaseInsensitiveBinding() {
+        return new CredentialRequirement()
+                .setId("pid")
+                .setRole(CredentialRole.PRIMARY)
+                .setBinding(List.of(new BindingRule()
+                        .setType(BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE)
+                        .setCredentialClaim("username")
+                        .setUserAttribute("username")
+                        .setCaseInsensitive(true)));
     }
 }
