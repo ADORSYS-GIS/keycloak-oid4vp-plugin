@@ -104,18 +104,23 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         verificationContext.verifyPresentation(opts, requirements, truststore);
 
         if (authReqs.shouldEnforceRevocationStatus()) {
-            try {
-                // Status is stored in the MSO payload per IETF Token Status List §Referenced Token
-                // (https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-11.html#name-referenced-token-in-cose)
-                // and MATTR docs
-                // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
-                tokenStatusValidator.validate(verificationContext.getVerifiedMsoPayload());
-            } catch (ReferencedTokenValidationException e) {
-                throw new VerificationException(
-                        String.format(
-                                "Token status verification failed for credential to requirement '%s'",
-                                credentialReq.getId()),
-                        e);
+            JsonNode verifiedMsoPayload = verificationContext.getVerifiedMsoPayload();
+            boolean statusClaimMissing = verifiedMsoPayload.get(ReferencedTokenValidator.STATUS_FIELD) == null;
+            // Only skip the status check when the credential has no status claim and that is tolerated.
+            if (!(statusClaimMissing && authReqs.shouldAllowMissingStatusClaim())) {
+                try {
+                    // Status is stored in the MSO payload per IETF Token Status List §Referenced Token
+                    // (https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-11.html#name-referenced-token-in-cose)
+                    // and MATTR docs
+                    // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
+                    tokenStatusValidator.validate(verifiedMsoPayload);
+                } catch (ReferencedTokenValidationException e) {
+                    throw new VerificationException(
+                            String.format(
+                                    "Token status verification failed for credential to requirement '%s'",
+                                    credentialReq.getId()),
+                            e);
+                }
             }
         }
 

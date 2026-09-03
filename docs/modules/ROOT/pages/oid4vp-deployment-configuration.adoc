@@ -381,6 +381,10 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
 |`enforceRevocationStatus`
 |`false`
 |Reject credentials whose status indicates they are no longer valid, as per the Token Status List mechanism.
+
+|`allowMissingStatusClaim`
+|`false`
+|Treat credentials without a `status` claim as valid when `enforceRevocationStatus` is enabled. Only meaningful with revocation enforcement enabled; such credentials cannot be revoked via the Token Status List mechanism.
 |===
 
 === Generic example (realm JSON import format)
@@ -402,7 +406,8 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
     "requireExpClaim": false,
     "verifyIssuerClaim": true,
     "fallbackToIsoSpecSessionTranscript": false,
-    "enforceRevocationStatus": false
+    "enforceRevocationStatus": false,
+    "allowMissingStatusClaim": false
   }
 }
 ----

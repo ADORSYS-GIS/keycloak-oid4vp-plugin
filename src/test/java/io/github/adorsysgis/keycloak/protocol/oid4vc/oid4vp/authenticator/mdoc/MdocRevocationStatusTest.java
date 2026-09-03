@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ALLOW_MISSING_STATUS_CLAIM_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_FIELD;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.STATUS_LIST_FIELD;
@@ -24,6 +25,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContex
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.TestTruststoreProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.ContextBuilder;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -104,49 +106,111 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
     @Test
     public void shouldFailVerification_WhenCredentialRevoked() throws Exception {
-        var authConfig = new AuthenticatorConfigModel();
-        authConfig.getConfig().put(ENFORCE_REVOCATION_STATUS_CONFIG, "true");
-        var authReqs = new AuthRequirements(authConfig);
+        RequestObject requestObject = revocationRequestObject();
+        MdocVerificationOpts optsFromRequest = mdocOptsFor(requestObject);
 
-        var requestObject = new RequestObject()
+        var verifier = new MdocCredentialVerifier(mockFetcher);
+        var ctx = revocationContext(requestObject, false);
+
+        String validMdoc = buildMdocWithStatus(1, optsFromRequest);
+        assertDoesNotThrow(() -> verifier.verifyCredential(ctx, revocationCredential(), validMdoc));
+
+        String revokedMdoc = buildMdocWithStatus(0, optsFromRequest);
+        VerificationException exception = assertThrows(
+                VerificationException.class, () -> verifier.verifyCredential(ctx, revocationCredential(), revokedMdoc));
+        assertTrue(exception.getMessage().contains("Token status verification failed"));
+    }
+
+    @Test
+    public void shouldFailVerification_WhenStatusMissingAndNotTolerated() throws Exception {
+        RequestObject requestObject = revocationRequestObject();
+        String missingStatusMdoc =
+                buildDeviceResponse(mdocOptsFor(requestObject)).encodeToBase64Url();
+
+        var verifier = new MdocCredentialVerifier(mockFetcher);
+        VerificationException exception = assertThrows(
+                VerificationException.class,
+                () -> verifier.verifyCredential(
+                        revocationContext(requestObject, false), revocationCredential(), missingStatusMdoc));
+        assertTrue(exception.getMessage().contains("Token status verification failed"));
+    }
+
+    @Test
+    public void shouldPass_WhenRevocationEnforcedAndStatusMissingButTolerated() throws Exception {
+        RequestObject requestObject = revocationRequestObject();
+        String missingStatusMdoc =
+                buildDeviceResponse(mdocOptsFor(requestObject)).encodeToBase64Url();
+
+        var verifier = new MdocCredentialVerifier(mockFetcher);
+        assertDoesNotThrow(() -> verifier.verifyCredential(
+                revocationContext(requestObject, true), revocationCredential(), missingStatusMdoc));
+    }
+
+    @Test
+    public void shouldPass_WhenRevocationEnforcedAndStatusValidEvenIfTolerated() throws Exception {
+        RequestObject requestObject = revocationRequestObject();
+        String validMdoc = buildMdocWithStatus(1, mdocOptsFor(requestObject));
+
+        var verifier = new MdocCredentialVerifier(mockFetcher);
+        assertDoesNotThrow(() ->
+                verifier.verifyCredential(revocationContext(requestObject, true), revocationCredential(), validMdoc));
+    }
+
+    @Test
+    public void shouldFail_WhenRevocationEnforcedAndStatusRevokedEvenIfTolerated() throws Exception {
+        RequestObject requestObject = revocationRequestObject();
+        String revokedMdoc = buildMdocWithStatus(0, mdocOptsFor(requestObject));
+
+        var verifier = new MdocCredentialVerifier(mockFetcher);
+        VerificationException exception = assertThrows(
+                VerificationException.class,
+                () -> verifier.verifyCredential(
+                        revocationContext(requestObject, true), revocationCredential(), revokedMdoc));
+        assertTrue(exception.getMessage().contains("Token status verification failed"));
+    }
+
+    private RequestObject revocationRequestObject() {
+        return new RequestObject()
                 .setClientId("x509_san_dns:example.com")
                 .setNonce("exc7gBkxjx1rdc9udRrveKvSsJIq80avlXeLHhGwqtA")
                 .setResponseUri("https://example.com/response");
+    }
+
+    private MdocVerificationOpts mdocOptsFor(RequestObject requestObject) throws Exception {
+        byte[] thumbprint = MdocCredentialVerifier.computeJwkThumbprint(requestObject);
+        return MdocVerificationOpts.builder()
+                .withClientId(requestObject.getClientId())
+                .withOid4vpNonce(requestObject.getNonce())
+                .withResponseUri(requestObject.getResponseUri())
+                .withJwkThumbprint(thumbprint)
+                .build();
+    }
+
+    private OID4VPAuthenticator.Context revocationContext(
+            RequestObject requestObject, boolean allowMissingStatusClaim) {
+        var authConfig = new AuthenticatorConfigModel();
+        authConfig.getConfig().put(ENFORCE_REVOCATION_STATUS_CONFIG, "true");
+        if (allowMissingStatusClaim) {
+            authConfig.getConfig().put(ALLOW_MISSING_STATUS_CLAIM_CONFIG, "true");
+        }
 
         var authCtx = new AuthorizationContext().setRequestObject(requestObject);
 
         var context = mock(AuthenticationFlowContext.class);
         when(context.getAuthenticatorConfig()).thenReturn(authConfig);
 
-        var credential = new CredentialRequirement()
+        return new ContextBuilder()
+                .authenticationFlowContext(context)
+                .authorizationContext(authCtx)
+                .authRequirements(new AuthRequirements(authConfig))
+                .build();
+    }
+
+    private CredentialRequirement revocationCredential() {
+        return new CredentialRequirement()
                 .setId("test")
                 .setCredentialTypes(List.of(DOC_TYPE))
                 .setTrust(List.of(new TrustPolicy().setType(TrustPolicy.X5C).setAnchors(List.of(getIssuerCertRef1()))));
-
-        var verifier = new MdocCredentialVerifier(mockFetcher);
-
-        // Build mDoc with opts matching what verifyCredential will derive from the requestObject
-        byte[] thumbprint = MdocCredentialVerifier.computeJwkThumbprint(requestObject);
-        var optsFromRequest = MdocVerificationOpts.builder()
-                .withClientId(requestObject.getClientId())
-                .withOid4vpNonce(requestObject.getNonce())
-                .withResponseUri(requestObject.getResponseUri())
-                .withJwkThumbprint(thumbprint)
-                .build();
-
-        String validMdoc = buildMdocWithStatus(1, optsFromRequest);
-        var ctx = new ContextBuilder()
-                .authenticationFlowContext(context)
-                .authorizationContext(authCtx)
-                .authRequirements(authReqs)
-                .build();
-
-        assertDoesNotThrow(() -> verifier.verifyCredential(ctx, credential, validMdoc));
-
-        String revokedMdoc = buildMdocWithStatus(0, optsFromRequest);
-        VerificationException exception = assertThrows(
-                VerificationException.class, () -> verifier.verifyCredential(ctx, credential, revokedMdoc));
-        assertTrue(exception.getMessage().contains("Token status verification failed"));
     }
 
     @Test
