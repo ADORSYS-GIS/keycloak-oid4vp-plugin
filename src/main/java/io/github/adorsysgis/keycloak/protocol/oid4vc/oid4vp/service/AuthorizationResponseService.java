@@ -285,9 +285,15 @@ public class AuthorizationResponseService {
 
         OAuth2Code codeData = new OAuth2Code(
                 code,
+                clientSession.getClient().getId(),
                 (int) expiration,
                 nonce,
                 OAuth2Constants.SCOPE_OPENID,
+                null,
+                null,
+                null,
+                null,
+                null,
                 clientSession.getUserSession().getId());
 
         return OAuth2CodeParser.persistCode(session, clientSession, codeData);

@@ -15,7 +15,7 @@ public final class KeycloakTestContainer {
 
     private static final Logger logger = Logger.getLogger(KeycloakTestContainer.class);
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.0";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.3";
     public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar";
 
     private KeycloakTestContainer() {}
