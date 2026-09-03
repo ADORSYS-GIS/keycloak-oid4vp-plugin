@@ -22,4 +22,3 @@ public final class PatchedCredentialOfferProviderFactory extends DefaultCredenti
         return super.order() + 9;
     }
 }
-
