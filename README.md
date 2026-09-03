@@ -66,6 +66,9 @@ behavior under heavy load. Run them with (as they are run in the CI/CD pipeline)
 ./mvnw gatling:test
 ```
 
+For the full options on how to run Gatling simulations (e.g. running a single simulation
+non-interactively), refer to the [Gatling Maven plugin documentation](https://docs.gatling.io/integrations/build-tools/maven-plugin/#running-your-simulations).
+
 ## Deploying the Plugin
 
 Copy the JAR file to the `providers` directory of your Keycloak installation. For example:

@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: load-testing
+  cancel-in-progress: true
+
 jobs:
   load-test:
     name: Run Gatling Simulations
@@ -58,6 +62,14 @@ jobs:
             -Dgatling.rampDurationSeconds=${{ inputs.rampDurationSeconds || '15' }} \
             -Dgatling.steadyDurationSeconds=${{ inputs.steadyDurationSeconds || '60' }} \
             -Dgatling.runMultipleSimulations=true
+
+      - name: Upload Gatling reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gatling-reports
+          path: target/gatling/**
+          if-no-files-found: warn
 
       - name: Notify Discord on failure
         if: failure()
