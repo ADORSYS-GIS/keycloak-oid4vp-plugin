@@ -31,8 +31,9 @@ public class EudiPidTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
         validateConfiguredIssuer(issuerSignedJWT);
 
         EudiPidTrustListProvider.TrustListSnapshot trustList = trustListProvider.resolve(policy);
+        EudiPidTrustListProvider.TrustedPidProvider provider = trustList.resolveIssuer(policy.getIssuer());
         X509Certificate[] issuerChain =
-                chainValidator.validate(issuerSignedJWT.getJwsHeader().getX5c(), trustList.trustedIssuerCertificates());
+                chainValidator.validate(issuerSignedJWT.getJwsHeader().getX5c(), provider.trustedCertificates());
         X509Certificate issuerLeaf = issuerChain[0];
         SignatureVerifierContext verifier =
                 trustListProvider.verifier(issuerSignedJWT.getJwsHeader().getRawAlgorithm(), issuerLeaf);

@@ -132,7 +132,8 @@ Paste the complete JSON array into the `OpenID4VP authentication profiles` field
             "type": "eudi_pid_trust_list",
             "trustListUrl": "https://bmi.usercontent.opencode.de/eudi-wallet/test-trust-lists/pid-provider.jwt",
             "trustListSigningCertificate": "<base64 DER trust-list signing certificate>",
-            "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance"
+            "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance",
+            "issuer": "<official-PID-provider-registration-identifier>"
           }
         ]
       }
@@ -141,7 +142,7 @@ Paste the complete JSON array into the `OpenID4VP authentication profiles` field
 ]
 ----
 
-The `eudi_pid_trust_list` policy validates PID issuer trust against the configured trust-list JWT. The `trustListSigningCertificate` anchors the trust-list JWT, and `serviceType` selects entries that are valid for PID issuance.
+The `eudi_pid_trust_list` policy validates PID issuer trust against the configured trust-list JWT. The `trustListSigningCertificate` anchors the trust-list JWT, `serviceType` selects services that are valid for PID issuance, and `issuer` selects the exact PID Provider entry and its certificates. The provider-to-certificate association is preserved; certificates from other providers in the same LoTE are not accepted for this primary credential.
 
 == Single self-issued credential profile
 

@@ -60,12 +60,13 @@ public class EudiPidTrustListProvider {
 
     protected String fetchTrustList(String url) throws EudiPidTrustException {
         try {
-            return SimpleHttp.doGet(url, session)
+            String jwt = SimpleHttp.doGet(url, session)
                     .header("Accept", "application/trustlist+jwt")
                     .connectTimeoutMillis(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
                     .connectionRequestTimeoutMillis(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
                     .socketTimeOutMillis(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
                     .asString();
+            return jwt != null ? jwt.trim() : null;
         } catch (Exception e) {
             throw new EudiPidTrustException("Could not fetch EUDI PID trust list: " + url, e);
         }

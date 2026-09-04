@@ -214,11 +214,12 @@ Validates the credential issuer against one or more X.509 trust anchors. The anc
   "type": "eudi_pid_trust_list",
   "trustListUrl": "https://example.com/trust-list.jwt",
   "trustListSigningCertificate": "<base64-DER-certificate>",
-  "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance"
+  "serviceType": "http://uri.etsi.org/19602/SvcType/PID/Issuance",
+  "issuer": "<official-PID-provider-registration-identifier>"
 }
 ----
 
-Validates the credential issuer against a EUDI trust list. The `trustListSigningCertificate` anchors the trust-list JWT signature, and `serviceType` filters entries by service type.
+Validates the credential issuer against a EUDI trust list. The `trustListSigningCertificate` anchors the trust-list JWT signature, `serviceType` filters services, and `issuer` selects the exact PID Provider entity whose certificates may validate the credential. A credential-based primary mDoc requires exactly one such policy and a nonblank `issuer`.
 
 ==== Binding rules
 

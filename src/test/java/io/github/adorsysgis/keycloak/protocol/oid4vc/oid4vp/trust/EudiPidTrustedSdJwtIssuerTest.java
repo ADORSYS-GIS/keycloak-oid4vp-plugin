@@ -43,7 +43,8 @@ class EudiPidTrustedSdJwtIssuerTest {
         SignatureVerifierContext verifier = verifier(Algorithm.ES256);
 
         EudiPidTrustedSdJwtIssuer trustedIssuer = new EudiPidTrustedSdJwtIssuer(
-                policy(PID_PROVIDER_ISSUER), new StubTrustListProvider(List.of(caCertificate), verifier));
+                policy(PID_PROVIDER_ISSUER),
+                new StubTrustListProvider(PID_PROVIDER_ISSUER, List.of(caCertificate), verifier));
 
         List<SignatureVerifierContext> verifiers = trustedIssuer.resolveIssuerVerifyingKeys(
                 issuerSignedJwt(PID_PROVIDER_ISSUER, leafCertificate, caCertificate));
@@ -55,7 +56,8 @@ class EudiPidTrustedSdJwtIssuerTest {
     @Test
     void shouldRejectPidCredentialFromUnexpectedIssuer() throws Exception {
         EudiPidTrustedSdJwtIssuer trustedIssuer = new EudiPidTrustedSdJwtIssuer(
-                policy(PID_PROVIDER_ISSUER), new StubTrustListProvider(List.of(), verifier(Algorithm.ES256)));
+                policy(PID_PROVIDER_ISSUER),
+                new StubTrustListProvider(PID_PROVIDER_ISSUER, List.of(), verifier(Algorithm.ES256)));
 
         EudiPidTrustException error = assertThrows(
                 EudiPidTrustException.class,
@@ -64,6 +66,26 @@ class EudiPidTrustedSdJwtIssuerTest {
         assertEquals(
                 "PID credential issuer does not match configured trusted issuer: https://issuer.example",
                 error.getMessage());
+    }
+
+    @Test
+    void shouldRejectCertificateTrustedForAnotherPidProvider() throws Exception {
+        KeyPair configuredCaKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate configuredCa = TestCryptoUtils.createSelfSignedCaCert(configuredCaKeyPair);
+        KeyPair otherCaKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate otherCa = TestCryptoUtils.createSelfSignedCaCert(otherCaKeyPair);
+        KeyPair leafKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate otherLeaf =
+                TestCryptoUtils.createLeafCert(leafKeyPair, otherCaKeyPair, otherCa, "CN=Other PID Issuer");
+
+        EudiPidTrustedSdJwtIssuer trustedIssuer = new EudiPidTrustedSdJwtIssuer(
+                policy(PID_PROVIDER_ISSUER),
+                new StubTrustListProvider(PID_PROVIDER_ISSUER, List.of(configuredCa), verifier(Algorithm.ES256)));
+
+        assertThrows(
+                VerificationException.class,
+                () -> trustedIssuer.resolveIssuerVerifyingKeys(
+                        issuerSignedJwt(PID_PROVIDER_ISSUER, otherLeaf, otherCa)));
     }
 
     private TrustPolicy policy(String issuer) {
@@ -103,16 +125,21 @@ class EudiPidTrustedSdJwtIssuerTest {
 
         private final List<X509Certificate> trustedCertificates;
         private final SignatureVerifierContext verifier;
+        private final String issuer;
 
-        StubTrustListProvider(List<X509Certificate> trustedCertificates, SignatureVerifierContext verifier) {
+        StubTrustListProvider(
+                String issuer, List<X509Certificate> trustedCertificates, SignatureVerifierContext verifier) {
             super(mock(KeycloakSession.class));
+            this.issuer = issuer;
             this.trustedCertificates = trustedCertificates;
             this.verifier = verifier;
         }
 
         @Override
         public TrustListSnapshot resolve(TrustPolicy policy) {
-            return new TrustListSnapshot(Instant.now().plusSeconds(3600), trustedCertificates, List.of());
+            TrustedPidIssuanceService service = new TrustedPidIssuanceService("PID issuance", trustedCertificates);
+            TrustedPidProvider provider = new TrustedPidProvider("PID provider", List.of(issuer), List.of(service));
+            return new TrustListSnapshot(Instant.now().plusSeconds(3600), trustedCertificates, List.of(provider));
         }
 
         @Override
