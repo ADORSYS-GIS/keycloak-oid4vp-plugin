@@ -82,14 +82,19 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                         authReqs.shouldRequireCryptographicHolderBinding()));
 
         if (authReqs.shouldEnforceRevocationStatus()) {
-            try {
-                tokenStatusValidator.validate(sdJwt.getIssuerSignedJWT().getPayload());
-            } catch (ReferencedTokenValidationException e) {
-                throw new VerificationException(
-                        String.format(
-                                "Token status verification failed for credential to requirement '%s'",
-                                credentialReq.getId()),
-                        e);
+            JsonNode issuerSignedPayload = sdJwt.getIssuerSignedJWT().getPayload();
+            boolean statusClaimMissing = issuerSignedPayload.get(ReferencedTokenValidator.STATUS_FIELD) == null;
+            // Only skip the status check when the credential has no status claim and that is tolerated.
+            if (!(statusClaimMissing && authReqs.shouldAllowMissingStatusClaim())) {
+                try {
+                    tokenStatusValidator.validate(issuerSignedPayload);
+                } catch (ReferencedTokenValidationException e) {
+                    throw new VerificationException(
+                            String.format(
+                                    "Token status verification failed for credential to requirement '%s'",
+                                    credentialReq.getId()),
+                            e);
+                }
             }
         }
 
