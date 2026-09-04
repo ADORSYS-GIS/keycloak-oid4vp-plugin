@@ -283,12 +283,24 @@ public class AuthorizationResponseService {
         String nonce = SecretGenerator.getInstance().randomString();
         long expiration = Time.currentTimeSeconds() + clientSession.getRealm().getAccessCodeLifespan();
 
-        OAuth2Code codeData = new OAuth2Code(
-                code,
-                (int) expiration,
-                nonce,
-                OAuth2Constants.SCOPE_OPENID,
-                clientSession.getUserSession().getId());
+        Map<String, String> codeMap = new HashMap<>();
+        codeMap.put(OAuth2Code.ID_NOTE, code);
+        codeMap.put("client_uuid", clientSession.getClient().getId());
+        codeMap.put(OAuth2Code.EXPIRATION_NOTE, String.valueOf(expiration));
+        codeMap.put("nonce", nonce);
+        codeMap.put("scope", OAuth2Constants.SCOPE_OPENID);
+        codeMap.put(OAuth2Code.USER_SESSION_ID_NOTE, clientSession.getUserSession().getId());
+        if (clientSession.getRedirectUri() != null) {
+            codeMap.put("redirectUri", clientSession.getRedirectUri());
+        }
+        if (clientSession.getNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM) != null) {
+            codeMap.put("code_challenge", clientSession.getNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM));
+        }
+        if (clientSession.getNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM) != null) {
+            codeMap.put("code_challenge_method", clientSession.getNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM));
+        }
+
+        OAuth2Code codeData = OAuth2Code.deserializeCode(codeMap);
 
         return OAuth2CodeParser.persistCode(session, clientSession, codeData);
     }
