@@ -1,8 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 
 /** Policy-aware entry point for referenced token status validation. */
 public final class TokenStatusValidator {

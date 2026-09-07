@@ -203,12 +203,22 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         // Setup transaction data wire and hash
         var tx = JsonSerialization.mapper.createObjectNode();
         tx.put(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.TYPE_CLAIM, "payment");
-        tx.putArray(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
-        String wire = io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.prepareWireEntry(
-                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.encodeWireObject(tx), "cred-1");
-        String hash = io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.base64UrlEncodeHash(
-                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.hashWireString(wire,
-                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.DEFAULT_HASH_ALG));
+        tx.putArray(
+                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport
+                                .CREDENTIAL_IDS_CLAIM)
+                .add("cred-1");
+        String wire =
+                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.prepareWireEntry(
+                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport
+                                .encodeWireObject(tx),
+                        "cred-1");
+        String hash =
+                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.base64UrlEncodeHash(
+                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport
+                                .hashWireString(
+                                        wire,
+                                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils
+                                                .TransactionDataSupport.DEFAULT_HASH_ALG));
 
         // Build mDoc with matching transaction_data_hashes in the authorized namespace
         DeviceSignedItemsEntry txEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
