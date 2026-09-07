@@ -25,8 +25,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRe
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.TokenStatusValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.List;
 import java.util.Optional;
@@ -51,14 +51,14 @@ import org.keycloak.util.JsonSerialization;
  */
 public class MdocCredentialVerifier implements CredentialVerifier {
 
-    private final ReferencedTokenValidator tokenStatusValidator;
+    private final TokenStatusValidator tokenStatusValidator;
     private MdocVerificationContext verificationContext;
 
     public MdocCredentialVerifier(StatusListJwtFetcher statusListJwtFetcher) {
-        this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
+        this.tokenStatusValidator = new TokenStatusValidator(statusListJwtFetcher);
     }
 
-    private MdocCredentialVerifier(ReferencedTokenValidator tokenStatusValidator) {
+    private MdocCredentialVerifier(TokenStatusValidator tokenStatusValidator) {
         this.tokenStatusValidator = tokenStatusValidator;
     }
 
@@ -104,23 +104,20 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         verificationContext.verifyPresentation(opts, requirements, truststore);
 
         if (authReqs.shouldEnforceRevocationStatus()) {
-            JsonNode verifiedMsoPayload = verificationContext.getVerifiedMsoPayload();
-            boolean statusClaimMissing = verifiedMsoPayload.get(ReferencedTokenValidator.STATUS_FIELD) == null;
-            // Only skip the status check when the credential has no status claim and that is tolerated.
-            if (!(statusClaimMissing && authReqs.shouldAllowMissingStatusClaim())) {
-                try {
-                    // Status is stored in the MSO payload per IETF Token Status List §Referenced Token
-                    // (https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-11.html#name-referenced-token-in-cose)
-                    // and MATTR docs
-                    // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
-                    tokenStatusValidator.validate(verifiedMsoPayload);
-                } catch (ReferencedTokenValidationException e) {
-                    throw new VerificationException(
-                            String.format(
-                                    "Token status verification failed for credential to requirement '%s'",
-                                    credentialReq.getId()),
-                            e);
-                }
+            // Status is stored in the MSO payload per IETF Token Status List §Referenced Token
+            // (https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-11.html#name-referenced-token-in-cose)
+            // and MATTR docs
+            // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
+            try {
+                tokenStatusValidator.validate(
+                        verificationContext.getVerifiedMsoPayload(),
+                        authReqs.shouldAllowMissingStatusClaim());
+            } catch (ReferencedTokenValidationException e) {
+                throw new VerificationException(
+                        String.format(
+                                "Token status verification failed for credential to requirement '%s'",
+                                credentialReq.getId()),
+                                e);
             }
         }
 

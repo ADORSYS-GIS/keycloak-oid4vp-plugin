@@ -384,7 +384,7 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
 
 |`allowMissingStatusClaim`
 |`false`
-|Treat credentials without a `status` claim as valid when `enforceRevocationStatus` is enabled. Only meaningful with revocation enforcement enabled; such credentials cannot be revoked via the Token Status List mechanism.
+|When `enforceRevocationStatus` is enabled, treat credentials without a `status` claim as valid. This option never revokes credentials; it only changes whether credentials without any status claim are treated as invalid. Such credentials cannot participate in revocation via the Token Status List mechanism because they have no status to revoke.
 |===
 
 === Generic example (realm JSON import format)

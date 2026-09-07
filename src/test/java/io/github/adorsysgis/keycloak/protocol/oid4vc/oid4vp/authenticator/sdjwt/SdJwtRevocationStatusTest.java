@@ -29,7 +29,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUti
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.net.URI;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -61,11 +60,7 @@ import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.util.JsonSerialization;
 
-/**
- * Verifies the revocation status handling of {@link SdJwtCredentialVerifier}: the strict default,
- * the {@code allowMissingStatusClaim} tolerance, and the guarantee that present-but-revoked status
- * claims are still rejected when the tolerance is enabled.
- */
+/** Verifies the SD-JWT verifier path forwards status validation to {@link TokenStatusValidator}. */
 class SdJwtRevocationStatusTest {
 
     private static final String VCT = "https://credentials.example.com/identity_credential";
@@ -94,7 +89,7 @@ class SdJwtRevocationStatusTest {
                 }
                 """.formatted(uri, IETF_1BIT_SMALL_TEST_VECTOR);
         String header = "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCJ9"; // {"typ":"statuslist+jwt"}
-        String payload = Base64.getUrlEncoder().withoutPadding().encodeToString(mockJwtPayload.getBytes());
+        String payload = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(mockJwtPayload.getBytes());
         return header + "." + payload + ".mock_signature";
     };
 
@@ -115,14 +110,6 @@ class SdJwtRevocationStatusTest {
 
         assertDoesNotThrow(() -> verifier.verifyCredential(
                 revocationContext(true), revocationCredential(), presentedSdJwtWithoutStatus()));
-    }
-
-    @Test
-    void shouldPass_WhenRevocationEnforcedAndStatusValidEvenIfTolerated() throws Exception {
-        var verifier = new SdJwtCredentialVerifier(mockFetcher);
-
-        assertDoesNotThrow(() -> verifier.verifyCredential(
-                revocationContext(true), revocationCredential(), presentedSdJwtWithStatus(1)));
     }
 
     @Test

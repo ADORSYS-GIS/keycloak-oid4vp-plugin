@@ -238,9 +238,10 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT);
         property.setHelpText(
-                "Treat credentials without a status claim as valid when revocation enforcement is enabled. "
-                        + "Only applies when enforceRevocationStatus is enabled; such credentials cannot be revoked "
-                        + "via the Token Status List mechanism.");
+                "When revocation enforcement (`enforceRevocationStatus`) is enabled, treat credentials without a "
+                        + "`status` claim as valid. This option never revokes credentials; it only changes whether "
+                        + "credentials without any status claim are treated as invalid. Such credentials cannot "
+                        + "participate in revocation via the Token Status List mechanism because they have no status to revoke.");
         configProperties.add(property);
     }
 

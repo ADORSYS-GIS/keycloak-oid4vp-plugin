@@ -30,10 +30,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequireme
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
@@ -48,6 +45,7 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.util.JsonSerialization;
 
+/** Verifies the mDoc verifier path forwards status validation to {@link io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.TokenStatusValidator}. */
 public class MdocRevocationStatusTest extends MdocBaseTest {
 
     private static final String STATUS_LIST_URI = "https://status.example.com/list";
@@ -56,7 +54,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     private static final String IETF_1BIT_SMALL_TEST_VECTOR = "eNrbuRgAAhcBXQ";
 
     private MdocVerificationOpts opts;
-    private TrustAnchorProvider trust;
+    private TestTruststoreProvider trust;
     private StatusListJwtFetcher mockFetcher;
 
     @BeforeEach
@@ -112,9 +110,6 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         var verifier = new MdocCredentialVerifier(mockFetcher);
         var ctx = revocationContext(requestObject, false);
 
-        String validMdoc = buildMdocWithStatus(1, optsFromRequest);
-        assertDoesNotThrow(() -> verifier.verifyCredential(ctx, revocationCredential(), validMdoc));
-
         String revokedMdoc = buildMdocWithStatus(0, optsFromRequest);
         VerificationException exception = assertThrows(
                 VerificationException.class, () -> verifier.verifyCredential(ctx, revocationCredential(), revokedMdoc));
@@ -144,16 +139,6 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
         var verifier = new MdocCredentialVerifier(mockFetcher);
         assertDoesNotThrow(() -> verifier.verifyCredential(
                 revocationContext(requestObject, true), revocationCredential(), missingStatusMdoc));
-    }
-
-    @Test
-    public void shouldPass_WhenRevocationEnforcedAndStatusValidEvenIfTolerated() throws Exception {
-        RequestObject requestObject = revocationRequestObject();
-        String validMdoc = buildMdocWithStatus(1, mdocOptsFor(requestObject));
-
-        var verifier = new MdocCredentialVerifier(mockFetcher);
-        assertDoesNotThrow(() ->
-                verifier.verifyCredential(revocationContext(requestObject, true), revocationCredential(), validMdoc));
     }
 
     @Test
@@ -214,25 +199,16 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     }
 
     @Test
-    public void shouldFail_WhenRevocationEnforcedAndStatusInvalid() throws Exception {
-        String mdoc = buildMdocWithStatus(0);
-        var ctx = new MdocVerificationContext(mdoc);
-        ctx.verifyPresentation(opts, null, trust);
-        ReferencedTokenValidationException exception =
-                assertThrows(ReferencedTokenValidationException.class, () -> new ReferencedTokenValidator(mockFetcher)
-                        .validate(ctx.getVerifiedMsoPayload()));
-        assertTrue(exception.getMessage().contains("Token status is not valid"));
-    }
-
-    @Test
     public void shouldVerifyCredential_WithBothRevocationAndTransactionData() throws Exception {
         // Setup transaction data wire and hash
         var tx = JsonSerialization.mapper.createObjectNode();
-        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
-        tx.putArray(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
-        String wire = TransactionDataSupport.prepareWireEntry(TransactionDataSupport.encodeWireObject(tx), "cred-1");
-        String hash = TransactionDataSupport.base64UrlEncodeHash(
-                TransactionDataSupport.hashWireString(wire, TransactionDataSupport.DEFAULT_HASH_ALG));
+        tx.put(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.TYPE_CLAIM, "payment");
+        tx.putArray(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
+        String wire = io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.prepareWireEntry(
+                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.encodeWireObject(tx), "cred-1");
+        String hash = io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.base64UrlEncodeHash(
+                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.hashWireString(wire,
+                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.DEFAULT_HASH_ALG));
 
         // Build mDoc with matching transaction_data_hashes in the authorized namespace
         DeviceSignedItemsEntry txEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
@@ -258,7 +234,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
         var credential = new CredentialRequirement()
                 .setId("test")
-                .setRole(CredentialRole.PRIMARY)
+                .setRole(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole.PRIMARY)
                 .setCredentialTypes(List.of(DOC_TYPE))
                 .setTrust(List.of(new TrustPolicy().setType(TrustPolicy.X5C).setAnchors(List.of(getIssuerCertRef1()))));
 
@@ -327,7 +303,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     private static CBORPairList getCborPairList(int idx, CBORPairList originalMso) {
         CBORPairList statusList = new CBORPairList(
                 new CBORPair(new CBORString("idx"), new CBORInteger(idx)),
-                new CBORPair(new CBORString("uri"), new CBORString(MdocRevocationStatusTest.STATUS_LIST_URI)));
+                new CBORPair(new CBORString("uri"), new CBORString(STATUS_LIST_URI)));
         CBORPairList statusWrapper = new CBORPairList(new CBORPair(new CBORString(STATUS_LIST_FIELD), statusList));
         CBORPair statusPair = new CBORPair(new CBORString(STATUS_FIELD), statusWrapper);
 

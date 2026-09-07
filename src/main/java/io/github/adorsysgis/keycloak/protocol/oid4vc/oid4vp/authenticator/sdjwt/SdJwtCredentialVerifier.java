@@ -9,8 +9,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.TokenStatusValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.List;
 import java.util.Optional;
@@ -30,14 +30,14 @@ import org.keycloak.utils.StringUtil;
 public class SdJwtCredentialVerifier implements CredentialVerifier {
 
     private final SdJwtPresentationConsumer consumer;
-    private final ReferencedTokenValidator tokenStatusValidator;
+    private final TokenStatusValidator tokenStatusValidator;
 
     public SdJwtCredentialVerifier(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
-        this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
+        this.tokenStatusValidator = new TokenStatusValidator(statusListJwtFetcher);
     }
 
-    private SdJwtCredentialVerifier(ReferencedTokenValidator tokenStatusValidator) {
+    private SdJwtCredentialVerifier(TokenStatusValidator tokenStatusValidator) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = tokenStatusValidator;
     }
@@ -82,19 +82,16 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                         authReqs.shouldRequireCryptographicHolderBinding()));
 
         if (authReqs.shouldEnforceRevocationStatus()) {
-            JsonNode issuerSignedPayload = sdJwt.getIssuerSignedJWT().getPayload();
-            boolean statusClaimMissing = issuerSignedPayload.get(ReferencedTokenValidator.STATUS_FIELD) == null;
-            // Only skip the status check when the credential has no status claim and that is tolerated.
-            if (!(statusClaimMissing && authReqs.shouldAllowMissingStatusClaim())) {
-                try {
-                    tokenStatusValidator.validate(issuerSignedPayload);
-                } catch (ReferencedTokenValidationException e) {
-                    throw new VerificationException(
-                            String.format(
-                                    "Token status verification failed for credential to requirement '%s'",
-                                    credentialReq.getId()),
-                            e);
-                }
+            try {
+                tokenStatusValidator.validate(
+                        sdJwt.getIssuerSignedJWT().getPayload(),
+                        authReqs.shouldAllowMissingStatusClaim());
+            } catch (ReferencedTokenValidationException e) {
+                throw new VerificationException(
+                        String.format(
+                                "Token status verification failed for credential to requirement '%s'",
+                                credentialReq.getId()),
+                                e);
             }
         }
 
