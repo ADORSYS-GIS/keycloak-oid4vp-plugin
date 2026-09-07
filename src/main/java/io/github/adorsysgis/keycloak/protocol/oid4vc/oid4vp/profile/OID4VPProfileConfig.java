@@ -469,8 +469,7 @@ public class OID4VPProfileConfig {
         List<TrustPolicy> trustPolicies = credential.getTrust();
         String credentialLabel = profile.getId() + "/" + credential.getId();
         if (trustPolicies.size() != 1) {
-            throw new IllegalStateException(
-                    "Primary mDoc must configure exactly one trust policy: " + credentialLabel);
+            throw new IllegalStateException("Primary mDoc must configure exactly one trust policy: " + credentialLabel);
         }
         boolean usesEudiTrustList =
                 trustPolicies.stream().anyMatch(policy -> TrustPolicy.EUDI_PID_TRUST_LIST.equals(policy.getType()));
