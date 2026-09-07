@@ -467,16 +467,15 @@ public class OID4VPProfileConfig {
     private static void validatePrimaryMdocIssuerPolicy(
             AuthenticationProfile profile, CredentialRequirement credential) {
         List<TrustPolicy> trustPolicies = credential.getTrust();
+        String credentialLabel = profile.getId() + "/" + credential.getId();
+        if (trustPolicies.size() != 1) {
+            throw new IllegalStateException(
+                    "Primary mDoc must configure exactly one trust policy: " + credentialLabel);
+        }
         boolean usesEudiTrustList =
                 trustPolicies.stream().anyMatch(policy -> TrustPolicy.EUDI_PID_TRUST_LIST.equals(policy.getType()));
         if (!usesEudiTrustList) {
             return;
-        }
-
-        String credentialLabel = profile.getId() + "/" + credential.getId();
-        if (trustPolicies.size() != 1) {
-            throw new IllegalStateException(
-                    "Primary mDoc with EUDI PID trust must configure exactly one trust policy: " + credentialLabel);
         }
 
         TrustPolicy trust = trustPolicies.getFirst();

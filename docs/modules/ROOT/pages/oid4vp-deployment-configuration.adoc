@@ -219,7 +219,9 @@ Validates the credential issuer against one or more X.509 trust anchors. The anc
 }
 ----
 
-Validates the credential issuer against a EUDI trust list. The `trustListSigningCertificate` anchors the trust-list JWT signature, `serviceType` filters services, and `issuer` selects the exact PID Provider entity whose certificates may validate the credential. A credential-based primary mDoc requires exactly one such policy and a nonblank `issuer`.
+Validates the credential issuer against a EUDI trust list. The `trustListSigningCertificate` anchors the trust-list JWT signature, `serviceType` filters services, and `issuer` selects the exact PID Provider entity whose certificates may validate the primary credential. A credential-based primary mDoc requires exactly one trust policy, including when using `x5c`; this is checked when loading the profile. EUDI PID primary mDocs additionally require a nonblank `issuer`. For certificate rotation with `x5c`, multiple certificates for the intended issuer can be placed in one policy's `anchors` array. Supporting mDocs accept matching service certificates across the list without enforcing an `issuer` selector.
+
+ETSI TS 119 602 V1.1.1 Annex D, Table D.3 prohibits `ServiceStatus` in the PID Providers LoTE profile. Current approval is represented by membership in the list; a provider that loses its mandate must be removed. Generic `granted`/`withdrawn` service-status filtering therefore does not apply to this profile. Cached snapshots can delay observation of removal until refresh (at most 15 minutes, capped by `NextUpdate`).
 
 ==== Binding rules
 

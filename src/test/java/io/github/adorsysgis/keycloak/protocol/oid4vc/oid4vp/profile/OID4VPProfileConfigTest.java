@@ -708,6 +708,24 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldRejectPrimaryMdocWithMultipleX5cPoliciesAtConfigurationTime() {
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
+                "trust": [
+                  { "type": "x5c", "anchors": ["{anchor}"] },
+                  { "type": "x5c", "anchors": ["{anchor}"] }
+                ]
+                """));
+        assertTrue(error.getMessage().contains("must configure exactly one trust policy"));
+    }
+
+    @Test
+    void shouldAcceptPrimaryMdocWithMultipleAnchorsInOneX5cPolicy() {
+        assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
+                "trust": [{ "type": "x5c", "anchors": ["{anchor}", "{anchor}"] }]
+                """));
+    }
+
+    @Test
     void shouldAcceptPrimaryMdocWithOneConfiguredPidProvider() {
         assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
                 "trust": [{

@@ -99,6 +99,8 @@ class EudiTrustListPayloadParser {
                 continue;
             }
 
+            // ETSI TS 119 602 V1.1.1 Annex D, Table D.3 prohibits ServiceStatus for PID providers.
+            // Approval is represented by list membership; withdrawn providers must be removed by the operator.
             List<X509Certificate> certificates = readCertificates(serviceInformation);
             if (certificates.isEmpty()) {
                 throw new EudiPidTrustException(
