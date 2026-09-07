@@ -30,6 +30,13 @@ public class BindingRule {
     @JsonProperty("comparator")
     private String comparator;
 
+    /**
+     * When {@code true}, the claim comparison ignores case. Leading and trailing whitespace is
+     * always trimmed regardless of this flag.
+     */
+    @JsonProperty("caseInsensitive")
+    private boolean caseInsensitive;
+
     public String getType() {
         return type;
     }
@@ -72,6 +79,15 @@ public class BindingRule {
 
     public BindingRule setComparator(String comparator) {
         this.comparator = comparator;
+        return this;
+    }
+
+    public boolean getCaseInsensitive() {
+        return caseInsensitive;
+    }
+
+    public BindingRule setCaseInsensitive(boolean caseInsensitive) {
+        this.caseInsensitive = caseInsensitive;
         return this;
     }
 }

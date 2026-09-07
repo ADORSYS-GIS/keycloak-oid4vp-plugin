@@ -289,7 +289,8 @@ public class AuthorizationResponseService {
         codeMap.put(OAuth2Code.EXPIRATION_NOTE, String.valueOf(expiration));
         codeMap.put("nonce", nonce);
         codeMap.put("scope", OAuth2Constants.SCOPE_OPENID);
-        codeMap.put(OAuth2Code.USER_SESSION_ID_NOTE, clientSession.getUserSession().getId());
+        codeMap.put(
+                OAuth2Code.USER_SESSION_ID_NOTE, clientSession.getUserSession().getId());
         if (clientSession.getRedirectUri() != null) {
             codeMap.put("redirectUri", clientSession.getRedirectUri());
         }

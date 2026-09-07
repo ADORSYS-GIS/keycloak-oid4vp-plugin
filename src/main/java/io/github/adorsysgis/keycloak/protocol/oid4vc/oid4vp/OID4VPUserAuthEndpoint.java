@@ -191,7 +191,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             }
         }
 
-        VerifierConfig config = new VerifierConfig(getOid4vpAuthenticatorConfig());
+        VerifierConfig config = VerifierConfig.resolve(realm.getId(), getOid4vpAuthenticatorConfig());
         AuthenticationSessionModel authSession = recoverAuthenticationSession(requestId);
 
         authorizationContext = authorizationRequestService.finalizeAuthorizationRequest(
@@ -373,7 +373,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         // Call delegate service to process the authorization response
         AuthenticationProcessor authProcessor = getAuthenticationProcessor();
         AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(authConfig);
+        VerifierConfig config = VerifierConfig.resolve(realm.getId(), authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(authorizationContext.getProfileId());
 
         authorizationResponseService.processAuthorizationResponse(
@@ -563,7 +563,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         ClientModel client = checkClient(clientId);
         AuthenticationSessionModel authSession = createAuthSession(client);
         AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(authConfig);
+        VerifierConfig config = VerifierConfig.resolve(realm.getId(), authConfig);
         AuthenticationProfile profile = config.getProfileConfig().getProfile(profileId);
 
         // Call delegate service to create an authorization request
@@ -602,7 +602,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
     public List<AuthenticationProfile> getAuthenticationProfilesForClient(String clientId) {
         checkClient(clientId);
         AuthenticatorConfigModel authConfig = getOid4vpAuthenticatorConfig();
-        VerifierConfig config = new VerifierConfig(authConfig);
+        VerifierConfig config = VerifierConfig.resolve(realm.getId(), authConfig);
         return config.getProfileConfig().getProfilesForClient(clientId);
     }
 

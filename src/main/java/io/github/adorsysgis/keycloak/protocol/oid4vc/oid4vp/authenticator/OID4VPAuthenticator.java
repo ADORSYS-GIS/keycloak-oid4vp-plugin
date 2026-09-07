@@ -21,6 +21,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -104,9 +105,9 @@ public class OID4VPAuthenticator implements Authenticator {
         AuthenticationSessionModel authSession = authFlowContext.getAuthenticationSession();
         AuthorizationContext authContext = new AuthenticationSessionStore(authSession).getAuthorizationContext();
 
-        // TODO: Access the profile config reliably without full parsing on every iteration.
-        //       Issue also applies to VerifierConfig.
-        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(authFlowContext.getAuthenticatorConfig());
+        String realmId = authFlowContext.getRealm().getId();
+        OID4VPProfileConfig profileConfig =
+                OID4VPProfileConfig.resolve(realmId, authFlowContext.getAuthenticatorConfig());
         AuthenticationProfile authProfile = profileConfig.getProfile(authContext.getProfileId());
 
         Map<String, String> presentedTokens = getPresentedTokens(authSession);
@@ -220,7 +221,14 @@ public class OID4VPAuthenticator implements Authenticator {
                                     String.format("Unsupported binding rule type: %s", rule.getType()));
                     };
 
-            if (!resolveComparator(session, rule).matches(actualValue, expectedValue)) {
+            String normalizedActual = actualValue != null ? actualValue.strip() : actualValue;
+            String normalizedExpected = expectedValue != null ? expectedValue.strip() : expectedValue;
+            if (rule.getCaseInsensitive() && normalizedActual != null && normalizedExpected != null) {
+                normalizedActual = normalizedActual.toLowerCase(Locale.ROOT);
+                normalizedExpected = normalizedExpected.toLowerCase(Locale.ROOT);
+            }
+
+            if (!resolveComparator(session, rule).matches(normalizedActual, normalizedExpected)) {
                 throw new VerificationException(String.format(
                         "Credential '%s' failed binding rule '%s'", credentialReq.getId(), rule.getType()));
             }

@@ -10,9 +10,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import org.keycloak.broker.provider.util.SimpleHttp;
+import org.apache.http.client.config.RequestConfig;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.SignatureVerifierContext;
+import org.keycloak.http.simple.SimpleHttp;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.utils.StringUtil;
@@ -60,11 +61,15 @@ public class EudiPidTrustListProvider {
 
     protected String fetchTrustList(String url) throws EudiPidTrustException {
         try {
-            String jwt = SimpleHttp.doGet(url, session)
+            RequestConfig requestConfig = RequestConfig.custom()
+                    .setConnectTimeout(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
+                    .setConnectionRequestTimeout(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
+                    .setSocketTimeout(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
+                    .build();
+            String jwt = SimpleHttp.create(session)
+                    .withRequestConfig(requestConfig)
+                    .doGet(url)
                     .header("Accept", "application/trustlist+jwt")
-                    .connectTimeoutMillis(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
-                    .connectionRequestTimeoutMillis(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
-                    .socketTimeOutMillis(TRUST_LIST_FETCH_TIMEOUT_MILLIS)
                     .asString();
             return jwt != null ? jwt.trim() : null;
         } catch (Exception e) {

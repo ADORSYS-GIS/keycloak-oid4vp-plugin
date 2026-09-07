@@ -17,7 +17,7 @@ public final class KeycloakTestContainer {
 
     private static final Logger logger = Logger.getLogger(KeycloakTestContainer.class);
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.0";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.3";
     public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar";
     private static final EudiPidTrustListTestServer EUDI_PID_TRUST_LIST_SERVER =
             EudiPidTrustListTestServer.start(Path.of("src/test/resources/truststore.jks"));
@@ -29,14 +29,25 @@ public final class KeycloakTestContainer {
     }
 
     public static KeycloakContainer create(List<String> realmImports, Consumer<String> logConsumer) {
-        // noinspection resource
-        return new KeycloakContainer(TEST_KEYCLOAK_IMAGE)
+        return configure(new KeycloakContainer(TEST_KEYCLOAK_IMAGE), realmImports, logConsumer);
+    }
+
+    /**
+     * Like {@link #create(List)} but binds a fixed host port to the container JMX port so the JVM
+     * heap can be sampled remotely via {@link JmxKeycloakContainer#JMX_PORT}.
+     */
+    public static KeycloakContainer createJmx(List<String> realmImports) {
+        return configure(new JmxKeycloakContainer(TEST_KEYCLOAK_IMAGE), realmImports, ignored -> {});
+    }
+
+    private static KeycloakContainer configure(
+            KeycloakContainer container, List<String> realmImports, Consumer<String> logConsumer) {
+        return container
                 .withImagePullPolicy(PullPolicy.alwaysPull())
                 .withProviderLibsFrom(List.of(loadShadedPluginJar()))
                 .withProviderClassesFrom("target/classes", "target/test-classes")
                 .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
                 .withRealmImportFiles(realmImports.toArray(String[]::new))
-                .withEnv("JAVA_OPTS_APPEND", "-Xms1g -Xmx2g")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
@@ -63,5 +74,19 @@ public final class KeycloakTestContainer {
             throw new IllegalStateException(message);
         }
         return shadedJar;
+    }
+
+    /**
+     * {@link KeycloakContainer} that binds a fixed host port to the container JMX port so the JVM
+     * heap can be read via {@code service:jmx:rmi:///jndi/rmi://localhost:<port>/jmxrmi}.
+     */
+    public static final class JmxKeycloakContainer extends KeycloakContainer {
+
+        public static final int JMX_PORT = 9099;
+
+        JmxKeycloakContainer(String image) {
+            super(image);
+            addFixedExposedPort(JMX_PORT, JMX_PORT);
+        }
     }
 }

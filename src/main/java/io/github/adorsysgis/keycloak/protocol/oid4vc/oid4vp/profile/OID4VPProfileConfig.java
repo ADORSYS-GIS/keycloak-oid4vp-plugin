@@ -2,6 +2,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
@@ -21,10 +23,32 @@ import org.keycloak.utils.StringUtil;
 
 /**
  * Parses and validates OpenID4VP authentication profiles.
+ *
+ * <p>Use {@link #resolve(String, AuthenticatorConfigModel)} to avoid re-parsing and re-validating
+ * the same configuration on every request. The constructor remains public for direct use
+ * in tests.
  */
 public class OID4VPProfileConfig {
 
+    private static final int MAX_CACHE_SIZE = 50;
+
+    private static final Cache<CacheKey, OID4VPProfileConfig> CACHE =
+            Caffeine.newBuilder().maximumSize(MAX_CACHE_SIZE).build();
+
     private final List<AuthenticationProfile> profiles;
+
+    /**
+     * Returns a cached {@code OID4VPProfileConfig} for the given authenticator config.
+     * The cache is scoped by realm ID, so different realms cannot share cached entries.
+     */
+    public static OID4VPProfileConfig resolve(String realmId, AuthenticatorConfigModel authConfig) {
+        Map<String, String> config =
+                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        CacheKey key = new CacheKey(realmId, Map.copyOf(config));
+        return CACHE.get(key, k -> new OID4VPProfileConfig(authConfig));
+    }
+
+    private record CacheKey(String realmId, Map<String, String> config) {}
 
     public OID4VPProfileConfig(AuthenticatorConfigModel authConfig) {
         Map<String, String> config =

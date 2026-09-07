@@ -53,7 +53,7 @@ public class MdocVerificationTest extends MdocBaseTest {
 
         try {
             // The test vector dates back to 2024, so we move back in time to bypass expiration checks.
-            Time.setOffset(1714338150 - Time.currentTime());
+            Time.setOffset((int) (1714338150 - Time.currentTimeSeconds()));
             new MdocVerificationContext(mdoc).verifyPresentation(opts, reqs, trust);
         } finally {
             Time.setOffset(0);
