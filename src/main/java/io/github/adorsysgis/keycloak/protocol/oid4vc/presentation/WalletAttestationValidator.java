@@ -11,6 +11,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
+import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -28,6 +29,8 @@ import org.keycloak.utils.StringUtil;
  * Authorization Challenge Endpoint while preserving the endpoint's missing-header response.
  */
 public final class WalletAttestationValidator {
+
+    static final String AUTHORIZATION_CHALLENGE_EVENT_CONTEXT = "oid4vci-authorization-challenge";
 
     private WalletAttestationValidator() {}
 
@@ -60,7 +63,9 @@ public final class WalletAttestationValidator {
                 .setRequest(session.getContext().getHttpRequest())
                 .setConnection(session.getContext().getConnection())
                 .setUriInfo(session.getContext().getUri())
-                .setEventBuilder(event.clone().event(EventType.CLIENT_LOGIN))
+                .setEventBuilder(event.clone()
+                        .event(EventType.CLIENT_LOGIN)
+                        .detail(Details.CONTEXT, AUTHORIZATION_CHALLENGE_EVENT_CONTEXT))
                 .setFlowId(clientAuthenticationFlow.getId())
                 .authenticateClient();
         if (response != null) {
