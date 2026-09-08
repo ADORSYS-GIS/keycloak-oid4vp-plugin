@@ -462,6 +462,37 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
+    public void testAllowMissingStatusClaim_acceptsPayloadWithoutStatus() throws Exception {
+        JsonNode tokenPayload = JsonSerialization.mapper.readTree("{}");
+        validator.validate(tokenPayload, true);
+    }
+
+    @Test
+    public void testAllowMissingStatusClaim_rejectsPayloadWithoutStatusWhenDisabled() throws Exception {
+        JsonNode tokenPayload = JsonSerialization.mapper.readTree("{}");
+        ReferencedTokenValidationException exception =
+                assertThrows(ReferencedTokenValidationException.class, () -> validator.validate(tokenPayload, false));
+        assertTrue(
+                exception.getMessage().contains("Missing required 'status' claim"),
+                "Exception should mention missing status claim");
+    }
+
+    @Test
+    public void testAllowMissingStatusClaim_stillRejectsRevokedStatus() {
+        ReferencedTokenValidationException exception = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> validator.validate(credentialPayload(0, TEST_STATUS_LIST_URI), true));
+        assertTrue(
+                exception.getMessage().contains("Token status is not valid"),
+                "Exception should mention invalid status. Actual: " + exception.getMessage());
+    }
+
+    @Test
+    public void testAllowMissingStatusClaim_acceptsValidStatus() throws Exception {
+        validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), true);
+    }
+
+    @Test
     public void testStatusListJwt_RejectsMissingSub() {
         StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
                 {

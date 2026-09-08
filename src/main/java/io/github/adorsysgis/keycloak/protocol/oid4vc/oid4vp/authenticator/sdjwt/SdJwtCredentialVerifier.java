@@ -9,8 +9,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.TokenStatusValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.List;
 import java.util.Optional;
@@ -30,14 +30,14 @@ import org.keycloak.utils.StringUtil;
 public class SdJwtCredentialVerifier implements CredentialVerifier {
 
     private final SdJwtPresentationConsumer consumer;
-    private final TokenStatusValidator tokenStatusValidator;
+    private final ReferencedTokenValidator tokenStatusValidator;
 
     public SdJwtCredentialVerifier(StatusListJwtFetcher statusListJwtFetcher) {
         this.consumer = new SdJwtPresentationConsumer();
-        this.tokenStatusValidator = new TokenStatusValidator(statusListJwtFetcher);
+        this.tokenStatusValidator = new ReferencedTokenValidator(statusListJwtFetcher);
     }
 
-    private SdJwtCredentialVerifier(TokenStatusValidator tokenStatusValidator) {
+    private SdJwtCredentialVerifier(ReferencedTokenValidator tokenStatusValidator) {
         this.consumer = new SdJwtPresentationConsumer();
         this.tokenStatusValidator = tokenStatusValidator;
     }

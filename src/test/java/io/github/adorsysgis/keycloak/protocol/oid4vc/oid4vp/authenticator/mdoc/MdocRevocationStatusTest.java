@@ -30,7 +30,9 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequireme
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
@@ -45,7 +47,7 @@ import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.util.JsonSerialization;
 
-/** Verifies the mDoc verifier path forwards status validation to {@link io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.TokenStatusValidator}. */
+/** Verifies the mDoc verifier path forwards status validation to {@link ReferencedTokenValidator}. */
 public class MdocRevocationStatusTest extends MdocBaseTest {
 
     private static final String STATUS_LIST_URI = "https://status.example.com/list";
@@ -128,6 +130,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
                 () -> verifier.verifyCredential(
                         revocationContext(requestObject, false), revocationCredential(), missingStatusMdoc));
         assertTrue(exception.getMessage().contains("Token status verification failed"));
+        assertTrue(exception.getCause().getMessage().contains("Missing required '" + STATUS_FIELD + "' claim"));
     }
 
     @Test
@@ -202,23 +205,11 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
     public void shouldVerifyCredential_WithBothRevocationAndTransactionData() throws Exception {
         // Setup transaction data wire and hash
         var tx = JsonSerialization.mapper.createObjectNode();
-        tx.put(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.TYPE_CLAIM, "payment");
-        tx.putArray(
-                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport
-                                .CREDENTIAL_IDS_CLAIM)
-                .add("cred-1");
-        String wire =
-                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.prepareWireEntry(
-                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport
-                                .encodeWireObject(tx),
-                        "cred-1");
-        String hash =
-                io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport.base64UrlEncodeHash(
-                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport
-                                .hashWireString(
-                                        wire,
-                                        io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils
-                                                .TransactionDataSupport.DEFAULT_HASH_ALG));
+        tx.put(TransactionDataSupport.TYPE_CLAIM, "payment");
+        tx.putArray(TransactionDataSupport.CREDENTIAL_IDS_CLAIM).add("cred-1");
+        String wire = TransactionDataSupport.prepareWireEntry(TransactionDataSupport.encodeWireObject(tx), "cred-1");
+        String hash = TransactionDataSupport.base64UrlEncodeHash(
+                TransactionDataSupport.hashWireString(wire, TransactionDataSupport.DEFAULT_HASH_ALG));
 
         // Build mDoc with matching transaction_data_hashes in the authorized namespace
         DeviceSignedItemsEntry txEntry = new DeviceSignedItemsEntry("transaction_data_hashes", List.of(hash));
@@ -244,7 +235,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
         var credential = new CredentialRequirement()
                 .setId("test")
-                .setRole(io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole.PRIMARY)
+                .setRole(CredentialRole.PRIMARY)
                 .setCredentialTypes(List.of(DOC_TYPE))
                 .setTrust(List.of(new TrustPolicy().setType(TrustPolicy.X5C).setAnchors(List.of(getIssuerCertRef1()))));
 
