@@ -20,6 +20,7 @@ on:
         default: '60'
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -27,8 +28,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check-changes:
+    name: Check for changes since the last successful run
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Decide whether load tests are needed
+        id: check
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const finish = async (shouldRun, reason) => {
+              const decision = shouldRun ? 'run' : 'skip';
+              core.setOutput('should-run', String(shouldRun));
+              core.notice(`Decision: ${decision} load tests. ${reason}`);
+              await core.summary
+                .addHeading('Load-test decision')
+                .addTable([
+                  [{ data: 'Decision', header: true }, { data: 'Reason', header: true }],
+                  [decision, reason],
+                ])
+                .write();
+            };
+
+            // A manual dispatch is an explicit request to run the tests, potentially
+            // with different load parameters, so it must not be deduplicated.
+            if (context.eventName === 'workflow_dispatch') {
+              await finish(true, 'The workflow was started manually.');
+              return;
+            }
+
+            try {
+              const branch = context.ref.replace(/^refs\/heads\//, '');
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'perf.yml',
+                branch,
+                status: 'success',
+                per_page: 1,
+              });
+
+              const previousRun = data.workflow_runs[0];
+              if (!previousRun) {
+                await finish(true, `No successful load-test run exists for ${branch}.`);
+                return;
+              }
+
+              if (previousRun.head_sha !== context.sha) {
+                await finish(
+                  true,
+                  `The commit changed from ${previousRun.head_sha} to ${context.sha}.`,
+                );
+                return;
+              }
+
+              await finish(
+                false,
+                `Commit ${context.sha} was already covered by successful run ${previousRun.id}.`,
+              );
+            } catch (error) {
+              // Fail open: an API problem must not silently suppress load testing.
+              core.warning(`Could not inspect previous workflow runs: ${error.message}`);
+              await finish(true, 'Previous runs could not be inspected, so the safe fallback is to run.');
+            }
+
   load-test:
     name: Run Gatling Simulations
+    needs: check-changes
+    if: >-
+      !cancelled() &&
+      (needs.check-changes.result != 'success' || needs.check-changes.outputs.should-run == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
