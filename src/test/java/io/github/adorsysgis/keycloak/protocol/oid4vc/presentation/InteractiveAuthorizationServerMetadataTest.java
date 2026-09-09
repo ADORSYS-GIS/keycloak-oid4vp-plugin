@@ -181,16 +181,15 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
                 .map(client -> realm.clients().get(client.getId()))
                 .orElseThrow();
         ClientRepresentation client = clientResource.toRepresentation();
-        Map<String, String> originalAttributes = new HashMap<>(
-                Optional.ofNullable(client.getAttributes()).orElseGet(Map::of));
+        Map<String, String> originalAttributes =
+                new HashMap<>(Optional.ofNullable(client.getAttributes()).orElseGet(Map::of));
         String trustAlias = "test-attester-trust";
 
         removeIdentityProvider(realm, trustAlias);
         createTrustProvider(realm, trustAlias);
         try {
             Map<String, String> attributes = new HashMap<>(originalAttributes);
-            attributes.put(
-                    AttestationBasedClientAuthenticator.OAUTH_CLIENT_ATTESTATION_CONFIG_TRUST_IDPS, trustAlias);
+            attributes.put(AttestationBasedClientAuthenticator.OAUTH_CLIENT_ATTESTATION_CONFIG_TRUST_IDPS, trustAlias);
             client.setAttributes(attributes);
             clientResource.update(client);
 
@@ -204,7 +203,8 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
                                     AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                                     AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
                             new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE, codeChallenge),
-                            new BasicNameValuePair(OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)),
+                            new BasicNameValuePair(
+                                    OAuth2Constants.CODE_CHALLENGE_METHOD, OAuth2Constants.PKCE_METHOD_S256)),
                     createClientAttestation(),
                     createClientAttestationPop());
 
@@ -249,9 +249,7 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
 
     private HttpResponse postAuthorizationChallengeWithAttestation(List<BasicNameValuePair> form) throws IOException {
         return postAuthorizationChallengeWithAttestation(
-                form,
-                "eyJ0eXAiOiJub3QtYXR0ZXN0YXRpb24ifQ.eA.eA",
-                "eyJ0eXAiOiJub3QtYXR0ZXN0YXRpb24ifQ.eA.eA");
+                form, "eyJ0eXAiOiJub3QtYXR0ZXN0YXRpb24ifQ.eA.eA", "eyJ0eXAiOiJub3QtYXR0ZXN0YXRpb24ifQ.eA.eA");
     }
 
     private HttpResponse postAuthorizationChallengeWithAttestation(
@@ -277,8 +275,10 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
         provider.setProviderId("default-trust");
         provider.setEnabled(true);
         provider.setConfig(new HashMap<>(Map.of(
-                "useJwksUrl", "false",
-                "publicKeySignatureVerifier", JsonSerialization.mapper.writeValueAsString(jwks))));
+                "useJwksUrl",
+                "false",
+                "publicKeySignatureVerifier",
+                JsonSerialization.mapper.writeValueAsString(jwks))));
 
         try (var response = realm.identityProviders().create(provider)) {
             assertEquals(HttpStatus.SC_CREATED, response.getStatus());
@@ -289,7 +289,8 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
         realm.identityProviders().findAll().stream()
                 .filter(provider -> alias.equals(provider.getAlias()))
                 .findFirst()
-                .ifPresent(provider -> realm.identityProviders().get(provider.getAlias()).remove());
+                .ifPresent(provider ->
+                        realm.identityProviders().get(provider.getAlias()).remove());
     }
 
     private String createClientAttestation() throws Exception {
