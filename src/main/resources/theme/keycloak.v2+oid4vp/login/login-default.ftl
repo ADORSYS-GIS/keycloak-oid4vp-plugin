@@ -40,7 +40,9 @@
         </div>
         <@passkeys.conditionalUIData />
     <#elseif section = "socialProviders" >
-        <#if realm.password && (social.providers?? && social.providers?has_content || oid4vp??)>
+        <#assign hasSocial = social.providers?? && social.providers?has_content>
+        <#assign hasOid4vp = oid4vp?? && oid4vp.loginProfiles?? && oid4vp.loginProfiles?has_content>
+        <#if realm.password && (hasSocial || hasOid4vp)>
             <@identityProviders.show social=social/>
         </#if>
     <#elseif section = "info" >
