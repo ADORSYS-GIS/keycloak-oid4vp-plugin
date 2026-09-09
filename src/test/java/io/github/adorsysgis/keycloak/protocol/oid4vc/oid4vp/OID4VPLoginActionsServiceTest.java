@@ -180,20 +180,29 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
                                     .json());
             updateAuthenticatorConfig(updatedConfig);
 
-            String authEndpoint = new URIBuilder(getAuthEndpointURI())
-                    .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
-                    .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
-                    .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
-                    .build()
-                    .toString();
-
-            HttpResponse response = httpClient.execute(new HttpGet(authEndpoint));
-            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-            String html = EntityUtils.toString(response.getEntity());
-            String text = Jsoup.parse(html).text();
+            var html = Jsoup.parse(fetchDefaultLoginPageHtml());
+            String text = html.text();
+            assertNotNull(html.selectFirst("form#kc-form-login"));
+            assertNotNull(html.selectFirst("#kc-social-providers"));
             assertTrue(text.contains("Sign in with a wallet"));
             assertFalse(text.contains("Presentation during issuance"));
+        } finally {
+            updateAuthenticatorConfig(originalConfig);
+        }
+    }
+
+    @Test
+    public void shouldHideSocialProvidersSectionWhenOid4vpProfilesAreUnusable() throws Exception {
+        var originalConfig = getAuthenticatorConfig();
+        try {
+            var updatedConfig = getAuthenticatorConfig();
+            updatedConfig.getConfig().put(PROFILES_CONFIG, "not-json");
+            updateAuthenticatorConfig(updatedConfig);
+
+            var html = Jsoup.parse(fetchDefaultLoginPageHtml());
+            assertNotNull(html.selectFirst("form#kc-form-login"));
+            assertNull(html.selectFirst("#kc-social-providers"));
+            assertFalse(html.text().contains("Or sign in with"));
         } finally {
             updateAuthenticatorConfig(originalConfig);
         }
@@ -382,4 +391,17 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
     }
 
     public record TestFlowDataV2(FormData formData, ResponseToWallet responseToWallet) {}
+
+    private String fetchDefaultLoginPageHtml() throws Exception {
+        String authEndpoint = new URIBuilder(getAuthEndpointURI())
+                .addParameter(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID)
+                .addParameter(OAuth2Constants.RESPONSE_TYPE, OAuth2Constants.CODE)
+                .addParameter(OAuth2Constants.REDIRECT_URI, TEST_CLIENT_REDIRECT_URI)
+                .build()
+                .toString();
+
+        HttpResponse response = httpClient.execute(new HttpGet(authEndpoint));
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        return EntityUtils.toString(response.getEntity());
+    }
 }
