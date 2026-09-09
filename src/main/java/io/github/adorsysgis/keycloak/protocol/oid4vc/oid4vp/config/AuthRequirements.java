@@ -28,6 +28,7 @@ public class AuthRequirements {
     private final boolean verifyIssuerClaim;
     private final boolean fallbackToIsoSpecSessionTranscript;
     private final boolean enforceRevocationStatus;
+    private final boolean allowMissingStatusClaim;
     private final boolean requireCryptographicHolderBinding;
 
     public AuthRequirements(AuthenticatorConfigModel authConfig) {
@@ -67,6 +68,10 @@ public class AuthRequirements {
         this.enforceRevocationStatus = Boolean.parseBoolean(config.getOrDefault(
                 OID4VPAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG,
                 String.valueOf(OID4VPAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT)));
+
+        this.allowMissingStatusClaim = Boolean.parseBoolean(config.getOrDefault(
+                OID4VPAuthenticatorFactory.ALLOW_MISSING_STATUS_CLAIM_CONFIG,
+                String.valueOf(OID4VPAuthenticatorFactory.ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT)));
     }
 
     public List<String> getCredentialTypes() {
@@ -99,6 +104,10 @@ public class AuthRequirements {
 
     public boolean shouldEnforceRevocationStatus() {
         return enforceRevocationStatus;
+    }
+
+    public boolean shouldAllowMissingStatusClaim() {
+        return allowMissingStatusClaim;
     }
 
     private static List<String> parseMultiStr(String str) {

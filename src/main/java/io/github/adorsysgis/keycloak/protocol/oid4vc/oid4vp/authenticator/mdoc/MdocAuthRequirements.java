@@ -30,6 +30,10 @@ public class MdocAuthRequirements {
         return authRequirements.shouldEnforceRevocationStatus();
     }
 
+    public boolean shouldAllowMissingStatusClaim() {
+        return authRequirements.shouldAllowMissingStatusClaim();
+    }
+
     public PresentationRequirements getPresentationRequirements() {
         return new SimpleMdocPresentationDefinition(expectedDocTypes, requiredClaims);
     }

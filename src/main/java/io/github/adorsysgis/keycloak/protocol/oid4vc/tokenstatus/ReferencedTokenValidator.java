@@ -52,6 +52,21 @@ public class ReferencedTokenValidator {
      * @throws ReferencedTokenValidationException if validation fails
      */
     public void validate(JsonNode tokenPayload) throws ReferencedTokenValidationException {
+        validate(tokenPayload, false);
+    }
+
+    /**
+     * Validates a Referenced Token payload by checking its status in the status list.
+     *
+     * @param tokenPayload The JSON payload of the Referenced Token
+     * @param allowMissingStatusClaim when {@code true}, a missing {@code status} claim is accepted
+     * @throws ReferencedTokenValidationException if validation fails
+     */
+    public void validate(JsonNode tokenPayload, boolean allowMissingStatusClaim)
+            throws ReferencedTokenValidationException {
+        if (tokenPayload.get(STATUS_FIELD) == null && allowMissingStatusClaim) {
+            return;
+        }
         try {
             // Validate basic token properties (expiration, etc.)
             validateBasicTokenProperties(tokenPayload);

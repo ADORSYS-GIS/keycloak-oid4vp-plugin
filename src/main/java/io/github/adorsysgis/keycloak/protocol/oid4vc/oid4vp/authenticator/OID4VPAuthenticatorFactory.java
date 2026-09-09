@@ -77,6 +77,9 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     public static final String ENFORCE_REVOCATION_STATUS_CONFIG = "enforceRevocationStatus";
     public static final boolean ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT = false;
 
+    public static final String ALLOW_MISSING_STATUS_CLAIM_CONFIG = "allowMissingStatusClaim";
+    public static final boolean ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT = false;
+
     static {
         ProviderConfigProperty property;
 
@@ -227,6 +230,18 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property.setDefaultValue(ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT);
         property.setHelpText(
                 "Reject credentials whose status indicates they are no longer valid as per the Token Status List mechanism.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(ALLOW_MISSING_STATUS_CLAIM_CONFIG);
+        property.setLabel("Allow credentials without status claims");
+        property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+        property.setDefaultValue(ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT);
+        property.setHelpText(
+                "When revocation enforcement (`enforceRevocationStatus`) is enabled, treat credentials without a "
+                        + "`status` claim as valid. This option never revokes credentials; it only changes whether "
+                        + "credentials without any status claim are treated as invalid. Such credentials cannot "
+                        + "participate in revocation via the Token Status List mechanism because they have no status to revoke.");
         configProperties.add(property);
     }
 

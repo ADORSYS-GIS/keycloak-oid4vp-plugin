@@ -66,6 +66,10 @@ public class SdJwtAuthRequirements {
         return authRequirements.shouldEnforceRevocationStatus();
     }
 
+    public boolean shouldAllowMissingStatusClaim() {
+        return authRequirements.shouldAllowMissingStatusClaim();
+    }
+
     private boolean shouldVerifyIssuerClaim() {
         return authRequirements.shouldVerifyIssuerClaim() && !usesExternalIssuerTrust(credentialRequirement);
     }

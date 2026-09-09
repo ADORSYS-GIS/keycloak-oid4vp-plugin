@@ -109,7 +109,8 @@ public class MdocCredentialVerifier implements CredentialVerifier {
                 // (https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-11.html#name-referenced-token-in-cose)
                 // and MATTR docs
                 // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
-                tokenStatusValidator.validate(verificationContext.getVerifiedMsoPayload());
+                tokenStatusValidator.validate(
+                        verificationContext.getVerifiedMsoPayload(), authReqs.shouldAllowMissingStatusClaim());
             } catch (ReferencedTokenValidationException e) {
                 throw new VerificationException(
                         String.format(
