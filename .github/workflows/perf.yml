@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   check-changes:
-    name: Check for changes since the last successful run
+    name: Check for changes since the last successful scheduled run
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -68,13 +68,14 @@ jobs:
                 repo: context.repo.repo,
                 workflow_id: 'perf.yml',
                 branch,
+                event: 'schedule',
                 status: 'success',
                 per_page: 1,
               });
 
               const previousRun = data.workflow_runs[0];
               if (!previousRun) {
-                await finish(true, `No successful load-test run exists for ${branch}.`);
+                await finish(true, `No successful scheduled load-test run exists for ${branch}.`);
                 return;
               }
 
@@ -88,7 +89,7 @@ jobs:
 
               await finish(
                 false,
-                `Commit ${context.sha} was already covered by successful run ${previousRun.id}.`,
+                `Commit ${context.sha} was already covered by successful scheduled run ${previousRun.id}.`,
               );
             } catch (error) {
               // Fail open: an API problem must not silently suppress load testing.
