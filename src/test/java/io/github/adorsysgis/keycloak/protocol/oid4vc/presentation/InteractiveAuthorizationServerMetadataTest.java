@@ -2,9 +2,13 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseKeycloakTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.PresentationDuringIssuanceBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.RSATestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
@@ -23,6 +27,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
@@ -53,7 +58,21 @@ import org.keycloak.util.JsonSerialization;
  *       {@code invalid_client_attestation}).
  * </ol>
  */
-class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest {
+class InteractiveAuthorizationServerMetadataTest extends PresentationDuringIssuanceBaseTest {
+
+    private static final String IDENTITY_CREDENTIAL_CONFIG_ID = "identity_credential";
+
+    @BeforeAll
+    static void ensureIdentityCredentialScope() {
+        var realm = keycloak.getKeycloakAdminClient().realm(TEST_REALM_NAME);
+        assertPresentationDuringIssuanceEnabled(realm);
+        ensureCredentialScope(
+                realm,
+                IDENTITY_CREDENTIAL_CONFIG_ID,
+                OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT,
+                PresentationDuringIssuanceMode.INTERACTIVE_AUTHORIZATION,
+                AuthenticationProfile.DEFAULT_PROFILE_ID);
+    }
 
     @Test
     @DisplayName(
@@ -121,10 +140,7 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
             OAuth2ErrorRepresentation error = parseHttpResponse(response, OAuth2ErrorRepresentation.class);
             assertEquals(OAuthErrorException.INVALID_CLIENT_ATTESTATION, error.getError());
-            assertEquals(
-                    "A wallet attestation is required: both OAuth-Client-Attestation and "
-                            + "OAuth-Client-Attestation-PoP headers must be present",
-                    error.getErrorDescription());
+            assertEquals("Wallet attestation authentication failed", error.getErrorDescription());
         } finally {
             restoreAttribute(
                     realm, rep, attributes, AuthorizationChallengeEndpoint.ATTR_REQUIRE_WALLET_ATTESTATION, original);
@@ -176,6 +192,11 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
     @DisplayName("a valid wallet attestation passes Keycloak's attestation authenticator")
     void validWalletAttestationPassesKeycloakAuthenticator() throws Exception {
         RealmResource realm = keycloak.getKeycloakAdminClient().realm(getActiveTestRealm());
+        RealmRepresentation realmRepresentation = realm.toRepresentation();
+        Map<String, String> realmAttributes = new HashMap<>(
+                Optional.ofNullable(realmRepresentation.getAttributes()).orElseGet(Map::of));
+        String originalRequirement =
+                realmAttributes.get(AuthorizationChallengeEndpoint.ATTR_REQUIRE_WALLET_ATTESTATION);
         var clientResource = realm.clients().findByClientId(TEST_CLIENT_ID).stream()
                 .findFirst()
                 .map(client -> realm.clients().get(client.getId()))
@@ -188,6 +209,10 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
         removeIdentityProvider(realm, trustAlias);
         createTrustProvider(realm, trustAlias);
         try {
+            realmAttributes.put(AuthorizationChallengeEndpoint.ATTR_REQUIRE_WALLET_ATTESTATION, "true");
+            realmRepresentation.setAttributes(realmAttributes);
+            realm.update(realmRepresentation);
+
             Map<String, String> attributes = new HashMap<>(originalAttributes);
             attributes.put(AttestationBasedClientAuthenticator.OAUTH_CLIENT_ATTESTATION_CONFIG_TRUST_IDPS, trustAlias);
             client.setAttributes(attributes);
@@ -198,7 +223,7 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
             HttpResponse response = postAuthorizationChallengeWithAttestation(
                     List.of(
                             new BasicNameValuePair(OAuth2Constants.CLIENT_ID, TEST_CLIENT_ID),
-                            new BasicNameValuePair(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID),
+                            new BasicNameValuePair(OAuth2Constants.SCOPE, IDENTITY_CREDENTIAL_CONFIG_ID),
                             new BasicNameValuePair(
                                     AuthorizationChallengeEndpoint.INTERACTION_TYPES_SUPPORTED_PARAM,
                                     AuthorizationChallengeEndpoint.INTERACTION_OPENID4VP_PRESENTATION),
@@ -208,16 +233,22 @@ class InteractiveAuthorizationServerMetadataTest extends OID4VPBaseKeycloakTest 
                     createClientAttestation(),
                     createClientAttestationPop());
 
-            assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
-            OAuth2ErrorRepresentation error = parseHttpResponse(response, OAuth2ErrorRepresentation.class);
-            assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
-            assertEquals(
-                    "The requested credential does not enforce an OpenID4VP presentation profile",
-                    error.getErrorDescription());
+            assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatusLine().getStatusCode());
+            AuthorizationChallengeResponse challenge =
+                    parseHttpResponse(response, AuthorizationChallengeResponse.class);
+            assertEquals(AuthorizationChallengeEndpoint.ERROR_INSUFFICIENT_AUTHORIZATION, challenge.getError());
+            assertNotNull(challenge.getAuthSession());
+            assertNotNull(challenge.getOpenid4vpRequest());
         } finally {
             client.setAttributes(originalAttributes);
             clientResource.update(client);
             realm.identityProviders().get(trustAlias).remove();
+            restoreAttribute(
+                    realm,
+                    realmRepresentation,
+                    realmAttributes,
+                    AuthorizationChallengeEndpoint.ATTR_REQUIRE_WALLET_ATTESTATION,
+                    originalRequirement);
         }
     }
 

@@ -1,8 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.presentation;
 
-import static org.keycloak.authentication.authenticators.client.AttestationBasedClientAuthenticator.OAUTH_CLIENT_ATTESTATION_HEADER;
-import static org.keycloak.authentication.authenticators.client.AttestationBasedClientAuthenticator.OAUTH_CLIENT_ATTESTATION_POP_HEADER;
-
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.WebApplicationException;
@@ -55,7 +52,7 @@ public final class WalletAttestationValidator {
                         .event(EventType.CLIENT_LOGIN)
                         .detail(Details.CONTEXT, AUTHORIZATION_CHALLENGE_EVENT_CONTEXT));
 
-        ProviderFactory providerFactory = session.getKeycloakSessionFactory()
+        ProviderFactory<ClientAuthenticator> providerFactory = session.getKeycloakSessionFactory()
                 .getProviderFactory(ClientAuthenticator.class, AttestationBasedClientAuthenticator.PROVIDER_ID);
         if (!(providerFactory instanceof ClientAuthenticatorFactory factory)) {
             throw invalidAttestation("Keycloak's attestation-based client authenticator is unavailable");
@@ -83,9 +80,7 @@ public final class WalletAttestationValidator {
             throw new WebApplicationException(CorsService.open().add(Response.fromResponse(context.getChallenge())));
         }
 
-        throw invalidAttestation(String.format(
-                "A wallet attestation is required: both %s and %s headers must be present",
-                OAUTH_CLIENT_ATTESTATION_HEADER, OAUTH_CLIENT_ATTESTATION_POP_HEADER));
+        throw invalidAttestation("Wallet attestation authentication failed");
     }
 
     private static BadRequestException invalidAttestation(String description) {
