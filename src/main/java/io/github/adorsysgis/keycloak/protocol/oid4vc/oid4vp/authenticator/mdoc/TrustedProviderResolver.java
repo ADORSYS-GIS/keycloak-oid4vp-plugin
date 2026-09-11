@@ -88,6 +88,9 @@ public final class TrustedProviderResolver {
         try {
             EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider(session).resolve(trust);
             TrustedPidProvider provider = snapshot.resolveIssuer(trust.getIssuer());
+            // The configured identifier has been resolved to exactly one provider in the signed LoTE. It becomes the
+            // credential's verified issuer namespace only after mDoc PKIX verification succeeds against this
+            // provider's certificates.
             return new ResolvedMdocTrust(
                     trust.getIssuer(), new StaticTruststoreProvider(provider.trustedCertificates()));
         } catch (EudiPidTrustException e) {

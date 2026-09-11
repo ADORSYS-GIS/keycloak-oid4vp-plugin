@@ -28,10 +28,10 @@ public class EudiPidTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
     @Override
     public List<SignatureVerifierContext> resolveIssuerVerifyingKeys(IssuerSignedJWT issuerSignedJWT)
             throws VerificationException {
-        validateConfiguredIssuer(issuerSignedJWT);
+        String issuer = resolveIssuerIdentifier(issuerSignedJWT);
 
         EudiPidTrustListProvider.TrustListSnapshot trustList = trustListProvider.resolve(policy);
-        EudiPidTrustListProvider.TrustedPidProvider provider = trustList.resolveIssuer(policy.getIssuer());
+        EudiPidTrustListProvider.TrustedPidProvider provider = trustList.resolveIssuer(issuer);
         X509Certificate[] issuerChain =
                 chainValidator.validate(issuerSignedJWT.getJwsHeader().getX5c(), provider.trustedCertificates());
         X509Certificate issuerLeaf = issuerChain[0];
@@ -40,14 +40,15 @@ public class EudiPidTrustedSdJwtIssuer implements TrustedSdJwtIssuer {
         return List.of(verifier);
     }
 
-    private void validateConfiguredIssuer(IssuerSignedJWT issuerSignedJWT) throws EudiPidTrustException {
-        if (StringUtil.isBlank(policy.getIssuer())) {
-            return;
-        }
+    private String resolveIssuerIdentifier(IssuerSignedJWT issuerSignedJWT) throws EudiPidTrustException {
         String actualIssuer = issuerSignedJWT.getPayload().path("iss").asText(null);
-        if (!policy.getIssuer().equals(actualIssuer)) {
+        if (StringUtil.isBlank(actualIssuer)) {
+            throw new EudiPidTrustException("PID credential is missing its signed issuer identifier");
+        }
+        if (StringUtil.isNotBlank(policy.getIssuer()) && !policy.getIssuer().equals(actualIssuer)) {
             throw new EudiPidTrustException(
                     "PID credential issuer does not match configured trusted issuer: " + actualIssuer);
         }
+        return actualIssuer;
     }
 }

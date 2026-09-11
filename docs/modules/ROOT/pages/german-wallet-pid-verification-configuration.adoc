@@ -107,8 +107,7 @@ Paste the complete JSON array into the `OpenID4VP authentication profiles` field
           "https://credentials.example.com/identity_credential"
         ],
         "claims": [
-          "sub",
-          "username"
+          "sub"
         ],
         "trust": [
           {
@@ -165,8 +164,7 @@ Use a single-credential profile when only a self-issued primary credential is re
           "https://credentials.example.com/identity_credential"
         ],
         "claims": [
-          "sub",
-          "username"
+          "sub"
         ],
         "trust": [
           {

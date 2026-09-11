@@ -12,7 +12,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ErrorResponseSanitizer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
@@ -134,7 +133,6 @@ public class OID4VPAuthenticator implements Authenticator {
         VerifiedCredential primaryCredential;
         try {
             primaryCredential = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
-            enforceConfiguredPrimaryIssuer(primaryCredentialReq, primaryCredential);
             TransactionDataSupport.requireCredentialIdInAllEntries(
                     ctx.authorizationContext().getRequestObject().getTransactionData(), primaryCredentialReq.getId());
             primaryVerifier.validateTransactionData(ctx, primaryToken);
@@ -288,28 +286,6 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         return user;
-    }
-
-    /**
-     * Defense in depth for the mDoc trust-list flow. The mDoc verifier returns the PID Provider
-     * identifier whose entity-specific certificates were used for PKIX verification. Authentication
-     * must not proceed unless that identifier is the issuer configured for this credential profile.
-     */
-    void enforceConfiguredPrimaryIssuer(CredentialRequirement credential, VerifiedCredential verifiedCredential)
-            throws VerificationException {
-        if (!credential.isPrimary() || credential.isSessionIdentity() || credential.getTrust() == null) {
-            return;
-        }
-
-        for (TrustPolicy trustPolicy : credential.getTrust()) {
-            if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trustPolicy.getType())) {
-                continue;
-            }
-            if (StringUtil.isBlank(verifiedCredential.issuer())
-                    || !trustPolicy.getIssuer().equals(verifiedCredential.issuer())) {
-                throw new VerificationException("Verified mDoc issuer does not match the configured PID Provider");
-            }
-        }
     }
 
     private UserModel recoverPresentationDuringIssuanceUser(Context ctx) {

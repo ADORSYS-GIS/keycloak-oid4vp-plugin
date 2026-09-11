@@ -69,6 +69,36 @@ class EudiPidTrustedSdJwtIssuerTest {
     }
 
     @Test
+    void shouldResolveSignedIssuerWhenPolicyDoesNotPinOne() throws Exception {
+        KeyPair caKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate caCertificate = TestCryptoUtils.createSelfSignedCaCert(caKeyPair);
+        KeyPair leafKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate leafCertificate =
+                TestCryptoUtils.createLeafCert(leafKeyPair, caKeyPair, caCertificate, "CN=PID Issuer");
+        SignatureVerifierContext verifier = verifier(Algorithm.ES256);
+
+        EudiPidTrustedSdJwtIssuer trustedIssuer = new EudiPidTrustedSdJwtIssuer(
+                policy(null), new StubTrustListProvider(PID_PROVIDER_ISSUER, List.of(caCertificate), verifier));
+
+        List<SignatureVerifierContext> verifiers = trustedIssuer.resolveIssuerVerifyingKeys(
+                issuerSignedJwt(PID_PROVIDER_ISSUER, leafCertificate, caCertificate));
+
+        assertEquals(1, verifiers.size());
+        assertSame(verifier, verifiers.getFirst());
+    }
+
+    @Test
+    void shouldRejectCredentialWithoutSignedIssuer() throws Exception {
+        EudiPidTrustedSdJwtIssuer trustedIssuer = new EudiPidTrustedSdJwtIssuer(
+                policy(null), new StubTrustListProvider(PID_PROVIDER_ISSUER, List.of(), verifier(Algorithm.ES256)));
+
+        EudiPidTrustException error = assertThrows(
+                EudiPidTrustException.class, () -> trustedIssuer.resolveIssuerVerifyingKeys(issuerSignedJwt(null)));
+
+        assertEquals("PID credential is missing its signed issuer identifier", error.getMessage());
+    }
+
+    @Test
     void shouldRejectCertificateTrustedForAnotherPidProvider() throws Exception {
         KeyPair configuredCaKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
         X509Certificate configuredCa = TestCryptoUtils.createSelfSignedCaCert(configuredCaKeyPair);
