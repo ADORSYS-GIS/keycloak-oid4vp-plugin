@@ -130,9 +130,9 @@ public class OID4VPAuthenticator implements Authenticator {
         String primaryToken = ctx.presentedTokens().get(primaryCredentialReq.getId());
 
         // Run credential verification and capture claims
-        JsonNode primaryClaims;
+        VerifiedCredential primaryCredential;
         try {
-            primaryClaims = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
+            primaryCredential = primaryVerifier.verifyCredential(ctx, primaryCredentialReq, primaryToken);
             TransactionDataSupport.requireCredentialIdInAllEntries(
                     ctx.authorizationContext().getRequestObject().getTransactionData(), primaryCredentialReq.getId());
             primaryVerifier.validateTransactionData(ctx, primaryToken);
@@ -143,7 +143,8 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         // Recover authenticating user from Keycloak
-        UserModel user = recoverAuthenticatingUser(ctx, primaryClaims);
+        JsonNode primaryClaims = primaryCredential.claims();
+        UserModel user = recoverAuthenticatingUser(ctx, primaryCredential);
         if (user == null) {
             throw new VerificationException("Failure recovering authenticating user");
         }
@@ -177,7 +178,9 @@ public class OID4VPAuthenticator implements Authenticator {
             try {
                 CredentialVerifier supportingVerifier =
                         ctx.credentialVerifiers().get(credential.getId());
-                JsonNode supportingClaims = supportingVerifier.verifyCredential(ctx, credential, token);
+                JsonNode supportingClaims = supportingVerifier
+                        .verifyCredential(ctx, credential, token)
+                        .claims();
                 applyBindingRules(ctx, authUser, credential, supportingClaims);
             } catch (VerificationException | IllegalStateException e) {
                 String msg = "Supporting credential verification failed";
@@ -230,13 +233,13 @@ public class OID4VPAuthenticator implements Authenticator {
         }
     }
 
-    private UserModel recoverAuthenticatingUser(Context ctx, JsonNode primaryClaims) {
+    private UserModel recoverAuthenticatingUser(Context ctx, VerifiedCredential primaryCredential) {
         logger.infof("Recovering authenticating user (authSession = %s)", ctx.id());
         CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
 
         UserModel user = primaryCredentialReq.isSessionIdentity()
                 ? recoverPresentationDuringIssuanceUser(ctx)
-                : recoverUserFromClaims(ctx, primaryCredentialReq, primaryClaims);
+                : recoverUserFromClaims(ctx, primaryCredentialReq, primaryCredential);
 
         if (user == null) {
             return null;
@@ -259,38 +262,26 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     private UserModel recoverUserFromClaims(
-            Context ctx, CredentialRequirement primaryCredentialReq, JsonNode primaryClaims) {
+            Context ctx, CredentialRequirement primaryCredentialReq, VerifiedCredential primaryCredential) {
         CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
-        String subject = verifier.readClaim(primaryClaims, primaryCredentialReq.getSubjectClaim());
-        String username = verifier.readClaim(primaryClaims, primaryCredentialReq.getUsernameClaim());
-        logger.debugf("Attempting user recovery with subject '%s' and username '%s'", subject, username);
+        String subject = verifier.readClaim(primaryCredential.claims(), primaryCredentialReq.getSubjectClaim());
+        CredentialIdentity identity = new CredentialIdentity(primaryCredential.issuer(), subject);
+        logger.debugf(
+                "Attempting user recovery with credential issuer '%s' and subject '%s'",
+                identity.issuer(), identity.subject());
 
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
         RealmModel realm = ctx.authenticationFlowContext().getRealm();
         UserProvider userProvider = session.users();
 
         UserModel user = null;
-        if (StringUtil.isNotBlank(subject)) {
-            user = userProvider.getUserById(realm, subject);
-        }
-
-        if (user == null && StringUtil.isNotBlank(username)) {
-            // TODO: Remove username-only fallback once SubjectID mapper is fixed and stable.
-            logger.warn("Subject did not resolve to a user. Falling back to username lookup");
-            user = userProvider.getUserByUsername(realm, username);
+        if (StringUtil.isNotBlank(identity.subject())) {
+            user = userProvider.getUserById(realm, identity.subject());
         }
 
         if (user == null) {
             logger.debugf("Authentication passed but authenticating user is unknown");
             failDenyingAuthenticatingUser(ctx);
-            return null;
-        }
-
-        if (StringUtil.isNotBlank(username) && !username.equals(user.getUsername())) {
-            logger.warnf(
-                    "Username mismatch for subject '%s': credential='%s', user='%s'",
-                    subject, username, user.getUsername());
-            failRejectingPresentedCredential(ctx, "Username mismatch");
             return null;
         }
 

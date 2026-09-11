@@ -7,6 +7,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListProvider;
 import java.io.IOException;
 import java.security.cert.X509Certificate;
 import java.util.HashSet;
@@ -15,7 +16,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.util.JsonSerialization;
@@ -106,7 +106,7 @@ public class OID4VPProfileConfig {
                 .setRole(CredentialRole.PRIMARY)
                 .setFormat(CredentialFormat.SD_JWT_VC.getValue())
                 .setCredentialTypes(authRequirements.getCredentialTypes())
-                .setClaims(List.of(JsonWebToken.SUBJECT, OAuth2Constants.USERNAME));
+                .setClaims(List.of(JsonWebToken.SUBJECT));
 
         return new AuthenticationProfile()
                 .setId(AuthenticationProfile.DEFAULT_PROFILE_ID)
@@ -325,6 +325,20 @@ public class OID4VPProfileConfig {
                             "x5c trust policy must declare at least one anchor: %s/%s", profileId, credential.getId()));
                 }
             }
+
+            if (TrustPolicy.EUDI_PID_TRUST_LIST.equals(type)) {
+                if (StringUtil.isBlank(trust.getTrustListUrl())
+                        || !trust.getTrustListUrl().startsWith("https://")) {
+                    throw new IllegalStateException(String.format(
+                            "EUDI PID trust-list URL must be configured and use HTTPS: %s/%s",
+                            profileId, credential.getId()));
+                }
+                if (StringUtil.isBlank(trust.getTrustListSigningCertificate())) {
+                    throw new IllegalStateException(String.format(
+                            "EUDI PID trust-list signing certificate must be configured: %s/%s",
+                            profileId, credential.getId()));
+                }
+            }
         }
     }
 
@@ -406,10 +420,10 @@ public class OID4VPProfileConfig {
      *
      * <ul>
      *   <li>{@code credential} (login): the identity is derived from the presented credential, so it must
-     *       request the configured identity claims ({@link CredentialRequirement#getSubjectClaim()} and
-     *       {@link CredentialRequirement#getUsernameClaim()}, defaulting to {@code sub} and {@code username}).
+     *       request the configured identity claim ({@link CredentialRequirement#getSubjectClaim()},
+     *       defaulting to {@code sub}).
      *   <li>{@code session} (presentation during issuance): the identity comes from the brokered offer
-     *       user, so {@code sub}/{@code username} are not required; instead binding rules are mandatory so
+     *       user, so {@code sub} is not required; instead binding rules are mandatory so
      *       the presented credential is actually matched against the user (otherwise the presentation
      *       requirement would be security-wise meaningless).
      * </ul>
@@ -430,6 +444,10 @@ public class OID4VPProfileConfig {
 
         boolean isMdoc = CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat());
 
+        if (isMdoc) {
+            validatePrimaryMdocIssuerPolicy(profile, credential);
+        }
+
         ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
         if (isMdoc && !subjectRef.isNamespaced()) {
             throw new IllegalStateException(
@@ -437,28 +455,37 @@ public class OID4VPProfileConfig {
                             + subjectRef + ": " + profile.getId() + "/" + credential.getId());
         }
 
-        ClaimReference usernameRef = null;
-        if (StringUtil.isNotBlank(credential.getUsernameClaim())) {
-            usernameRef = ClaimReference.parse(credential.getUsernameClaim());
-            if (isMdoc && !usernameRef.isNamespaced()) {
-                throw new IllegalStateException(
-                        "mDoc primary credential usernameClaim must be namespace-qualified (\"namespace/name\"),"
-                                + " got: " + usernameRef + ": " + profile.getId() + "/" + credential.getId());
-            }
-        }
-
         List<ClaimReference> primaryRefs = credential.getClaimReferences();
         boolean hasSubject = containsIdentityClaim(primaryRefs, subjectRef);
-        boolean hasUsername = true;
-        if (usernameRef != null) {
-            hasUsername = containsIdentityClaim(primaryRefs, usernameRef);
-        }
-        if (!hasSubject || !hasUsername) {
-            String required = usernameRef != null
-                    ? "subjectClaim='" + subjectRef + "' and usernameClaim='" + usernameRef + "'"
-                    : "subjectClaim='" + subjectRef + "'";
+        if (!hasSubject) {
+            String required = "subjectClaim='" + subjectRef + "'";
             throw new IllegalStateException("OpenID4VP primary credential must request identity claims " + required
                     + ": " + profile.getId() + "/" + credential.getId());
+        }
+    }
+
+    private static void validatePrimaryMdocIssuerPolicy(
+            AuthenticationProfile profile, CredentialRequirement credential) {
+        List<TrustPolicy> trustPolicies = credential.getTrust();
+        String credentialLabel = profile.getId() + "/" + credential.getId();
+        if (trustPolicies.size() != 1) {
+            throw new IllegalStateException("Primary mDoc must configure exactly one trust policy: " + credentialLabel);
+        }
+        boolean usesEudiTrustList =
+                trustPolicies.stream().anyMatch(policy -> TrustPolicy.EUDI_PID_TRUST_LIST.equals(policy.getType()));
+        if (!usesEudiTrustList) {
+            return;
+        }
+
+        TrustPolicy trust = trustPolicies.getFirst();
+        if (StringUtil.isBlank(trust.getIssuer())) {
+            throw new IllegalStateException(
+                    "Primary mDoc EUDI PID trust policy must configure issuer: " + credentialLabel);
+        }
+        if (StringUtil.isNotBlank(trust.getServiceType())
+                && !EudiPidTrustListProvider.PID_ISSUANCE_SERVICE_TYPE.equals(trust.getServiceType())) {
+            throw new IllegalStateException(
+                    "Primary mDoc EUDI PID trust policy must use the PID issuance service type: " + credentialLabel);
         }
     }
 

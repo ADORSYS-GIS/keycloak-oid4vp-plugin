@@ -57,7 +57,7 @@ class EudiTrustListJwtVerifier {
 
     private JWSInput parseTrustListJwt(String trustListJwt) throws EudiPidTrustException {
         try {
-            return new JWSInput(trustListJwt);
+            return new JWSInput(trustListJwt != null ? trustListJwt.trim() : null);
         } catch (JWSInputException e) {
             throw new EudiPidTrustException("Could not parse EUDI trust list JWT", e);
         }

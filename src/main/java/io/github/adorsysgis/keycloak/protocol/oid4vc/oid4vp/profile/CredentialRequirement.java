@@ -2,14 +2,13 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.VCFormat;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.utils.StringUtil;
 
 public class CredentialRequirement {
 
-    /** Identity is derived from the presented credential's {@code sub}/{@code username} claims (login). */
+    /** Identity is derived from the presented credential's {@code sub} claim (login). */
     public static final String IDENTITY_SOURCE_CREDENTIAL = "credential";
 
     /**
@@ -43,15 +42,6 @@ public class CredentialRequirement {
      */
     @JsonProperty("subjectClaim")
     private String subjectClaim = JsonWebToken.SUBJECT;
-
-    /**
-     * Optional claim (optionally namespaced) used as a fallback to resolve the Keycloak user by
-     * username when {@code subjectClaim} does not match a user ID. Defaults to {@code username}.
-     * Set to blank or omit to skip the username fallback (subjectClaim alone is sufficient).
-     * Temporary workaround until the SubjectID mapper is in place.
-     */
-    @JsonProperty("usernameClaim")
-    private String usernameClaim = OAuth2Constants.USERNAME;
 
     @JsonProperty("trust")
     private List<TrustPolicy> trust = List.of(new TrustPolicy());
@@ -123,15 +113,6 @@ public class CredentialRequirement {
 
     public CredentialRequirement setSubjectClaim(String subjectClaim) {
         this.subjectClaim = subjectClaim;
-        return this;
-    }
-
-    public String getUsernameClaim() {
-        return usernameClaim;
-    }
-
-    public CredentialRequirement setUsernameClaim(String usernameClaim) {
-        this.usernameClaim = usernameClaim;
         return this;
     }
 
