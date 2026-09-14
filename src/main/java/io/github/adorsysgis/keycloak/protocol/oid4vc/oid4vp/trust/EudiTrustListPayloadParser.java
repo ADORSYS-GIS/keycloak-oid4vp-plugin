@@ -106,9 +106,7 @@ class EudiTrustListPayloadParser {
                 throw new EudiPidTrustException(
                         "EUDI PID issuance service contains no X.509 certificates: " + names.getFirst());
             }
-            List<String> serviceNames = readValues(serviceInformation.path("ServiceName"));
-            services.add(new TrustedPidIssuanceService(
-                    serviceNames.isEmpty() ? serviceType : serviceNames.getFirst(), certificates));
+            services.add(new TrustedPidIssuanceService(certificates));
         }
 
         return new TrustedPidProvider(names.getFirst(), List.copyOf(identifiers), services);

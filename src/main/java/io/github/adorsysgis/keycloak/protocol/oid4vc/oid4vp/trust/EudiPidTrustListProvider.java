@@ -183,9 +183,8 @@ public class EudiPidTrustListProvider {
         }
     }
 
-    public record TrustedPidIssuanceService(String serviceName, List<X509Certificate> certificates) {
+    public record TrustedPidIssuanceService(List<X509Certificate> certificates) {
         public TrustedPidIssuanceService {
-            serviceName = Objects.requireNonNull(serviceName);
             certificates = List.copyOf(Objects.requireNonNull(certificates));
         }
     }

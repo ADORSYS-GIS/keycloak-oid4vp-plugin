@@ -119,7 +119,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        return new VerifiedCredential(trust.issuer(), payloadRef.get().get(L_NAME_SPACES));
+        return new VerifiedCredential(payloadRef.get().get(L_NAME_SPACES));
     }
 
     @Override

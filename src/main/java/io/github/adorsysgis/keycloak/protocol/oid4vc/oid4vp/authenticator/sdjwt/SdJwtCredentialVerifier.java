@@ -94,8 +94,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        String issuer = sdJwt.getIssuerSignedJWT().getPayload().path("iss").asText(null);
-        return new VerifiedCredential(issuer, payloadRef.get());
+        return new VerifiedCredential(payloadRef.get());
     }
 
     @Override

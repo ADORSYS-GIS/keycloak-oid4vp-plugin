@@ -59,7 +59,7 @@ public final class TrustedProviderResolver {
                             credential.getId(), trust.getType()));
             }
         }
-        return new ResolvedMdocTrust(null, new StaticTruststoreProvider(trustAnchors));
+        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors));
     }
 
     private static boolean requiresIssuerEnforcement(CredentialRequirement credential) {
@@ -75,10 +75,9 @@ public final class TrustedProviderResolver {
 
         TrustPolicy trust = credential.getTrust().getFirst();
         if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
-            // Preserve the existing x5c primary flow. It has no standardized provider identifier to return.
             if (TrustPolicy.X5C.equals(trust.getType())) {
                 return new ResolvedMdocTrust(
-                        trust.getIssuer(), new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())));
+                        new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())));
             }
             throw new IllegalStateException(String.format(
                     "Primary credential '%s' uses an unsupported issuer trust policy: %s",
@@ -88,11 +87,7 @@ public final class TrustedProviderResolver {
         try {
             EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider(session).resolve(trust);
             TrustedPidProvider provider = snapshot.resolveIssuer(trust.getIssuer());
-            // The configured identifier has been resolved to exactly one provider in the signed LoTE. It becomes the
-            // credential's verified issuer namespace only after mDoc PKIX verification succeeds against this
-            // provider's certificates.
-            return new ResolvedMdocTrust(
-                    trust.getIssuer(), new StaticTruststoreProvider(provider.trustedCertificates()));
+            return new ResolvedMdocTrust(new StaticTruststoreProvider(provider.trustedCertificates()));
         } catch (EudiPidTrustException e) {
             throw new VerificationException(
                     String.format("Credential '%s' could not resolve its configured PID Provider", credential.getId()),
@@ -119,5 +114,5 @@ public final class TrustedProviderResolver {
         }
     }
 
-    public record ResolvedMdocTrust(String issuer, TrustAnchorProvider trustAnchors) {}
+    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors) {}
 }

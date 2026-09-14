@@ -167,7 +167,7 @@ class EudiPidTrustedSdJwtIssuerTest {
 
         @Override
         public TrustListSnapshot resolve(TrustPolicy policy) {
-            TrustedPidIssuanceService service = new TrustedPidIssuanceService("PID issuance", trustedCertificates);
+            TrustedPidIssuanceService service = new TrustedPidIssuanceService(trustedCertificates);
             TrustedPidProvider provider = new TrustedPidProvider("PID provider", List.of(issuer), List.of(service));
             return new TrustListSnapshot(Instant.now().plusSeconds(3600), trustedCertificates, List.of(provider));
         }

@@ -265,18 +265,15 @@ public class OID4VPAuthenticator implements Authenticator {
             Context ctx, CredentialRequirement primaryCredentialReq, VerifiedCredential primaryCredential) {
         CredentialVerifier verifier = ctx.credentialVerifiers().get(primaryCredentialReq.getId());
         String subject = verifier.readClaim(primaryCredential.claims(), primaryCredentialReq.getSubjectClaim());
-        CredentialIdentity identity = new CredentialIdentity(primaryCredential.issuer(), subject);
-        logger.debugf(
-                "Attempting user recovery with credential issuer '%s' and subject '%s'",
-                identity.issuer(), identity.subject());
+        logger.debugf("Attempting user recovery with credential subject '%s'", subject);
 
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
         RealmModel realm = ctx.authenticationFlowContext().getRealm();
         UserProvider userProvider = session.users();
 
         UserModel user = null;
-        if (StringUtil.isNotBlank(identity.subject())) {
-            user = userProvider.getUserById(realm, identity.subject());
+        if (StringUtil.isNotBlank(subject)) {
+            user = userProvider.getUserById(realm, subject);
         }
 
         if (user == null) {

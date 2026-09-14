@@ -118,7 +118,7 @@ class EudiPidTrustListProviderTest {
         KeyPair signerKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
         X509Certificate signerCertificate = TestCryptoUtils.createSelfSignedCaCert(signerKeyPair);
         EudiPidTrustListProvider.TrustedPidIssuanceService service =
-                new EudiPidTrustListProvider.TrustedPidIssuanceService("PID issuance", List.of(signerCertificate));
+                new EudiPidTrustListProvider.TrustedPidIssuanceService(List.of(signerCertificate));
         EudiPidTrustListProvider.TrustedPidProvider providerA = new EudiPidTrustListProvider.TrustedPidProvider(
                 "Provider A", List.of("PSDDE-DUPLICATE"), List.of(service));
         EudiPidTrustListProvider.TrustedPidProvider providerB = new EudiPidTrustListProvider.TrustedPidProvider(
