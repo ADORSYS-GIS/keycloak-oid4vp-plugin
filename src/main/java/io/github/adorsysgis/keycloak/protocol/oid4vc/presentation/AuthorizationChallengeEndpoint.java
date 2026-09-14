@@ -162,7 +162,7 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
         // When the Authorization Server requires a Wallet Attestation, it MUST be included on the
         // Authorization Challenge Request (OID4VCI §6.1, Note). Validate it before starting the challenge.
         if (isWalletAttestationRequired()) {
-            WalletAttestationValidator.validate(session, clientId);
+            WalletAttestationValidator.validate(session, event);
         }
 
         // The requested credential configuration is the sole authority for profile selection. Allowing

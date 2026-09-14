@@ -42,7 +42,8 @@ public final class KeycloakTestContainer {
                 .withImagePullPolicy(PullPolicy.alwaysPull())
                 .withProviderLibsFrom(List.of(loadShadedPluginJar()))
                 .withProviderClassesFrom("target/classes", "target/test-classes")
-                .withFeaturesEnabled("oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code")
+                .withFeaturesEnabled(
+                        "oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code", "client-auth-abca")
                 .withRealmImportFiles(realmImports.toArray(String[]::new))
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
