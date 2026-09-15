@@ -670,4 +670,40 @@ public class ReferencedTokenValidatorTest {
         // status[1] = 0 (VALID) in the 1-bit test vector
         validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI));
     }
+
+    @Test
+    public void testStatusListJwt_AcceptsOptionalAggregationUri() throws Exception {
+        // The IETF OAuth Status List draft defines aggregation_uri as an optional field.
+        // A conformant issuer may include it; the validator must not reject it.
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "%s",
+                    "iat": 1700000000,
+                    "exp": 9999999999,
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "%s",
+                        "aggregation_uri": "https://status.example.com/aggregation"
+                    }
+                }
+                """.formatted(uri, IETF_1BIT_TEST_VECTOR));
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher);
+        val.validate(credentialPayload(1, TEST_STATUS_LIST_URI));
+    }
+
+    @Test
+    public void testCredentialStatus_AcceptsOptionalUnknownFields() throws Exception {
+        // The credential's status_list object (mapped to StatusInfo) may carry optional
+        // unknown fields; the validator must not reject them.
+        ObjectNode statusList = JsonSerialization.mapper.createObjectNode();
+        statusList.put("idx", 1);
+        statusList.put("uri", TEST_STATUS_LIST_URI);
+        statusList.put("aggregation_uri", "https://status.example.com/aggregation");
+        ObjectNode status = JsonSerialization.mapper.createObjectNode();
+        status.set("status_list", statusList);
+        ObjectNode payload = JsonSerialization.mapper.createObjectNode();
+        payload.set("status", status);
+
+        validator.validate(payload);
+    }
 }
