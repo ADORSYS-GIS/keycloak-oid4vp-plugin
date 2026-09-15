@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -438,6 +439,7 @@ public class ReferencedTokenValidator {
      * @param idx The token index in the status list (must be non-negative)
      * @param uri The URI of the status list token (must not be null or empty)
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static record StatusInfo(
             @JsonProperty(IDX_FIELD) int idx,
             @JsonProperty(URI_FIELD) String uri) {
@@ -453,6 +455,7 @@ public class ReferencedTokenValidator {
      * @param bits The number of bits per status value (must be 1, 2, 4, or 8)
      * @param lst  The base64url-encoded, DEFLATE-compressed status list (must not be null or empty)
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static record StatusList(
             @JsonProperty(BITS_FIELD) int bits,
             @JsonProperty(LST_FIELD) String lst) {
