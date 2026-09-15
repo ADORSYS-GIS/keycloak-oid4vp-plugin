@@ -104,4 +104,19 @@ class OID4VPConfigTest {
         assertTrue(config.verboseErrors());
         assertEquals(2000, config.cacheMaxSize());
     }
+
+    @Test
+    void shouldEnforceStatusListX5cTrustByDefault() {
+        assertTrue(new OID4VPConfig(null).enforceStatusListX5cTrust());
+    }
+
+    @Test
+    void shouldAllowDisablingStatusListX5cTrust() {
+        Config.Scope scope = mock(Config.Scope.class);
+        when(scope.getBoolean("enforce-status-list-x5c-trust", true)).thenReturn(false);
+
+        OID4VPConfig config = new OID4VPConfig(scope);
+
+        assertFalse(config.enforceStatusListX5cTrust());
+    }
 }
