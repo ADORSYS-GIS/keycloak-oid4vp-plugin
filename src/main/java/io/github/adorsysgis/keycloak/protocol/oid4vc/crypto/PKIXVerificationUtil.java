@@ -3,13 +3,16 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorProvider;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertPath;
+import java.security.cert.CertPathBuilder;
+import java.security.cert.CertPathBuilderResult;
 import java.security.cert.CertPathValidator;
 import java.security.cert.CertStore;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.CollectionCertStoreParameters;
-import java.security.cert.PKIXParameters;
+import java.security.cert.PKIXBuilderParameters;
 import java.security.cert.TrustAnchor;
+import java.security.cert.X509CertSelector;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -22,10 +25,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.security.auth.x500.X500Principal;
+
+import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Time;
 
 public class PKIXVerificationUtil {
+
+    private static final Logger logger = Logger.getLogger(PKIXVerificationUtil.class);
 
     private static final int MAX_CHAIN_LENGTH = 5;
 
@@ -56,7 +63,7 @@ public class PKIXVerificationUtil {
         return validateChain(certs, roots, intermediates);
     }
 
-    private static X509Certificate[] validateChain(
+    public static X509Certificate[] validateChain(
             List<X509Certificate> certs,
             Collection<X509Certificate> rootCertificates,
             Collection<X509Certificate> intermediateCertificates)
@@ -71,61 +78,61 @@ public class PKIXVerificationUtil {
                         String.format("Certificate chain too long: %d (max %d)", certs.size(), MAX_CHAIN_LENGTH));
             }
 
+            // The presented chain must be in order: each certificate is issued by the next one.
+            for (int i = 0; i < certs.size() - 1; i++) {
+                if (!certs.get(i).getIssuerX500Principal().equals(certs.get(i + 1).getSubjectX500Principal())) {
+                    throw new VerificationException("Certificate chain is not in order");
+                }
+                certs.get(i).verify(certs.get(i + 1).getPublicKey());
+            }
+
             if (rootCertificates == null || rootCertificates.isEmpty()) {
                 throw new VerificationException("No trusted root certificates available for validation");
             }
 
-            // Build trust anchors from roots
-            Set<TrustAnchor> trustAnchors = rootCertificates.stream()
+            List<X509Certificate> roots = new ArrayList<>(rootCertificates);
+            List<X509Certificate> intermediates =
+                    intermediateCertificates == null ? List.of() : new ArrayList<>(intermediateCertificates);
+
+            // Build trust anchors from roots. Certificates passed as roots are trusted as
+            // roots - self-signed or not; intermediates are only used for bridging.
+            Set<TrustAnchor> trustAnchors = roots.stream()
                     .map(cert -> new TrustAnchor(cert, null))
                     .collect(Collectors.toSet());
 
-            if (trustAnchors.isEmpty()) {
-                throw new VerificationException("No trusted root certificates available for validation");
+            // The presented chain plus the intermediates form the certificate store the path
+            // builder uses to connect the leaf to a trusted root. Unrelated certificates are
+            // simply ignored by the builder.
+            List<X509Certificate> store = new ArrayList<>(certs);
+            for (X509Certificate certificate : intermediates) {
+                if (!store.contains(certificate)) {
+                    store.add(certificate);
+                }
             }
 
-            PKIXParameters params = new PKIXParameters(trustAnchors);
+            X509CertSelector targetSelector = new X509CertSelector();
+            targetSelector.setCertificate(certs.getFirst());
+
+            PKIXBuilderParameters params = new PKIXBuilderParameters(trustAnchors, targetSelector);
             // TODO: Revocation checking is currently disabled to avoid blocking network I/O during validation.
             // For production-grade revocation, set to true and configure a PKIXRevocationChecker or
             // provide a CRL cert store via params.addCertStore().
             params.setRevocationEnabled(false);
             // Sync with Keycloak offset time for testing (and production time consistency)
             params.setDate(new Date(Time.currentTimeMillis()));
+            params.addCertStore(CertStore.getInstance("Collection", new CollectionCertStoreParameters(store)));
 
-            // Add intermediate certificates from the truststore as a CertStore so PKIX
-            // can bridge chains where the issuer CA is stored as an intermediate.
-            Collection<X509Certificate> intermediates =
-                    intermediateCertificates == null ? List.of() : intermediateCertificates;
-            if (!intermediates.isEmpty()) {
-                params.addCertStore(
-                        CertStore.getInstance("Collection", new CollectionCertStoreParameters(intermediates)));
+            // Fail fast on expired certificates so callers observe a CertificateExpiredException
+            // instead of the path builder's generic "unable to find valid certification path".
+            for (X509Certificate cert : certs) {
+                cert.checkValidity(params.getDate());
             }
 
-            // Validate the path. The CertPath should not include the trust anchor itself.
-            List<X509Certificate> pathCerts = new ArrayList<>(certs);
-            X509Certificate leafCert = pathCerts.getFirst();
-            X509Certificate lastCert = pathCerts.getLast();
+            CertPathBuilder builder = CertPathBuilder.getInstance("PKIX");
+            CertPathBuilderResult buildResult = builder.build(params);
+            CertPath certPath = buildResult.getCertPath();
 
-            boolean leafIsTrusted = trustAnchors.stream()
-                    .anyMatch(anchor -> anchor.getTrustedCert().equals(leafCert));
-
-            // If the leaf is directly trusted (e.g. self-signed trusted cert), we are done.
-            if (leafIsTrusted) {
-                leafCert.checkValidity(params.getDate());
-                return certs.toArray(new X509Certificate[0]);
-            }
-
-            boolean rootInPath = trustAnchors.stream()
-                    .anyMatch(anchor -> anchor.getTrustedCert().equals(lastCert));
-
-            if (rootInPath && pathCerts.size() > 1) {
-                pathCerts.removeLast();
-            }
-
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            CertPath certPath = cf.generateCertPath(pathCerts);
-            CertPathValidator validator = CertPathValidator.getInstance("PKIX");
-            validator.validate(certPath, params);
+            CertPathValidator.getInstance("PKIX").validate(certPath, params);
 
             return certs.toArray(new X509Certificate[0]);
 
