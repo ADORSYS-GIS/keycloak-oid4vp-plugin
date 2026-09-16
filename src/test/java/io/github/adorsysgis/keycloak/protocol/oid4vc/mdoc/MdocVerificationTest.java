@@ -168,7 +168,7 @@ public class MdocVerificationTest extends MdocBaseTest {
                 opts,
                 new TestTruststoreProvider(toCert(getSpecSampleCert())),
                 "Certificate chain validation failed",
-                "Path does not chain with any of the trust anchors");
+                "unable to find valid certification path to requested target");
     }
 
     @Test
