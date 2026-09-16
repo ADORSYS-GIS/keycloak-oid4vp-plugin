@@ -274,9 +274,9 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     @Test
     @DisplayName("should reject a nested presentation belonging to a different user")
     void shouldRejectMismatchedIdentityInNestedFlow() throws Exception {
-        // The credential subject is valid, but its username belongs to another identity.
+        // The credential subject is unknown/mismatched.
         String identityCredential =
-                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER_ID, "other-user");
+                sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, "unknown-user-id", TEST_USER);
         Connection.Response initial =
                 startNestedAuthorization(buildAuthorizationEndpoint(CREDENTIAL_IDENTITY_CONFIG_ID, null, null));
         String location = nestedLink(initial);
@@ -294,7 +294,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
                 response,
                 HttpStatus.SC_UNAUTHORIZED,
                 ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
-                "Invalid OID4VP credential presentation: Username mismatch");
+                "User with presented OID4VP credential is unknown");
     }
 
     @Test

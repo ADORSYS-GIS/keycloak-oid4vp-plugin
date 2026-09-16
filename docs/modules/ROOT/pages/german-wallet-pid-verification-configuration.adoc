@@ -107,8 +107,7 @@ Paste the complete JSON array into the `OpenID4VP authentication profiles` field
           "https://credentials.example.com/identity_credential"
         ],
         "claims": [
-          "sub",
-          "username"
+          "sub"
         ],
         "trust": [
           {
@@ -141,7 +140,7 @@ Paste the complete JSON array into the `OpenID4VP authentication profiles` field
 ]
 ----
 
-The `eudi_pid_trust_list` policy validates PID issuer trust against the configured trust-list JWT. The `trustListSigningCertificate` anchors the trust-list JWT, and `serviceType` selects entries that are valid for PID issuance.
+The `eudi_pid_trust_list` policy validates PID issuer trust against the configured trust-list JWT. The `trustListSigningCertificate` anchors the trust-list JWT and `serviceType` selects PID issuance services. In this example, `pid` is a supporting mDoc: its verifier accepts the matching service certificates across the list and does not enforce an `issuer` selector. The primary `main` credential determines the Keycloak user. Provider-specific certificate selection applies to credential-based primary mDocs, which must configure exactly one trust policy with an explicit `issuer` when using EUDI PID trust.
 
 == Single self-issued credential profile
 
@@ -165,8 +164,7 @@ Use a single-credential profile when only a self-issued primary credential is re
           "https://credentials.example.com/identity_credential"
         ],
         "claims": [
-          "sub",
-          "username"
+          "sub"
         ],
         "trust": [
           {
@@ -183,8 +181,7 @@ Use a single-credential profile when only a self-issued primary credential is re
 
 When a primary mDoc credential identifies the Keycloak user, use a namespaced `subjectClaim` (e.g. `eu.europa.ec.eudi.pid.1/personal_administrative_number`) rather than a bare element like `document_number`, which may not be globally unique across issuers.
 
-For full details on `subjectClaim`, `usernameClaim`, and the namespace/element format, see xref:oid4vp-deployment-configuration.adoc#oid4vp-deployment-configuration[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
-
+For full details on `subjectClaim` and the namespace/element format, see xref:oid4vp-deployment-configuration.adoc#oid4vp-deployment-configuration[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
 == Authentication flow
 
 At runtime:

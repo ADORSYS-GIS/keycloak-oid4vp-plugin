@@ -138,6 +138,26 @@ public class MdocBaseTest {
     }
 
     /**
+     * Builds an end-to-end mDoc token signed by a specific issuer. This lets trust-list tests
+     * prove that two providers listed under the same LoTE remain separate trust domains.
+     */
+    public static String buildMdocVpToken(
+            RequestObject requestObject,
+            Map<String, Object> claims,
+            String docType,
+            COSEEC2Key issuerKey,
+            X509Certificate issuerCertificate)
+            throws Exception {
+        MdocVerificationOpts opts = buildOpts(requestObject, null, false);
+        return buildDeviceResponse(opts, claims, docType, ctx -> {
+                    ctx.signingKey = issuerKey;
+                    ctx.certChain = List.of(issuerCertificate);
+                    return ctx.signMsoAndWrap();
+                })
+                .encodeToBase64Url();
+    }
+
+    /**
      * Builds an mDoc device response (Base64URL-encoded) matching the OpenID4VP session
      * transcript parameters of the given request object, optionally binding the device
      * signature to the ISO-spec session transcript using {@code mdocGeneratedNonce}.
@@ -554,6 +574,32 @@ public class MdocBaseTest {
 
     public static X509Certificate getIssuerCertRef1() {
         return toCert(getIssuerCertBase64());
+    }
+
+    /** A second issuer key used to model a different trusted PID Provider. */
+    public static COSEEC2Key getIssuerKeyRef2() {
+        return new COSEKeyBuilder()
+                .ktyEC2()
+                .ec2CrvP256()
+                .ec2XInBase64Url("oIFzT0YF6zfxCQoJx7WoTN6irn0YYB3afocbtBorlXc")
+                .ec2YInBase64Url("ljBEcYGgi1Ai0QaWGrX3ChsR-vIClMDXrvtUgnmdeiE")
+                .ec2DInBase64Url("cS5nxH61v9ZHVzSZDRudd4kd25tu2b5Ffx33iL5BOQw")
+                .buildEC2Key();
+    }
+
+    /** Certificate corresponding to {@link #getIssuerKeyRef2()}. */
+    public static X509Certificate getIssuerCertRef2() {
+        return toCert(str("""
+                MIIBoDCCAUegAwIBAgIUPz/iUqi+6vgCE+YCk1yFCOa5QRwwCgYIKoZIzj0EAwIw
+                JTEjMCEGA1UEAwwaUElEIFByb3ZpZGVyIEIgVGVzdCBJc3N1ZXIwIBcNMjYwOTAy
+                MTUzMzQ1WhgPMjEyNjA4MDkxNTMzNDVaMCUxIzAhBgNVBAMMGlBJRCBQcm92aWRl
+                ciBCIFRlc3QgSXNzdWVyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoIFzT0YF
+                6zfxCQoJx7WoTN6irn0YYB3afocbtBorlXeWMERxgaCLUCLRBpYatfcKGxH68gKU
+                wNeu+1SCeZ16IaNTMFEwHQYDVR0OBBYEFAR2raUFPCn9vhk9HG1fuZir0Dj+MB8G
+                A1UdIwQYMBaAFAR2raUFPCn9vhk9HG1fuZir0Dj+MA8GA1UdEwEB/wQFMAMBAf8w
+                CgYIKoZIzj0EAwIDRwAwRAIgKlIeoYkff8PP0r+YYe+2WH9KAR2sGgJHwbln2O9s
+                nYECIDI3PT4VjWdaHl9Zo1cIwln/NbForQPPwlxJTRBrF00E
+                """));
     }
 
     /**
