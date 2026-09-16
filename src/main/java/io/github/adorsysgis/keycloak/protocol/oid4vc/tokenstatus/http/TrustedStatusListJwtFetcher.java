@@ -3,8 +3,12 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorAdapter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Base64;
 import java.util.List;
 import org.jboss.logging.Logger;
 import org.keycloak.common.VerificationException;
@@ -21,6 +25,7 @@ import org.keycloak.truststore.TruststoreProvider;
 
 /**
  * Enhanced fetcher that enforces trust through Keycloak's global truststore.
+ * Truststore validation can be disabled via {@code enforce-status-list-x5c-trust}.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
@@ -28,8 +33,15 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
     private static final Logger logger = Logger.getLogger(TrustedStatusListJwtFetcher.class);
 
+    private final boolean enforceX5cTrust;
+
     public TrustedStatusListJwtFetcher(KeycloakSession session) {
+        this(session, true);
+    }
+
+    public TrustedStatusListJwtFetcher(KeycloakSession session, boolean enforceX5cTrust) {
         super(session);
+        this.enforceX5cTrust = enforceX5cTrust;
     }
 
     @Override
@@ -90,8 +102,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
                     new VerificationException("Missing x5c header"));
         }
 
-        X509Certificate[] chain = validateCertChain(x5c);
-        X509Certificate leaf = chain[0];
+        X509Certificate leaf = enforceX5cTrust ? validateCertChain(x5c)[0] : parseLeafCertificate(x5c);
 
         try {
             validateLeafCertificate(leaf);
@@ -119,6 +130,16 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
             return signatureProvider.verifier(keyWrapper);
         } catch (Exception e) {
             throw new ReferencedTokenValidationException("Failed to create signature verifier for " + alg, e);
+        }
+    }
+
+    private X509Certificate parseLeafCertificate(List<String> x5c) throws ReferencedTokenValidationException {
+        try {
+            byte[] der = Base64.getDecoder().decode(x5c.getFirst());
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            return (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(der));
+        } catch (CertificateException | IllegalArgumentException e) {
+            throw new ReferencedTokenValidationException("Failed to parse X.509 certificate", e);
         }
     }
 

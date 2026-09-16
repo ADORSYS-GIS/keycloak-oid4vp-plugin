@@ -145,6 +145,24 @@ public class TrustedStatusListJwtFetcherTest {
     }
 
     @Test
+    public void shouldAcceptUntrustedStatusListJwtWhenX5cTrustDisabled() {
+        String uri = "https://example.com/status-list-jwt";
+        TrustedStatusListJwtFetcher disabledTrustFetcher = new MockTrustedStatusListJwtFetcher(session, false);
+        assertDoesNotThrow(() -> disabledTrustFetcher.fetchStatusListJwt(uri));
+    }
+
+    @Test
+    public void shouldStillRejectInvalidSignatureWhenX5cTrustDisabled() throws Exception {
+        String uri = "https://example.com/status-list-jwt+invalid-signature";
+        setupSignatureMock(Algorithm.ES256, false);
+
+        TrustedStatusListJwtFetcher disabledTrustFetcher = new MockTrustedStatusListJwtFetcher(session, false);
+        var e = assertThrows(
+                ReferencedTokenValidationException.class, () -> disabledTrustFetcher.fetchStatusListJwt(uri));
+        assertEquals("Invalid JWS signature", e.getMessage());
+    }
+
+    @Test
     public void shouldRejectWhenTruststoreIsEmpty() {
         String uri = "https://example.com/status-list-jwt";
 
@@ -316,7 +334,11 @@ public class TrustedStatusListJwtFetcherTest {
     /* ------------------ Mock Fetcher ------------------ */
     public static class MockTrustedStatusListJwtFetcher extends TrustedStatusListJwtFetcher {
         public MockTrustedStatusListJwtFetcher(KeycloakSession session) {
-            super(session);
+            this(session, true);
+        }
+
+        public MockTrustedStatusListJwtFetcher(KeycloakSession session, boolean enforceX5cTrust) {
+            super(session, enforceX5cTrust);
         }
 
         @Override

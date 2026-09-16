@@ -74,3 +74,28 @@ bin/kc.sh start --spi-realm-restapi-extension-oid4vp-auth-verbose-errors=true
 export KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS=true
 bin/kc.sh start
 ----
+
+=== Status list JWT X.509 trust
+
+By default, status-list JWT `x5c` chains are validated against Keycloak's global truststore.
+When the same organization operates Keycloak and the status-list server, this can be disabled
+with `enforce-status-list-x5c-trust=false`.
+
+**Example in `keycloak.conf`:**
+[source,properties]
+----
+spi-realm-restapi-extension-oid4vp-auth-enforce-status-list-x5c-trust=false
+----
+
+**Example via Command Line:**
+[source,bash]
+----
+bin/kc.sh start --spi-realm-restapi-extension-oid4vp-auth-enforce-status-list-x5c-trust=false
+----
+
+**Example via Environment Variables:**
+[source,bash]
+----
+export KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_ENFORCE_STATUS_LIST_X5C_TRUST=false
+bin/kc.sh start
+----

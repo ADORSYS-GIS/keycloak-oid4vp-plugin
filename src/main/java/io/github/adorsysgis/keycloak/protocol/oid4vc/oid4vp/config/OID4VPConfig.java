@@ -27,18 +27,27 @@ public final class OID4VPConfig {
     public static final String VERBOSE_ERRORS_CONFIG = "verbose-errors";
 
     /**
+     * Config key for whether status-list JWTs must present an {@code x5c} chain that
+     * validates against Keycloak's global truststore. Default is {@code true}.
+     */
+    public static final String ENFORCE_STATUS_LIST_X5C_TRUST_CONFIG = "enforce-status-list-x5c-trust";
+
+    /**
      * Config key for the certificate cache size.
      * Or max entries for the authorization-request certificate cache.
      */
     public static final String CACHE_MAX_SIZE_CONFIG = "cache-max-size";
 
     private final boolean verboseErrors;
+    private final boolean enforceStatusListX5cTrust;
     private final int certificateCacheMaxSize;
     private final List<String> autoCreateAuthFlowRealms;
 
     public OID4VPConfig(Config.Scope config) {
         this.autoCreateAuthFlowRealms = config == null ? List.of() : parseRealmList(config.get(MANAGED_REALMS_CONFIG));
         this.verboseErrors = config != null && config.getBoolean(VERBOSE_ERRORS_CONFIG, false);
+        this.enforceStatusListX5cTrust =
+                config == null || config.getBoolean(ENFORCE_STATUS_LIST_X5C_TRUST_CONFIG, true);
         this.certificateCacheMaxSize = config == null
                 ? ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE
                 : config.getInt(CACHE_MAX_SIZE_CONFIG, ExtendedCertificateUtils.DEFAULT_MAX_CACHE_SIZE);
@@ -62,6 +71,10 @@ public final class OID4VPConfig {
 
     public boolean verboseErrors() {
         return verboseErrors;
+    }
+
+    public boolean enforceStatusListX5cTrust() {
+        return enforceStatusListX5cTrust;
     }
 
     private static List<String> parseRealmList(String raw) {

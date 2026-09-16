@@ -1,8 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.mdoc.MdocCredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.sdjwt.SdJwtCredentialVerifier;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
@@ -30,6 +32,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     public static final String REFERENCE_CATEGORY = "verifiable-credential";
 
     private static final List<ProviderConfigProperty> configProperties = new ArrayList<>();
+
+    private boolean enforceStatusListX5cTrust = true;
 
     public static final String PROFILES_CONFIG = "profiles";
 
@@ -262,7 +266,7 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
      * handlers (e.g. for {@code mso_mdoc}) alongside the default SD-JWT handler.
      */
     protected Map<String, CredentialVerifier> defaultHandlers(KeycloakSession session) {
-        StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);
+        StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session, enforceStatusListX5cTrust);
         Map<String, CredentialVerifier> handlers = new LinkedHashMap<>();
         handlers.put(CredentialFormat.SD_JWT_VC.getValue(), new SdJwtCredentialVerifier(httpFetcher));
         handlers.put(CredentialFormat.MSO_MDOC.getValue(), new MdocCredentialVerifier(httpFetcher));
@@ -305,7 +309,10 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     }
 
     @Override
-    public void init(Config.Scope config) {}
+    public void init(Config.Scope config) {
+        Config.Scope pluginScope = Config.scope("realm-restapi-extension", OID4VPUserAuthEndpointFactory.PROVIDER_ID);
+        this.enforceStatusListX5cTrust = new OID4VPConfig(pluginScope).enforceStatusListX5cTrust();
+    }
 
     @Override
     public void postInit(KeycloakSessionFactory factory) {}
