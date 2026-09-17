@@ -58,7 +58,7 @@ public class PKIXVerificationUtil {
         return validateChain(certs, roots, intermediates);
     }
 
-    public static X509Certificate[] validateChain(
+    static X509Certificate[] validateChain(
             List<X509Certificate> certs,
             Collection<X509Certificate> rootCertificates,
             Collection<X509Certificate> intermediateCertificates)
@@ -111,7 +111,8 @@ public class PKIXVerificationUtil {
             // The PKIX path builder enforces the remaining constraints (signatures, basic
             // constraints, key usage, validity of bridged certificates) along the path it
             // builds, so no separate validation run is needed afterwards.
-            CertPathBuilder.getInstance("PKIX").build(params);
+            CertPathBuilder.getInstance("PKIX").build(params).getCertPath();
+
             return certs.toArray(new X509Certificate[0]);
         } catch (VerificationException e) {
             throw e;
@@ -134,8 +135,6 @@ public class PKIXVerificationUtil {
             throws VerificationException, GeneralSecurityException {
         for (int i = 0; i < certs.size(); i++) {
             X509Certificate cert = certs.get(i);
-            // Fail fast on expired certificates so callers observe a CertificateExpiredException
-            // instead of the path builder's generic "unable to find valid certification path".
             cert.checkValidity(new Date(Time.currentTimeMillis()));
             if (i == certs.size() - 1) {
                 break;

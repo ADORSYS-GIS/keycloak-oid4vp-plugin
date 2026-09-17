@@ -3,11 +3,15 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.InputStream;
 import java.security.KeyPair;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
+import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Date;
@@ -34,6 +38,9 @@ import org.keycloak.common.util.Time;
  */
 class PKIXVerificationUtilTest {
 
+    // The validation date, pinned to October 2026. It must fall within the validity period of
+    // every certificate in the de-pid-provider-test.pem fixture so the tests exercise chain
+    // building rather than expiry; adjust it if the fixture certificates are regenerated.
     private static final int OCT_2026_EPOCH_SECONDS = 1790812800;
 
     private static X509Certificate leaf;
@@ -46,10 +53,16 @@ class PKIXVerificationUtilTest {
     private static X509Certificate sameDnCa;
     private static X509Certificate bogusRoot;
 
+    // A generated chain whose intermediate has expired while the leaf it issued is still
+    // valid, so an expired intermediate bridged in from the store must be rejected.
+    private static X509Certificate validRootForIntermediate;
+    private static X509Certificate expiredIntermediate;
+    private static X509Certificate leafUnderExpiredIntermediate;
+
     @BeforeAll
     static void setup() throws Exception {
         CryptoIntegration.init(PKIXVerificationUtilTest.class.getClassLoader());
-        List<X509Certificate> chain = readPemChain("/tokenstatus/de-pid-provider-test.pem");
+        List<X509Certificate> chain = readTestChain();
         leaf = chain.get(0);
         intermediate = chain.get(1);
         root = chain.get(2);
@@ -83,6 +96,41 @@ class PKIXVerificationUtilTest {
                 KeyUsage.keyCertSign | KeyUsage.digitalSignature,
                 notBefore,
                 notAfter);
+
+        // A leaf that stays valid after its intermediate has expired, bridged in from the
+        // intermediate store rather than presented, so an expired bridged intermediate must
+        // be rejected.
+        KeyPair validRootKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        validRootForIntermediate = TestCryptoUtils.createLeafCert(
+                validRootKeyPair,
+                validRootKeyPair,
+                null,
+                "CN=Valid Root CA",
+                true,
+                KeyUsage.keyCertSign | KeyUsage.digitalSignature,
+                oct2026(-40),
+                oct2026(40));
+        KeyPair expiredIntermediateKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        expiredIntermediate = TestCryptoUtils.createLeafCert(
+                expiredIntermediateKeyPair,
+                validRootKeyPair,
+                validRootForIntermediate,
+                "CN=Expired Intermediate CA",
+                true,
+                KeyUsage.keyCertSign | KeyUsage.digitalSignature,
+                oct2026(-40),
+                oct2026(-10));
+        KeyPair leafUnderExpiredIntermediateKeyPair =
+                TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        leafUnderExpiredIntermediate = TestCryptoUtils.createLeafCert(
+                leafUnderExpiredIntermediateKeyPair,
+                expiredIntermediateKeyPair,
+                expiredIntermediate,
+                "CN=Leaf under expired intermediate",
+                false,
+                KeyUsage.digitalSignature,
+                oct2026(-5),
+                oct2026(5));
     }
 
     @AfterEach
@@ -91,16 +139,16 @@ class PKIXVerificationUtilTest {
     }
 
     private void pinTimeToOctober2026() {
-        long offsetSeconds = OCT_2026_EPOCH_SECONDS - System.currentTimeMillis() / 1000;
+        pinTimeTo(new Date(OCT_2026_EPOCH_SECONDS * 1000L));
+    }
+
+    private void pinTimeTo(Date target) {
+        long offsetSeconds = target.getTime() / 1000 - System.currentTimeMillis() / 1000;
         Time.setOffset((int) offsetSeconds);
     }
 
     private static Date oct2026(long dayOffset) {
         return new Date((OCT_2026_EPOCH_SECONDS + dayOffset * 86400) * 1000);
-    }
-
-    private static List<X509Certificate> chain() {
-        return list(leaf, intermediate, root);
     }
 
     private static List<X509Certificate> list(X509Certificate... certificates) {
@@ -200,7 +248,7 @@ class PKIXVerificationUtilTest {
                         "No trusted root certificates available for validation"),
                 invalid(
                         "full chain without any trust anchors",
-                        chain(),
+                        list(leaf, intermediate, root),
                         list(),
                         list(),
                         "No trusted root certificates available for validation"),
@@ -220,7 +268,7 @@ class PKIXVerificationUtilTest {
                         "Certificate chain validation failed"),
                 invalid(
                         "full chain with unrelated as root anchor",
-                        chain(),
+                        list(leaf, intermediate, root),
                         list(unrelated),
                         list(),
                         "Certificate chain validation failed"),
@@ -237,6 +285,12 @@ class PKIXVerificationUtilTest {
                         list(leaf, root, intermediate),
                         list(root),
                         list(),
+                        "Certificate chain is not in order"),
+                invalid(
+                        "leaf+root chain without the intermediate (non-contiguous)",
+                        list(leaf, root),
+                        list(root),
+                        list(intermediate),
                         "Certificate chain is not in order"),
                 invalid(
                         "leaf chain with same subject CA that does not sign it",
@@ -270,8 +324,59 @@ class PKIXVerificationUtilTest {
         }
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private static List<X509Certificate> readPemChain(String resource) throws Exception {
+    private record ValidityCase(
+            String name,
+            Date pinnedAt,
+            List<X509Certificate> chain,
+            List<X509Certificate> roots,
+            List<X509Certificate> intermediates,
+            Class<? extends CertificateException> expectedCause) {}
+
+    static Stream<ValidityCase> validityCases() {
+        return Stream.of(
+                // The presented certificate has already expired at the validation time.
+                new ValidityCase(
+                        "expired presented certificate",
+                        new Date(leaf.getNotAfter().getTime() + 86400000L),
+                        list(leaf, intermediate),
+                        list(root),
+                        list(),
+                        CertificateExpiredException.class),
+                // The presented certificate is not yet valid at the validation time.
+                new ValidityCase(
+                        "not-yet-valid presented certificate",
+                        new Date(leaf.getNotBefore().getTime() - 86400000L),
+                        list(leaf, intermediate),
+                        list(root),
+                        list(),
+                        CertificateNotYetValidException.class),
+                // The presented leaf is valid, but the intermediate bridged in from the
+                // store (not presented) has already expired. The path builder rejects the
+                // expired intermediate itself, so no specific cause is asserted here.
+                new ValidityCase(
+                        "expired bridged intermediate",
+                        new Date(OCT_2026_EPOCH_SECONDS * 1000L),
+                        list(leafUnderExpiredIntermediate),
+                        list(validRootForIntermediate),
+                        list(expiredIntermediate),
+                        null));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("validityCases")
+    void shouldRejectCertificatesOutsideTheirValidity(ValidityCase testCase) {
+        pinTimeTo(testCase.pinnedAt());
+        VerificationException error = assertThrows(
+                VerificationException.class,
+                () -> PKIXVerificationUtil.validateChain(testCase.chain(), testCase.roots(), testCase.intermediates()));
+        assertEquals("Certificate chain validation failed", error.getMessage());
+        if (testCase.expectedCause() != null) {
+            assertInstanceOf(testCase.expectedCause(), error.getCause());
+        }
+    }
+
+    private static List<X509Certificate> readTestChain() throws Exception {
+        String resource = "/tokenstatus/de-pid-provider-test.pem";
         try (InputStream stream = PKIXVerificationUtilTest.class.getResourceAsStream(resource)) {
             if (stream == null) {
                 throw new IllegalArgumentException("Resource not found: " + resource);

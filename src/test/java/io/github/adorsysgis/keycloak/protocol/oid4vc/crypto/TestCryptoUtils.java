@@ -59,6 +59,14 @@ public class TestCryptoUtils {
         return createLeafCert(kp, caKp, caCert, subject, isCa, keyUsageBitmask, now, later);
     }
 
+    /**
+     * Creates a certificate with the given subject, issued by {@code caKp}/{@code caCert}
+     * and valid from {@code notBefore} to {@code notAfter}.
+     *
+     * <p>The subject and issuer names are taken from principals directly so the encoded
+     * attribute order is preserved. A string round trip ({@code new X500Name(principal.getName())})
+     * reverses multi-RDN names and breaks byte-level DN equality with the issuer certificate.
+     */
     public static X509Certificate createLeafCert(
             KeyPair kp,
             KeyPair caKp,
@@ -69,9 +77,6 @@ public class TestCryptoUtils {
             Date notBefore,
             Date notAfter)
             throws Exception {
-        // The names are taken from principals directly so the encoded attribute order is
-        // preserved. A string round trip (new X500Name(principal.getName())) reverses
-        // multi-RDN names and breaks byte-level DN equality with the issuer certificate.
         X500Name subjectName = JcaX500NameUtil.getX500Name(new X500Principal(subject));
         X500Name issuerName =
                 caCert != null ? JcaX500NameUtil.getX500Name(caCert.getSubjectX500Principal()) : subjectName;
