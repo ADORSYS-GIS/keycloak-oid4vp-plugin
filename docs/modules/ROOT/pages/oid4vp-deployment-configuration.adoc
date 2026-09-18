@@ -220,6 +220,41 @@ Validates the credential issuer against one or more X.509 trust anchors. The anc
 
 Validates the credential issuer against a EUDI trust list. The `trustListSigningCertificate` anchors the trust-list JWT signature, `serviceType` filters services, and `issuer` can select an exact PID Provider. For SD-JWT, the plugin always requires the signed `iss`: when `issuer` is configured it must match, and when omitted the signed `iss` dynamically selects the provider. In both cases, only that provider's certificates validate the SD-JWT. A credential-based primary mDoc requires exactly one trust policy, including when using `x5c`; this is checked when loading the profile. EUDI PID primary mDocs additionally require a nonblank `issuer`. For certificate rotation with `x5c`, multiple certificates for the intended issuer can be placed in one policy's `anchors` array. Supporting mDocs accept matching service certificates across the list without enforcing an `issuer` selector.
 
+==== Trust-policy selection by format and role
+
+[cols="2,2,2,3"]
+|===
+|Credential |Use |Do not use |Reason
+
+|Same-realm primary SD-JWT
+|One `self` policy
+|Standalone `x5c`, or `self` mixed with external policies
+|The current realm's enabled signing keys and the signed `iss` establish local origin.
+
+|External PID SD-JWT
+|`eudi_pid_trust_list`; normally pin `issuer` for a single-provider profile
+|Standalone `x5c`
+|The signed `iss` selects a provider and only that provider's LoTE certificates validate the JWT `x5c` chain.
+
+|Primary mDoc with pinned certificates
+|Exactly one `x5c` policy; configure a stable `issuer` when external-user import is possible
+|`self`, or multiple trust policies
+|mDoc has no signed `iss`. PKIX verifies the chain; configured `issuer` supplies the stable external namespace.
+
+|Primary PID mDoc with a LoTE
+|Exactly one `eudi_pid_trust_list` policy with nonblank `issuer`
+|An omitted or ambiguous provider
+|The named provider is selected before PKIX verification and becomes the verified issuer namespace.
+
+|Supporting mDoc
+|`x5c` or `eudi_pid_trust_list`, plus an explicit binding rule
+|Using it to select the Keycloak user
+|The primary credential already selected the account; the supporting credential supplies independently verified evidence.
+|===
+
+Trust is configured per credential requirement. A dual-credential profile therefore has a separate `trust` array for
+its primary and supporting credentials; trust established for one credential never applies to the other.
+
 ETSI TS 119 602 V1.1.1 Annex D, Table D.3 prohibits `ServiceStatus` in the PID Providers LoTE profile. Current approval is represented by membership in the list; a provider that loses its mandate must be removed. Generic `granted`/`withdrawn` service-status filtering therefore does not apply to this profile. Cached snapshots can delay observation of removal until refresh (at most 15 minutes, capped by `NextUpdate`).
 
 ==== Binding rules
@@ -487,6 +522,39 @@ Keycloak users. Never enable it without understanding the rules below.
   only when import is enabled.
 * An external subject is never looked up as a local user ID, username, or email. Username and
   email matches never link or merge accounts: a collision fails the login instead.
+
+==== Cross-realm Keycloak example
+
+Suppose `https://issuer.example/realms/source` issues the credential and
+`https://login.example/realms/target` runs the verifier. The target realm does not call the source
+realm or read its users. It verifies the wallet presentation, classifies the signing origin, and
+derives an opaque external ID from the verified `(issuer namespace, subject)` pair. That external ID
+selects a federated link in the target realm.
+
+The target realm must configure all of the following:
+
+. A primary requirement whose stable `subjectClaim` is included in `claims`.
+. Format-appropriate trust which establishes a stable external issuer namespace.
+. `importUnknownUsers=true` and the intended `importIdentityProviderAlias`.
+. An enabled, hidden `oid4vp-plugin-import` provider with that alias.
+. Plugin-owned attribute mappers for every field required by the target realm user profile.
+
+For an SD-JWT, the signed `iss` is the issuer namespace and `sub` is normally the subject. External
+SD-JWT uses `eudi_pid_trust_list`; standalone `x5c` is not implemented for this format. The signed
+`iss` must resolve to a provider in the list and, when `trust.issuer` is configured, must equal it.
+
+For an mDoc, there is no signed JWT-style `iss`. An `x5c` primary intended for import must therefore
+configure a stable, nonblank `trust.issuer` and dedicated CA anchors. An EUDI PID primary instead
+uses the exact registered provider identifier from its LoTE policy. The mDoc `subjectClaim` must be
+namespace-qualified.
+
+[IMPORTANT]
+====
+Use different credential-signing keys in different realms. Username and email mappers populate the
+target account but never locate or merge one. Changing `trust.issuer`, `subjectClaim`, or the import
+provider alias changes the federated-link namespace and can strand existing links. Retain rotated
+issuer keys or anchors for as long as credentials signed by them must remain usable.
+====
 
 [IMPORTANT]
 ====
