@@ -160,6 +160,49 @@ When a primary credential is used to identify the Keycloak user, use `subjectCla
 
 For the full configuration reference — including the mDoc namespace/element format, defaults, and examples — see link:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
 
+=== Authenticating users unknown to Keycloak (opt-in user import)
+
+Out of the box, a verified credential only authenticates a user that already exists: same-realm
+credentials resolve their `sub` as a local user ID, and anything else must match a federated
+identity link from an earlier import. Unknown identities are rejected.
+
+When `importUnknownUsers` is enabled and the hidden `oid4vp-plugin-import` identity provider
+exists, a fully verified external credential can create its user on first login instead: the
+plugin stages the mapped claims, validates them against the realm user profile, checks for
+username/email collisions and races, then creates and links the user and completes the login —
+over the API, the browser same-device flow, and code redemption alike.
+
+All credential-only checks run before user resolution. Bindings that compare credential claims
+with user attributes run against the current linked/local user, or against staged attributes for a
+new external user. A linked user is synchronized only after those bindings pass; a new user is
+created only after its staged values pass them.
+
+If two requests try to import the same external identity at once, one request creates the account and
+the other is rejected safely. Retrying then follows the normal linked-user path, including checks against
+the stored user's attributes.
+
+What administrators and users should expect:
+
+* Import is disabled by default; linked users keep authenticating after it is turned off again.
+* Only credentials verified as issued by the current realm resolve local users directly by
+  `sub`. This is determined from the verified signing key, independently of whether trust used
+  `self`, `x5c`, or the EUDI trust list. Everything else is issuer-bound, so the same subject from
+  two issuers never cross-authenticates.
+* A locally issued login credential must put the Keycloak internal user ID in its configured
+  `subjectClaim`; there is no fallback from user ID to username.
+* Each realm should use distinct credential-issuance signing keys. Sharing an issuance key between
+  realms makes origin ambiguous, especially for mdoc.
+* Username and email matches never link an account — collisions fail the login and leave the
+  existing account untouched.
+* Disabled accounts stay disabled and are never re-enabled by a login.
+* A mapper or provider-hook failure during creation or linked-user synchronization fails the login and
+  rolls back user changes.
+* There is no profile-review or account-linking screen in this flow; incomplete staged data
+  fails the import instead.
+
+For setup (provider, mappers, issuer sources, sync modes), see
+xref:oid4vp-deployment-configuration.adoc[Importing users previously unknown to Keycloak].
+
 === Technical Configuration (Performance & Security)
 
 For details on certificate caching, lifespan, and other performance/security configurations, see xref:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].

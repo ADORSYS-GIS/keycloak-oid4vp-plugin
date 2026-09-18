@@ -369,24 +369,35 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
     @Test
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential() throws Exception {
-        withAuthenticationProfile(AuthenticationProfileSamples.mdocPrimary(), (apiFlow, requestObject) -> {
-            Credential mdocCredential =
-                    requestObject.getDcqlQuery().getCredentials().getFirst();
-            assertEquals("mso_mdoc", mdocCredential.getFormat());
-            assertEquals(MdocBaseTest.DOC_TYPE, mdocCredential.getMeta().getDoctypeValue());
+        // The x5c profile declares an explicit issuer, so the subject resolves as an external
+        // federated identity; the user is pre-linked exactly as a previous import would have.
+        createImportIdp();
+        linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
+        try {
+            withAuthenticationProfile(
+                    AuthenticationProfileSamples.mdocPrimaryWithIssuer(TEST_MDOC_ISSUER), (apiFlow, requestObject) -> {
+                        Credential mdocCredential =
+                                requestObject.getDcqlQuery().getCredentials().getFirst();
+                        assertEquals("mso_mdoc", mdocCredential.getFormat());
+                        assertEquals(
+                                MdocBaseTest.DOC_TYPE, mdocCredential.getMeta().getDoctypeValue());
 
-            Map<String, Object> mdocClaims = Map.of(
-                    MdocBaseTest.NAMESPACE,
-                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
-            String mdocToken = presentMdoc(requestObject, mdocClaims);
+                        Map<String, Object> mdocClaims = Map.of(
+                                MdocBaseTest.NAMESPACE,
+                                Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+                        String mdocToken = presentMdoc(requestObject, mdocClaims);
 
-            TestOpts opts = TestOpts.getDefault()
-                    .setAuthContext(apiFlow.authContext())
-                    .setCodeVerifier(apiFlow.codeVerifier())
-                    .setShouldForceUnencryptedResponse(true);
+                        TestOpts opts = TestOpts.getDefault()
+                                .setAuthContext(apiFlow.authContext())
+                                .setCodeVerifier(apiFlow.codeVerifier())
+                                .setShouldForceUnencryptedResponse(true);
 
-            testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
-        });
+                        testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+                    });
+        } finally {
+            unlinkExternalUser(TEST_USER_ID);
+            removeImportIdp();
+        }
     }
 
     @Test
@@ -400,17 +411,24 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                         MdocBaseTest.getIssuerCertBase64(),
                         EudiPidTrustListTestServer.PROVIDER_A_ID);
 
-        withAuthenticationProfile(profile, (apiFlow, requestObject) -> {
-            Map<String, Object> claims = Map.of(MdocBaseTest.NAMESPACE, Map.of(JsonWebToken.SUBJECT, TEST_USER_ID));
-            String mdocToken = presentMdoc(requestObject, claims);
+        createImportIdp();
+        linkExternalUser(TEST_USER_ID, EudiPidTrustListTestServer.PROVIDER_A_ID, TEST_USER_ID);
+        try {
+            withAuthenticationProfile(profile, (apiFlow, requestObject) -> {
+                Map<String, Object> claims = Map.of(MdocBaseTest.NAMESPACE, Map.of(JsonWebToken.SUBJECT, TEST_USER_ID));
+                String mdocToken = presentMdoc(requestObject, claims);
 
-            TestOpts opts = TestOpts.getDefault()
-                    .setAuthContext(apiFlow.authContext())
-                    .setCodeVerifier(apiFlow.codeVerifier())
-                    .setShouldForceUnencryptedResponse(true);
+                TestOpts opts = TestOpts.getDefault()
+                        .setAuthContext(apiFlow.authContext())
+                        .setCodeVerifier(apiFlow.codeVerifier())
+                        .setShouldForceUnencryptedResponse(true);
 
-            testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
-        });
+                testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+            });
+        } finally {
+            unlinkExternalUser(TEST_USER_ID);
+            removeImportIdp();
+        }
     }
 
     @Test
@@ -453,19 +471,27 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential_MdlIdentityClaim() throws Exception {
         // Regression for issue 001: a standard ISO 18013-5 mDL carries no sub claim, so
         // identity must be derivable from a configured standard mDL claim (document_number).
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.mdocPrimaryWithMdlIdentity(), (apiFlow, requestObject) -> {
-                    Map<String, Object> mdocClaims = Map.of(
-                            MdocBaseTest.NAMESPACE, Map.of("document_number", TEST_USER_ID, "given_name", "Alice"));
-                    String mdocToken = presentMdoc(requestObject, mdocClaims);
+        createImportIdp();
+        linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
+        try {
+            withAuthenticationProfile(
+                    AuthenticationProfileSamples.mdocPrimaryWithMdlIdentityAndIssuer(TEST_MDOC_ISSUER),
+                    (apiFlow, requestObject) -> {
+                        Map<String, Object> mdocClaims = Map.of(
+                                MdocBaseTest.NAMESPACE, Map.of("document_number", TEST_USER_ID, "given_name", "Alice"));
+                        String mdocToken = presentMdoc(requestObject, mdocClaims);
 
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier())
-                            .setShouldForceUnencryptedResponse(true);
+                        TestOpts opts = TestOpts.getDefault()
+                                .setAuthContext(apiFlow.authContext())
+                                .setCodeVerifier(apiFlow.codeVerifier())
+                                .setShouldForceUnencryptedResponse(true);
 
-                    testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
-                });
+                        testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+                    });
+        } finally {
+            unlinkExternalUser(TEST_USER_ID);
+            removeImportIdp();
+        }
     }
 
     @Test
@@ -475,32 +501,39 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // extracts it and binds the mDoc device signature to the ISO-spec session transcript.
         String mdocGeneratedNonce = "mdoc-generated-nonce-9f3a7c";
 
-        withAuthenticationProfile(
-                AuthenticationProfileSamples.mdocPrimary(),
-                Map.of(
-                        RESPONSE_MODE_CONFIG,
-                        ResponseMode.DIRECT_POST_JWT.getValue(),
-                        FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG,
-                        "true"),
-                (apiFlow, requestObject) -> {
-                    // Encrypted responses advertise an ephemeral JWK set for response encryption.
-                    assertNotNull(requestObject.getClientMetadata().getJwks());
+        createImportIdp();
+        linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
+        try {
+            withAuthenticationProfile(
+                    AuthenticationProfileSamples.mdocPrimaryWithIssuer(TEST_MDOC_ISSUER),
+                    Map.of(
+                            RESPONSE_MODE_CONFIG,
+                            ResponseMode.DIRECT_POST_JWT.getValue(),
+                            FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG,
+                            "true"),
+                    (apiFlow, requestObject) -> {
+                        // Encrypted responses advertise an ephemeral JWK set for response encryption.
+                        assertNotNull(requestObject.getClientMetadata().getJwks());
 
-                    Map<String, Object> mdocClaims = Map.of(
-                            MdocBaseTest.NAMESPACE,
-                            Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
-                    String mdocToken = MdocBaseTest.buildMdocVpToken(
-                            requestObject, mdocClaims, MdocBaseTest.DOC_TYPE, mdocGeneratedNonce, true);
+                        Map<String, Object> mdocClaims = Map.of(
+                                MdocBaseTest.NAMESPACE,
+                                Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+                        String mdocToken = MdocBaseTest.buildMdocVpToken(
+                                requestObject, mdocClaims, MdocBaseTest.DOC_TYPE, mdocGeneratedNonce, true);
 
-                    TestOpts opts = TestOpts.getDefault()
-                            .setAuthContext(apiFlow.authContext())
-                            .setCodeVerifier(apiFlow.codeVerifier())
-                            // Let the framework encrypt the response (direct_post.jwt) and inject
-                            // the mdocGeneratedNonce into the JWE `apu` header.
-                            .setResponseApu(mdocGeneratedNonce);
+                        TestOpts opts = TestOpts.getDefault()
+                                .setAuthContext(apiFlow.authContext())
+                                .setCodeVerifier(apiFlow.codeVerifier())
+                                // Let the framework encrypt the response (direct_post.jwt) and inject
+                                // the mdocGeneratedNonce into the JWE `apu` header.
+                                .setResponseApu(mdocGeneratedNonce);
 
-                    testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
-                });
+                        testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+                    });
+        } finally {
+            unlinkExternalUser(TEST_USER_ID);
+            removeImportIdp();
+        }
     }
 
     @Test

@@ -16,6 +16,9 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOrigin;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOriginResolver;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -39,6 +42,7 @@ import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
+import org.keycloak.services.Urls;
 import org.keycloak.util.JWKSUtils;
 import org.keycloak.util.JsonSerialization;
 
@@ -119,7 +123,19 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        return new VerifiedCredential(payloadRef.get().get(L_NAME_SPACES));
+        JsonNode namespaces = payloadRef.get().get(L_NAME_SPACES);
+        String subject = readClaim(namespaces, credentialReq.getSubjectClaim());
+        CredentialOrigin origin =
+                CredentialOriginResolver.forMdoc(session, verificationContext.getVerifiedIssuerCertificate());
+        String realmIssuer = Urls.realmIssuer(
+                session.getContext().getUri().getBaseUri(),
+                session.getContext().getRealm().getName());
+        String issuer = origin == CredentialOrigin.CURRENT_REALM ? realmIssuer : trust.issuerNamespace();
+        if (origin == CredentialOrigin.EXTERNAL && realmIssuer.equals(issuer)) {
+            throw new VerificationException("External credential must not claim the current realm issuer");
+        }
+        return new VerifiedCredential(
+                CredentialIdentity.forCredential(credentialReq, origin, issuer, subject), namespaces);
     }
 
     @Override

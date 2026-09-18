@@ -26,12 +26,18 @@ public interface CredentialVerifier {
     CredentialVerifier copy();
 
     /**
-     * Verifies a credential presentation and returns its verified issuer and claims.
+     * Verifies a credential presentation and returns the verified claims.
      *
      * <p>The orchestrator uses the returned claims for binding-rule evaluation and
-     * subject extraction.
+     * subject/username extraction.
      *
-     * @return the verified credential result
+     * <p>An ordinary primary login credential exposes its verified
+     * {@link CredentialIdentity} (issuer and subject) when a stable external identity applies;
+     * the identity is {@code null} when none applies (e.g. mdoc {@code x5c} trust without an
+     * explicit issuer, or session-bound presentations). A missing identity never fails
+     * verification; the user-import path refuses import without one.
+     *
+     * @return the verified claims (fully disclosed if needed)
      * @throws VerificationException if cryptographic verification, claim requirements, or trust
      *         policy validation fails
      */

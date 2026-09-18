@@ -18,9 +18,10 @@ import org.keycloak.models.KeycloakSession;
  * {@link TrustAnchorProvider} suitable for mDoc issuer PKIX verification.
  *
  * <p>Unlike its SD-JWT counterpart {@code SdJwtTrustedIssuerResolver}, this resolver
- * does <strong>not</strong> support self-trust: mDoc issuers are always external to
- * the Keycloak realm, so a trust anchor (either pinned certificates or an EUDI PID
- * trust list) must be configured.
+ * does <strong>not</strong> use the SD-JWT self-trust policy: mDoc trust is established through
+ * X.509 or the EUDI trust list. Credential origin is classified separately after verification, so
+ * an mdoc signed by a current-realm key is still recognized as current-realm. A trust anchor
+ * (either pinned certificates or an EUDI PID trust list) must still be configured.
  *
  * <p>Supported policy types:
  * <ul>
@@ -59,7 +60,7 @@ public final class TrustedProviderResolver {
                             credential.getId(), trust.getType()));
             }
         }
-        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors));
+        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors), null);
     }
 
     private static boolean requiresIssuerEnforcement(CredentialRequirement credential) {
@@ -77,7 +78,8 @@ public final class TrustedProviderResolver {
         if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
             if (TrustPolicy.X5C.equals(trust.getType())) {
                 return new ResolvedMdocTrust(
-                        new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())));
+                        new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())),
+                        requirePinnedIssuerNamespace(trust, credential.getId()));
             }
             throw new IllegalStateException(String.format(
                     "Primary credential '%s' uses an unsupported issuer trust policy: %s",
@@ -87,12 +89,27 @@ public final class TrustedProviderResolver {
         try {
             EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider(session).resolve(trust);
             TrustedPidProvider provider = snapshot.resolveIssuer(trust.getIssuer());
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(provider.trustedCertificates()));
+            return new ResolvedMdocTrust(
+                    new StaticTruststoreProvider(provider.trustedCertificates()), trust.getIssuer());
         } catch (EudiPidTrustException e) {
             throw new VerificationException(
                     String.format("Credential '%s' could not resolve its configured PID Provider", credential.getId()),
                     e);
         }
+    }
+
+    /**
+     * Returns the stable issuer namespace for pinned X.509 trust: the explicitly configured
+     * {@code trust.issuer}, or {@code null} when none is configured. A certificate thumbprint alone
+     * is not a stable long-term identity (leaf certificates rotate and a shared root can serve
+     * several issuers); a {@code null} namespace means the credential exposes no external identity
+     * and user import for it fails closed, while verification itself is unaffected.
+     */
+    private static String requirePinnedIssuerNamespace(TrustPolicy trust, String credentialId) {
+        if (trust.getIssuer() == null || trust.getIssuer().isBlank()) {
+            return null;
+        }
+        return trust.getIssuer();
     }
 
     private static List<X509Certificate> resolveX5cAnchors(TrustPolicy trust, String credentialId) {
@@ -114,5 +131,11 @@ public final class TrustedProviderResolver {
         }
     }
 
-    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors) {}
+    /**
+     * Resolved trust anchors plus, for primary login credentials, the stable issuer namespace that
+     * identified them. The namespace is {@code null} when the credential does not enforce an issuer
+     * (supporting credentials and session-bound presentations), which therefore expose no external
+     * identity.
+     */
+    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors, String issuerNamespace) {}
 }

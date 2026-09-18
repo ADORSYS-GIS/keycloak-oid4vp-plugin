@@ -18,10 +18,6 @@ The OpenID4VP client identifier prefixes recognized in this plugin's model are:
 Only `x509_san_dns` (default in the authenticator UI) and `x509_hash` are implemented for building `client_id` here:
 `x509_san_dns` uses the Keycloak frontend hostname; `x509_hash` uses a hash derived from the configured `accessCertificate`.
 
-|`queryLanguage`
-|`dcql_query`
-|Which credential query shape is placed in the signed request object: `dcql_query`, `dif_presentation_exchange`, or `all` (both).
-
 |`responseMode`
 |`direct_post.jwt`
 a|How the wallet delivers the authorization response to the verifier `response_uri`.
@@ -48,6 +44,9 @@ When set to `post`, the wallet sends an HTTP POST to the request URI with `walle
 |`eyJ...`
 |Opaque registration certificate value exposed via `verifier_info`.
 |===
+
+Credential requests use DCQL. The current authenticator has no `queryLanguage` setting and does
+not generate DIF Presentation Exchange requests.
 
 === Supported credential formats
 
@@ -393,7 +392,6 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
 {
   "config": {
     "clientIdentifierPrefix": "x509_hash",
-    "queryLanguage": "dcql_query",
     "responseMode": "direct_post.jwt",
     "requestUriMethod": "get",
     "customUrlScheme": "openid4vp://",
@@ -457,6 +455,133 @@ The `trust` configuration is omitted for brevity — refer to the trust configur
 ----
 
 For SD-JWT VC credentials, use standard claim names such as `sub` — no namespace is needed.
+
+=== Importing users previously unknown to Keycloak
+
+By default the plugin only authenticates users that already exist: a verified credential whose
+identity matches no user is rejected with `UNKNOWN_USER`. When third-party-issued credentials
+should also work for first-time users, enable opt-in user import.
+
+[IMPORTANT]
+====
+Import is disabled by default. Enabling it lets fully verified external credentials create
+Keycloak users. Never enable it without understanding the rules below.
+====
+
+==== How resolution works
+
+* Trust validation and issuer origin are separate. `self`, `x5c`, or the EUDI trust list first
+  decides whether the credential is accepted. The plugin then treats it as issued *by this realm*
+  only when the verified SD-JWT signature or mdoc issuer-certificate key matches a signing key
+  owned by the realm. It resolves the configured subject directly as a Keycloak user ID, without
+  any federated link. If that user no longer exists, login fails — a deleted account is never
+  recreated.
+* Any other credential is *external*: the plugin computes an issuer-qualified external ID from
+  the verified issuer and the configured subject, and looks up the federated link
+  (`<import-alias>.<external-ID>`). A linked user authenticates; an unknown identity is created
+  only when import is enabled.
+* An external subject is never looked up as a local user ID, username, or email. Username and
+  email matches never link or merge accounts: a collision fails the login instead.
+
+[IMPORTANT]
+====
+For a credential issued by this realm, configure `subjectClaim` and the matching OID4VC issuance
+mapper so the claim contains the Keycloak internal user ID (`UserModel.ID`). Keycloak may map the
+subject to the username by default; the plugin deliberately has no username fallback.
+====
+
+[IMPORTANT]
+====
+Use distinct credential-issuance signing keys for each realm. Reusing an issuance key across realms
+makes cryptographic origin ambiguous, particularly for mdoc because it has no signed `iss` claim
+equivalent to SD-JWT. Retain rotated realm keys for as long as credentials signed by them must still
+be recognized as locally issued.
+====
+
+==== Authenticator settings
+
+[cols="1,1,2"]
+|===
+|Setting |Default |Purpose
+
+|`importUnknownUsers`
+|`false`
+|Master switch. Allows creation of a fully verified but unknown external user.
+
+|`importIdentityProviderAlias`
+|`oid4vp-import`
+|Alias of the hidden import identity provider used for the federated link namespace, the sync
+mode, and the attribute mappers.
+|===
+
+==== The hidden import identity provider
+
+Import provisioning is an explicit realm administrator action: create an identity provider with
+
+* provider ID `oid4vp-plugin-import` (deliberately distinct from upstream Keycloak's `oid4vp`
+  broker, so both can coexist),
+* alias `oid4vp-import` (or update `importIdentityProviderAlias` to match),
+* display name e.g. `OpenID4VP Plugin Import`,
+* hidden on the login page.
+
+The provider is a configuration and mapping host only. It sends no authorization requests and
+verifies no presentations; direct login through it is unsupported. It owns the link namespace,
+the sync mode, and the attribute mappers described next. Keep it hidden so Keycloak does not show
+users a login option that cannot start an authentication flow. Direct access is also rejected by
+the provider, so hiding it is not the security boundary. Do not expect an automatic realm migration
+to create it.
+
+==== Attribute mappers
+
+Configure `oid4vp-user-attribute-idp-mapper` entries on the import provider to stage credential
+claims onto username, email, first/last name, or custom attributes. Each mapper takes a claim
+path (`address.locality`, `nationalities[]`, `nationalities[0]`; escape literal dots as `\.`)
+and a user attribute name (`username`, `email`, `firstName`, `lastName`, or any custom name).
+
+Map every value required by the realm's user-profile configuration. Common mappings are
+username, email, first name, and last name, but the exact required set belongs to the realm.
+When no username mapper is configured, the plugin derives an initial username from the verified
+subject. mDoc claims arrive namespaced, so their paths include the (escaped) namespace, e.g.
+`org\.iso.18013.5.1.email`.
+
+Only this plugin-owned mapper runs while staging values before the user exists. Third-party
+mappers stay out of staging; their import and update hooks still run once the user exists.
+
+==== Supported issuer sources
+
+The verified issuer must come from information covered by successful trust verification:
+
+* SD-JWT VC: the signed `iss` value after signature and trust validation.
+* mDoc with an EUDI PID trust list: the configured PID Provider identifier whose scoped
+  certificates validated the document.
+* mDoc with pinned X.509 trust: an explicit non-blank `trust.issuer`, with anchors dedicated
+  to that issuer. A certificate thumbprint alone is not a stable identity (leaf certificates
+  rotate, a shared root can serve several issuers). Without a stable namespace, import for
+  that credential fails closed — verification itself is unaffected.
+
+==== Sync mode and relogin
+
+Linked users keep working after import is disabled; the flag gates creation only. On relogin
+the staged claims resynchronize broker-style: basic attributes heal only in `FORCE` sync mode,
+and each mapper's effective mode decides (`IMPORT` keeps imported values untouched).
+Configure the mode explicitly: a mapper without one falls back to legacy update behavior.
+
+Credential-to-user binding rules are checked against the linked user's current Keycloak
+attributes before synchronization. If a binding fails, authentication is rejected and no mapped
+attribute is updated. For a new external user, the same rules are checked against the staged
+mapper values before the user is created.
+
+If the hidden provider is later removed or disabled, an already-linked user can still authenticate, but
+claim synchronization is skipped. If the provider is available and synchronization starts, a mapper or
+provider-hook failure fails the login and rolls back the attempted changes.
+
+[NOTE]
+====
+There is no interactive profile review, email verification, duplicate confirmation, or account
+linking in prompt-free import. Collisions fail instead of offering confirmation, and invalid
+or incomplete staged profiles refuse the import. Interactive First Broker Login screens are a
+separate future feature.
+====
 
 === SPRIN-D wallet sandbox profile (example)
 
