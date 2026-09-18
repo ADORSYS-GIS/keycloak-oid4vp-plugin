@@ -462,6 +462,37 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
+    public void testAllowMissingStatusClaim_acceptsPayloadWithoutStatus() throws Exception {
+        JsonNode tokenPayload = JsonSerialization.mapper.readTree("{}");
+        validator.validate(tokenPayload, true);
+    }
+
+    @Test
+    public void testAllowMissingStatusClaim_rejectsPayloadWithoutStatusWhenDisabled() throws Exception {
+        JsonNode tokenPayload = JsonSerialization.mapper.readTree("{}");
+        ReferencedTokenValidationException exception =
+                assertThrows(ReferencedTokenValidationException.class, () -> validator.validate(tokenPayload, false));
+        assertTrue(
+                exception.getMessage().contains("Missing required 'status' claim"),
+                "Exception should mention missing status claim");
+    }
+
+    @Test
+    public void testAllowMissingStatusClaim_stillRejectsRevokedStatus() {
+        ReferencedTokenValidationException exception = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> validator.validate(credentialPayload(0, TEST_STATUS_LIST_URI), true));
+        assertTrue(
+                exception.getMessage().contains("Token status is not valid"),
+                "Exception should mention invalid status. Actual: " + exception.getMessage());
+    }
+
+    @Test
+    public void testAllowMissingStatusClaim_acceptsValidStatus() throws Exception {
+        validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), true);
+    }
+
+    @Test
     public void testStatusListJwt_RejectsMissingSub() {
         StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
                 {
@@ -638,5 +669,41 @@ public class ReferencedTokenValidatorTest {
     public void testStatusListJwt_AcceptsValidClaims() throws Exception {
         // status[1] = 0 (VALID) in the 1-bit test vector
         validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI));
+    }
+
+    @Test
+    public void testStatusListJwt_AcceptsOptionalAggregationUri() throws Exception {
+        // The IETF OAuth Status List draft defines aggregation_uri as an optional field.
+        // A conformant issuer may include it; the validator must not reject it.
+        StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
+                {
+                    "sub": "%s",
+                    "iat": 1700000000,
+                    "exp": 9999999999,
+                    "status_list": {
+                        "bits": 1,
+                        "lst": "%s",
+                        "aggregation_uri": "https://status.example.com/aggregation"
+                    }
+                }
+                """.formatted(uri, IETF_1BIT_TEST_VECTOR));
+        ReferencedTokenValidator val = new ReferencedTokenValidator(fetcher);
+        val.validate(credentialPayload(1, TEST_STATUS_LIST_URI));
+    }
+
+    @Test
+    public void testCredentialStatus_AcceptsOptionalUnknownFields() throws Exception {
+        // The credential's status_list object (mapped to StatusInfo) may carry optional
+        // unknown fields; the validator must not reject them.
+        ObjectNode statusList = JsonSerialization.mapper.createObjectNode();
+        statusList.put("idx", 1);
+        statusList.put("uri", TEST_STATUS_LIST_URI);
+        statusList.put("aggregation_uri", "https://status.example.com/aggregation");
+        ObjectNode status = JsonSerialization.mapper.createObjectNode();
+        status.set("status_list", statusList);
+        ObjectNode payload = JsonSerialization.mapper.createObjectNode();
+        payload.set("status", status);
+
+        validator.validate(payload);
     }
 }
