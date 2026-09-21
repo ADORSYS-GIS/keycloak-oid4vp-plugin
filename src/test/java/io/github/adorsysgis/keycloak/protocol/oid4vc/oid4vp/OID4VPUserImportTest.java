@@ -45,6 +45,7 @@ import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
 import org.keycloak.representations.idm.FederatedIdentityRepresentation;
 import org.keycloak.representations.idm.IdentityProviderMapperRepresentation;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
+import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
 /**
@@ -57,6 +58,8 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
     private static final String TEST_ISSUER = TEST_MDOC_ISSUER;
     private static final String EXTERNAL_SUBJECT = "external-sub-1";
     private static final String EXTERNAL_SDJWT_SUBJECT = "external-sdjwt-sub";
+    private static final String EMAIL_AS_USERNAME_SUBJECT = "email-as-username-sub";
+    private static final String EMAIL_AS_USERNAME = "email-login@example.com";
     private static final String IMPORT_PROFILE_ID = "mdoc-import";
     private static final String SDJWT_IMPORT_PROFILE_ID = "sdjwt-import";
 
@@ -71,6 +74,8 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
                 "race-sub",
                 "bind-sub",
                 "realm-spoof-sub",
+                EMAIL_AS_USERNAME_SUBJECT,
+                EMAIL_AS_USERNAME,
                 EXTERNAL_SDJWT_SUBJECT)) {
             for (UserRepresentation user : getActiveTestRealmResource().users().search(username)) {
                 getActiveTestRealmResource().users().get(user.getId()).remove();
@@ -116,6 +121,76 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
                         .orElse(null);
         assertNotNull(link, "Imported user must carry a federated identity link");
         assertEquals(externalId, link.getUserId());
+    }
+
+    @Test
+    public void shouldUseMappedEmailAsUsername_WhenRealmRequiresEmailAsUsername() throws Exception {
+        createImportIdpWithMappers();
+
+        withRegistrationEmailAsUsername(
+                true,
+                () -> withAuthenticationProfile(
+                        importProfileJson(),
+                        IMPORT_PROFILE_ID,
+                        Map.of(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true"),
+                        (apiFlow, requestObject) -> {
+                            String mdocToken =
+                                    presentExternalMdoc(requestObject, EMAIL_AS_USERNAME_SUBJECT, EMAIL_AS_USERNAME);
+
+                            TestOpts opts = TestOpts.getDefault()
+                                    .setAuthContext(apiFlow.authContext())
+                                    .setCodeVerifier(apiFlow.codeVerifier())
+                                    .setShouldForceUnencryptedResponse(true)
+                                    .setTestUser(EMAIL_AS_USERNAME);
+                            testSuccessfulAuthenticationWithVPTokenMap(
+                                    Map.of(AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+                        }));
+
+        List<UserRepresentation> users = getActiveTestRealmResource().users().search(EMAIL_AS_USERNAME);
+        assertEquals(1, users.size(), "Exactly one email-as-username user must be imported");
+        assertEquals(EMAIL_AS_USERNAME, users.getFirst().getUsername());
+        assertEquals(EMAIL_AS_USERNAME, users.getFirst().getEmail());
+        assertEquals("Ada", users.getFirst().getFirstName());
+        assertEquals("Lovelace", users.getFirst().getLastName());
+
+        FederatedIdentityRepresentation link =
+                usersFederatedLink(users.getFirst().getId());
+        assertNotNull(link, "The email-as-username user must carry a federated identity link");
+        assertEquals(CredentialIdentity.externalId(TEST_ISSUER, EMAIL_AS_USERNAME_SUBJECT), link.getUserId());
+    }
+
+    @Test
+    public void shouldNotImportWithoutEmail_WhenRealmRequiresEmailAsUsername() throws Exception {
+        createImportIdpWithNameMappers();
+
+        withRegistrationEmailAsUsername(
+                true,
+                () -> withAuthenticationProfile(
+                        importProfileJsonWithoutEmail(),
+                        IMPORT_PROFILE_ID,
+                        Map.of(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true"),
+                        (apiFlow, requestObject) -> {
+                            String mdocToken =
+                                    presentExternalMdocWithoutEmail(requestObject, EMAIL_AS_USERNAME_SUBJECT);
+
+                            TestOpts opts = TestOpts.getDefault()
+                                    .setAuthContext(apiFlow.authContext())
+                                    .setCodeVerifier(apiFlow.codeVerifier())
+                                    .setShouldForceUnencryptedResponse(true);
+                            testFailingAuthenticationWithVPTokenMap(
+                                    Map.of(AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID, mdocToken),
+                                    opts,
+                                    HttpStatus.SC_UNAUTHORIZED,
+                                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                                    "Staged user data violates the realm user profile");
+                        }));
+
+        assertTrue(
+                getActiveTestRealmResource()
+                        .users()
+                        .search(EMAIL_AS_USERNAME_SUBJECT)
+                        .isEmpty(),
+                "A credential without the required email must not create a user or link");
     }
 
     @Test
@@ -968,6 +1043,20 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
         }
     }
 
+    private void withRegistrationEmailAsUsername(boolean enabled, ThrowingRunnable test) throws Exception {
+        RealmRepresentation originalRealm = getActiveTestRealmResource().toRepresentation();
+        try {
+            RealmRepresentation updatedRealm = getActiveTestRealmResource().toRepresentation();
+            updatedRealm.setRegistrationEmailAsUsername(enabled);
+            getActiveTestRealmResource().update(updatedRealm);
+            test.run();
+        } finally {
+            RealmRepresentation restoredRealm = getActiveTestRealmResource().toRepresentation();
+            restoredRealm.setRegistrationEmailAsUsername(originalRealm.isRegistrationEmailAsUsername());
+            getActiveTestRealmResource().update(restoredRealm);
+        }
+    }
+
     private String presentMdoc(RequestObject requestObject, Map<String, Object> claims) throws Exception {
         return MdocBaseTest.buildMdocVpToken(requestObject, claims, MdocBaseTest.DOC_TYPE);
     }
@@ -998,6 +1087,11 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
 
     private String importProfileJson() {
         return importProfileJson(IMPORT_PROFILE_ID, TEST_ISSUER);
+    }
+
+    private String importProfileJsonWithoutEmail() {
+        return importProfileJson()
+                .replace(", \"{namespace}/email\"".replace("{namespace}", MdocBaseTest.NAMESPACE), "");
     }
 
     private String importProfileJsonWithEmailBinding() {
@@ -1068,6 +1162,15 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
         createImportIdp();
 
         addClaimMapper("external-email", namespacedClaim("email"), "email");
+        addNameMappers();
+    }
+
+    private void createImportIdpWithNameMappers() {
+        createImportIdp();
+        addNameMappers();
+    }
+
+    private void addNameMappers() {
         addClaimMapper("external-first-name", namespacedClaim("given_name"), "firstName");
         addClaimMapper("external-last-name", namespacedClaim("family_name"), "lastName");
     }
@@ -1138,6 +1241,12 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
         Map<String, Object> claims = Map.of(
                 MdocBaseTest.NAMESPACE,
                 Map.of("sub", subject, "email", email, "given_name", "Ada", "family_name", "Lovelace"));
+        return MdocBaseTest.buildMdocVpToken(requestObject, claims, MdocBaseTest.DOC_TYPE);
+    }
+
+    private String presentExternalMdocWithoutEmail(RequestObject requestObject, String subject) throws Exception {
+        Map<String, Object> claims =
+                Map.of(MdocBaseTest.NAMESPACE, Map.of("sub", subject, "given_name", "Ada", "family_name", "Lovelace"));
         return MdocBaseTest.buildMdocVpToken(requestObject, claims, MdocBaseTest.DOC_TYPE);
     }
 }

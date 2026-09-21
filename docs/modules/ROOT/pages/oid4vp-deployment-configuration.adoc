@@ -617,6 +617,20 @@ When no username mapper is configured, the plugin derives an initial username fr
 subject. mDoc claims arrive namespaced, so their paths include the (escaped) namespace, e.g.
 `org\.iso.18013.5.1.email`.
 
+[IMPORTANT]
+====
+Keycloak's default declarative user profile commonly requires `email` in the registration context.
+Some authoritative credentials, including the German PID, cannot supply an email. In that case,
+explicitly make email optional in the target realm before enabling import; do not synthesize an
+email or weaken the plugin's staged-profile validation. The plugin validates the complete staged
+account before any user or federated link is written and fails closed when a required value is
+missing.
+
+Custom mapped attributes must also be declared in the realm user-profile schema, or the realm's
+unmanaged-attribute policy must permit the intended management context. For read-only inspection
+through administrative interfaces, `ADMIN_VIEW` is the narrow unmanaged-attribute setting.
+====
+
 Only this plugin-owned mapper runs while staging values before the user exists. Third-party
 mappers stay out of staging; their import and update hooks still run once the user exists.
 
