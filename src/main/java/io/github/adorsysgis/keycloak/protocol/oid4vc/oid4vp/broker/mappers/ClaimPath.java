@@ -53,13 +53,6 @@ public class ClaimPath {
     }
 
     /**
-     * The parsed steps, for consumers that transform the path rather than resolve it.
-     */
-    public List<Step> steps() {
-        return steps;
-    }
-
-    /**
      * Parses the dot notation path, returning {@code null} if it is not well formed.
      */
     public static ClaimPath parse(String path) {

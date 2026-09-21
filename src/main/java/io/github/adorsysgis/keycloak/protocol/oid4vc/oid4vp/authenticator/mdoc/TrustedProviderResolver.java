@@ -79,7 +79,7 @@ public final class TrustedProviderResolver {
             if (TrustPolicy.X5C.equals(trust.getType())) {
                 return new ResolvedMdocTrust(
                         new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())),
-                        requirePinnedIssuerNamespace(trust, credential.getId()));
+                        pinnedIssuerNamespace(trust));
             }
             throw new IllegalStateException(String.format(
                     "Primary credential '%s' uses an unsupported issuer trust policy: %s",
@@ -105,7 +105,7 @@ public final class TrustedProviderResolver {
      * several issuers); a {@code null} namespace means the credential exposes no external identity
      * and user import for it fails closed, while verification itself is unaffected.
      */
-    private static String requirePinnedIssuerNamespace(TrustPolicy trust, String credentialId) {
+    private static String pinnedIssuerNamespace(TrustPolicy trust) {
         if (trust.getIssuer() == null || trust.getIssuer().isBlank()) {
             return null;
         }
@@ -133,9 +133,9 @@ public final class TrustedProviderResolver {
 
     /**
      * Resolved trust anchors plus, for primary login credentials, the stable issuer namespace that
-     * identified them. The namespace is {@code null} when the credential does not enforce an issuer
-     * (supporting credentials and session-bound presentations), which therefore expose no external
-     * identity.
+     * identified them. The namespace is {@code null} for supporting credentials, session-bound
+     * presentations, and pinned-X.509 primary credentials without an explicit issuer; those paths
+     * expose no external identity.
      */
     public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors, String issuerNamespace) {}
 }

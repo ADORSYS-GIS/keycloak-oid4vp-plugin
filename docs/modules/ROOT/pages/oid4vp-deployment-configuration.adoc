@@ -563,14 +563,6 @@ mapper so the claim contains the Keycloak internal user ID (`UserModel.ID`). Key
 subject to the username by default; the plugin deliberately has no username fallback.
 ====
 
-[IMPORTANT]
-====
-Use distinct credential-issuance signing keys for each realm. Reusing an issuance key across realms
-makes cryptographic origin ambiguous, particularly for mdoc because it has no signed `iss` claim
-equivalent to SD-JWT. Retain rotated realm keys for as long as credentials signed by them must still
-be recognized as locally issued.
-====
-
 ==== Authenticator settings
 
 [cols="1,1,2"]

@@ -29,6 +29,7 @@ import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderMapperSyncMode;
+import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
@@ -48,6 +49,7 @@ class OID4VPUserSynchronizationTest {
     private final OID4VPUserProvisioner provisioner = new OID4VPUserProvisioner();
     private final KeycloakSession session = mock(KeycloakSession.class);
     private final RealmModel realm = mock(RealmModel.class);
+    private final IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
     private final UserModel user = mock(UserModel.class);
     private final OID4VPAuthenticator authenticator = mock(OID4VPAuthenticator.class);
     private final OID4VPAuthenticator.Context context = mock(OID4VPAuthenticator.Context.class);
@@ -57,6 +59,7 @@ class OID4VPUserSynchronizationTest {
     void setUp() {
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
+        when(session.identityProviders()).thenReturn(identityProviders);
         when(sessionFactory.getProviderFactory(eq(IdentityProviderMapper.class), anyString()))
                 .thenReturn(new OID4VPUserAttributeMapper());
         when(user.getUsername()).thenReturn("external-sub-1");
@@ -68,7 +71,7 @@ class OID4VPUserSynchronizationTest {
     void forceSyncModeHealsMappedAttributes() throws Exception {
         // IdP-level FORCE heals basic attributes; the mapper-level FORCE delegate applies mapped
         // values on top, so the first name write lands twice with the same value.
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS))
+        when(identityProviders.getMappersByAliasStream(ALIAS))
                 .thenReturn(Stream.of(
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE),
                         mapper("first-name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.FORCE)));
@@ -88,7 +91,7 @@ class OID4VPUserSynchronizationTest {
     void importSyncModeKeepsImportedAttributes() throws Exception {
         // Mapper-level IMPORT: changed claims leave the user untouched (no basics healing either,
         // since the IdP mode is IMPORT, not FORCE).
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS))
+        when(identityProviders.getMappersByAliasStream(ALIAS))
                 .thenReturn(Stream.of(
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.IMPORT),
                         mapper("first-name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.IMPORT)));
@@ -106,8 +109,7 @@ class OID4VPUserSynchronizationTest {
     void unsetMapperSyncModeFallsBackToLegacyUpdate() throws Exception {
         // Without an explicit mode the mapper behaves as LEGACY and applies claim updates, exactly
         // like the broker. Administrators wanting IMPORT stability must configure it explicitly.
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS))
-                .thenReturn(Stream.of(emailMapper(), firstNameMapper()));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(emailMapper(), firstNameMapper()));
         JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\",\"given_name\":\"New\"}");
         OID4VPImportIdentityProviderConfig config = providerConfig(IdentityProviderSyncMode.IMPORT);
 
@@ -129,7 +131,7 @@ class OID4VPUserSynchronizationTest {
                 () -> provisioner.verifyAndSynchronizeExistingUser(request(claims), config, "external-id", user));
 
         assertEquals(UserProvisioningException.Reason.BINDING, error.getReason());
-        verify(realm, never()).getIdentityProviderMappersByAliasStream(ALIAS);
+        verify(identityProviders, never()).getMappersByAliasStream(ALIAS);
         verify(user, never()).setEmail(anyString());
         verify(user, never()).setFirstName(anyString());
     }
@@ -141,7 +143,7 @@ class OID4VPUserSynchronizationTest {
         IdentityProviderMapperModel failing =
                 mapper("failing-mapper", "ignored", "ignored", IdentityProviderMapperSyncMode.FORCE);
         failing.setIdentityProviderMapper("failing-mapper");
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS)).thenReturn(Stream.of(firstName, failing));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(firstName, failing));
 
         IdentityProviderMapper failingMapper = mock(IdentityProviderMapper.class);
         when(session.getKeycloakSessionFactory().getProviderFactory(IdentityProviderMapper.class, "failing-mapper"))
@@ -165,7 +167,7 @@ class OID4VPUserSynchronizationTest {
 
     private OID4VPUserProvisioner.Request request(JsonNode claims) {
         return new OID4VPUserProvisioner.Request(
-                session, realm, authenticator, context, null, primaryRequirement, null, claims, Map.of(), null);
+                session, realm, authenticator, context, null, primaryRequirement, claims, Map.of(), null);
     }
 
     private OID4VPImportIdentityProviderConfig providerConfig(IdentityProviderSyncMode syncMode) {

@@ -4,7 +4,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import java.util.Map;
-import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
@@ -17,14 +16,10 @@ import org.keycloak.models.RealmModel;
  */
 public class OID4VPImportConfig {
 
-    private static final Logger logger = Logger.getLogger(OID4VPImportConfig.class);
-
     private final boolean importUnknownUsers;
     private final String importIdentityProviderAlias;
 
     public OID4VPImportConfig(AuthenticatorConfigModel authConfig) {
-        logger.debugf("Collecting user import properties");
-
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
 
@@ -56,7 +51,7 @@ public class OID4VPImportConfig {
      *     administrator exactly what to fix.
      */
     public OID4VPImportIdentityProviderConfig resolveImportIdentityProvider(KeycloakSession session, RealmModel realm) {
-        IdentityProviderModel model = realm.getIdentityProviderByAlias(importIdentityProviderAlias);
+        IdentityProviderModel model = session.identityProviders().getByAlias(importIdentityProviderAlias);
         if (model == null) {
             throw new IllegalStateException(String.format(
                     "User import is enabled but no identity provider with alias '%s' exists in realm '%s'."

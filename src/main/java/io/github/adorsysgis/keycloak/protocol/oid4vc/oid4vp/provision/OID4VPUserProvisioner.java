@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.provision;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProvider;
@@ -57,7 +56,6 @@ public class OID4VPUserProvisioner {
             OID4VPAuthenticator.Context context,
             OID4VPImportConfig importConfig,
             CredentialRequirement primaryRequirement,
-            CredentialIdentity identity,
             JsonNode primaryClaims,
             Map<CredentialRequirement, JsonNode> supporting,
             EventBuilder event) {}
@@ -88,7 +86,7 @@ public class OID4VPUserProvisioner {
         String alias = idpConfig.getAlias();
         // The mapper stream is one-shot; materialize it once and share it between staging and hooks.
         List<IdentityProviderMapperModel> mappers =
-                realm.getIdentityProviderMappersByAliasStream(alias).toList();
+                session.identityProviders().getMappersByAliasStream(alias).toList();
 
         // Fail closed when a concurrent import linked the identity while staging ran.
         if (findLinkedUser(session, realm, alias, externalId) != null) {
@@ -190,7 +188,8 @@ public class OID4VPUserProvisioner {
         RealmModel realm = request.realm();
         OID4VPImportIdentityProvider provider = new OID4VPImportIdentityProvider(session, idpConfig);
         // The mapper stream is one-shot; materialize it once and share it between staging and hooks.
-        List<IdentityProviderMapperModel> mappers = realm.getIdentityProviderMappersByAliasStream(idpConfig.getAlias())
+        List<IdentityProviderMapperModel> mappers = session.identityProviders()
+                .getMappersByAliasStream(idpConfig.getAlias())
                 .toList();
         BrokeredIdentityContext brokerContext = rebuildBrokeredContext(
                 session, realm, provider, idpConfig, externalId, request.primaryClaims(), user, mappers);

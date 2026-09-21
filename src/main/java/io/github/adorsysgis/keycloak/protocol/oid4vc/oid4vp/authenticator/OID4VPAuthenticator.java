@@ -437,7 +437,6 @@ public class OID4VPAuthenticator implements Authenticator {
                 ctx,
                 importConfig,
                 primaryCredentialReq,
-                identity,
                 presentation.primaryCredential().claims(),
                 supporting,
                 ctx.authenticationFlowContext().getEvent());
@@ -506,7 +505,7 @@ public class OID4VPAuthenticator implements Authenticator {
 
     private void failProvisioning(Context ctx, UserProvisioningException e) {
         switch (e.getReason()) {
-            case NOT_CONFIGURED, NO_IDENTITY -> {
+            case NOT_CONFIGURED -> {
                 logger.warnf("User import refused: %s", e.getMessage());
                 failDenyingAuthenticatingUser(ctx);
             }
@@ -701,7 +700,7 @@ public class OID4VPAuthenticator implements Authenticator {
 
     /**
      * A resolved user plus work that is safe only after user-attribute bindings pass. New imports
-     * carry {@code userAttributeBindingsApplied=true} because those checks ran against staged data
+     * do not require another direct binding check because those checks ran against staged data
      * before creation.
      */
     @FunctionalInterface

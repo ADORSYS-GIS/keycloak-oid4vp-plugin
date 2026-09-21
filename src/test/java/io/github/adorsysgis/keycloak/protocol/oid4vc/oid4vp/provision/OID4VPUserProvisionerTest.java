@@ -16,7 +16,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOrigin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
@@ -40,6 +39,7 @@ import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderMapperSyncMode;
 import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.KeycloakTransactionManager;
@@ -65,17 +65,19 @@ class OID4VPUserProvisionerTest {
     private final KeycloakSession session = mock(KeycloakSession.class);
     private final RealmModel realm = mock(RealmModel.class);
     private final UserProvider users = mock(UserProvider.class);
+    private final IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
     private final UserProfileProvider profiles = mock(UserProfileProvider.class);
     private final UserProfile profile = mock(UserProfile.class);
 
     @BeforeEach
     void setUp() {
         when(session.users()).thenReturn(users);
+        when(session.identityProviders()).thenReturn(identityProviders);
         when(session.getProvider(UserProfileProvider.class)).thenReturn(profiles);
         when(profiles.create(any(UserProfileContext.class), any(Map.class))).thenReturn(profile);
         when(realm.getName()).thenReturn("test");
-        when(realm.getIdentityProviderByAlias(ALIAS)).thenReturn(idpModel());
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS)).thenReturn(Stream.of());
+        when(identityProviders.getByAlias(ALIAS)).thenReturn(idpModel());
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of());
     }
 
     @Test
@@ -136,7 +138,7 @@ class OID4VPUserProvisionerTest {
 
     @Test
     void missingProviderFailsWithoutWriting() {
-        when(realm.getIdentityProviderByAlias(ALIAS)).thenReturn(null);
+        when(identityProviders.getByAlias(ALIAS)).thenReturn(null);
         OID4VPUserProvisioner.Request request = request(JsonSerialization.mapper.createObjectNode());
 
         UserProvisioningException e =
@@ -206,7 +208,7 @@ class OID4VPUserProvisionerTest {
     @Test
     void missingMapperFailsBeforeWriting() {
         IdentityProviderMapperModel mapperModel = mapperModel("missing-mapper");
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         when(sessionFactory.getProviderFactory(IdentityProviderMapper.class, "missing-mapper"))
@@ -221,7 +223,7 @@ class OID4VPUserProvisionerTest {
     @Test
     void mapperFailureAfterWritingMarksRollbackOnly() {
         IdentityProviderMapperModel mapperModel = mapperModel("failing-mapper");
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         IdentityProviderMapper mapper = mock(IdentityProviderMapper.class);
@@ -282,7 +284,7 @@ class OID4VPUserProvisionerTest {
     void mapperFailureDuringLinkedUserSynchronizationMarksRollbackOnly() {
         IdentityProviderMapperModel mapperModel = mapperModel("failing-mapper");
         mapperModel.setSyncMode(IdentityProviderMapperSyncMode.FORCE);
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         IdentityProviderMapper mapper = mock(IdentityProviderMapper.class);
@@ -327,7 +329,7 @@ class OID4VPUserProvisionerTest {
         mapperModel.setIdentityProviderMapper(OID4VPUserAttributeMapper.PROVIDER_ID);
         mapperModel.setConfig(
                 Map.of(AbstractOID4VPClaimMapper.CLAIM, "email", OID4VPUserAttributeMapper.USER_ATTRIBUTE, "email"));
-        when(realm.getIdentityProviderMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         when(sessionFactory.getProviderFactory(eq(IdentityProviderMapper.class), anyString()))
@@ -366,7 +368,6 @@ class OID4VPUserProvisionerTest {
                 context,
                 new OID4VPImportConfig(authConfig),
                 primary,
-                new CredentialIdentity(CredentialOrigin.EXTERNAL, "https://issuer.example.com", "sub-1"),
                 primaryClaims,
                 Map.of(),
                 null);

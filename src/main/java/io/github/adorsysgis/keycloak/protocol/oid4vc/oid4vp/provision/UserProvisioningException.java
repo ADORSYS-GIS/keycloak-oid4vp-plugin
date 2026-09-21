@@ -10,8 +10,6 @@ public class UserProvisioningException extends Exception {
     public enum Reason {
         /** The import provider is missing, disabled, or has an unexpected provider id. */
         NOT_CONFIGURED,
-        /** The credential exposes no stable external identity, so there is nothing to link. */
-        NO_IDENTITY,
         /** A binding rule rejects the staged values. */
         BINDING,
         /** The staged profile violates the realm user-profile rules. */

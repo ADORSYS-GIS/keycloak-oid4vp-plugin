@@ -15,6 +15,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 
@@ -67,7 +68,7 @@ class OID4VPImportConfigTest {
                 authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true")));
 
         OID4VPImportIdentityProviderConfig resolved =
-                config.resolveImportIdentityProvider(mock(KeycloakSession.class), realmWith(idpModel(true, true)));
+                config.resolveImportIdentityProvider(sessionWith(idpModel(true, true)), realm());
 
         assertEquals(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, resolved.getAlias());
     }
@@ -75,13 +76,8 @@ class OID4VPImportConfigTest {
     @Test
     void missingProviderFailsClearly() {
         OID4VPImportConfig config = new OID4VPImportConfig(null);
-        RealmModel realm = mock(RealmModel.class);
-        when(realm.getIdentityProviderByAlias(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT))
-                .thenReturn(null);
-
         IllegalStateException e = assertThrows(
-                IllegalStateException.class,
-                () -> config.resolveImportIdentityProvider(mock(KeycloakSession.class), realm));
+                IllegalStateException.class, () -> config.resolveImportIdentityProvider(sessionWith(null), realm()));
         assertTrue(e.getMessage().contains("no identity provider"));
     }
 
@@ -91,8 +87,7 @@ class OID4VPImportConfigTest {
 
         IllegalStateException e = assertThrows(
                 IllegalStateException.class,
-                () -> config.resolveImportIdentityProvider(
-                        mock(KeycloakSession.class), realmWith(idpModel(true, false))));
+                () -> config.resolveImportIdentityProvider(sessionWith(idpModel(true, false)), realm()));
         assertTrue(e.getMessage().contains("disabled"));
     }
 
@@ -103,8 +98,7 @@ class OID4VPImportConfigTest {
         model.setProviderId("oidc");
 
         IllegalStateException e = assertThrows(
-                IllegalStateException.class,
-                () -> config.resolveImportIdentityProvider(mock(KeycloakSession.class), realmWith(model)));
+                IllegalStateException.class, () -> config.resolveImportIdentityProvider(sessionWith(model), realm()));
         assertTrue(e.getMessage().contains(OID4VPImportIdentityProviderFactory.PROVIDER_ID));
     }
 
@@ -122,9 +116,17 @@ class OID4VPImportConfigTest {
         return model;
     }
 
-    private static RealmModel realmWith(IdentityProviderModel idp) {
+    private static KeycloakSession sessionWith(IdentityProviderModel idp) {
+        IdentityProviderStorageProvider storage = mock(IdentityProviderStorageProvider.class);
+        when(storage.getByAlias(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT))
+                .thenReturn(idp);
+        KeycloakSession session = mock(KeycloakSession.class);
+        when(session.identityProviders()).thenReturn(storage);
+        return session;
+    }
+
+    private static RealmModel realm() {
         RealmModel realm = mock(RealmModel.class);
-        when(realm.getIdentityProviderByAlias(idp.getAlias())).thenReturn(idp);
         when(realm.getName()).thenReturn("test");
         return realm;
     }
