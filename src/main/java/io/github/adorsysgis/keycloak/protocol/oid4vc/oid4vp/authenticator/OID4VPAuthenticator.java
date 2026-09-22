@@ -594,6 +594,7 @@ public class OID4VPAuthenticator implements Authenticator {
             case "given_name", "firstName" -> user.getFirstName();
             case "family_name", "lastName" -> user.getLastName();
             case "username", "preferred_username" -> user.getUsername();
+            case "email" -> user.getEmail();
             default -> user.getFirstAttribute(userAttribute);
         };
     }
@@ -608,6 +609,7 @@ public class OID4VPAuthenticator implements Authenticator {
             case "given_name", "firstName" -> staged.getFirstName();
             case "family_name", "lastName" -> staged.getLastName();
             case "username", "preferred_username" -> staged.getModelUsername();
+            case "email" -> staged.getEmail();
             default -> {
                 List<String> values = staged.getAttributes().get(userAttribute);
                 yield values == null || values.isEmpty() ? null : values.get(0);

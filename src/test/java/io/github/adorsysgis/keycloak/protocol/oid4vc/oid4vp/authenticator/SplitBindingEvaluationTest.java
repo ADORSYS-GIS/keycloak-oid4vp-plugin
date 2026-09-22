@@ -23,6 +23,7 @@ import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserModel;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -109,6 +110,33 @@ class SplitBindingEvaluationTest {
         assertEquals("Credential 'sup' failed binding rule 'claim_equals_user_attribute'", error.getMessage());
     }
 
+    @Test
+    void userAttributeBindingReadsStagedEmailProperty() {
+        CredentialRequirement supporting = supportingWithUserAttributeBinding("email", "email");
+        JsonNode claims = JsonSerialization.mapper.createObjectNode().put("email", "ada@example.com");
+        when(supportingVerifier.readClaim(claims, "email")).thenReturn("ada@example.com");
+        BrokeredIdentityContext staged = stagedContext("Lovelace");
+        staged.setEmail("ada@example.com");
+
+        assertDoesNotThrow(() -> authenticator.applyUserAttributeBindings(
+                context(supporting),
+                supporting,
+                claims,
+                attribute -> OID4VPAuthenticator.readStagedUserAttribute(staged, attribute)));
+    }
+
+    @Test
+    void userAttributeBindingReadsExistingUserEmailProperty() {
+        CredentialRequirement supporting = supportingWithUserAttributeBinding("email", "email");
+        JsonNode claims = JsonSerialization.mapper.createObjectNode().put("email", "ada@example.com");
+        when(supportingVerifier.readClaim(claims, "email")).thenReturn("ada@example.com");
+        UserModel user = mock(UserModel.class);
+        when(user.getEmail()).thenReturn("ada@example.com");
+
+        assertDoesNotThrow(
+                () -> authenticator.applyUserAttributeBindings(context(supporting), supporting, claims, user));
+    }
+
     private OID4VPAuthenticator.Context context(CredentialRequirement supporting) {
         CredentialRequirement primary = new CredentialRequirement().setId("pid").setRole(CredentialRole.PRIMARY);
         AuthenticationProfile profile =
@@ -135,13 +163,18 @@ class SplitBindingEvaluationTest {
     }
 
     private static CredentialRequirement supportingWithUserAttributeBinding() {
+        return supportingWithUserAttributeBinding("family_name", "family_name");
+    }
+
+    private static CredentialRequirement supportingWithUserAttributeBinding(
+            String credentialClaim, String userAttribute) {
         return new CredentialRequirement()
                 .setId("sup")
                 .setRole(CredentialRole.SUPPORTING)
                 .setBinding(List.of(new BindingRule()
                         .setType(BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE)
-                        .setCredentialClaim("family_name")
-                        .setUserAttribute("family_name")));
+                        .setCredentialClaim(credentialClaim)
+                        .setUserAttribute(userAttribute)));
     }
 
     private static CredentialRequirement supportingWithBothRuleTypes() {
