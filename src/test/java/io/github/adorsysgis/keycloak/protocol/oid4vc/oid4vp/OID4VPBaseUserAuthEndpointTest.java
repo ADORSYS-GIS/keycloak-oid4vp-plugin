@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
@@ -18,6 +20,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Processing
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ECTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
+import jakarta.ws.rs.NotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.interfaces.ECPublicKey;
@@ -39,6 +42,8 @@ import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jwk.JWKParser;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
+import org.keycloak.representations.idm.FederatedIdentityRepresentation;
+import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -48,6 +53,16 @@ import org.keycloak.util.JsonSerialization;
 public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakTest {
 
     public static final String TEST_REALM_OID4VP_AUTH_CONFIG_ID = "oid4vp-auth-config-id";
+
+    /**
+     * Alias of the hidden user-import identity provider used by import tests.
+     */
+    protected static final String IMPORT_IDP_ALIAS = "oid4vp-import";
+
+    /**
+     * Stable issuer namespace used by mDoc import tests with pinned X.509 trust.
+     */
+    protected static final String TEST_MDOC_ISSUER = "test-mdoc-issuer";
 
     protected final SdJwtVPTestUtils sdJwtVPTestUtils = new SdJwtVPTestUtils(keycloak, getActiveTestRealm());
 
@@ -567,6 +582,52 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
     protected void updateAuthenticatorConfig(AuthenticatorConfigRepresentation config) {
         getActiveTestRealmResource().flows().updateAuthenticatorConfig(config.getId(), config);
+    }
+
+    /**
+     * Creates the hidden user-import identity provider. Tests that pre-link users or import
+     * unknown users must call this first; there is no automatic realm migration.
+     */
+    protected void createImportIdp() {
+        IdentityProviderRepresentation idp = new IdentityProviderRepresentation();
+        idp.setAlias(IMPORT_IDP_ALIAS);
+        idp.setProviderId(OID4VPImportIdentityProviderFactory.PROVIDER_ID);
+        idp.setEnabled(true);
+        getActiveTestRealmResource().identityProviders().create(idp);
+    }
+
+    /**
+     * Removes the hidden user-import identity provider if present.
+     */
+    protected void removeImportIdp() {
+        try {
+            getActiveTestRealmResource()
+                    .identityProviders()
+                    .get(IMPORT_IDP_ALIAS)
+                    .remove();
+        } catch (NotFoundException e) {
+        }
+    }
+
+    /**
+     * Links an existing user to an external identity, as a previous user import would have.
+     */
+    protected void linkExternalUser(String userId, String issuer, String subject) {
+        FederatedIdentityRepresentation link = new FederatedIdentityRepresentation();
+        link.setIdentityProvider(IMPORT_IDP_ALIAS);
+        link.setUserId(CredentialIdentity.externalId(issuer, subject));
+        link.setUserName(subject);
+        getActiveTestRealmResource().users().get(userId).addFederatedIdentity(IMPORT_IDP_ALIAS, link);
+    }
+
+    /**
+     * Removes the external identity link of a user if present.
+     */
+    protected void unlinkExternalUser(String userId) {
+        try {
+            getActiveTestRealmResource().users().get(userId).removeFederatedIdentity(IMPORT_IDP_ALIAS);
+        } catch (NotFoundException e) {
+        }
     }
 
     public record TestFlowData(

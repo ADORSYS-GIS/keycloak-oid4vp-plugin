@@ -446,6 +446,8 @@ public class OID4VPProfileConfig {
 
         if (isMdoc) {
             validatePrimaryMdocIssuerPolicy(profile, credential);
+        } else {
+            validatePrimarySdJwtIssuerPolicy(profile, credential);
         }
 
         ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
@@ -461,6 +463,18 @@ public class OID4VPProfileConfig {
             String required = "subjectClaim='" + subjectRef + "'";
             throw new IllegalStateException("OpenID4VP primary credential must request identity claims " + required
                     + ": " + profile.getId() + "/" + credential.getId());
+        }
+    }
+
+    private static void validatePrimarySdJwtIssuerPolicy(
+            AuthenticationProfile profile, CredentialRequirement credential) {
+        List<TrustPolicy> trustPolicies = credential.getTrust();
+        long selfTrustPolicies = trustPolicies.stream()
+                .filter(policy -> TrustPolicy.SELF.equals(policy.getType()))
+                .count();
+        if (selfTrustPolicies > 0 && trustPolicies.size() != 1) {
+            throw new IllegalStateException("Primary SD-JWT must not combine self-trust with external trust policies: "
+                    + profile.getId() + "/" + credential.getId());
         }
     }
 

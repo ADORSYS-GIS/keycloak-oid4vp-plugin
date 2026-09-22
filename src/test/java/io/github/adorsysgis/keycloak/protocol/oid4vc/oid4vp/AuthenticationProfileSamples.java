@@ -91,6 +91,47 @@ public final class AuthenticationProfileSamples {
     }
 
     /**
+     * Like {@link #mdocPrimary()} but declares the stable issuer namespace required to resolve
+     * the presented subject as an external federated identity (user import or a pre-linked user).
+     */
+    public static ProfileSample mdocPrimaryWithIssuer(String issuer) {
+        return mdocPrimaryWithAnchorAndIssuer(MdocBaseTest.getIssuerCertBase64(), issuer);
+    }
+
+    /**
+     * Like {@link #mdocPrimaryWithAnchor(String)} but declares the stable issuer namespace
+     * required to resolve the presented subject as an external federated identity.
+     */
+    public static ProfileSample mdocPrimaryWithAnchorAndIssuer(String anchorBase64, String issuer) {
+        String json = """
+                [
+                  {
+                    "id": "{mdocPrimaryProfileId}",
+                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["{docType}"],
+                        "claims": ["{namespace}/sub", "{namespace}/username"],
+                        "subjectClaim": "{namespace}/sub",
+                        "trust": [
+                          { "type": "x5c", "anchors": ["{anchorBase64}"], "issuer": "{issuer}" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{mdocPrimaryProfileId}", MDOC_PRIMARY_PROFILE_ID)
+                .replace("{docType}", MdocBaseTest.DOC_TYPE)
+                .replace("{namespace}", MdocBaseTest.NAMESPACE)
+                .replace("{anchorBase64}", anchorBase64)
+                .replace("{issuer}", issuer);
+        return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
+    }
+
+    /**
      * Like {@link #mdocPrimary()} but secures the primary mDoc credential with the given x5c
      * trust anchor (Base64) instead of the default issuer certificate.
      */
@@ -200,6 +241,39 @@ public final class AuthenticationProfileSamples {
                 .replace("{docType}", MdocBaseTest.DOC_TYPE)
                 .replace("{namespace}", MdocBaseTest.NAMESPACE)
                 .replace("{anchorBase64}", anchorBase64);
+        return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
+    }
+
+    /**
+     * Like {@link #mdocPrimaryWithMdlIdentity()} but declares the stable issuer namespace required
+     * to resolve the presented subject as an external federated identity.
+     */
+    public static ProfileSample mdocPrimaryWithMdlIdentityAndIssuer(String issuer) {
+        String json = """
+                [
+                  {
+                    "id": "{mdocPrimaryProfileId}",
+                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["{docType}"],
+                        "claims": ["{namespace}/document_number", "{namespace}/given_name"],
+                        "subjectClaim": "{namespace}/document_number",
+                        "trust": [
+                          { "type": "x5c", "anchors": ["{anchorBase64}"], "issuer": "{issuer}" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{mdocPrimaryProfileId}", MDOC_PRIMARY_PROFILE_ID)
+                .replace("{docType}", MdocBaseTest.DOC_TYPE)
+                .replace("{namespace}", MdocBaseTest.NAMESPACE)
+                .replace("{anchorBase64}", MdocBaseTest.getIssuerCertBase64())
+                .replace("{issuer}", issuer);
         return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
     }
 

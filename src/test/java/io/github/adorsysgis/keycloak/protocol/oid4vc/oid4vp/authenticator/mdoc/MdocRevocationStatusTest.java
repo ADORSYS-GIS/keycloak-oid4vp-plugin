@@ -36,15 +36,22 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.KeyManager;
+import org.keycloak.models.KeycloakContext;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakUriInfo;
+import org.keycloak.models.RealmModel;
 import org.keycloak.util.JsonSerialization;
 
 /** Verifies the mDoc verifier path forwards status validation to {@link ReferencedTokenValidator}. */
@@ -186,6 +193,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
         var context = mock(AuthenticationFlowContext.class);
         when(context.getAuthenticatorConfig()).thenReturn(authConfig);
+        attachRealmContext(context);
 
         return new ContextBuilder()
                 .authenticationFlowContext(context)
@@ -232,6 +240,7 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
         var context = mock(AuthenticationFlowContext.class);
         when(context.getAuthenticatorConfig()).thenReturn(authConfig);
+        attachRealmContext(context);
 
         var credential = new CredentialRequirement()
                 .setId("test")
@@ -293,6 +302,23 @@ public class MdocRevocationStatusTest extends MdocBaseTest {
 
     private String buildMdocWithStatus(int idx) throws Exception {
         return buildMdocWithStatus(idx, opts);
+    }
+
+    private static void attachRealmContext(AuthenticationFlowContext flowContext) {
+        KeycloakSession session = mock(KeycloakSession.class);
+        KeycloakContext context = mock(KeycloakContext.class);
+        RealmModel realm = mock(RealmModel.class);
+        KeyManager keys = mock(KeyManager.class);
+        KeycloakUriInfo uri = mock(KeycloakUriInfo.class);
+
+        when(flowContext.getSession()).thenReturn(session);
+        when(session.getContext()).thenReturn(context);
+        when(session.keys()).thenReturn(keys);
+        when(context.getRealm()).thenReturn(realm);
+        when(context.getUri()).thenReturn(uri);
+        when(realm.getName()).thenReturn("test");
+        when(uri.getBaseUri()).thenReturn(URI.create("https://keycloak.example.com/"));
+        when(keys.getKeysStream(realm)).thenAnswer(ignored -> Stream.empty());
     }
 
     private String buildMdocWithStatus(int idx, MdocVerificationOpts mdocOpts) throws Exception {

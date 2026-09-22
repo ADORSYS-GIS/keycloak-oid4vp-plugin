@@ -51,6 +51,7 @@ public class MdocVerificationContext {
     private final CBORPairList mdoc;
     private JsonNode verifiedMsoPayload;
     private CBORTaggedItem deviceNameSpaces;
+    private X509Certificate verifiedIssuerCertificate;
 
     public MdocVerificationContext(String mdoc) throws VerificationException {
         try {
@@ -130,9 +131,15 @@ public class MdocVerificationContext {
             if (!new COSEVerifier(leaf.getPublicKey()).verify(issuerAuth)) {
                 throw new COSEException("COSE signature verification failed");
             }
+            this.verifiedIssuerCertificate = leaf;
         } catch (COSEException e) {
             throw new VerificationException("Issuer signature could not be verified", e);
         }
+    }
+
+    /** Returns the PKIX-validated leaf certificate that verified the issuer COSE signature. */
+    public X509Certificate getVerifiedIssuerCertificate() {
+        return verifiedIssuerCertificate;
     }
 
     /**

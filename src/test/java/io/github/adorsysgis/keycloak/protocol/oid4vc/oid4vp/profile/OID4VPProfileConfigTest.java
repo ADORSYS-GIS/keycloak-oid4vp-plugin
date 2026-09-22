@@ -341,6 +341,38 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldRejectPrimarySdJwtThatMixesSelfAndExternalTrust() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "credentialTypes": ["main-vct"],
+                        "claims": ["sub"],
+                        "trust": [
+                          { "type": "self" },
+                          {
+                            "type": "eudi_pid_trust_list",
+                            "trustListUrl": "https://example.eu/pid-providers.lote",
+                            "trustListSigningCertificate": "base64-der-signing-certificate",
+                            "issuer": "external-issuer"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertTrue(error.getMessage().contains("must not combine self-trust with external trust policies"));
+    }
+
+    @Test
     void shouldRejectCredentialIdentityPrimaryMissingConfiguredIdentityClaim() {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(PROFILES_CONFIG, """
