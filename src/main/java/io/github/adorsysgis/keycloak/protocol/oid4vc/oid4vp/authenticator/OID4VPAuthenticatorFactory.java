@@ -80,6 +80,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     public static final String ALLOW_MISSING_STATUS_CLAIM_CONFIG = "allowMissingStatusClaim";
     public static final boolean ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT = false;
 
+    public static final String STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG = "statusListTrustMaterialIdps";
+
     static {
         ProviderConfigProperty property;
 
@@ -242,6 +244,14 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
                         + "`status` claim as valid. This option never revokes credentials; it only changes whether "
                         + "credentials without any status claim are treated as invalid. Such credentials cannot "
                         + "participate in revocation via the Token Status List mechanism because they have no status to revoke.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG);
+        property.setLabel("Status List trust-material identity providers");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setHelpText(
+                "Optional comma-separated aliases of trust-material identity providers used to validate Status List JWT x5c chains. When configured, only these providers establish trust. When empty, the Keycloak global truststore is used for backward compatibility.");
         configProperties.add(property);
     }
 

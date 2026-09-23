@@ -5,6 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.TestCryptoUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.TrustedStatusListJwtFetcher;
@@ -31,12 +36,16 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.keycloak.broker.provider.TrustMaterialResolver;
+import org.keycloak.common.VerificationException;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
+import org.keycloak.crypto.X509CertificateChainValidator;
+import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.truststore.TruststoreProvider;
@@ -76,7 +85,6 @@ public class TrustedStatusListJwtFetcherTest {
 
         fetcher = new MockTrustedStatusListJwtFetcher(session);
 
-        // Set validation time to be within status-list JWT validity
         // Set validation time to be within new test certificates validity
         int currentTime = (int) (System.currentTimeMillis() / 1000);
         int targetTime = currentTime + 3600; // 1 hour from now
@@ -93,6 +101,53 @@ public class TrustedStatusListJwtFetcherTest {
         String uri = "https://example.com/status-list-jwt";
         setupTrustForStatusListJwt();
         assertDoesNotThrow(() -> fetcher.fetchStatusListJwt(uri));
+    }
+
+    @Test
+    public void shouldAcceptStatusListTrustedByConfiguredProvider() throws Exception {
+        String aliases = "status-list-trust";
+        TrustMaterialResolver resolver = mock(TrustMaterialResolver.class);
+        JWK trustedKey = trustedKeyForStatusListJwt();
+        when(resolver.validateX509Chain(eq(session), eq(aliases), any(), anyList(), eq(Algorithm.ES256)))
+                .thenReturn(trustedKey);
+        TrustedStatusListJwtFetcher providerFetcher = new MockTrustedStatusListJwtFetcher(session, resolver);
+
+        assertDoesNotThrow(() -> providerFetcher.fetchStatusListJwt("https://example.com/status-list-jwt", aliases));
+    }
+
+    @Test
+    public void shouldNotFallBackToGlobalTruststoreWhenProvidersAreConfigured() throws Exception {
+        String aliases = "missing-x509-trust";
+        setupTrustForStatusListJwt();
+        TrustMaterialResolver resolver = mock(TrustMaterialResolver.class);
+        when(resolver.validateX509Chain(eq(session), eq(aliases), any(), anyList(), eq(Algorithm.ES256)))
+                .thenReturn(null);
+        TrustedStatusListJwtFetcher providerFetcher = new MockTrustedStatusListJwtFetcher(session, resolver);
+
+        ReferencedTokenValidationException error = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> providerFetcher.fetchStatusListJwt("https://example.com/status-list-jwt", aliases));
+
+        assertEquals("No configured trust-material identity provider supplied X.509 trust", error.getMessage());
+    }
+
+    @Test
+    public void shouldRejectProviderValidationFailureWithoutTruststoreFallback() throws Exception {
+        String aliases = "untrusted-provider";
+        setupTrustForStatusListJwt();
+        TrustMaterialResolver resolver = mock(TrustMaterialResolver.class);
+        when(resolver.validateX509Chain(eq(session), eq(aliases), any(), anyList(), eq(Algorithm.ES256)))
+                .thenThrow(new VerificationException("untrusted chain"));
+        TrustedStatusListJwtFetcher providerFetcher = new MockTrustedStatusListJwtFetcher(session, resolver);
+
+        ReferencedTokenValidationException error = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> providerFetcher.fetchStatusListJwt("https://example.com/status-list-jwt", aliases));
+
+        assertEquals(
+                "Status List JWT x5c validation through configured trust-material providers failed",
+                error.getMessage());
+        assertEquals("untrusted chain", error.getCause().getMessage());
     }
 
     @Test
@@ -278,6 +333,14 @@ public class TrustedStatusListJwtFetcherTest {
         setupTrustForJwt(statusListJwt);
     }
 
+    private JWK trustedKeyForStatusListJwt() throws Exception {
+        String jwt = MockTrustedStatusListJwtFetcher.exampleStatusListJwt("/tokenstatus/status-list-jwt.txt");
+        JWSInput jws = new JWSInput(jwt);
+        List<X509Certificate> chain = X509CertificateChainValidator.decodeCertificateChain(
+                jws.getHeader().getX5c());
+        return X509CertificateChainValidator.toJwk(chain.getFirst(), Algorithm.ES256, chain);
+    }
+
     private void setupTrustForJwt(String jwt) throws Exception {
         JWSInput jws = new JWSInput(jwt);
         List<String> x5cList = jws.getHeader().getX5c();
@@ -317,6 +380,10 @@ public class TrustedStatusListJwtFetcherTest {
     public static class MockTrustedStatusListJwtFetcher extends TrustedStatusListJwtFetcher {
         public MockTrustedStatusListJwtFetcher(KeycloakSession session) {
             super(session);
+        }
+
+        public MockTrustedStatusListJwtFetcher(KeycloakSession session, TrustMaterialResolver trustMaterialResolver) {
+            super(session, trustMaterialResolver);
         }
 
         @Override

@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -490,6 +493,19 @@ public class ReferencedTokenValidatorTest {
     @Test
     public void testAllowMissingStatusClaim_acceptsValidStatus() throws Exception {
         validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), true);
+    }
+
+    @Test
+    public void testConfiguredTrustMaterialAliasesAreForwardedToFetcher() throws Exception {
+        String aliases = "status-trust-a,status-trust-b";
+        StatusListJwtFetcher fetcher = mock(StatusListJwtFetcher.class);
+        when(fetcher.fetchStatusListJwt(TEST_STATUS_LIST_URI, aliases))
+                .thenReturn(buildValidStatusListJwt(TEST_STATUS_LIST_URI));
+        ReferencedTokenValidator configuredValidator = new ReferencedTokenValidator(fetcher);
+
+        configuredValidator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), false, aliases);
+
+        verify(fetcher).fetchStatusListJwt(TEST_STATUS_LIST_URI, aliases);
     }
 
     @Test

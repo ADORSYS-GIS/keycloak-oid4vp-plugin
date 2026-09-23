@@ -19,4 +19,18 @@ public interface StatusListJwtFetcher {
      * @throws ReferencedTokenValidationException if any issue arises or HTTP status not OK (200)
      */
     String fetchStatusListJwt(String uri) throws ReferencedTokenValidationException;
+
+    /**
+     * Fetches a Status List JWT and validates it with the selected trust-material identity
+     * providers. Implementations that do not perform trust validation retain their existing
+     * behavior through this default method.
+     *
+     * @param uri the URI to fetch
+     * @param trustMaterialProviderAliases comma-separated identity-provider aliases, or
+     *     {@code null} to use the legacy trust mechanism
+     */
+    default String fetchStatusListJwt(String uri, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
+        return fetchStatusListJwt(uri);
+    }
 }
