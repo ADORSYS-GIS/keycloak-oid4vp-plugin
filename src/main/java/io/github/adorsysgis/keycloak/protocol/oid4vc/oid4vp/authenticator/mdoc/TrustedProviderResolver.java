@@ -10,20 +10,20 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorPro
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.keycloak.common.VerificationException;
+import org.keycloak.crypto.KeyUse;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.models.KeycloakSession;
 
 /**
  * Resolves the trust policy configured on a {@link CredentialRequirement} into a
  * {@link TrustAnchorProvider} suitable for mDoc issuer PKIX verification.
  *
- * <p>Unlike its SD-JWT counterpart {@code SdJwtTrustedIssuerResolver}, this resolver
- * does <strong>not</strong> support self-trust: mDoc issuers are always external to
- * the Keycloak realm, so a trust anchor (either pinned certificates or an EUDI PID
- * trust list) must be configured.
- *
  * <p>Supported policy types:
  * <ul>
+ *     <li>{@link TrustPolicy#SELF} — pins the leaf certificates of the realm's enabled
+ *     signing keys, allowing mDocs issued by this Keycloak realm.</li>
  *     <li>{@link TrustPolicy#X5C} — uses the parsed {@code anchors} certificates as
  *     trust roots.</li>
  *     <li>{@link TrustPolicy#EUDI_PID_TRUST_LIST} — for a primary login credential,
@@ -38,9 +38,8 @@ public final class TrustedProviderResolver {
     public static ResolvedMdocTrust resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
-            throw new IllegalStateException(String.format(
-                    "Credential '%s' does not configure any trust policy. Self-trust is not supported for mDoc.",
-                    credential.getId()));
+            throw new IllegalStateException(
+                    String.format("Credential '%s' does not configure any trust policy.", credential.getId()));
         }
 
         if (requiresIssuerEnforcement(credential)) {
@@ -49,14 +48,10 @@ public final class TrustedProviderResolver {
 
         List<X509Certificate> trustAnchors = new ArrayList<>();
         for (TrustPolicy trust : credential.getTrust()) {
-            switch (trust.getType()) {
-                case TrustPolicy.X5C -> trustAnchors.addAll(resolveX5cAnchors(trust, credential.getId()));
-                case TrustPolicy.EUDI_PID_TRUST_LIST ->
-                    trustAnchors.addAll(resolveEudiPidTrustList(session, trust, credential.getId()));
-                default ->
-                    throw new IllegalStateException(String.format(
-                            "Credential '%s' uses an unsupported trust policy: %s",
-                            credential.getId(), trust.getType()));
+            if (TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
+                trustAnchors.addAll(resolveEudiPidTrustList(session, trust, credential.getId()));
+            } else {
+                trustAnchors.addAll(resolveStaticAnchors(session, trust, credential.getId()));
             }
         }
         return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors));
@@ -75,13 +70,8 @@ public final class TrustedProviderResolver {
 
         TrustPolicy trust = credential.getTrust().getFirst();
         if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
-            if (TrustPolicy.X5C.equals(trust.getType())) {
-                return new ResolvedMdocTrust(
-                        new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())));
-            }
-            throw new IllegalStateException(String.format(
-                    "Primary credential '%s' uses an unsupported issuer trust policy: %s",
-                    credential.getId(), trust.getType()));
+            List<X509Certificate> anchors = resolveStaticAnchors(session, trust, credential.getId());
+            return new ResolvedMdocTrust(new StaticTruststoreProvider(anchors));
         }
 
         try {
@@ -93,6 +83,42 @@ public final class TrustedProviderResolver {
                     String.format("Credential '%s' could not resolve its configured PID Provider", credential.getId()),
                     e);
         }
+    }
+
+    private static List<X509Certificate> resolveStaticAnchors(
+            KeycloakSession session, TrustPolicy trust, String credentialId) {
+        return switch (trust.getType()) {
+            case TrustPolicy.SELF -> resolveSelfAnchors(session, credentialId);
+            case TrustPolicy.X5C -> resolveX5cAnchors(trust, credentialId);
+            default ->
+                throw new IllegalStateException(String.format(
+                        "Credential '%s' uses an unsupported trust policy: %s", credentialId, trust.getType()));
+        };
+    }
+
+    private static List<X509Certificate> resolveSelfAnchors(KeycloakSession session, String credentialId) {
+        List<X509Certificate> anchors = session.keys()
+                .getKeysStream(session.getContext().getRealm())
+                .filter(key -> KeyUse.SIG.equals(key.getUse()))
+                .filter(key -> key.getStatus() != null && key.getStatus().isEnabled())
+                .map(TrustedProviderResolver::leafCertificate)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (anchors.isEmpty()) {
+            throw new IllegalStateException(String.format(
+                    "Credential '%s' uses self trust but the realm has no enabled signing key with a certificate.",
+                    credentialId));
+        }
+        return anchors;
+    }
+
+    private static X509Certificate leafCertificate(KeyWrapper key) {
+        if (key.getCertificateChain() != null && !key.getCertificateChain().isEmpty()) {
+            return key.getCertificateChain().getFirst();
+        }
+        return key.getCertificate();
     }
 
     private static List<X509Certificate> resolveX5cAnchors(TrustPolicy trust, String credentialId) {

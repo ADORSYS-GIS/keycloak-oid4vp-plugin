@@ -85,6 +85,34 @@ public final class AuthenticationProfileSamples {
         return new ProfileSample(json, DUAL_PROFILE_ID);
     }
 
+    /** Single primary mso_mdoc credential issued by a signing key of the same Keycloak realm. */
+    public static ProfileSample selfTrustedMdocPrimary() {
+        String json = """
+                [
+                  {
+                    "id": "{mdocPrimaryProfileId}",
+                    "displayCta": { "en": "Sign in with a self-issued mDoc" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["{docType}"],
+                        "claims": ["{namespace}/sub", "{namespace}/username"],
+                        "subjectClaim": "{namespace}/sub",
+                        "trust": [
+                          { "type": "self" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{mdocPrimaryProfileId}", MDOC_PRIMARY_PROFILE_ID)
+                .replace("{docType}", MdocBaseTest.DOC_TYPE)
+                .replace("{namespace}", MdocBaseTest.NAMESPACE);
+        return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
+    }
+
     /** Single primary mso_mdoc credential secured by an x5c trust anchor. */
     public static ProfileSample mdocPrimary() {
         return mdocPrimaryWithAnchor(MdocBaseTest.getIssuerCertBase64());
