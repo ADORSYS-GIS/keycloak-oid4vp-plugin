@@ -194,7 +194,7 @@ Trust policies define how the issuer of a credential is verified.
 { "type": "self" }
 ----
 
-Used for credentials issued by the same Keycloak instance. Not supported for mDoc credentials.
+Used for credentials issued by the same Keycloak realm. For SD-JWT VC, verification uses the realm's enabled signing keys. For mDoc, the leaf certificates of enabled realm signing keys are used as trust anchors. Active and passive keys are trusted so credentials remain valid across normal key rotation; disabled keys are not trusted.
 
 .X.509 certificate trust (`x5c`)
 [source,json]

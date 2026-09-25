@@ -645,11 +645,10 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
-    void shouldRejectSelfTrustForMdocCredential() {
-        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
-                        "trust": [{ "type": "self" }]
-                        """));
-        assertTrue(e.getMessage().contains("Self-trust is not supported for mDoc credentials"));
+    void shouldAcceptSelfTrustForMdocCredential() {
+        assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
+                "trust": [{ "type": "self" }]
+                """));
     }
 
     @Test

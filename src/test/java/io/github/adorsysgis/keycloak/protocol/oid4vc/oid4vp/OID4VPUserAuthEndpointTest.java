@@ -28,6 +28,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListTestServer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
+import jakarta.ws.rs.core.Response;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.security.cert.CertificateFactory;
@@ -50,9 +51,12 @@ import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
+import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.keys.KeyProvider;
 import org.keycloak.representations.JsonWebToken;
+import org.keycloak.representations.idm.ComponentRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -387,6 +391,62 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
             testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
         });
+    }
+
+    @Test
+    public void shouldAuthenticateSuccessfully_WithSelfTrustedMdoc() throws Exception {
+        String keyProviderId = installSelfTrustedMdocRealmKey();
+        try {
+            withAuthenticationProfile(
+                    AuthenticationProfileSamples.selfTrustedMdocPrimary(), (apiFlow, requestObject) -> {
+                        Map<String, Object> claims = Map.of(
+                                MdocBaseTest.NAMESPACE,
+                                Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+                        String mdocToken = presentMdoc(requestObject, claims);
+
+                        TestOpts opts = TestOpts.getDefault()
+                                .setAuthContext(apiFlow.authContext())
+                                .setCodeVerifier(apiFlow.codeVerifier())
+                                .setShouldForceUnencryptedResponse(true);
+
+                        testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+                    });
+        } finally {
+            getActiveTestRealmResource().components().removeComponent(keyProviderId);
+        }
+    }
+
+    @Test
+    public void shouldRejectForeignIssuer_WithSelfTrustedMdoc() throws Exception {
+        String keyProviderId = installSelfTrustedMdocRealmKey();
+        try {
+            withAuthenticationProfile(
+                    AuthenticationProfileSamples.selfTrustedMdocPrimary(), (apiFlow, requestObject) -> {
+                        Map<String, Object> claims = Map.of(
+                                MdocBaseTest.NAMESPACE,
+                                Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+                        String mdocToken = MdocBaseTest.buildMdocVpToken(
+                                requestObject,
+                                claims,
+                                MdocBaseTest.DOC_TYPE,
+                                MdocBaseTest.getIssuerKeyRef2(),
+                                MdocBaseTest.getIssuerCertRef2());
+
+                        TestOpts opts = TestOpts.getDefault()
+                                .setAuthContext(apiFlow.authContext())
+                                .setCodeVerifier(apiFlow.codeVerifier())
+                                .setShouldForceUnencryptedResponse(true);
+
+                        testFailingAuthenticationWithVPTokenMap(
+                                Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
+                                opts,
+                                HttpStatus.SC_UNAUTHORIZED,
+                                ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                                "Certificate chain validation failed");
+                    });
+        } finally {
+            getActiveTestRealmResource().components().removeComponent(keyProviderId);
+        }
     }
 
     @Test
@@ -997,6 +1057,40 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
         return sdJwtVPTestUtils.presentSdJwt(
                 sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+    }
+
+    private String installSelfTrustedMdocRealmKey() throws Exception {
+        ComponentRepresentation component = new ComponentRepresentation();
+        component.setName("mdoc-self-trust-test-key");
+        component.setParentId(getActiveTestRealmResource().toRepresentation().getId());
+        component.setProviderType(KeyProvider.class.getName());
+        component.setProviderId("ecdsa-generated");
+
+        MultivaluedHashMap<String, String> config = new MultivaluedHashMap<>();
+        config.putSingle("algorithm", "ES256");
+        config.putSingle("priority", "1000");
+        config.putSingle("active", "false");
+        config.putSingle("enabled", "true");
+        config.putSingle("ecdsaEllipticCurveKey", "P-256");
+        config.putSingle(
+                "ecdsaPrivateKey",
+                Base64.getEncoder()
+                        .encodeToString(
+                                MdocBaseTest.getIssuerKeyRef1().toECPrivateKey().getEncoded()));
+        config.putSingle(
+                "ecdsaPublicKey",
+                Base64.getEncoder()
+                        .encodeToString(
+                                MdocBaseTest.getIssuerKeyRef1().toECPublicKey().getEncoded()));
+        config.putSingle("certificate", MdocBaseTest.getIssuerCertBase64());
+        component.setConfig(config);
+
+        try (Response response = getActiveTestRealmResource().components().add(component)) {
+            assertEquals(HttpStatus.SC_CREATED, response.getStatus());
+            assertNotNull(response.getLocation());
+            String path = response.getLocation().getPath();
+            return path.substring(path.lastIndexOf('/') + 1);
+        }
     }
 
     private String presentMdoc(RequestObject requestObject, Map<String, Object> claims) throws Exception {
