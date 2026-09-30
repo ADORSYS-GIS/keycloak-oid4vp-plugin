@@ -131,7 +131,7 @@ public class OID4VCIssuerMetadataProviderTest {
                     new HashMap<>(Optional.ofNullable(rep.getAttributes()).orElseGet(Map::of));
 
             try {
-                for (String invalidValue : List.of("not-valid-json", "[{}]")) {
+                for (String invalidValue : List.of("not-valid-json", "[{}]", "[]")) {
                     attributes.put(OID4VCIssuerMetadataProvider.ATTR_ISSUER_INFO, invalidValue);
                     rep.setAttributes(attributes);
                     realm.update(rep);

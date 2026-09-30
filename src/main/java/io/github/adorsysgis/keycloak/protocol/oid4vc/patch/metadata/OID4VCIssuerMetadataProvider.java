@@ -118,7 +118,7 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
                 logger.warnf("Invalid %s realm attribute. Skipping issuer_info.", ATTR_ISSUER_INFO);
                 return null;
             }
-            return issuerInfo;
+            return issuerInfo.isEmpty() ? null : issuerInfo;
         } catch (IOException e) {
             logger.error("Failed to parse issuer_info metadata", e);
             return null;
