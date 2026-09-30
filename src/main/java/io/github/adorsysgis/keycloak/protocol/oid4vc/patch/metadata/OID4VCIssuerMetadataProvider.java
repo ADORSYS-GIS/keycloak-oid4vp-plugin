@@ -1,8 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.io.IOException;
 import java.util.Collections;
@@ -26,6 +28,7 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
 
     public static final String ATTR_DISPLAY = "oid4vci.display";
     public static final String ATTR_PRESENTATION_DURING_ISSUANCE = "oid4vci.presentation_during_issuance";
+    public static final String ATTR_ISSUER_INFO = "oid4vci.issuer_info";
 
     private final RealmModel realm;
 
@@ -47,6 +50,12 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
 
         // Add root display metadata
         metadata.setDisplay(parseDisplay());
+
+        // Advertise issuer_info elements when configured (ETSI TS 119 472-3, Section 4.2.3)
+        List<IssuerInfo> issuerInfo = parseIssuerInfo();
+        if (issuerInfo != null) {
+            metadata = ExtendedCredentialIssuer.from(metadata).setIssuerInfo(issuerInfo);
+        }
 
         // Always omit encryption parameters from metadata
         metadata.setCredentialResponseEncryption(null);
@@ -92,17 +101,71 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         }
     }
 
+    private List<IssuerInfo> parseIssuerInfo() {
+        String issuerInfoJson = realm.getAttribute(ATTR_ISSUER_INFO);
+        if (StringUtil.isBlank(issuerInfoJson)) {
+            return null;
+        }
+
+        try {
+            List<IssuerInfo> issuerInfo = JsonSerialization.readValue(issuerInfoJson, new TypeReference<>() {});
+            if (issuerInfo == null
+                    || issuerInfo.stream()
+                            .anyMatch(info -> info == null
+                                    || StringUtil.isBlank(info.getFormat())
+                                    || info.getData() == null
+                                    || info.getData().isNull())) {
+                logger.warnf("Invalid %s realm attribute. Skipping issuer_info.", ATTR_ISSUER_INFO);
+                return null;
+            }
+            return issuerInfo;
+        } catch (IOException e) {
+            logger.error("Failed to parse issuer_info metadata", e);
+            return null;
+        }
+    }
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private static final class ExtendedCredentialIssuer extends CredentialIssuer {
 
         @JsonProperty("authorization_challenge_endpoint")
         private String authorizationChallengeEndpoint;
 
+        @JsonProperty("issuer_info")
+        private List<IssuerInfo> issuerInfo;
+
+        private static ExtendedCredentialIssuer from(CredentialIssuer source) {
+            return JsonSerialization.mapper.convertValue(source, ExtendedCredentialIssuer.class);
+        }
+
         private static ExtendedCredentialIssuer from(CredentialIssuer source, String authorizationChallengeEndpoint) {
-            ExtendedCredentialIssuer target =
-                    JsonSerialization.mapper.convertValue(source, ExtendedCredentialIssuer.class);
+            ExtendedCredentialIssuer target = from(source);
             target.authorizationChallengeEndpoint = authorizationChallengeEndpoint;
             return target;
+        }
+
+        private ExtendedCredentialIssuer setIssuerInfo(List<IssuerInfo> issuerInfo) {
+            this.issuerInfo = issuerInfo;
+            return this;
+        }
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static final class IssuerInfo {
+
+        @JsonProperty("format")
+        private String format;
+
+        @JsonProperty("data")
+        private JsonNode data;
+
+        public String getFormat() {
+            return format;
+        }
+
+        public JsonNode getData() {
+            return data;
         }
     }
 }
