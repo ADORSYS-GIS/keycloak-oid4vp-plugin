@@ -70,6 +70,10 @@ public class SdJwtAuthRequirements {
         return authRequirements.shouldAllowMissingStatusClaim();
     }
 
+    public String getStatusListTrustMaterialIdps() {
+        return authRequirements.getStatusListTrustMaterialIdps();
+    }
+
     private boolean shouldVerifyIssuerClaim() {
         return authRequirements.shouldVerifyIssuerClaim() && !usesExternalIssuerTrust(credentialRequirement);
     }

@@ -85,7 +85,9 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         if (authReqs.shouldEnforceRevocationStatus()) {
             try {
                 tokenStatusValidator.validate(
-                        sdJwt.getIssuerSignedJWT().getPayload(), authReqs.shouldAllowMissingStatusClaim());
+                        sdJwt.getIssuerSignedJWT().getPayload(),
+                        authReqs.shouldAllowMissingStatusClaim(),
+                        authReqs.getStatusListTrustMaterialIdps());
             } catch (ReferencedTokenValidationException e) {
                 throw new VerificationException(
                         String.format(
