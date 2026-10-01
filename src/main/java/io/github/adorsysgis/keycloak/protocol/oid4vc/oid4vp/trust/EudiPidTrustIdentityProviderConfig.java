@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
-import java.net.URI;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.utils.StringUtil;
@@ -68,13 +67,8 @@ public class EudiPidTrustIdentityProviderConfig extends IdentityProviderModel {
         if (StringUtil.isBlank(value)) {
             throw new IllegalArgumentException("EUDI PID trust-list URL is required");
         }
-        try {
-            URI uri = URI.create(value);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
-                throw new IllegalArgumentException("EUDI PID trust-list URL must be an absolute HTTPS URL");
-            }
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("EUDI PID trust-list URL must be an absolute HTTPS URL", e);
+        if (!EudiPidTrustListProvider.isAbsoluteHttpsUrl(value)) {
+            throw new IllegalArgumentException("EUDI PID trust-list URL must be an absolute HTTPS URL");
         }
     }
 }

@@ -509,6 +509,16 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
+    public void testConfiguredTrustMaterialAliasesFailClosedForUnsupportedFetcher() {
+        ReferencedTokenValidationException error = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), false, "status-trust"));
+
+        assertEquals(
+                "This Status List JWT fetcher does not support trust-material identity providers", error.getMessage());
+    }
+
+    @Test
     public void testStatusListJwt_RejectsMissingSub() {
         StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
                 {
@@ -640,7 +650,7 @@ public class ReferencedTokenValidatorTest {
                 {
                     "sub": "https://status.example.com/list",
                     "iat": 1700000000,
-                    "exp": 1001,
+                    "exp": 1010,
                     "status_list": {
                         "bits": 1,
                         "lst": "eNrbuRgAAhcBXQ"
