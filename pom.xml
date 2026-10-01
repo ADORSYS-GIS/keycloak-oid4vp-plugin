@@ -41,8 +41,7 @@
 
     <properties>
         <revision>999.0.0-SNAPSHOT</revision>
-        <!-- TODO: Replace the local development snapshot with 26.8.0 once released. -->
-        <keycloak.version>999.0.0-SNAPSHOT</keycloak.version>
+        <keycloak.version>26.8.0</keycloak.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <gatling.virtualUsers>30</gatling.virtualUsers>
