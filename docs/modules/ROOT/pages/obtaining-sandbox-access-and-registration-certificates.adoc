@@ -2,7 +2,7 @@
 
 You obtain access and registration certificates from the https://sandbox.eudi-wallet.org/[German EUDI Wallet Sandbox Registrar] to act as a trusted verifier (or issuer) in the ecosystem. Keycloak then advertises these certificates in OpenID4VP requests (or signed Credential Issuer Metadata).
 
-This guide focuses mainly on the process to obtain *access certificates* for a Keycloak-controlled signing key. Registration certificates — first for verification, then issuance — are briefly covered at the end.
+This guide focuses mainly on the process to obtain *access certificates* for a Keycloak-controlled signing key. Registration certificates for verification and issuance are briefly covered at the end.
 
 Because the access certificate is issued for a key pair you keep control of, the most convenient way to expose the private key to Keycloak is an external keystore imported through a `java-keystore` provider. This guide generates one for illustration.
 
@@ -56,7 +56,7 @@ The issued certificate must stay bound to this key pair. Do not generate a new k
 
 [WARNING]
 ====
-The Registrar embeds the `Support URL` value of your organization as a `SAN:URI` in the certificate, which is how the OpenID4VP request later identifies you. If the certificate should carry a specific SAN:URI, set *Support URL* under *Organization settings* before completing this section; it cannot be changed afterwards without issuing a new certificate.
+The Registrar embeds the `Support URL` value of your organization as a `SAN:URI` in the certificate. If the certificate should carry a specific SAN:URI, set *Support URL* under *Organization settings* before completing this section; it cannot be changed afterwards without issuing a new certificate.
 
 The Sandbox offers no functional way to append a SAN:DNS to the certificate, so the certificate cannot work with the `x509_san_dns` client identifier prefix. Use `x509_hash` instead (see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference]).
 ====
@@ -105,7 +105,7 @@ Verify it:
 openssl pkcs12 -info -in keystore.p12 -passin pass:changeit -noout
 ----
 
-NOTE: The Key alias is the `-name` value used here (`ecdsa-key` in this example). The `-passout` option sets the keystore password, which also applies as the key password. Never commit `priv.pem`, `cert.csr`, the `.p12` file or its passwords.
+NOTE: The Key alias is the `-name` value used here (`ecdsa-key` in this example). The `-passout` option sets the keystore password, which also applies as the key password. `changeit` is used for illustration only — choose a strong password instead. Never commit `priv.pem`, `cert.csr`, the `.p12` file or its passwords.
 
 == Register the keystore as a Keycloak provider
 
@@ -147,6 +147,11 @@ NOTE: The Key alias is the `-name` value used here (`ecdsa-key` in this example)
 
 image::provider-configuration.png[Adding the java-keystore provider in Keycloak]
 
+[IMPORTANT]
+====
+The plugin signs OpenID4VP requests with preferably an *active ES256 signing key* it selects itself, regardless of provider priority or alias. The configured access certificate must match that key — disable any competing active ES256 keys in the realm to avoid an unintended mismatch. The plugin validates this on configuration load.
+====
+
 == Prepare the access certificate for the OpenID4VP authenticator
 
 The OpenID4VP authenticator expects the leaf access certificate as a single-line, Base64-encoded DER string (without PEM headers, whitespace or line breaks):
@@ -156,7 +161,7 @@ The OpenID4VP authenticator expects the leaf access certificate as a single-line
 openssl x509 -in cert.pem -outform DER | openssl base64 -A
 ----
 
-Paste the output into the *Access certificate* field of the authenticator configuration (see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference]).
+Paste the output into the *Access certificate* field of the authenticator configuration, and set the *Client Identifier Prefix* to `x509_hash` — the plugin defaults to `x509_san_dns`, which is not compatible with the Sandbox certificate carrying no SAN:DNS entry (see the warning in <<Create the access certificate>>). For more details, see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
 
 == Registration certificates
 
@@ -164,7 +169,7 @@ A registration certificate describes *what* a relying party requests or issues. 
 
 === As a verifier
 
-. Specify the information to request: the schema first and then the specific fields (e.g. `eu.europa.ec.eudi.pid.1` `given_name` / `family_name`).
+. Specify the information to request: the credential schema, then the required claims—for example, `eu.europa.ec.eudi.pid.1` with `given_name` and `family_name`.
 . Specify the verifier metadata: name and description (description should explain the purpose of requesting a credential).
 . Attach the access certificate and confirm.
 
@@ -174,13 +179,13 @@ You obtain a `registration_cert` JWT, which you configure in the *Registration c
 
 === As an issuer
 
-Issuance registration is symmetric:
+In most cases, you would also want Keycloak to act as an issuer. Registration for issuance is symmetric and can reuse the same access certificate:
 
 . Specify the schema to be issued.
 . Specify the issuer metadata: name and description.
 . Attach the access certificate and confirm.
 
-image::issuer-registration.png[Issuer registration steps with schema, metadata, and access certificate]
+The resulting `registration_cert` JWT is configured as *Issuer info* in Keycloak so that it is published in the Credential Issuer Metadata. For details, refer to the https://www.keycloak.org/docs/latest/server_admin/index.html#configuring-realm-level-oid4vci-attributes[official documentation] (Configuring realm-level OID4VCI attributes).
 
 == Summary
 
