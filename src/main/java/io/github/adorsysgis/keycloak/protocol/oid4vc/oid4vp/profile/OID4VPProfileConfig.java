@@ -306,10 +306,6 @@ public class OID4VPProfileConfig {
             }
 
             if (TrustPolicy.SELF.equals(type)) {
-                if (CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat())) {
-                    throw new IllegalStateException(String.format(
-                            "Self-trust is not supported for mDoc credentials: %s/%s", profileId, credential.getId()));
-                }
                 continue;
             }
 

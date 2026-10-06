@@ -390,6 +390,50 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAuthenticateSuccessfully_WithActiveSelfTrustedMdoc() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.selfTrustedMdocPrimary(), (apiFlow, requestObject) -> {
+            Map<String, Object> claims = Map.of(
+                    MdocBaseTest.NAMESPACE,
+                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+            String mdocToken = presentMdoc(requestObject, claims);
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testSuccessfulAuthenticationWithVPTokenMap(Map.of(PRIMARY_CREDENTIAL_ID, mdocToken), opts);
+        });
+    }
+
+    @Test
+    public void shouldRejectForeignIssuer_WithSelfTrustedMdoc() throws Exception {
+        withAuthenticationProfile(AuthenticationProfileSamples.selfTrustedMdocPrimary(), (apiFlow, requestObject) -> {
+            Map<String, Object> claims = Map.of(
+                    MdocBaseTest.NAMESPACE,
+                    Map.of(JsonWebToken.SUBJECT, TEST_USER_ID, OAuth2Constants.USERNAME, TEST_USER));
+            String mdocToken = MdocBaseTest.buildMdocVpToken(
+                    requestObject,
+                    claims,
+                    MdocBaseTest.DOC_TYPE,
+                    MdocBaseTest.getIssuerKeyRef2(),
+                    MdocBaseTest.getIssuerCertRef2());
+
+            TestOpts opts = TestOpts.getDefault()
+                    .setAuthContext(apiFlow.authContext())
+                    .setCodeVerifier(apiFlow.codeVerifier())
+                    .setShouldForceUnencryptedResponse(true);
+
+            testFailingAuthenticationWithVPTokenMap(
+                    Map.of(PRIMARY_CREDENTIAL_ID, mdocToken),
+                    opts,
+                    HttpStatus.SC_UNAUTHORIZED,
+                    ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                    "Certificate chain validation failed");
+        });
+    }
+
+    @Test
     public void shouldAuthenticateSuccessfully_WithMdocIssuerResolvedFromSignedPidTrustList() throws Exception {
         EudiPidTrustListTestServer trustListServer = KeycloakTestContainer.eudiPidTrustListServer();
         trustListServer.serveSignedTrustList();
