@@ -24,7 +24,7 @@ jobs:
     # This workflow will not run if the OPENCODE_GATEWAY_AUDIENCE is not set
     # This var is already set at the organization level in ADORSYS-GIS and so workflow typically have it defined
     if: ${{ vars.OPENCODE_GATEWAY_AUDIENCE != '' }}
-    uses: ADORSYS-GIS/ai-governance/.github/workflows/opencode-review.yml@a887e7622d0bec0acff4ce5975229845daa90767
+    uses: ADORSYS-GIS/ai-governance/.github/workflows/opencode-review.yml@f1735f92f24dd86c7707ed990a3f3ecb51e2ea9b
     permissions:
       id-token: write # mint the GHA OIDC token (gateway auth)
       contents: write # checkout + the action's git ops
