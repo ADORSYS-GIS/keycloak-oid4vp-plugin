@@ -390,7 +390,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
-    public void shouldAuthenticateSuccessfully_WithSelfTrustedMdoc() throws Exception {
+    public void shouldAuthenticateSuccessfully_WithActiveSelfTrustedMdoc() throws Exception {
         withAuthenticationProfile(AuthenticationProfileSamples.selfTrustedMdocPrimary(), (apiFlow, requestObject) -> {
             Map<String, Object> claims = Map.of(
                     MdocBaseTest.NAMESPACE,

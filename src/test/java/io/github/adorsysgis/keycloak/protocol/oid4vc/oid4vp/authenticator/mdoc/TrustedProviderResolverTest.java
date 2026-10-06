@@ -11,7 +11,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRe
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import java.security.cert.X509Certificate;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,14 +51,7 @@ class TrustedProviderResolverTest {
                 key(KeyStatus.ACTIVE, KeyUse.ENC, MdocBaseTest.getIssuerCertRef1(), false),
                 key(KeyStatus.ACTIVE, KeyUse.SIG, null, false));
 
-        Set<X509Certificate> anchors = new HashSet<>(
-                TrustedProviderResolver.resolve(session, primaryCredential())
-                        .trustAnchors()
-                        .getRootCertificates()
-                        .values()
-                        .stream()
-                        .flatMap(List::stream)
-                        .toList());
+        Set<X509Certificate> anchors = resolveAnchors(primaryCredential());
 
         assertEquals(Set.of(activeCertificate, passiveCertificate), anchors);
     }
@@ -69,11 +61,7 @@ class TrustedProviderResolverTest {
         X509Certificate certificate = MdocBaseTest.getIssuerCertRef1();
         realmKeys = List.of(key(KeyStatus.ACTIVE, KeyUse.SIG, certificate, false));
 
-        var resolved = TrustedProviderResolver.resolve(session, supportingCredential());
-
-        assertTrue(resolved.trustAnchors().getRootCertificates().values().stream()
-                .flatMap(List::stream)
-                .anyMatch(certificate::equals));
+        assertEquals(Set.of(certificate), resolveAnchors(supportingCredential()));
     }
 
     @Test
@@ -83,11 +71,7 @@ class TrustedProviderResolverTest {
         CredentialRequirement credential =
                 new CredentialRequirement().setId("identity").setTrust(List.of());
 
-        var resolved = TrustedProviderResolver.resolve(session, credential);
-
-        assertTrue(resolved.trustAnchors().getRootCertificates().values().stream()
-                .flatMap(List::stream)
-                .anyMatch(certificate::equals));
+        assertEquals(Set.of(certificate), resolveAnchors(credential));
     }
 
     @Test
@@ -112,6 +96,17 @@ class TrustedProviderResolverTest {
         return new CredentialRequirement()
                 .setId("identity")
                 .setTrust(List.of(new TrustPolicy().setType(TrustPolicy.SELF)));
+    }
+
+    private Set<X509Certificate> resolveAnchors(CredentialRequirement credential) throws Exception {
+        return Set.copyOf(
+                TrustedProviderResolver.resolve(session, credential)
+                        .trustAnchors()
+                        .getRootCertificates()
+                        .values()
+                        .stream()
+                        .flatMap(List::stream)
+                        .toList());
     }
 
     private static KeyWrapper key(

@@ -152,12 +152,6 @@ public class CredentialRequirement {
         return CredentialRole.PRIMARY.equals(role);
     }
 
-    public boolean isSelfTrusted() {
-        return trust == null
-                || trust.isEmpty()
-                || trust.stream().anyMatch(policy -> TrustPolicy.SELF.equals(policy.getType()));
-    }
-
     /**
      * Reference to a single claim, optionally namespaced.
      * <p>

@@ -141,7 +141,7 @@
         }
       },
       {
-        "name": "mdoc-self-trust-test-key",
+        "name": "mdoc-self-trust-active-test-key",
         "providerId": "ecdsa-generated",
         "config": {
           "algorithm": [
@@ -151,7 +151,7 @@
             "1000"
           ],
           "active": [
-            "false"
+            "true"
           ],
           "enabled": [
             "true"
