@@ -77,6 +77,20 @@ class TrustedProviderResolverTest {
     }
 
     @Test
+    void shouldDefaultToSelfTrustWhenTrustIsNotConfigured() throws Exception {
+        X509Certificate certificate = MdocBaseTest.getIssuerCertRef1();
+        realmKeys = List.of(key(KeyStatus.ACTIVE, KeyUse.SIG, certificate, false));
+        CredentialRequirement credential =
+                new CredentialRequirement().setId("identity").setTrust(List.of());
+
+        var resolved = TrustedProviderResolver.resolve(session, credential);
+
+        assertTrue(resolved.trustAnchors().getRootCertificates().values().stream()
+                .flatMap(List::stream)
+                .anyMatch(certificate::equals));
+    }
+
+    @Test
     void shouldRejectSelfTrustWhenRealmHasNoEnabledSigningCertificate() {
         realmKeys = List.of(key(KeyStatus.ACTIVE, KeyUse.SIG, null, false));
 

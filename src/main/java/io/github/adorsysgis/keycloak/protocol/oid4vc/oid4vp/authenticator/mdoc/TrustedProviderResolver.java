@@ -38,8 +38,7 @@ public final class TrustedProviderResolver {
     public static ResolvedMdocTrust resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
-            throw new IllegalStateException(
-                    String.format("Credential '%s' does not configure any trust policy.", credential.getId()));
+            return new ResolvedMdocTrust(new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())));
         }
 
         if (requiresIssuerEnforcement(credential)) {

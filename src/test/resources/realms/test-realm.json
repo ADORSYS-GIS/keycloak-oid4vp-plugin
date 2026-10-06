@@ -139,6 +139,36 @@
             "true"
           ]
         }
+      },
+      {
+        "name": "mdoc-self-trust-test-key",
+        "providerId": "ecdsa-generated",
+        "config": {
+          "algorithm": [
+            "ES256"
+          ],
+          "priority": [
+            "1000"
+          ],
+          "active": [
+            "false"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "ecdsaEllipticCurveKey": [
+            "P-256"
+          ],
+          "ecdsaPrivateKey": [
+            "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgNcGG9RM19Wyb4XF/RNP9ONB+MftuL3ELFdy/Q0LCX6ihRANCAASqJzAzB+33cMUJ0nHA8UEu2CFXK6xPmoeWdLJZpGWcLYSwdzYB4dGwyWX/4HS4JZGR+eulSAcgRgeXl43vK8Zo"
+          ],
+          "ecdsaPublicKey": [
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqicwMwft93DFCdJxwPFBLtghVyusT5qHlnSyWaRlnC2EsHc2AeHRsMll/+B0uCWRkfnrpUgHIEYHl5eN7yvGaA=="
+          ],
+          "certificate": [
+            "MIIBlzCCAT2gAwIBAgIUNPf1jk/kxePsVn/ntNMpN3IHqGMwCgYIKoZIzj0EAwIwIDEeMBwGA1UEAwwVQ09TRSBJc3N1ZXIgMTAwIFllYXJzMCAXDTI2MDYyOTEwMjczMFoYDzIxMjYwNjA1MTAyNzMwWjAgMR4wHAYDVQQDDBVDT1NFIElzc3VlciAxMDAgWWVhcnMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASqJzAzB+33cMUJ0nHA8UEu2CFXK6xPmoeWdLJZpGWcLYSwdzYB4dGwyWX/4HS4JZGR+eulSAcgRgeXl43vK8Zoo1MwUTAdBgNVHQ4EFgQUl8hm4O6VpuB0A5yhQe/zJxAJr54wHwYDVR0jBBgwFoAUl8hm4O6VpuB0A5yhQe/zJxAJr54wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiA0LGtfjdKY+1wxDzozcOTP+xB5Zcqf0GhCONvabiMRiAIhANR38jESb7jxK0rLtDSKKWvzHBx3ChgwKq7o+N+fqp4t"
+          ]
+        }
       }
     ]
   }
