@@ -1,5 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.stream.Stream;
@@ -48,7 +50,7 @@ public class EudiPidTrustIdentityProvider implements TrustMaterialIdentityProvid
 
             List<X509Certificate> presentedChain = X509CertificateChainValidator.decodeCertificateChain(x5c);
             X509Certificate leaf = presentedChain.getFirst();
-            if (trustedCertificates.contains(leaf)) {
+            if (isExplicitlyPublishedSignerCertificate(trustedCertificates, leaf)) {
                 validatePublishedSignerCertificate(leaf);
                 return X509CertificateChainValidator.toJwk(leaf, algorithm, presentedChain);
             }
@@ -63,20 +65,24 @@ public class EudiPidTrustIdentityProvider implements TrustMaterialIdentityProvid
      * A PID Provider list may publish the end-entity service certificate itself instead of a CA
      * root. In that case the certificate is an explicit pin, so no path can or needs to be built.
      */
+    private static boolean isExplicitlyPublishedSignerCertificate(
+            List<X509Certificate> publishedCertificates, X509Certificate presentedLeaf) {
+        // X509Certificate.equals compares the complete encoded certificate, not only its public key.
+        return publishedCertificates.stream().anyMatch(presentedLeaf::equals);
+    }
+
     private static void validatePublishedSignerCertificate(X509Certificate certificate) throws VerificationException {
         try {
             certificate.checkValidity();
-            if (certificate.getBasicConstraints() >= 0) {
-                throw new VerificationException("A published signer certificate must be an end-entity certificate");
-            }
-            boolean[] keyUsage = certificate.getKeyUsage();
-            if (keyUsage != null && (keyUsage.length == 0 || !keyUsage[0])) {
-                throw new VerificationException("A published signer certificate must be valid for digital signatures");
-            }
-        } catch (VerificationException e) {
-            throw e;
-        } catch (Exception e) {
+        } catch (CertificateExpiredException | CertificateNotYetValidException e) {
             throw new VerificationException("The published signer certificate is not currently valid", e);
+        }
+        if (certificate.getBasicConstraints() >= 0) {
+            throw new VerificationException("A published signer certificate must be an end-entity certificate");
+        }
+        boolean[] keyUsage = certificate.getKeyUsage();
+        if (keyUsage != null && (keyUsage.length == 0 || !keyUsage[0])) {
+            throw new VerificationException("A published signer certificate must be valid for digital signatures");
         }
     }
 

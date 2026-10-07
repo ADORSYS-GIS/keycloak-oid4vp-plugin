@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import java.security.cert.CertificateException;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.utils.StringUtil;
@@ -33,7 +34,7 @@ public class EudiPidTrustIdentityProviderConfig extends IdentityProviderModel {
         }
         try {
             CertificateUtil.parseCertificate(getTrustListSigningCertificate());
-        } catch (Exception e) {
+        } catch (CertificateException | IllegalArgumentException e) {
             throw new IllegalArgumentException("EUDI PID trust-list signing certificate is invalid", e);
         }
     }
