@@ -1,12 +1,15 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.TrustAnchorAdapter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
 import java.nio.charset.StandardCharsets;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import org.jboss.logging.Logger;
+import org.keycloak.broker.provider.TrustMaterialRequest;
+import org.keycloak.broker.provider.TrustMaterialResolver;
 import org.keycloak.common.VerificationException;
 import org.keycloak.crypto.Algorithm;
 import org.keycloak.crypto.KeyType;
@@ -14,26 +17,46 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
+import org.keycloak.jose.jwk.JWK;
+import org.keycloak.jose.jwk.JWKParser;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.truststore.TruststoreProvider;
+import org.keycloak.utils.StringUtil;
 
 /**
- * Enhanced fetcher that enforces trust through Keycloak's global truststore.
+ * Fetches Status List JWTs and verifies their signatures against configured Keycloak trust-material
+ * providers, or the global truststore when no providers are configured.
+ *
+ * <p>A configured provider selection is authoritative: provider resolution or validation failures
+ * never fall back to the global truststore.
  *
  * @author <a href="mailto:Ingrid.Kamga@adorsys.com">Ingrid Kamga</a>
  */
 public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
-    private static final Logger logger = Logger.getLogger(TrustedStatusListJwtFetcher.class);
+    private static final String ISSUER_CLAIM = "iss";
+
+    private final TrustMaterialResolver trustMaterialResolver;
 
     public TrustedStatusListJwtFetcher(KeycloakSession session) {
+        this(session, new TrustMaterialResolver());
+    }
+
+    protected TrustedStatusListJwtFetcher(KeycloakSession session, TrustMaterialResolver trustMaterialResolver) {
         super(session);
+        this.trustMaterialResolver = trustMaterialResolver;
     }
 
     @Override
     public String fetchStatusListJwt(String uri) throws ReferencedTokenValidationException {
+        return fetchStatusListJwt(uri, null);
+    }
+
+    @Override
+    public String fetchStatusListJwt(String uri, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
         // Enforce HTTPS
         if (!uri.startsWith("https://")) {
             throw new ReferencedTokenValidationException("Status list JWT URI must use HTTPS: " + uri);
@@ -44,7 +67,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         JWSInput jws = parseStatusListJwt(statusListJwt);
 
         // Verify signature and certificate chain
-        verifyStatusListJwt(jws);
+        verifyStatusListJwt(jws, trustMaterialProviderAliases);
 
         return statusListJwt;
     }
@@ -52,10 +75,60 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
     /**
      * Verifies the signature and certificate chain of the Status List JWT.
      */
-    protected void verifyStatusListJwt(JWSInput jws) throws ReferencedTokenValidationException {
-        X509Certificate leaf = getLeafCertificateFromX5C(jws);
-        SignatureVerifierContext verifier = getVerifierContext(jws, leaf);
+    protected void verifyStatusListJwt(JWSInput jws, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
+        PublicKey verificationKey = StringUtil.isBlank(trustMaterialProviderAliases)
+                ? getLeafCertificateFromX5C(jws).getPublicKey()
+                : resolveVerificationKey(jws, trustMaterialProviderAliases);
+        SignatureVerifierContext verifier = getVerifierContext(jws, verificationKey);
         validateJwsSignature(jws, verifier);
+    }
+
+    private PublicKey resolveVerificationKey(JWSInput jws, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
+        String algorithm = jws.getHeader().getRawAlgorithm();
+        TrustMaterialRequest request = TrustMaterialRequest.builder()
+                .kid(jws.getHeader().getKeyId())
+                .algorithm(algorithm)
+                .issuer(readIssuer(jws))
+                .build();
+        try {
+            JWK trustedKey = trustMaterialResolver.validateX509Chain(
+                    session,
+                    trustMaterialProviderAliases,
+                    request,
+                    jws.getHeader().getX5c(),
+                    algorithm);
+            if (trustedKey == null) {
+                throw new ReferencedTokenValidationException(
+                        "No configured trust-material identity provider supplied X.509 trust");
+            }
+            PublicKey publicKey = JWKParser.create(trustedKey).toPublicKey();
+            if (publicKey == null) {
+                throw new ReferencedTokenValidationException(
+                        "Configured trust-material identity provider returned an unsupported verification key");
+            }
+            return publicKey;
+        } catch (ReferencedTokenValidationException e) {
+            throw e;
+        } catch (VerificationException e) {
+            throw new ReferencedTokenValidationException(
+                    "Status List JWT x5c validation through configured trust-material providers failed", e);
+        } catch (RuntimeException e) {
+            throw new ReferencedTokenValidationException(
+                    "Could not resolve a Status List JWT verification key from configured trust-material providers", e);
+        }
+    }
+
+    private String readIssuer(JWSInput jws) throws ReferencedTokenValidationException {
+        try {
+            // This claim is only a trust-material selector. It is not trusted until the JWS
+            // signature has been verified with the key returned by the selected provider.
+            JsonNode issuer = jws.readJsonContent(JsonNode.class).get(ISSUER_CLAIM);
+            return issuer != null && issuer.isTextual() ? issuer.asText() : null;
+        } catch (JWSInputException e) {
+            throw new ReferencedTokenValidationException("Failed to parse Status List JWT claims", e);
+        }
     }
 
     protected void validateJwsSignature(JWSInput jws, SignatureVerifierContext verifier)
@@ -102,7 +175,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         return leaf;
     }
 
-    protected SignatureVerifierContext getVerifierContext(JWSInput jws, X509Certificate certificate)
+    protected SignatureVerifierContext getVerifierContext(JWSInput jws, PublicKey publicKey)
             throws ReferencedTokenValidationException {
         String alg = jws.getHeader().getRawAlgorithm();
         SignatureProvider signatureProvider = session.getProvider(SignatureProvider.class, alg);
@@ -112,7 +185,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
         try {
             KeyWrapper keyWrapper = new KeyWrapper();
-            keyWrapper.setPublicKey(certificate.getPublicKey());
+            keyWrapper.setPublicKey(publicKey);
             keyWrapper.setAlgorithm(alg);
             keyWrapper.setType(algorithmToKeyType(alg));
             keyWrapper.setUse(KeyUse.SIG);

@@ -110,7 +110,9 @@ public class MdocCredentialVerifier implements CredentialVerifier {
                 // and MATTR docs
                 // (https://learn.mattr.global/docs/holding/credential-claiming-guides/revocation-status-check).
                 tokenStatusValidator.validate(
-                        verificationContext.getVerifiedMsoPayload(), authReqs.shouldAllowMissingStatusClaim());
+                        verificationContext.getVerifiedMsoPayload(),
+                        authReqs.shouldAllowMissingStatusClaim(),
+                        authReqs.getStatusListTrustMaterialIdps());
             } catch (ReferencedTokenValidationException e) {
                 throw new VerificationException(
                         String.format(

@@ -6,8 +6,10 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.Authenticatio
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint.REQUEST_JWT_PATH;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase.pruneAuthSessionId;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.RESPONSE_MODE_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -18,6 +20,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.KeycloakTestContainer;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.TestCryptoUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlQueryGeneratorTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
@@ -26,16 +29,19 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credentia
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContextStatus;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.stub.CustomOID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListTestServer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
+import java.security.KeyPair;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.http.HttpHeaders;
@@ -50,9 +56,12 @@ import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
+import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.common.util.PemUtils;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
+import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -848,6 +857,26 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAcceptTrustedAndRejectUntrustedStatusListJwtThroughConfiguredProviderAliases() throws Exception {
+        String trustedAlias = "status-list-trusted-x509";
+        String untrustedAlias = "status-list-untrusted-x509";
+        RealmResource realm = getActiveTestRealmResource();
+        X509Certificate statusListRoot = statusListRootCertificate();
+        KeyPair unrelatedKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate unrelatedRoot = TestCryptoUtils.createSelfSignedCaCert(unrelatedKeyPair);
+
+        try {
+            createX509TrustProvider(realm, trustedAlias, statusListRoot);
+            createX509TrustProvider(realm, untrustedAlias, unrelatedRoot);
+            assertStatusListAuthentication(trustedAlias, true);
+            assertStatusListAuthentication(untrustedAlias, false);
+        } finally {
+            removeIdentityProviderIfPresent(realm, trustedAlias);
+            removeIdentityProviderIfPresent(realm, untrustedAlias);
+        }
+    }
+
+    @Test
     public void shouldFailAuthentication_SdJwtSignedWithDisabledKey() throws Exception {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(
                 CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER, true, true, SdJwtVPTestUtils.getDisabledKeycloakJwk());
@@ -1041,6 +1070,56 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
         return sdJwtVPTestUtils.presentSdJwt(
                 sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
+    }
+
+    private void assertStatusListAuthentication(String trustProviderAlias, boolean expectedToSucceed) throws Exception {
+        AuthenticationProfileSamples.ProfileSample profiles = AuthenticationProfileSamples.dualProfile();
+        Map<String, String> revocationConfig = Map.of(
+                ENFORCE_REVOCATION_STATUS_CONFIG, "true", STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, trustProviderAlias);
+
+        withAuthenticationProfile(profiles.json(), "default", revocationConfig, (apiFlow, requestObject) -> {
+            String sdJwtVpToken = presentSdJwt(requestObject);
+            TestOpts opts =
+                    TestOpts.getDefault().setAuthContext(apiFlow.authContext()).setCodeVerifier(apiFlow.codeVerifier());
+            if (expectedToSucceed) {
+                testSuccessfulAuthenticationWithVPTokenMap(Map.of("identity", sdJwtVpToken), opts);
+            } else {
+                testFailingAuthenticationWithVPTokenMap(
+                        Map.of("identity", sdJwtVpToken),
+                        opts,
+                        HttpStatus.SC_UNAUTHORIZED,
+                        ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                        "Token status verification failed for credential to requirement 'identity'");
+            }
+        });
+    }
+
+    private X509Certificate statusListRootCertificate() throws Exception {
+        String jwt = CustomOID4VPAuthenticatorFactory.MockTrustedStatusListJwtFetcher.exampleStatusListJwt(
+                "/tokenstatus/status-list-jwt.txt");
+        List<X509Certificate> chain = org.keycloak.crypto.X509CertificateChainValidator.decodeCertificateChain(
+                new JWSInput(jwt).getHeader().getX5c());
+        return chain.getLast();
+    }
+
+    private void createX509TrustProvider(RealmResource realm, String alias, X509Certificate rootCertificate) {
+        IdentityProviderRepresentation provider = new IdentityProviderRepresentation();
+        provider.setAlias(alias);
+        provider.setProviderId("default-trust");
+        provider.setEnabled(true);
+        provider.setConfig(new HashMap<>(
+                Map.of("useX509", "true", "trustedCertificates", PemUtils.encodeCertificate(rootCertificate))));
+
+        try (var response = realm.identityProviders().create(provider)) {
+            assertEquals(HttpStatus.SC_CREATED, response.getStatus());
+        }
+    }
+
+    private void removeIdentityProviderIfPresent(RealmResource realm, String alias) {
+        realm.identityProviders().findAll().stream()
+                .filter(provider -> alias.equals(provider.getAlias()))
+                .findFirst()
+                .ifPresent(provider -> realm.identityProviders().get(alias).remove());
     }
 
     private String presentMdoc(RequestObject requestObject, Map<String, Object> claims) throws Exception {

@@ -29,6 +29,7 @@ public class AuthRequirements {
     private final boolean fallbackToIsoSpecSessionTranscript;
     private final boolean enforceRevocationStatus;
     private final boolean allowMissingStatusClaim;
+    private final String statusListTrustMaterialIdps;
     private final boolean requireCryptographicHolderBinding;
 
     public AuthRequirements(AuthenticatorConfigModel authConfig) {
@@ -72,6 +73,9 @@ public class AuthRequirements {
         this.allowMissingStatusClaim = Boolean.parseBoolean(config.getOrDefault(
                 OID4VPAuthenticatorFactory.ALLOW_MISSING_STATUS_CLAIM_CONFIG,
                 String.valueOf(OID4VPAuthenticatorFactory.ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT)));
+
+        this.statusListTrustMaterialIdps =
+                config.get(OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG);
     }
 
     public List<String> getCredentialTypes() {
@@ -108,6 +112,10 @@ public class AuthRequirements {
 
     public boolean shouldAllowMissingStatusClaim() {
         return allowMissingStatusClaim;
+    }
+
+    public String getStatusListTrustMaterialIdps() {
+        return statusListTrustMaterialIdps;
     }
 
     private static List<String> parseMultiStr(String str) {

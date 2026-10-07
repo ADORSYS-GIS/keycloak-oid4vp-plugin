@@ -388,7 +388,45 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
 |`allowMissingStatusClaim`
 |`false`
 |Treat credentials without a `status` claim as valid when `enforceRevocationStatus` is enabled. By default, this option is turned off and such credentials are rejected for missing a `status` claim when `enforceRevocationStatus` is enabled.
+
+|`statusListTrustMaterialIdps`
+|_(empty)_
+|Comma-separated aliases of Keycloak trust-material identity providers used to validate the `x5c` chain of fetched Status List JWTs. When aliases are configured, only those providers establish trust and validation fails if none accepts the chain. When empty, the global Keycloak `TruststoreProvider` is used for backward compatibility.
 |===
+
+==== Status List signer trust
+
+For static X.509 CA roots, configure Keycloak's built-in *Default Trust* identity provider with X.509 trust enabled and reference its alias from `statusListTrustMaterialIdps`.
+The provider validates the complete Status List JWT `x5c` chain; the certificate carried in the JWT is not trusted merely because it is present.
+
+For certificates published by an ETSI TS 119 602 PID Provider List of Trusted Entities, configure the plugin's *EUDI PID Trust List* identity provider (`eudi-pid-trust-list`).
+Its settings are:
+
+[cols="1,1,2"]
+|===
+|Setting |Default |Purpose
+
+|`trustListUrl`
+|_(required)_
+|Absolute HTTPS URL of the signed PID Provider LoTE JWT.
+
+|`trustListSigningCertificate`
+|_(required)_
+|Base64 DER or PEM certificate trusted to sign the LoTE.
+
+|`serviceType`
+|`http://uri.etsi.org/19602/SvcType/PID/Issuance`
+|Only certificates belonging to services of this type establish trust.
+
+|`issuer`
+|_(empty)_
+|Optional official PID Provider registration identifier. When set, only that provider's service certificates establish trust.
+|===
+
+[IMPORTANT]
+====
+Configured trust-material providers are authoritative. The global truststore is not used as a fallback when `statusListTrustMaterialIdps` is non-empty. Remove the setting to explicitly restore legacy global-truststore validation.
+====
 
 === Generic example (realm JSON import format)
 
@@ -410,7 +448,8 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
     "verifyIssuerClaim": true,
     "fallbackToIsoSpecSessionTranscript": false,
     "enforceRevocationStatus": false,
-    "allowMissingStatusClaim": false
+    "allowMissingStatusClaim": false,
+    "statusListTrustMaterialIdps": "status-list-x509,status-list-etsi"
   }
 }
 ----
