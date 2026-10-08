@@ -25,6 +25,8 @@ class CredentialIdentityTest {
         String second = CredentialIdentity.externalId("https://issuer.example.com", "subject-1");
 
         assertEquals(first, second);
+        // Fixed legacy vector: changing the hashing utility must not orphan existing links.
+        assertEquals("v1.dc9e9875b558505dbf0e1591b64428443d2ff1af7dde7b9eb011d1cf7ba9306d", first);
         assertTrue(first.startsWith(CredentialIdentity.EXTERNAL_ID_VERSION + "."));
     }
 

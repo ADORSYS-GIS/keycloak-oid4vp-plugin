@@ -30,7 +30,7 @@ public class OID4VPImportIdentityProvider extends AbstractIdentityProvider<Ident
      * same wire value as upstream Keycloak's {@code OID4VPIdentityProvider.CREDENTIAL_CLAIMS} so
      * ported mappers read claims without adaptation.
      */
-    public static final String CREDENTIAL_CLAIMS = "OID4VP_CREDENTIAL_CLAIMS";
+    public static final String CREDENTIAL_CLAIMS = org.keycloak.broker.oid4vp.OID4VPIdentityProvider.CREDENTIAL_CLAIMS;
 
     public OID4VPImportIdentityProvider(KeycloakSession session, IdentityProviderModel config) {
         super(session, config);

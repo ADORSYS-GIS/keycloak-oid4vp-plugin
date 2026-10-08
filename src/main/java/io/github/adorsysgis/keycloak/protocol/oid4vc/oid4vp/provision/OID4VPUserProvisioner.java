@@ -12,7 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
@@ -30,6 +29,9 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.services.resources.IdentityBrokerService;
+import org.keycloak.storage.adapter.UpdateOnlyChangeUserModelDelegate;
 import org.keycloak.userprofile.UserProfile;
 import org.keycloak.userprofile.UserProfileContext;
 import org.keycloak.userprofile.UserProfileProvider;
@@ -85,7 +87,7 @@ public class OID4VPUserProvisioner {
         RealmModel realm = request.realm();
 
         IdentityProviderModel idpConfig = resolveProvider(request);
-        OID4VPImportIdentityProvider provider = new OID4VPImportIdentityProvider(session, idpConfig);
+        OID4VPImportIdentityProvider provider = importProvider(session, idpConfig);
         String alias = idpConfig.getAlias();
         // The mapper stream is one-shot; materialize it once and share it between staging and hooks.
         List<IdentityProviderMapperModel> mappers =
@@ -201,20 +203,25 @@ public class OID4VPUserProvisioner {
             Request request, IdentityProviderModel idpConfig, String externalId, UserModel user) {
         KeycloakSession session = request.session();
         RealmModel realm = request.realm();
-        OID4VPImportIdentityProvider provider = new OID4VPImportIdentityProvider(session, idpConfig);
+        OID4VPImportIdentityProvider provider = importProvider(session, idpConfig);
         // The mapper stream is one-shot; materialize it once and share it between staging and hooks.
         List<IdentityProviderMapperModel> mappers = session.identityProviders()
                 .getMappersByAliasStream(idpConfig.getAlias())
                 .toList();
         BrokeredIdentityContext brokerContext = rebuildBrokeredContext(
                 session, realm, provider, idpConfig, externalId, request.primaryClaims(), user, mappers);
+        // Share Keycloak's unchanged-write suppression across basic updates and mapper hooks.
+        user = new UpdateOnlyChangeUserModelDelegate(user);
         String previousEmail = user.getEmail();
 
         if (IdentityProviderSyncMode.FORCE.equals(idpConfig.getSyncMode())) {
-            setIfDifferent(user.getFirstName(), brokerContext.getFirstName(), user::setFirstName);
-            setIfDifferent(user.getLastName(), brokerContext.getLastName(), user::setLastName);
-            if (brokerContext.getUsername() != null
-                    && !brokerContext.getUsername().equals(user.getUsername())) {
+            if (brokerContext.getFirstName() != null) {
+                user.setFirstName(brokerContext.getFirstName());
+            }
+            if (brokerContext.getLastName() != null) {
+                user.setLastName(brokerContext.getLastName());
+            }
+            if (brokerContext.getUsername() != null) {
                 user.setUsername(brokerContext.getUsername());
             }
         }
@@ -419,18 +426,10 @@ public class OID4VPUserProvisioner {
                         "An account with username '" + email + "' already exists");
             }
         }
-        if (session.users().getUserByUsername(realm, username) != null) {
+        if (username != null && KeycloakModelUtils.findUserByNameOrEmail(session, realm, username) != null) {
             throw new UserProvisioningException(
                     UserProvisioningException.Reason.DUPLICATE,
-                    "An account with username '" + username + "' already exists");
-        }
-        if (realm.isLoginWithEmailAllowed()
-                && username != null
-                && username.indexOf('@') > 0
-                && session.users().getUserByEmail(realm, username) != null) {
-            throw new UserProvisioningException(
-                    UserProvisioningException.Reason.DUPLICATE,
-                    "An account with email '" + username + "' already exists");
+                    "An account with username or login email '" + username + "' already exists");
         }
     }
 
@@ -504,10 +503,13 @@ public class OID4VPUserProvisioner {
         }
     }
 
-    private static void setIfDifferent(String current, String staged, Consumer<String> setter) {
-        String currentValue = current == null ? "" : current;
-        if (staged != null && !staged.equals(currentValue)) {
-            setter.accept(staged);
+    private static OID4VPImportIdentityProvider importProvider(KeycloakSession session, IdentityProviderModel config) {
+        OID4VPImportIdentityProvider provider =
+                IdentityBrokerService.getIdentityProvider(session, config, OID4VPImportIdentityProvider.class);
+        if (provider == null) {
+            throw new IllegalStateException(
+                    "No OpenID4VP import provider factory registered for '" + config.getAlias() + "'");
         }
+        return provider;
     }
 }

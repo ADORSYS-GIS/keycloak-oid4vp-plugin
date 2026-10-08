@@ -2,10 +2,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Objects;
+import org.keycloak.crypto.JavaAlgorithm;
+import org.keycloak.jose.jws.crypto.HashUtils;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -68,11 +68,7 @@ public record CredentialIdentity(CredentialOrigin origin, String issuer, String 
         }
         String framed =
                 EXTERNAL_ID_VERSION + "|" + issuer.length() + "|" + issuer + "|" + subject.length() + "|" + subject;
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(framed.getBytes(StandardCharsets.UTF_8));
-            return EXTERNAL_ID_VERSION + "." + HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is required for external identity encoding", e);
-        }
+        byte[] digest = HashUtils.hash(JavaAlgorithm.SHA256, framed.getBytes(StandardCharsets.UTF_8));
+        return EXTERNAL_ID_VERSION + "." + HexFormat.of().formatHex(digest);
     }
 }

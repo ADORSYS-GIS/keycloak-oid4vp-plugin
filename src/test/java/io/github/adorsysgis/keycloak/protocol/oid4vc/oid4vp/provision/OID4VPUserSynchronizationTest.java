@@ -11,12 +11,12 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.util.HashMap;
@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.broker.oid4vp.mappers.AbstractOID4VPClaimMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
+import org.keycloak.broker.provider.IdentityProvider;
 import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.IdentityProviderMapperModel;
@@ -62,18 +63,61 @@ class OID4VPUserSynchronizationTest {
     void setUp() {
         KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
+        when(sessionFactory.getProviderFactoriesStream(IdentityProvider.class))
+                .thenAnswer(invocation -> Stream.of(new OID4VPImportIdentityProviderFactory()));
         when(session.identityProviders()).thenReturn(identityProviders);
         when(sessionFactory.getProviderFactory(eq(IdentityProviderMapper.class), anyString()))
                 .thenReturn(new OID4VPUserAttributeMapper());
         when(user.getUsername()).thenReturn("external-sub-1");
         when(user.getEmail()).thenReturn("old@example.com");
-        when(user.getFirstName()).thenReturn("Old");
+        AtomicReference<String> firstName = new AtomicReference<>("Old");
+        when(user.getFirstName()).thenAnswer(invocation -> firstName.get());
+        doAnswer(invocation -> {
+                    firstName.set(invocation.getArgument(0));
+                    return null;
+                })
+                .when(user)
+                .setFirstName(anyString());
+    }
+
+    @Test
+    void unchangedMappedValuesDoNotWrite() throws Exception {
+        when(identityProviders.getMappersByAliasStream(ALIAS))
+                .thenReturn(Stream.of(
+                        mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE),
+                        mapper("name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.FORCE)));
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"old@example.com\",\"given_name\":\"Old\"}");
+
+        provisioner.verifyAndSynchronizeExistingUser(
+                request(claims), providerConfig(IdentityProviderSyncMode.FORCE), "external-id", user);
+
+        verify(user, never()).setEmail(any());
+        verify(user, never()).setFirstName(any());
+        verify(user, never()).setUsername(any());
+        verify(user, never()).setEmailVerified(anyBoolean());
+    }
+
+    @Test
+    void missingClaimsDoNotClearExistingBasics() throws Exception {
+        when(identityProviders.getMappersByAliasStream(ALIAS))
+                .thenReturn(Stream.of(
+                        mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE),
+                        mapper("name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.FORCE)));
+
+        provisioner.verifyAndSynchronizeExistingUser(
+                request(JsonSerialization.mapper.createObjectNode()),
+                providerConfig(IdentityProviderSyncMode.FORCE),
+                "external-id",
+                user);
+
+        verify(user, never()).setEmail(any());
+        verify(user, never()).setFirstName(any());
+        verify(user, never()).setLastName(any());
     }
 
     @Test
     void forceSyncModeHealsMappedAttributes() throws Exception {
-        // IdP-level FORCE heals basic attributes; the mapper-level FORCE delegate applies mapped
-        // values on top, so the first name write lands twice with the same value.
+        // Basic healing and the FORCE mapper share unchanged-write suppression.
         when(identityProviders.getMappersByAliasStream(ALIAS))
                 .thenReturn(Stream.of(
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE),
@@ -87,13 +131,14 @@ class OID4VPUserSynchronizationTest {
         order.verify(authenticator).applyUserAttributeBindings(context, primaryRequirement, claims, user);
         order.verify(user).setEmail("new@example.com");
         verify(user).setEmail("new@example.com");
-        verify(user, times(2)).setFirstName("New");
+        verify(user).setFirstName("New");
     }
 
     @Test
     void changedEmailVerificationFollowsProviderTrust() throws Exception {
         for (boolean trustEmail : new boolean[] {false, true}) {
             UserModel linkedUser = mock(UserModel.class);
+            when(linkedUser.isEmailVerified()).thenReturn(!trustEmail);
             when(linkedUser.getUsername()).thenReturn("external-sub-1");
             AtomicReference<String> email = new AtomicReference<>("old@example.com");
             when(linkedUser.getEmail()).thenAnswer(invocation -> email.get());
@@ -181,7 +226,8 @@ class OID4VPUserSynchronizationTest {
                 .thenReturn(failingMapper);
         doThrow(new RuntimeException("mapper failed"))
                 .when(failingMapper)
-                .updateBrokeredUser(eq(session), eq(realm), eq(user), eq(failing), any(BrokeredIdentityContext.class));
+                .updateBrokeredUser(
+                        eq(session), eq(realm), any(UserModel.class), eq(failing), any(BrokeredIdentityContext.class));
         KeycloakTransactionManager transactions = mock(KeycloakTransactionManager.class);
         when(session.getTransactionManager()).thenReturn(transactions);
 
@@ -192,7 +238,7 @@ class OID4VPUserSynchronizationTest {
                 IllegalStateException.class,
                 () -> provisioner.verifyAndSynchronizeExistingUser(request(claims), config, "external-id", user));
 
-        verify(user, times(2)).setFirstName("New");
+        verify(user).setFirstName("New");
         verify(transactions).setRollbackOnly();
     }
 
@@ -204,6 +250,7 @@ class OID4VPUserSynchronizationTest {
     private IdentityProviderModel providerConfig(IdentityProviderSyncMode syncMode) {
         IdentityProviderModel config = new IdentityProviderModel();
         config.setAlias(ALIAS);
+        config.setProviderId(OID4VPImportIdentityProviderFactory.PROVIDER_ID);
         config.setEnabled(true);
         config.setSyncMode(syncMode);
         return config;

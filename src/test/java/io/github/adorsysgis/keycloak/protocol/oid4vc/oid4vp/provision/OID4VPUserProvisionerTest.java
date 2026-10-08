@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.broker.oid4vp.mappers.AbstractOID4VPClaimMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
+import org.keycloak.broker.provider.IdentityProvider;
 import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -75,6 +76,8 @@ class OID4VPUserProvisionerTest {
 
     @BeforeEach
     void setUp() {
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
+        when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         when(session.users()).thenReturn(users);
         when(session.identityProviders()).thenReturn(identityProviders);
         when(session.getProvider(UserProfileProvider.class)).thenReturn(profiles);
@@ -165,6 +168,20 @@ class OID4VPUserProvisionerTest {
     }
 
     @Test
+    void missingProviderFactoryFailsBeforeCreation() {
+        KeycloakSessionFactory factory = newSessionFactory();
+        when(factory.getProviderFactoriesStream(IdentityProvider.class)).thenAnswer(invocation -> Stream.empty());
+        when(session.getKeycloakSessionFactory()).thenReturn(factory);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> provisioner.provisionNewUser(request(JsonSerialization.mapper.createObjectNode()), EXTERNAL_ID));
+
+        verify(profile, never()).create();
+        verify(users, never()).addUser(any(RealmModel.class), anyString());
+    }
+
+    @Test
     void createsLinksAndReturnsUnknownUser() throws Exception {
         JsonNode claims = JsonSerialization.mapper.readTree("{\"sub\":\"sub-1\"}");
         OID4VPUserProvisioner.Request request = request(claims);
@@ -231,7 +248,7 @@ class OID4VPUserProvisionerTest {
                 AbstractOID4VPClaimMapper.CLAIM, "preferred_username",
                 OID4VPUserAttributeMapper.USER_ATTRIBUTE, "username"));
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(usernameMapper));
-        KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         when(sessionFactory.getProviderFactory(eq(IdentityProviderMapper.class), anyString()))
                 .thenReturn(new OID4VPUserAttributeMapper());
@@ -331,7 +348,7 @@ class OID4VPUserProvisionerTest {
     void missingMapperFailsBeforeWriting() {
         IdentityProviderMapperModel mapperModel = mapperModel("missing-mapper");
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
-        KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         when(sessionFactory.getProviderFactory(IdentityProviderMapper.class, "missing-mapper"))
                 .thenReturn(null);
@@ -346,7 +363,7 @@ class OID4VPUserProvisionerTest {
     void mapperFailureAfterWritingMarksRollbackOnly() {
         IdentityProviderMapperModel mapperModel = mapperModel("failing-mapper");
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
-        KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         IdentityProviderMapper mapper = mock(IdentityProviderMapper.class);
         when(sessionFactory.getProviderFactory(IdentityProviderMapper.class, "failing-mapper"))
@@ -407,7 +424,7 @@ class OID4VPUserProvisionerTest {
         IdentityProviderMapperModel mapperModel = mapperModel("failing-mapper");
         mapperModel.setSyncMode(IdentityProviderMapperSyncMode.FORCE);
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
-        KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         IdentityProviderMapper mapper = mock(IdentityProviderMapper.class);
         when(mapper.supportsSyncMode(any())).thenReturn(true);
@@ -444,6 +461,13 @@ class OID4VPUserProvisionerTest {
         assertNull(provisioner.findLinkedUser(session, realm, ALIAS, EXTERNAL_ID));
     }
 
+    private KeycloakSessionFactory newSessionFactory() {
+        KeycloakSessionFactory factory = mock(KeycloakSessionFactory.class);
+        when(factory.getProviderFactoriesStream(IdentityProvider.class))
+                .thenAnswer(invocation -> Stream.of(new OID4VPImportIdentityProviderFactory()));
+        return factory;
+    }
+
     private void stubEmailMapper() {
         IdentityProviderMapperModel mapperModel = new IdentityProviderMapperModel();
         mapperModel.setName("email-mapper");
@@ -452,7 +476,7 @@ class OID4VPUserProvisionerTest {
         mapperModel.setConfig(
                 Map.of(AbstractOID4VPClaimMapper.CLAIM, "email", OID4VPUserAttributeMapper.USER_ATTRIBUTE, "email"));
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
-        KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
         when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
         when(sessionFactory.getProviderFactory(eq(IdentityProviderMapper.class), anyString()))
                 .thenReturn(new OID4VPUserAttributeMapper());
