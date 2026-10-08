@@ -17,14 +17,13 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedToken
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.http.StatusListJwtFetcher;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import org.keycloak.OID4VCConstants;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.sdjwt.consumer.PresentationRequirements;
 import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
+import org.keycloak.sdjwt.vp.SdJwtVpVerificationResult;
 import org.keycloak.services.Urls;
 import org.keycloak.utils.StringUtil;
 
@@ -70,15 +69,9 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
 
         SdJwtVP sdJwt = parseSdJwt(token);
 
-        AtomicReference<JsonNode> payloadRef = new AtomicReference<>();
-        PresentationRequirements requirements = payload -> {
-            payloadRef.set(payload);
-            authReqs.getPresentationRequirements().checkIfSatisfiedBy(payload);
-        };
-
-        consumer.verifySdJwtPresentation(
+        SdJwtVpVerificationResult verificationResult = consumer.verifySdJwtPresentation(
                 sdJwt,
-                requirements,
+                authReqs.getPresentationRequirements(),
                 SdJwtTrustedIssuerResolver.resolve(session, credentialReq),
                 authReqs.getIssuerSignedJwtVerificationOpts(),
                 authReqs.getKeyBindingJwtVerificationOpts(
@@ -99,7 +92,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        JsonNode verifiedClaims = payloadRef.get();
+        JsonNode verifiedClaims = verificationResult.getClaims();
         String issuer = Optional.ofNullable(sdJwt.getIssuerSignedJWT().getPayload())
                 .map(payload -> payload.get(OID4VCConstants.CLAIM_NAME_ISSUER))
                 .filter(node -> !node.isNull())

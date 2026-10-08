@@ -239,6 +239,8 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals("external-sdjwt@example.com", users.getFirst().getEmail());
         assertEquals("Grace", users.getFirst().getFirstName());
         assertEquals("Hopper", users.getFirst().getLastName());
+        assertEquals("Grace", users.getFirst().getFirstName());
+        assertEquals("Hopper", users.getFirst().getLastName());
         FederatedIdentityRepresentation link =
                 usersFederatedLink(users.getFirst().getId());
         assertNotNull(link);
