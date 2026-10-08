@@ -21,6 +21,13 @@ When the realm attribute `oid4vci.presentation_during_issuance` is `true`, the p
 - the Credential Issuer Metadata, as required by the German EUDI Wallet ecosystem profile; and
 - the OAuth Authorization Server Metadata, as defined by OAuth 2.0 for First-Party Applications.
 
+### Omit encryption parameters from Issuer Metadata
+
+By default the Credential Issuer Metadata advertises `credential_response_encryption` and
+`credential_request_encryption` as provided by Keycloak. When the realm attribute
+`oid4vci.omit_encryption` is `true`, the plugin sets both to `null` so they are omitted from the
+metadata. The attribute defaults to `false`.
+
 ### OIDC DPoP compatibility patch
 
 `PatchedOIDCLoginProtocol` removes the `dpop_jkt` client-session note when the client has not

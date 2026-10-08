@@ -26,6 +26,7 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
 
     public static final String ATTR_DISPLAY = "oid4vci.display";
     public static final String ATTR_PRESENTATION_DURING_ISSUANCE = "oid4vci.presentation_during_issuance";
+    public static final String ATTR_OMIT_ENCRYPTION = "oid4vci.omit_encryption";
 
     private final RealmModel realm;
 
@@ -48,15 +49,21 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         // Add root display metadata
         metadata.setDisplay(parseDisplay());
 
-        // Always omit encryption parameters from metadata
-        metadata.setCredentialResponseEncryption(null);
-        metadata.setCredentialRequestEncryption(null);
+        // Omit encryption parameters from metadata when the realm attribute is enabled (default off)
+        if (isOmitEncryptionEnabled()) {
+            metadata.setCredentialResponseEncryption(null);
+            metadata.setCredentialRequestEncryption(null);
+        }
 
         return metadata;
     }
 
     private boolean isPresentationDuringIssuanceEnabled() {
         return Boolean.parseBoolean(realm.getAttribute(ATTR_PRESENTATION_DURING_ISSUANCE));
+    }
+
+    private boolean isOmitEncryptionEnabled() {
+        return Boolean.parseBoolean(realm.getAttribute(ATTR_OMIT_ENCRYPTION));
     }
 
     private String authorizationChallengeEndpoint() {
