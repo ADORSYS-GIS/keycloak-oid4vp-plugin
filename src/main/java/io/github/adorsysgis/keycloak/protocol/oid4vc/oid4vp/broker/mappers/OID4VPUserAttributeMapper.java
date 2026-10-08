@@ -17,52 +17,20 @@
 
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-import org.keycloak.broker.provider.BrokeredIdentityContext;
-import org.keycloak.common.util.CollectionUtil;
-import org.keycloak.models.IdentityProviderMapperModel;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserModel;
-import org.keycloak.provider.ProviderConfigProperty;
-import org.keycloak.provider.ProviderConfigurationBuilder;
-import org.keycloak.utils.StringUtil;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
+import org.keycloak.Config;
+import org.keycloak.broker.oid4vp.mappers.OID4VPSdJwtUserAttributeMapper;
 
 /**
- * Maps a claim of the presented credential to a user property or attribute. A single mapper covers
- * the credential value types: string, number and boolean claims become a single text value, arrays
- * become a multivalued attribute, and object values are imported as their JSON representation.
- *
- * <p>Preprocessing is context-only: it stages values on the {@link BrokeredIdentityContext}
- * without touching any user, so prompt-free import can run it safely before creating the user.
- *
- * <p>Ported from Keycloak's {@code org.keycloak.broker.oid4vp.mappers.OID4VPSdJwtUserAttributeMapper}
- * and generalized beyond SD-JWT: any verified claims JSON staged under the import provider's
- * context-data key works. Only the package, provider id, and display texts differ.
+ * Adapts Keycloak's claim mapper to the plugin's hidden import provider. Despite its upstream
+ * name, the mapper reads verified claims JSON, so both SD-JWT and mdoc claims use the same logic.
+ * Claim selection, context-only staging, and attribute synchronization stay owned by Keycloak.
  */
-public class OID4VPUserAttributeMapper extends AbstractOID4VPClaimMapper {
+public class OID4VPUserAttributeMapper extends OID4VPSdJwtUserAttributeMapper
+        implements OID4VPEnvironmentProviderFactory {
 
     public static final String PROVIDER_ID = "oid4vp-user-attribute-idp-mapper";
-
-    public static final String USER_ATTRIBUTE = "user.attribute";
-
-    public static final String USERNAME = "username";
-    public static final String EMAIL = "email";
-    public static final String FIRST_NAME = "firstName";
-    public static final String LAST_NAME = "lastName";
-
-    private static final List<ProviderConfigProperty> CONFIG_PROPERTIES = ProviderConfigurationBuilder.create()
-            .property(claimProperty())
-            .property()
-            .name(USER_ATTRIBUTE)
-            .label("User Attribute Name")
-            .helpText("User attribute name to store the claim. Use username, email, firstName and lastName "
-                    + "to map to those predefined user properties.")
-            .type(ProviderConfigProperty.USER_PROFILE_ATTRIBUTE_LIST_TYPE)
-            .add()
-            .build();
 
     @Override
     public String getId() {
@@ -70,13 +38,13 @@ public class OID4VPUserAttributeMapper extends AbstractOID4VPClaimMapper {
     }
 
     @Override
-    public List<ProviderConfigProperty> getConfigProperties() {
-        return CONFIG_PROPERTIES;
+    public String[] getCompatibleProviders() {
+        return new String[] {OID4VPImportIdentityProviderFactory.PROVIDER_ID};
     }
 
     @Override
-    public String getDisplayCategory() {
-        return "Attribute Importer";
+    public boolean isSupported(Config.Scope config) {
+        return OID4VPEnvironmentProviderFactory.super.isSupported(config);
     }
 
     @Override
@@ -86,71 +54,7 @@ public class OID4VPUserAttributeMapper extends AbstractOID4VPClaimMapper {
 
     @Override
     public String getHelpText() {
-        return "Import the configured claim of the presented credential into the specified user property or "
-                + "attribute. String, number and boolean claims are imported as a single value, arrays as a "
-                + "multivalued attribute, and object values as their JSON representation.";
-    }
-
-    @Override
-    public void preprocessFederatedIdentity(
-            KeycloakSession session,
-            RealmModel realm,
-            IdentityProviderMapperModel mapperModel,
-            BrokeredIdentityContext context) {
-        String attribute = attribute(mapperModel);
-        if (attribute == null) {
-            return;
-        }
-        List<String> values = claimValues(mapperModel, context);
-        switch (attribute) {
-            case USERNAME -> setIfPresent(values, context::setModelUsername);
-            case EMAIL -> setIfPresent(values, context::setEmail);
-            case FIRST_NAME -> setIfPresent(values, context::setFirstName);
-            case LAST_NAME -> setIfPresent(values, context::setLastName);
-            default -> context.setUserAttribute(attribute, values == null ? new ArrayList<>() : values);
-        }
-    }
-
-    @Override
-    public void updateBrokeredUser(
-            KeycloakSession session,
-            RealmModel realm,
-            UserModel user,
-            IdentityProviderMapperModel mapperModel,
-            BrokeredIdentityContext context) {
-        String attribute = attribute(mapperModel);
-        if (attribute == null) {
-            return;
-        }
-        List<String> values = claimValues(mapperModel, context);
-        switch (attribute) {
-            case USERNAME -> setIfPresent(values, user::setUsername);
-            case EMAIL -> setIfPresent(values, user::setEmail);
-            case FIRST_NAME -> setIfPresent(values, user::setFirstName);
-            case LAST_NAME -> setIfPresent(values, user::setLastName);
-            default -> {
-                if (values == null || values.isEmpty()) {
-                    user.removeAttribute(attribute);
-                } else if (!CollectionUtil.collectionEquals(
-                        values, user.getAttributeStream(attribute).toList())) {
-                    user.setAttribute(attribute, values);
-                }
-            }
-        }
-    }
-
-    protected void setIfPresent(List<String> values, Consumer<String> setter) {
-        if (values != null && !values.isEmpty() && StringUtil.isNotBlank(values.get(0))) {
-            setter.accept(values.get(0));
-        }
-    }
-
-    protected String attribute(IdentityProviderMapperModel mapperModel) {
-        String attribute = mapperModel.getConfig().get(USER_ATTRIBUTE);
-        if (StringUtil.isBlank(attribute)) {
-            logger.warnf("No user attribute configured for mapper %s", mapperModel.getName());
-            return null;
-        }
-        return attribute.trim();
+        return "Import a verified credential claim into a user property or attribute. "
+                + "Supports SD-JWT and mdoc claims, including multivalued arrays and JSON objects.";
     }
 }

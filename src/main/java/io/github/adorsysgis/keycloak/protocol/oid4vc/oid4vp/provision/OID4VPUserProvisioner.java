@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityProviderMapper;
@@ -29,9 +30,11 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.userprofile.UserProfile;
 import org.keycloak.userprofile.UserProfileContext;
 import org.keycloak.userprofile.UserProfileProvider;
 import org.keycloak.userprofile.ValidationException;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Prompt-free provisioning of externally issued OpenID4VP identities, mirroring Keycloak's first
@@ -97,14 +100,25 @@ public class OID4VPUserProvisioner {
 
         BrokeredIdentityContext brokerContext = stageBrokeredContext(request, provider, idpConfig, externalId, mappers);
 
-        evaluateStagedBindings(request, brokerContext);
+        evaluateStagedBindings(
+                request, attribute -> OID4VPAuthenticator.readStagedUserAttribute(brokerContext, attribute));
 
-        String finalUsername = effectiveUsername(realm, brokerContext);
+        String proposedUsername = effectiveUsername(realm, brokerContext);
         // Collisions fail fast with the broker's duplicate semantics before profile validation:
         // a colliding account is a different problem than malformed staged data.
-        checkCollisions(session, realm, brokerContext, finalUsername);
+        checkCollisions(session, realm, proposedUsername, brokerContext.getEmail());
 
-        validateStagedProfile(request, brokerContext);
+        UserProfile profile = validateStagedProfile(request, brokerContext, proposedUsername);
+        Map<String, List<String>> persistedAttributes =
+                new LinkedHashMap<>(profile.getAttributes().getWritable());
+        // The profile's user factory creates the username even when it is not editable.
+        String finalUsername = profile.getAttributes().getFirst(UserModel.USERNAME);
+        if (finalUsername == null) {
+            finalUsername = profile.getAttributes().getFirst(UserModel.EMAIL);
+        }
+        putIfPresent(persistedAttributes, UserModel.USERNAME, finalUsername);
+        evaluateStagedBindings(request, attribute -> readProfileAttribute(persistedAttributes, attribute));
+        checkCollisions(session, realm, finalUsername, readProfileAttribute(persistedAttributes, UserModel.EMAIL));
 
         // Recheck the link immediately before the first write.
         UserModel raced = findLinkedUser(session, realm, alias, externalId);
@@ -116,8 +130,10 @@ public class OID4VPUserProvisioner {
 
         UserModel user;
         try {
-            user = session.users().addUser(realm, finalUsername);
+            user = profile.create();
         } catch (ModelDuplicateException e) {
+            // Profile creation also persists attributes: a duplicate may occur after addUser.
+            markRollbackOnly(session);
             UserModel concurrent = findLinkedUser(session, realm, alias, externalId);
             if (concurrent != null) {
                 throw new UserProvisioningException(
@@ -135,10 +151,9 @@ public class OID4VPUserProvisioner {
         }
         try {
             user.setEnabled(true);
-            if (Boolean.TRUE.equals(idpConfig.isTrustEmail()) && brokerContext.getEmail() != null) {
+            if (Boolean.TRUE.equals(idpConfig.isTrustEmail()) && user.getEmail() != null) {
                 user.setEmailVerified(true);
             }
-            copyStagedAttributes(user, brokerContext);
 
             session.users()
                     .addFederatedIdentity(
@@ -193,6 +208,7 @@ public class OID4VPUserProvisioner {
                 .toList();
         BrokeredIdentityContext brokerContext = rebuildBrokeredContext(
                 session, realm, provider, idpConfig, externalId, request.primaryClaims(), user, mappers);
+        String previousEmail = user.getEmail();
 
         if (IdentityProviderSyncMode.FORCE.equals(idpConfig.getSyncMode())) {
             setIfDifferent(user.getFirstName(), brokerContext.getFirstName(), user::setFirstName);
@@ -208,6 +224,15 @@ public class OID4VPUserProvisioner {
             IdentityProviderMapper mapper = mapper(session, mapperModel);
             IdentityProviderMapperSyncModeDelegate.delegateUpdateBrokeredUser(
                     session, realm, user, mapperModel, brokerContext, mapper);
+        }
+        // This authenticator does not run a broker authentication session. Keycloak's inherited
+        // email updater therefore does nothing; reconcile verification after effective mapper
+        // updates so a new address never inherits verification from the previous one.
+        String updatedEmail = user.getEmail();
+        if (previousEmail == null
+                ? updatedEmail != null
+                : updatedEmail == null || !previousEmail.equalsIgnoreCase(updatedEmail)) {
+            user.setEmailVerified(updatedEmail != null && Boolean.TRUE.equals(idpConfig.isTrustEmail()));
         }
     }
 
@@ -328,24 +353,18 @@ public class OID4VPUserProvisioner {
         }
     }
 
-    private void evaluateStagedBindings(Request request, BrokeredIdentityContext brokerContext)
+    private void evaluateStagedBindings(Request request, Function<String, String> attributes)
             throws UserProvisioningException {
         OID4VPAuthenticator authenticator = request.authenticator();
         OID4VPAuthenticator.Context context = request.context();
 
         try {
             authenticator.applyUserAttributeBindings(
-                    context,
-                    request.primaryRequirement(),
-                    request.primaryClaims(),
-                    attribute -> OID4VPAuthenticator.readStagedUserAttribute(brokerContext, attribute));
+                    context, request.primaryRequirement(), request.primaryClaims(), attributes);
             for (Map.Entry<CredentialRequirement, JsonNode> supporting :
                     request.supporting().entrySet()) {
                 authenticator.applyUserAttributeBindings(
-                        context,
-                        supporting.getKey(),
-                        supporting.getValue(),
-                        attribute -> OID4VPAuthenticator.readStagedUserAttribute(brokerContext, attribute));
+                        context, supporting.getKey(), supporting.getValue(), attributes);
             }
         } catch (VerificationException | IllegalStateException e) {
             throw new UserProvisioningException(
@@ -355,10 +374,10 @@ public class OID4VPUserProvisioner {
         }
     }
 
-    private void validateStagedProfile(Request request, BrokeredIdentityContext brokerContext)
+    private UserProfile validateStagedProfile(Request request, BrokeredIdentityContext brokerContext, String username)
             throws UserProvisioningException {
         Map<String, List<String>> attributes = new LinkedHashMap<>();
-        putIfPresent(attributes, UserModel.USERNAME, brokerContext.getModelUsername());
+        putIfPresent(attributes, UserModel.USERNAME, username);
         putIfPresent(attributes, UserModel.EMAIL, brokerContext.getEmail());
         putIfPresent(attributes, UserModel.FIRST_NAME, brokerContext.getFirstName());
         putIfPresent(attributes, UserModel.LAST_NAME, brokerContext.getLastName());
@@ -372,10 +391,11 @@ public class OID4VPUserProvisioner {
         }
 
         try {
-            request.session()
+            UserProfile profile = request.session()
                     .getProvider(UserProfileProvider.class)
-                    .create(UserProfileContext.REGISTRATION, attributes)
-                    .validate();
+                    .create(UserProfileContext.REGISTRATION, attributes);
+            profile.validate();
+            return profile;
         } catch (ValidationException e) {
             throw new UserProvisioningException(
                     UserProvisioningException.Reason.INVALID_PROFILE,
@@ -384,15 +404,19 @@ public class OID4VPUserProvisioner {
         }
     }
 
-    private void checkCollisions(
-            KeycloakSession session, RealmModel realm, BrokeredIdentityContext brokerContext, String username)
+    private void checkCollisions(KeycloakSession session, RealmModel realm, String username, String email)
             throws UserProvisioningException {
-        if (brokerContext.getEmail() != null && !realm.isDuplicateEmailsAllowed()) {
-            UserModel existing = session.users().getUserByEmail(realm, brokerContext.getEmail());
+        if (email != null && !realm.isDuplicateEmailsAllowed()) {
+            UserModel existing = session.users().getUserByEmail(realm, email);
             if (existing != null) {
                 throw new UserProvisioningException(
                         UserProvisioningException.Reason.DUPLICATE,
-                        "An account with email '" + brokerContext.getEmail() + "' already exists");
+                        "An account with email '" + email + "' already exists");
+            }
+            if (realm.isLoginWithEmailAllowed() && session.users().getUserByUsername(realm, email) != null) {
+                throw new UserProvisioningException(
+                        UserProvisioningException.Reason.DUPLICATE,
+                        "An account with username '" + email + "' already exists");
             }
         }
         if (session.users().getUserByUsername(realm, username) != null) {
@@ -400,29 +424,29 @@ public class OID4VPUserProvisioner {
                     UserProvisioningException.Reason.DUPLICATE,
                     "An account with username '" + username + "' already exists");
         }
+        if (realm.isLoginWithEmailAllowed()
+                && username != null
+                && username.indexOf('@') > 0
+                && session.users().getUserByEmail(realm, username) != null) {
+            throw new UserProvisioningException(
+                    UserProvisioningException.Reason.DUPLICATE,
+                    "An account with email '" + username + "' already exists");
+        }
     }
 
-    private void copyStagedAttributes(UserModel user, BrokeredIdentityContext brokerContext) {
-        if (brokerContext.getEmail() != null) {
-            user.setEmail(brokerContext.getEmail());
-        }
-        if (brokerContext.getFirstName() != null) {
-            user.setFirstName(brokerContext.getFirstName());
-        }
-        if (brokerContext.getLastName() != null) {
-            user.setLastName(brokerContext.getLastName());
-        }
-        for (Map.Entry<String, List<String>> staged : brokerContext.getAttributes().entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .toList()) {
-            if (UserModel.USERNAME.equalsIgnoreCase(staged.getKey())
-                    || UserModel.EMAIL.equalsIgnoreCase(staged.getKey())
-                    || UserModel.FIRST_NAME.equalsIgnoreCase(staged.getKey())
-                    || UserModel.LAST_NAME.equalsIgnoreCase(staged.getKey())) {
-                continue;
-            }
-            user.setAttribute(staged.getKey(), staged.getValue());
-        }
+    /** Reads the first nonblank value Keycloak will persist, using the binding aliases. */
+    private static String readProfileAttribute(Map<String, List<String>> attributes, String name) {
+        String key =
+                switch (name) {
+                    case "given_name", "firstName" -> UserModel.FIRST_NAME;
+                    case "family_name", "lastName" -> UserModel.LAST_NAME;
+                    case "preferred_username", "username" -> UserModel.USERNAME;
+                    default -> name;
+                };
+        List<String> values = attributes.get(key);
+        return values == null
+                ? null
+                : values.stream().filter(StringUtil::isNotBlank).findFirst().orElse(null);
     }
 
     private void emitRegistrationEvent(EventBuilder event, String alias, UserModel user) {

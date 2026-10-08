@@ -620,8 +620,10 @@ account before any user or federated link is written and fails closed when a req
 missing.
 
 Custom mapped attributes must also be declared in the realm user-profile schema, or the realm's
-unmanaged-attribute policy must permit the intended management context. For read-only inspection
-through administrative interfaces, `ADMIN_VIEW` is the narrow unmanaged-attribute setting.
+unmanaged-attribute policy must permit writes in the registration context. Import uses Keycloak's
+user-profile persistence, including its normalization and writable-attribute permissions. Binding
+rules are checked against the values that will actually be stored; a filtered attribute cannot
+satisfy a binding. `ADMIN_VIEW` permits administrative inspection only, not import writes.
 ====
 
 Only this plugin-owned mapper runs while staging values before the user exists. Third-party

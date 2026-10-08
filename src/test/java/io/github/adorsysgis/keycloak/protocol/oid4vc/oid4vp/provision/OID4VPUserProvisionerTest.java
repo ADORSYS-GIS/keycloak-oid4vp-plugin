@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,7 +20,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.Creden
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.AbstractOID4VPClaimMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPImportConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -27,12 +27,15 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRo
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.authentication.AuthenticationFlowContext;
+import org.keycloak.broker.oid4vp.mappers.AbstractOID4VPClaimMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityProviderMapper;
+import org.keycloak.common.VerificationException;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.IdentityProviderMapperModel;
@@ -46,6 +49,7 @@ import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
+import org.keycloak.userprofile.Attributes;
 import org.keycloak.userprofile.UserProfile;
 import org.keycloak.userprofile.UserProfileContext;
 import org.keycloak.userprofile.UserProfileProvider;
@@ -67,16 +71,97 @@ class OID4VPUserProvisionerTest {
     private final IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
     private final UserProfileProvider profiles = mock(UserProfileProvider.class);
     private final UserProfile profile = mock(UserProfile.class);
+    private final Attributes profileAttributes = mock(Attributes.class);
 
     @BeforeEach
     void setUp() {
         when(session.users()).thenReturn(users);
         when(session.identityProviders()).thenReturn(identityProviders);
         when(session.getProvider(UserProfileProvider.class)).thenReturn(profiles);
-        when(profiles.create(any(UserProfileContext.class), any(Map.class))).thenReturn(profile);
+        when(profiles.create(any(UserProfileContext.class), any(Map.class))).thenAnswer(invocation -> {
+            Map<String, List<String>> staged = invocation.getArgument(1);
+            when(profileAttributes.getWritable()).thenReturn(staged);
+            when(profileAttributes.getFirst(anyString())).thenAnswer(read -> {
+                List<String> values = staged.get(read.getArgument(0));
+                return values == null || values.isEmpty() ? null : values.get(0);
+            });
+            return profile;
+        });
+        when(profile.getAttributes()).thenReturn(profileAttributes);
+        when(profile.create()).thenAnswer(invocation -> {
+            UserModel created = users.addUser(realm, profileAttributes.getFirst(UserModel.USERNAME));
+            String email = profileAttributes.getFirst(UserModel.EMAIL);
+            if (email != null) {
+                created.setEmail(email);
+            }
+            return created;
+        });
+        when(session.getTransactionManager()).thenReturn(mock(KeycloakTransactionManager.class));
         when(realm.getName()).thenReturn("test");
         when(identityProviders.getByAlias(ALIAS)).thenReturn(idpModel());
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of());
+    }
+
+    @Test
+    void filteredBoundAttributeFailsBeforeProfileCreation() throws Exception {
+        stubEmailMapper();
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"ada@example.com\"}");
+        OID4VPUserProvisioner.Request original = request(claims);
+        OID4VPAuthenticator authenticator = mock(OID4VPAuthenticator.class);
+        OID4VPUserProvisioner.Request boundRequest = new OID4VPUserProvisioner.Request(
+                session,
+                realm,
+                authenticator,
+                original.context(),
+                original.importConfig(),
+                original.primaryRequirement(),
+                claims,
+                Map.of(),
+                null);
+        doAnswer(invocation -> {
+                    Function<String, String> attributes = invocation.getArgument(3);
+                    if (attributes.apply("email") == null) {
+                        throw new VerificationException("Bound email is not writable");
+                    }
+                    return null;
+                })
+                .when(authenticator)
+                .applyUserAttributeBindings(
+                        any(OID4VPAuthenticator.Context.class),
+                        any(CredentialRequirement.class),
+                        any(JsonNode.class),
+                        any(Function.class));
+        when(profiles.create(any(UserProfileContext.class), any(Map.class))).thenReturn(profile);
+        when(profileAttributes.getWritable()).thenReturn(Map.of(UserModel.USERNAME, List.of("sub-1")));
+        when(profileAttributes.getFirst(UserModel.USERNAME)).thenReturn("sub-1");
+
+        UserProvisioningException error = assertThrows(
+                UserProvisioningException.class, () -> provisioner.provisionNewUser(boundRequest, EXTERNAL_ID));
+
+        assertEquals(UserProvisioningException.Reason.BINDING, error.getReason());
+        verify(profile, never()).create();
+        verify(users, never()).addUser(any(RealmModel.class), anyString());
+    }
+
+    @Test
+    void duplicateDuringProfilePersistenceMarksRollbackOnly() {
+        UserModel created = mock(UserModel.class);
+        when(users.addUser(realm, "sub-1")).thenReturn(created);
+        doAnswer(invocation -> {
+                    users.addUser(realm, "sub-1");
+                    throw new ModelDuplicateException("email collision after creating user");
+                })
+                .when(profile)
+                .create();
+
+        assertThrows(
+                UserProvisioningException.class,
+                () -> provisioner.provisionNewUser(request(JsonSerialization.mapper.createObjectNode()), EXTERNAL_ID));
+
+        verify(users).addUser(realm, "sub-1");
+        verify(session.getTransactionManager()).setRollbackOnly();
+        verify(users, never())
+                .addFederatedIdentity(any(RealmModel.class), any(UserModel.class), any(FederatedIdentityModel.class));
     }
 
     @Test
@@ -89,6 +174,8 @@ class OID4VPUserProvisionerTest {
         UserModel result = provisioner.provisionNewUser(request, EXTERNAL_ID);
 
         assertSame(created, result);
+        verify(profile).validate();
+        verify(profile).create();
         verify(created).setEnabled(true);
         verify(users)
                 .addFederatedIdentity(realm, created, new FederatedIdentityModel(ALIAS, EXTERNAL_ID, "sub-1", null));
@@ -118,6 +205,42 @@ class OID4VPUserProvisionerTest {
 
         assertEquals(UserProvisioningException.Reason.DUPLICATE, e.getReason());
         assertTrue(e.getMessage().contains("taken@example.com"));
+        verify(users, never()).addUser(any(RealmModel.class), anyString());
+    }
+
+    @Test
+    void refusesEmailMatchingExistingUsernameWithoutWriting() throws Exception {
+        stubEmailMapper();
+        when(realm.isLoginWithEmailAllowed()).thenReturn(true);
+        when(users.getUserByUsername(realm, "taken@example.com")).thenReturn(mock(UserModel.class));
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"sub\":\"sub-1\",\"email\":\"taken@example.com\"}");
+
+        UserProvisioningException error = assertThrows(
+                UserProvisioningException.class, () -> provisioner.provisionNewUser(request(claims), EXTERNAL_ID));
+
+        assertEquals(UserProvisioningException.Reason.DUPLICATE, error.getReason());
+        verify(users, never()).addUser(any(RealmModel.class), anyString());
+    }
+
+    @Test
+    void refusesUsernameMatchingExistingEmailWithoutWriting() throws Exception {
+        when(realm.isLoginWithEmailAllowed()).thenReturn(true);
+        when(users.getUserByEmail(realm, "taken@example.com")).thenReturn(mock(UserModel.class));
+        IdentityProviderMapperModel usernameMapper = mapperModel(OID4VPUserAttributeMapper.PROVIDER_ID);
+        usernameMapper.setConfig(Map.of(
+                AbstractOID4VPClaimMapper.CLAIM, "preferred_username",
+                OID4VPUserAttributeMapper.USER_ATTRIBUTE, "username"));
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(usernameMapper));
+        KeycloakSessionFactory sessionFactory = mock(KeycloakSessionFactory.class);
+        when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
+        when(sessionFactory.getProviderFactory(eq(IdentityProviderMapper.class), anyString()))
+                .thenReturn(new OID4VPUserAttributeMapper());
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"preferred_username\":\"taken@example.com\"}");
+
+        UserProvisioningException error = assertThrows(
+                UserProvisioningException.class, () -> provisioner.provisionNewUser(request(claims), EXTERNAL_ID));
+
+        assertEquals(UserProvisioningException.Reason.DUPLICATE, error.getReason());
         verify(users, never()).addUser(any(RealmModel.class), anyString());
     }
 

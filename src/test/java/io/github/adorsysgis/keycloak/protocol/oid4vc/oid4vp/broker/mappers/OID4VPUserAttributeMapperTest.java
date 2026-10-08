@@ -1,14 +1,19 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProvider;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.keycloak.broker.oid4vp.mappers.AbstractOID4VPClaimMapper;
+import org.keycloak.broker.oid4vp.mappers.ClaimPath;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderModel;
@@ -22,6 +27,31 @@ import org.keycloak.util.JsonSerialization;
 class OID4VPUserAttributeMapperTest {
 
     private final OID4VPUserAttributeMapper mapper = new OID4VPUserAttributeMapper();
+
+    @Test
+    void adapterKeepsPluginIdentityAndAvailability() {
+        assertEquals("oid4vp-user-attribute-idp-mapper", mapper.getId());
+        assertArrayEquals(
+                new String[] {OID4VPImportIdentityProviderFactory.PROVIDER_ID}, mapper.getCompatibleProviders());
+        assertTrue(mapper.isSupported(null));
+        assertEquals(
+                org.keycloak.broker.oid4vp.OID4VPIdentityProvider.CREDENTIAL_CLAIMS,
+                OID4VPImportIdentityProvider.CREDENTIAL_CLAIMS);
+    }
+
+    @Test
+    void preprocessHandlesMdocNamespacesAndStructuredValues() throws Exception {
+        BrokeredIdentityContext context = brokeredContext(
+                JsonSerialization.mapper.readTree(
+                        "{\"org.iso.18013.5.1\":{\"family_name\":\"Mustermann\"},\"adult\":true,\"address\":{\"city\":\"Berlin\"}}"));
+        mapper.preprocessFederatedIdentity(
+                null, null, mapperModel("org\\.iso\\.18013\\.5\\.1.family_name", "lastName"), context);
+        mapper.preprocessFederatedIdentity(null, null, mapperModel("adult", "adult"), context);
+        mapper.preprocessFederatedIdentity(null, null, mapperModel("address", "address"), context);
+        assertEquals("Mustermann", context.getLastName());
+        assertEquals("true", context.getUserAttribute("adult"));
+        assertEquals("{\"city\":\"Berlin\"}", context.getUserAttribute("address"));
+    }
 
     @Test
     void preprocessStagesUsernameEmailAndNames() throws Exception {
@@ -78,6 +108,69 @@ class OID4VPUserAttributeMapperTest {
         mapper.preprocessFederatedIdentity(null, null, blankAttribute, context);
 
         assertEquals("staged-user", context.getModelUsername());
+    }
+
+    @Test
+    void selectsNestedClaim() throws Exception {
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"address\":{\"locality\":\"Berlin\"}}");
+
+        assertEquals(
+                List.of("Berlin"),
+                ClaimPath.parse("address.locality").select(claims).stream()
+                        .map(JsonNode::asText)
+                        .toList());
+    }
+
+    @Test
+    void selectsAllArrayElements() throws Exception {
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"nationalities\":[\"DE\",\"FR\"]}");
+
+        assertEquals(
+                List.of("DE", "FR"),
+                ClaimPath.parse("nationalities[]").select(claims).stream()
+                        .map(JsonNode::asText)
+                        .toList());
+    }
+
+    @Test
+    void selectsFirstArrayElement() throws Exception {
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"nationalities\":[\"DE\",\"FR\"]}");
+
+        assertEquals(
+                List.of("DE"),
+                ClaimPath.parse("nationalities[0]").select(claims).stream()
+                        .map(JsonNode::asText)
+                        .toList());
+    }
+
+    @Test
+    void supportsEscapedDotInClaimName() throws Exception {
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"a.b\":\"value\"}");
+
+        assertEquals(
+                List.of("value"),
+                ClaimPath.parse("a\\.b").select(claims).stream()
+                        .map(JsonNode::asText)
+                        .toList());
+    }
+
+    @Test
+    void missingPathsSelectNothing() throws Exception {
+        JsonNode claims = JsonSerialization.mapper.readTree("{\"given_name\":\"Ada\"}");
+
+        assertTrue(ClaimPath.parse("family_name").select(claims).isEmpty());
+        assertTrue(ClaimPath.parse("given_name[]").select(claims).isEmpty());
+        assertTrue(ClaimPath.parse("address.locality").select(claims).isEmpty());
+    }
+
+    @Test
+    void malformedPathsReturnNull() {
+        assertNull(ClaimPath.parse(null));
+        assertNull(ClaimPath.parse(""));
+        assertNull(ClaimPath.parse("address."));
+        assertNull(ClaimPath.parse("[0]"));
+        assertNull(ClaimPath.parse("nationalities[1]"));
+        assertNull(ClaimPath.parse("nationalities["));
     }
 
     private static BrokeredIdentityContext brokeredContext(JsonNode claims) {

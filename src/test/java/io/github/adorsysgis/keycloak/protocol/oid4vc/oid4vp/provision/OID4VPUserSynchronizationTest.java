@@ -3,8 +3,10 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.provision;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -15,14 +17,15 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.AbstractOID4VPClaimMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.keycloak.broker.oid4vp.mappers.AbstractOID4VPClaimMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.common.VerificationException;
@@ -88,6 +91,33 @@ class OID4VPUserSynchronizationTest {
     }
 
     @Test
+    void changedEmailVerificationFollowsProviderTrust() throws Exception {
+        for (boolean trustEmail : new boolean[] {false, true}) {
+            UserModel linkedUser = mock(UserModel.class);
+            when(linkedUser.getUsername()).thenReturn("external-sub-1");
+            AtomicReference<String> email = new AtomicReference<>("old@example.com");
+            when(linkedUser.getEmail()).thenAnswer(invocation -> email.get());
+            doAnswer(invocation -> {
+                        email.set(invocation.getArgument(0));
+                        return null;
+                    })
+                    .when(linkedUser)
+                    .setEmail(anyString());
+            when(identityProviders.getMappersByAliasStream(ALIAS))
+                    .thenReturn(
+                            Stream.of(mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE)));
+            IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.IMPORT);
+            config.setTrustEmail(trustEmail);
+            JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\"}");
+
+            provisioner.verifyAndSynchronizeExistingUser(request(claims), config, "external-id", linkedUser);
+
+            assertEquals("new@example.com", linkedUser.getEmail());
+            verify(linkedUser).setEmailVerified(trustEmail);
+        }
+    }
+
+    @Test
     void importSyncModeKeepsImportedAttributes() throws Exception {
         // Mapper-level IMPORT: changed claims leave the user untouched (no basics healing either,
         // since the IdP mode is IMPORT, not FORCE).
@@ -102,6 +132,7 @@ class OID4VPUserSynchronizationTest {
 
         verify(user, never()).setEmail(anyString());
         verify(user, never()).setFirstName(anyString());
+        verify(user, never()).setEmailVerified(anyBoolean());
         assertEquals("old@example.com", user.getEmail());
     }
 
