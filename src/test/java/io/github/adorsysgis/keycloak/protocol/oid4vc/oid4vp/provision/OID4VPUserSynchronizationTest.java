@@ -117,7 +117,7 @@ class OID4VPUserSynchronizationTest {
 
     @Test
     void forceSyncModeHealsMappedAttributes() throws Exception {
-        // Basic healing and the FORCE mapper share unchanged-write suppression.
+        // Keycloak's FORCE mapper updates mapped basics with unchanged-write suppression.
         when(identityProviders.getMappersByAliasStream(ALIAS))
                 .thenReturn(Stream.of(
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE),
@@ -163,9 +163,47 @@ class OID4VPUserSynchronizationTest {
     }
 
     @Test
+    void forceProviderHonorsMapperImportOverrides() throws Exception {
+        when(identityProviders.getMappersByAliasStream(ALIAS))
+                .thenReturn(Stream.of(
+                        mapper("first-name", "given_name", "firstName", IdentityProviderMapperSyncMode.IMPORT),
+                        mapper("last-name", "family_name", "lastName", IdentityProviderMapperSyncMode.IMPORT),
+                        mapper("username", "preferred_username", "username", IdentityProviderMapperSyncMode.IMPORT),
+                        mapper("email", "email", "email", IdentityProviderMapperSyncMode.IMPORT)));
+        JsonNode claims = JsonSerialization.mapper.readTree(
+                "{\"given_name\":\"New\",\"family_name\":\"Changed\",\"preferred_username\":\"new-user\",\"email\":\"new@example.com\"}");
+
+        provisioner.verifyAndSynchronizeExistingUser(
+                request(claims), providerConfig(IdentityProviderSyncMode.FORCE), "external-id", user);
+
+        verify(user, never()).setFirstName(any());
+        verify(user, never()).setLastName(any());
+        verify(user, never()).setUsername(any());
+        verify(user, never()).setEmail(any());
+        verify(user, never()).setEmailVerified(anyBoolean());
+    }
+
+    @Test
+    void inheritedForceUpdatesWhileImportOverrideKeepsItsValue() throws Exception {
+        when(identityProviders.getMappersByAliasStream(ALIAS))
+                .thenReturn(Stream.of(
+                        mapper("first-name", "given_name", "firstName", IdentityProviderMapperSyncMode.IMPORT),
+                        mapper("last-name", "family_name", "lastName", IdentityProviderMapperSyncMode.INHERIT),
+                        mapper("username", "preferred_username", "username", IdentityProviderMapperSyncMode.INHERIT)));
+        JsonNode claims = JsonSerialization.mapper.readTree(
+                "{\"given_name\":\"New\",\"family_name\":\"Changed\",\"preferred_username\":\"new-user\"}");
+
+        provisioner.verifyAndSynchronizeExistingUser(
+                request(claims), providerConfig(IdentityProviderSyncMode.FORCE), "external-id", user);
+
+        verify(user, never()).setFirstName(any());
+        verify(user).setLastName("Changed");
+        verify(user).setUsername("new-user");
+    }
+
+    @Test
     void importSyncModeKeepsImportedAttributes() throws Exception {
-        // Mapper-level IMPORT: changed claims leave the user untouched (no basics healing either,
-        // since the IdP mode is IMPORT, not FORCE).
+        // Mapper-level IMPORT leaves imported values untouched.
         when(identityProviders.getMappersByAliasStream(ALIAS))
                 .thenReturn(Stream.of(
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.IMPORT),

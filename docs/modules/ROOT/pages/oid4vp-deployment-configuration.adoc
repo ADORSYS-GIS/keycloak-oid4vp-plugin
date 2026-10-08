@@ -644,8 +644,10 @@ The verified issuer must come from information covered by successful trust verif
 ==== Sync mode and relogin
 
 Linked users keep working after import is disabled; the flag gates creation only. On relogin
-the staged claims resynchronize broker-style: basic attributes heal only in `FORCE` sync mode,
-and each mapper's effective mode decides (`IMPORT` keeps imported values untouched).
+the staged claims resynchronize through Keycloak's mapper sync-mode delegate. Each mapper's
+effective mode governs both basic properties and custom attributes: `INHERIT` follows the provider,
+`FORCE` updates mapped values, and `IMPORT` keeps imported values untouched even when the provider
+uses `FORCE`.
 Configure the mode explicitly: a mapper without one falls back to legacy update behavior.
 
 Credential-to-user binding rules are checked against the linked user's current Keycloak

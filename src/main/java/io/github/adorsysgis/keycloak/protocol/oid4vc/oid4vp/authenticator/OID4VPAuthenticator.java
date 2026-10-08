@@ -23,7 +23,6 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -610,10 +609,7 @@ public class OID4VPAuthenticator implements Authenticator {
             case "family_name", "lastName" -> staged.getLastName();
             case "username", "preferred_username" -> staged.getModelUsername();
             case "email" -> staged.getEmail();
-            default -> {
-                List<String> values = staged.getAttributes().get(userAttribute);
-                yield values == null || values.isEmpty() ? null : values.get(0);
-            }
+            default -> staged.getUserAttribute(userAttribute);
         };
     }
 

@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -81,6 +82,16 @@ class SplitBindingEvaluationTest {
                 ctx, primaryClaims, supportingWithBothRuleTypes(), supportingClaims));
         assertDoesNotThrow(() -> authenticator.applyUserAttributeBindings(
                 ctx, supportingWithBothRuleTypes(), supportingClaims, attribute -> "Lovelace"));
+    }
+
+    @Test
+    void stagedCustomAttributeReaderUsesFirstValueAndHandlesMissingValues() {
+        BrokeredIdentityContext staged = stagedContext("Lovelace");
+        assertNull(OID4VPAuthenticator.readStagedUserAttribute(staged, "custom"));
+        staged.setUserAttribute("custom", List.of());
+        assertNull(OID4VPAuthenticator.readStagedUserAttribute(staged, "custom"));
+        staged.setUserAttribute("custom", List.of("first", "second"));
+        assertEquals("first", OID4VPAuthenticator.readStagedUserAttribute(staged, "custom"));
     }
 
     @Test

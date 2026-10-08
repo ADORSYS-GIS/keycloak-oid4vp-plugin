@@ -24,7 +24,6 @@ import org.keycloak.events.EventType;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderModel;
-import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.RealmModel;
@@ -183,9 +182,9 @@ public class OID4VPUserProvisioner {
      * linked user. Keeping verification and mutation behind this single public operation prevents
      * callers from accidentally updating the user before its bindings pass.
      *
-     * <p>Synchronization mirrors the broker: basic attributes heal only in {@code FORCE} sync
-     * mode, and mapper updates honor each mapper's effective sync mode (so {@code IMPORT} keeps
-     * imported values untouched).
+     * <p>Keycloak's mapper sync-mode delegate owns all mapped updates, including basic properties.
+     * Each mapper's effective sync mode applies, so an explicit {@code IMPORT} override keeps its
+     * imported values untouched even when the provider uses {@code FORCE}.
      */
     public void verifyAndSynchronizeExistingUser(
             Request request, IdentityProviderModel idpConfig, String externalId, UserModel user)
@@ -208,24 +207,14 @@ public class OID4VPUserProvisioner {
         List<IdentityProviderMapperModel> mappers = session.identityProviders()
                 .getMappersByAliasStream(idpConfig.getAlias())
                 .toList();
-        BrokeredIdentityContext brokerContext = rebuildBrokeredContext(
-                session, realm, provider, idpConfig, externalId, request.primaryClaims(), user, mappers);
-        // Share Keycloak's unchanged-write suppression across basic updates and mapper hooks.
+        BrokeredIdentityContext brokerContext =
+                buildBrokeredContext(request, provider, idpConfig, externalId, user.getUsername(), mappers);
+        // Share Keycloak's unchanged-write suppression across provider and mapper hooks.
         user = new UpdateOnlyChangeUserModelDelegate(user);
         String previousEmail = user.getEmail();
 
-        if (IdentityProviderSyncMode.FORCE.equals(idpConfig.getSyncMode())) {
-            if (brokerContext.getFirstName() != null) {
-                user.setFirstName(brokerContext.getFirstName());
-            }
-            if (brokerContext.getLastName() != null) {
-                user.setLastName(brokerContext.getLastName());
-            }
-            if (brokerContext.getUsername() != null) {
-                user.setUsername(brokerContext.getUsername());
-            }
-        }
-
+        // Basic properties are mapper-owned here, not supplied by a separate broker login.
+        // Writing staged properties directly would bypass mapper-level IMPORT overrides.
         provider.updateBrokeredUser(session, realm, user, brokerContext);
         for (IdentityProviderMapperModel mapperModel : mappers) {
             IdentityProviderMapper mapper = mapper(session, mapperModel);
@@ -298,36 +287,24 @@ public class OID4VPUserProvisioner {
         String initialUsername = deriveUsername(verifier.readClaim(
                 request.primaryClaims(), request.primaryRequirement().getSubjectClaim()));
 
-        BrokeredIdentityContext brokerContext = new BrokeredIdentityContext(externalId, idpConfig);
-        brokerContext.setIdp(provider);
-        brokerContext.setUsername(initialUsername);
-        brokerContext.setModelUsername(initialUsername);
-        brokerContext.setBrokerUserId(idpConfig.getAlias() + "." + externalId);
-        brokerContext.getContextData().put(OID4VPImportIdentityProvider.CREDENTIAL_CLAIMS, request.primaryClaims());
-
-        stageSupportedMappers(request.session(), request.realm(), mappers, brokerContext);
-        return brokerContext;
+        return buildBrokeredContext(request, provider, idpConfig, externalId, initialUsername, mappers);
     }
 
-    private BrokeredIdentityContext rebuildBrokeredContext(
-            KeycloakSession session,
-            RealmModel realm,
+    private BrokeredIdentityContext buildBrokeredContext(
+            Request request,
             OID4VPImportIdentityProvider provider,
             IdentityProviderModel idpConfig,
             String externalId,
-            JsonNode primaryClaims,
-            UserModel user,
+            String username,
             List<IdentityProviderMapperModel> mappers) {
-        String username = user.getUsername();
-
         BrokeredIdentityContext brokerContext = new BrokeredIdentityContext(externalId, idpConfig);
         brokerContext.setIdp(provider);
         brokerContext.setUsername(username);
         brokerContext.setModelUsername(username);
-        brokerContext.setBrokerUserId(idpConfig.getAlias() + "." + brokerContext.getId());
-        brokerContext.getContextData().put(OID4VPImportIdentityProvider.CREDENTIAL_CLAIMS, primaryClaims);
+        brokerContext.setBrokerUserId(idpConfig.getAlias() + "." + externalId);
+        brokerContext.getContextData().put(OID4VPImportIdentityProvider.CREDENTIAL_CLAIMS, request.primaryClaims());
 
-        stageSupportedMappers(session, realm, mappers, brokerContext);
+        stageSupportedMappers(request.session(), request.realm(), mappers, brokerContext);
         return brokerContext;
     }
 
