@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOrigin;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -104,11 +104,11 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                 session.getContext().getRealm().getName());
         CredentialIdentity identity = null;
         if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
-            CredentialOrigin origin = CredentialOrigin.fromPrimaryTrust(credentialReq);
-            if (origin == CredentialOrigin.CURRENT_REALM && !realmIssuer.equals(issuer)) {
+            Origin origin = Origin.fromPrimaryTrust(credentialReq);
+            if (origin == Origin.CURRENT_REALM && !realmIssuer.equals(issuer)) {
                 throw new VerificationException("Credential signed by this realm has an unexpected issuer");
             }
-            if (origin == CredentialOrigin.EXTERNAL && realmIssuer.equals(issuer)) {
+            if (origin == Origin.EXTERNAL && realmIssuer.equals(issuer)) {
                 throw new VerificationException("External credential must not claim the current realm issuer");
             }
             identity = CredentialIdentity.forCredential(credentialReq, origin, issuer, subject);

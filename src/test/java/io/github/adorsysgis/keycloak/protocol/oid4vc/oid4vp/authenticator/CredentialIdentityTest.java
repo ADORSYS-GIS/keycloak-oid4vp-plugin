@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
@@ -52,15 +53,13 @@ class CredentialIdentityTest {
     void missingIssuerOrSubjectResolvesToNull() {
         // Verification never fails for a missing identity (existing trust configurations without
         // an issuer namespace keep authenticating); the import path refuses import without one.
-        assertNull(
-                CredentialIdentity.forCredential(primaryLoginCredential(), CredentialOrigin.EXTERNAL, null, "subject"));
-        assertNull(
-                CredentialIdentity.forCredential(primaryLoginCredential(), CredentialOrigin.EXTERNAL, "issuer", null));
-        assertNull(CredentialIdentity.forCredential(primaryLoginCredential(), CredentialOrigin.EXTERNAL, null, null));
+        assertNull(CredentialIdentity.forCredential(primaryLoginCredential(), Origin.EXTERNAL, null, "subject"));
+        assertNull(CredentialIdentity.forCredential(primaryLoginCredential(), Origin.EXTERNAL, "issuer", null));
+        assertNull(CredentialIdentity.forCredential(primaryLoginCredential(), Origin.EXTERNAL, null, null));
 
-        CredentialIdentity identity = CredentialIdentity.forCredential(
-                primaryLoginCredential(), CredentialOrigin.CURRENT_REALM, "issuer", "subject");
-        assertEquals(CredentialOrigin.CURRENT_REALM, identity.origin());
+        CredentialIdentity identity =
+                CredentialIdentity.forCredential(primaryLoginCredential(), Origin.CURRENT_REALM, "issuer", "subject");
+        assertEquals(Origin.CURRENT_REALM, identity.origin());
         assertEquals("issuer", identity.issuer());
         assertEquals("subject", identity.subject());
     }
@@ -69,9 +68,9 @@ class CredentialIdentityTest {
     void supportingCredentialExposesNoUserIdentity() {
         CredentialRequirement supporting = new CredentialRequirement().setId("supporting");
 
-        assertNull(CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, null, "subject"));
-        assertNull(CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, "issuer", null));
-        assertNull(CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, "issuer", "subject"));
+        assertNull(CredentialIdentity.forCredential(supporting, Origin.EXTERNAL, null, "subject"));
+        assertNull(CredentialIdentity.forCredential(supporting, Origin.EXTERNAL, "issuer", null));
+        assertNull(CredentialIdentity.forCredential(supporting, Origin.EXTERNAL, "issuer", "subject"));
     }
 
     @Test
@@ -81,8 +80,8 @@ class CredentialIdentityTest {
         CredentialRequirement externallyTrusted =
                 primaryLoginCredential().setTrust(List.of(new TrustPolicy().setType(TrustPolicy.EUDI_PID_TRUST_LIST)));
 
-        assertEquals(CredentialOrigin.CURRENT_REALM, CredentialOrigin.fromPrimaryTrust(selfTrusted));
-        assertEquals(CredentialOrigin.EXTERNAL, CredentialOrigin.fromPrimaryTrust(externallyTrusted));
+        assertEquals(Origin.CURRENT_REALM, Origin.fromPrimaryTrust(selfTrusted));
+        assertEquals(Origin.EXTERNAL, Origin.fromPrimaryTrust(externallyTrusted));
     }
 
     @Test
@@ -92,7 +91,7 @@ class CredentialIdentityTest {
                         new TrustPolicy().setType(TrustPolicy.SELF),
                         new TrustPolicy().setType(TrustPolicy.EUDI_PID_TRUST_LIST)));
 
-        assertThrows(IllegalStateException.class, () -> CredentialOrigin.fromPrimaryTrust(mixed));
+        assertThrows(IllegalStateException.class, () -> Origin.fromPrimaryTrust(mixed));
     }
 
     @Test
@@ -100,8 +99,8 @@ class CredentialIdentityTest {
         CredentialRequirement sessionPrimary =
                 primaryLoginCredential().setIdentitySource(CredentialRequirement.IDENTITY_SOURCE_SESSION);
 
-        assertNull(CredentialIdentity.forCredential(sessionPrimary, CredentialOrigin.EXTERNAL, null, null));
-        assertNull(CredentialIdentity.forCredential(sessionPrimary, CredentialOrigin.EXTERNAL, "issuer", "subject"));
+        assertNull(CredentialIdentity.forCredential(sessionPrimary, Origin.EXTERNAL, null, null));
+        assertNull(CredentialIdentity.forCredential(sessionPrimary, Origin.EXTERNAL, "issuer", "subject"));
     }
 
     private static CredentialRequirement primaryLoginCredential() {

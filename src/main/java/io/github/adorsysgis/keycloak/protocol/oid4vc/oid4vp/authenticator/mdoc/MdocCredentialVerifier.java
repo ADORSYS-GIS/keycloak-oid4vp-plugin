@@ -17,7 +17,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContex
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOrigin;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -127,9 +127,9 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         String subject = readClaim(namespaces, credentialReq.getSubjectClaim());
         CredentialIdentity identity = null;
         if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
-            CredentialOrigin origin = CredentialOrigin.fromPrimaryTrust(credentialReq);
+            Origin origin = Origin.fromPrimaryTrust(credentialReq);
             String issuer = trust.issuerNamespace();
-            if (origin == CredentialOrigin.CURRENT_REALM) {
+            if (origin == Origin.CURRENT_REALM) {
                 issuer = realmIssuer(session);
             } else if (issuer != null && realmIssuer(session).equals(issuer)) {
                 throw new VerificationException("External credential must not claim the current realm issuer");

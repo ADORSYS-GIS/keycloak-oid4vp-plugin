@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
@@ -370,7 +371,7 @@ public class OID4VPAuthenticator implements Authenticator {
      * credential. The issuer URL comparison is an additional namespace consistency check.
      */
     private boolean isSameRealmCredential(KeycloakSession session, RealmModel realm, CredentialIdentity identity) {
-        if (identity == null || identity.origin() != CredentialOrigin.CURRENT_REALM) {
+        if (identity == null || identity.origin() != Origin.CURRENT_REALM) {
             return false;
         }
         String realmIssuer = Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName());

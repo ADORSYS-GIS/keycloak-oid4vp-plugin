@@ -1,8 +1,10 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.jose.jws.crypto.HashUtils;
@@ -17,7 +19,40 @@ import org.keycloak.utils.StringUtil;
  * <p>Presentation-during-issuance credentials keep using the session-bound Keycloak user and carry
  * no external identity.
  */
-public record CredentialIdentity(CredentialOrigin origin, String issuer, String subject) {
+public record CredentialIdentity(Origin origin, String issuer, String subject) {
+
+    /** Cryptographically established origin of this verified identity. */
+    public enum Origin {
+        CURRENT_REALM,
+        EXTERNAL;
+
+        /**
+         * Returns the origin established by the primary credential's successful trust policy.
+         *
+         * <p>Profile validation makes primary trust unambiguous: mDoc requires exactly one policy and
+         * SD-JWT does not allow self trust to be combined with external trust. The credential verifier
+         * has already validated the signature against the configured policy before this method is used.
+         */
+        public static Origin fromPrimaryTrust(CredentialRequirement credential) {
+            if (!credential.isPrimary() || credential.isSessionIdentity()) {
+                throw new IllegalArgumentException("Credential must be a non-session primary credential");
+            }
+
+            List<TrustPolicy> trust = credential.getTrust();
+            if (trust == null || trust.isEmpty()) {
+                return CURRENT_REALM;
+            }
+
+            boolean usesSelfTrust = trust.stream().anyMatch(policy -> TrustPolicy.SELF.equals(policy.getType()));
+            boolean usesExternalTrust = trust.stream().anyMatch(policy -> !TrustPolicy.SELF.equals(policy.getType()));
+            if (usesSelfTrust && usesExternalTrust) {
+                throw new IllegalStateException(
+                        "Primary credential must not combine self trust with external trust policies: "
+                                + credential.getId());
+            }
+            return usesSelfTrust ? CURRENT_REALM : EXTERNAL;
+        }
+    }
 
     /** Version prefix of {@link #externalId(String, String)}. Bump when the encoding changes. */
     public static final String EXTERNAL_ID_VERSION = "v1";
@@ -43,7 +78,7 @@ public record CredentialIdentity(CredentialOrigin origin, String issuer, String 
      * credentials that expose none.
      */
     public static CredentialIdentity forCredential(
-            CredentialRequirement credentialReq, CredentialOrigin origin, String issuer, String subject) {
+            CredentialRequirement credentialReq, Origin origin, String issuer, String subject) {
         Objects.requireNonNull(credentialReq, "credentialReq");
         if (!credentialReq.isPrimary() || credentialReq.isSessionIdentity()) {
             return null;
