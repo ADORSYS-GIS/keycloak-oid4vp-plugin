@@ -12,7 +12,7 @@ import org.keycloak.utils.StringUtil;
  * Verified identity exposed by a credential: its cryptographically established origin, issuer
  * namespace, and subject. These values must come from information covered by successful credential
  * and trust verification. User resolution consumes the primary credential's identity; supporting
- * credentials may expose the same information for other verified-presentation processing.
+ * credentials do not define the authenticating user's identity.
  *
  * <p>Presentation-during-issuance credentials keep using the session-bound Keycloak user and carry
  * no external identity.
@@ -35,16 +35,17 @@ public record CredentialIdentity(CredentialOrigin origin, String issuer, String 
     /**
      * Resolves the identity to expose on a {@link VerifiedCredential}.
      *
-     * <p>Returns the identity when both the issuer namespace and the subject are available,
-     * {@code null} otherwise. Verification itself never fails for a missing identity: existing
-     * trust configurations (e.g. mdoc {@code x5c} anchors without an explicit issuer) keep
-     * authenticating exactly as before. Callers that require an external identity, such as user
-     * import, must refuse credentials that expose none.
+     * <p>Returns the primary identity when both the issuer namespace and the subject are available,
+     * {@code null} otherwise. Supporting and session-bound credentials do not identify the
+     * authenticating user. Verification itself never fails for a missing identity: existing trust
+     * configurations (e.g. mdoc {@code x5c} anchors without an explicit issuer) keep authenticating
+     * exactly as before. Callers that require an external identity, such as user import, must refuse
+     * credentials that expose none.
      */
     public static CredentialIdentity forCredential(
             CredentialRequirement credentialReq, CredentialOrigin origin, String issuer, String subject) {
         Objects.requireNonNull(credentialReq, "credentialReq");
-        if (credentialReq.isSessionIdentity()) {
+        if (!credentialReq.isPrimary() || credentialReq.isSessionIdentity()) {
             return null;
         }
         if (StringUtil.isBlank(issuer) || StringUtil.isBlank(subject)) {

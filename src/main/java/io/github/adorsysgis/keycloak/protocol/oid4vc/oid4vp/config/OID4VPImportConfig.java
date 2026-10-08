@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import java.util.Map;
 import org.keycloak.models.AuthenticatorConfigModel;
@@ -50,7 +49,7 @@ public class OID4VPImportConfig {
      *     provider id. Import must be refused in all three cases; the message tells the realm
      *     administrator exactly what to fix.
      */
-    public OID4VPImportIdentityProviderConfig resolveImportIdentityProvider(KeycloakSession session, RealmModel realm) {
+    public IdentityProviderModel resolveImportIdentityProvider(KeycloakSession session, RealmModel realm) {
         IdentityProviderModel model = session.identityProviders().getByAlias(importIdentityProviderAlias);
         if (model == null) {
             throw new IllegalStateException(String.format(
@@ -73,6 +72,6 @@ public class OID4VPImportConfig {
                     model.getProviderId(),
                     OID4VPImportIdentityProviderFactory.PROVIDER_ID));
         }
-        return new OID4VPImportIdentityProviderConfig(model);
+        return model;
     }
 }

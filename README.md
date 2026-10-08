@@ -26,6 +26,7 @@ are supported:
     - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
     - Response Mode: `direct_post` and `direct_post.jwt`
     - Response Type: `vp_token`
+    - Query Languages: DIF Presentation Exchange and DCQL
     - Signed request object (`request_uri` dereferencing)
     - Request object `x5c` support for verifier access certificate
 
@@ -33,10 +34,6 @@ are supported:
     - DCQL request/response model is supported
     - `verifier_info` support for registration certificate injection
     - Compatibility and interoperability hardening are still evolving
-- **Opt-in user import** ✅
-    - Fully verified third-party credentials can create and link previously unknown users
-      (`importUnknownUsers`, default off); see
-      [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc)
 
 Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
 
@@ -141,7 +138,7 @@ flags), see:
 
 ### OID4VP authenticator configuration
 
-Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`,
+Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
 `responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 

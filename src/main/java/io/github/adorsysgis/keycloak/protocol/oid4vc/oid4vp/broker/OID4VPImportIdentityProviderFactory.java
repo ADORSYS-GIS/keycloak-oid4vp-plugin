@@ -30,12 +30,12 @@ public class OID4VPImportIdentityProviderFactory extends AbstractIdentityProvide
 
     @Override
     public OID4VPImportIdentityProvider create(KeycloakSession session, IdentityProviderModel model) {
-        return new OID4VPImportIdentityProvider(session, new OID4VPImportIdentityProviderConfig(model));
+        return new OID4VPImportIdentityProvider(session, model);
     }
 
     @Override
-    public OID4VPImportIdentityProviderConfig createConfig() {
-        return new OID4VPImportIdentityProviderConfig();
+    public IdentityProviderModel createConfig() {
+        return new IdentityProviderModel();
     }
 
     @Override

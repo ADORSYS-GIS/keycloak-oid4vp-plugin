@@ -18,7 +18,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.AbstractOID4VPClaimMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
@@ -306,7 +305,7 @@ class OID4VPUserProvisionerTest {
         when(session.getTransactionManager()).thenReturn(transactions);
 
         OID4VPUserProvisioner.Request request = request(JsonSerialization.mapper.createObjectNode());
-        OID4VPImportIdentityProviderConfig idpConfig = new OID4VPImportIdentityProviderConfig(idpModel());
+        IdentityProviderModel idpConfig = idpModel();
 
         assertThrows(
                 IllegalStateException.class,

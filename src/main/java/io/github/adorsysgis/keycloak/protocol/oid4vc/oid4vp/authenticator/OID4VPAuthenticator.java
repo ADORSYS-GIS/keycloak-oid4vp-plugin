@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPImportConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
@@ -36,6 +35,7 @@ import org.keycloak.authentication.FlowStatus;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.common.VerificationException;
 import org.keycloak.events.Errors;
+import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
@@ -367,8 +367,8 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     /**
-     * Origin is established by the format verifier from the verified signing key, independently of
-     * the trust policy. The issuer URL comparison is an additional namespace consistency check.
+     * Origin is established by the format verifier from the trust policy that verified the primary
+     * credential. The issuer URL comparison is an additional namespace consistency check.
      */
     private boolean isSameRealmCredential(KeycloakSession session, RealmModel realm, CredentialIdentity identity) {
         if (identity == null || identity.origin() != CredentialOrigin.CURRENT_REALM) {
@@ -481,7 +481,7 @@ public class OID4VPAuthenticator implements Authenticator {
             UserModel linked) {
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
         RealmModel realm = ctx.authenticationFlowContext().getRealm();
-        OID4VPImportIdentityProviderConfig idpConfig;
+        IdentityProviderModel idpConfig;
         try {
             idpConfig = importConfig.resolveImportIdentityProvider(session, realm);
         } catch (IllegalStateException e) {

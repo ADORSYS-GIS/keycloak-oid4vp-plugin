@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOrigin;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOriginResolver;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -107,18 +106,21 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                 .map(JsonNode::asText)
                 .orElse(null);
         String subject = readClaim(verifiedClaims, credentialReq.getSubjectClaim());
-        CredentialOrigin origin = CredentialOriginResolver.forSdJwt(session, sdJwt.getIssuerSignedJWT());
         String realmIssuer = Urls.realmIssuer(
                 session.getContext().getUri().getBaseUri(),
                 session.getContext().getRealm().getName());
-        if (origin == CredentialOrigin.CURRENT_REALM && !realmIssuer.equals(issuer)) {
-            throw new VerificationException("Credential signed by this realm has an unexpected issuer");
+        CredentialIdentity identity = null;
+        if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
+            CredentialOrigin origin = CredentialOrigin.fromPrimaryTrust(credentialReq);
+            if (origin == CredentialOrigin.CURRENT_REALM && !realmIssuer.equals(issuer)) {
+                throw new VerificationException("Credential signed by this realm has an unexpected issuer");
+            }
+            if (origin == CredentialOrigin.EXTERNAL && realmIssuer.equals(issuer)) {
+                throw new VerificationException("External credential must not claim the current realm issuer");
+            }
+            identity = CredentialIdentity.forCredential(credentialReq, origin, issuer, subject);
         }
-        if (origin == CredentialOrigin.EXTERNAL && realmIssuer.equals(issuer)) {
-            throw new VerificationException("External credential must not claim the current realm issuer");
-        }
-        return new VerifiedCredential(
-                CredentialIdentity.forCredential(credentialReq, origin, issuer, subject), verifiedClaims);
+        return new VerifiedCredential(identity, verifiedClaims);
     }
 
     @Override

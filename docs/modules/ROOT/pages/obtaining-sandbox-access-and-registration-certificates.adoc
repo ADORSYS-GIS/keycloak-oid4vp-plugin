@@ -1,0 +1,192 @@
+= Obtaining access and registration certificates from the German EUDI Wallet Sandbox
+
+You obtain access and registration certificates from the https://sandbox.eudi-wallet.org/[German EUDI Wallet Sandbox Registrar] to act as a trusted verifier (or issuer) in the ecosystem. Keycloak then advertises these certificates in OpenID4VP requests (or signed Credential Issuer Metadata).
+
+This guide focuses mainly on the process to obtain *access certificates* for a Keycloak-controlled signing key. Registration certificates for verification and issuance are briefly covered at the end.
+
+Because the access certificate is issued for a key pair you keep control of, the most convenient way to expose the private key to Keycloak is an external keystore imported through a `java-keystore` provider. This guide generates one for illustration.
+
+== Prerequisites
+
+* An account on the German Sandbox Registrar.
+* OpenSSL and, possibly, filesystem access to your Keycloak installation for loading the keystore.
+
+== Procedure overview
+
+Registering an organization is an end-to-end flow: you select or create the schemas you request to verify (or offer to issue), then select or create an access certificate matching the public key of your signing provider. Dedicated UIs exist for these steps — the Attestation Catalog for schemas, *Certificates > Access certificates* and *Certificates > Registration certificates* for certificate management — but the overview page also guides you through issuing or verifying directly:
+
+image::sandbox-overview.png[Sandbox overview with Register for verification and Register for issuance actions]
+
+This documentation focuses on creating the access certificate separately; it can later be selected when following the registration procedures.
+
+== Prepare a Certificate Signing Request (CSR)
+
+The Sandbox requires a CSR to produce an access certificate that matches the public key in the CSR, thereby ensuring that the requesting party controls the corresponding private key.
+
+The example below generates a new key for illustration. If you already control a private key that Keycloak can access (for instance in an existing keystore), proceed directly with that key instead — the CSR must be generated from it so that the issued certificate matches.
+
+* Generate an ECDSA P-256 private key:
+
+[source,bash]
+----
+openssl ecparam -name prime256v1 -genkey -noout -out priv.pem
+chmod 600 priv.pem
+----
+
+* Generate the PKCS#10 CSR (adjust the subject to your organization):
+
+[source,bash]
+----
+openssl req -new \
+  -key priv.pem \
+  -out cert.csr \
+  -subj "/CN=adorsys/O=adorsys/C=DE"
+----
+
+* Optionally inspect it before uploading:
+
+[source,bash]
+----
+openssl req -in cert.csr -noout -text -verify
+----
+
+The issued certificate must stay bound to this key pair. Do not generate a new key between the CSR creation and the certificate download.
+
+== Create the access certificate
+
+[WARNING]
+====
+The Registrar embeds the `Support URL` value of your organization as a `SAN:URI` in the certificate. If the certificate should carry a specific SAN:URI, set *Support URL* under *Organization settings* before completing this section; it cannot be changed afterwards without issuing a new certificate.
+
+The Sandbox offers no functional way to append a SAN:DNS to the certificate, so the certificate cannot work with the `x509_san_dns` client identifier prefix. Use `x509_hash` instead (see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference]).
+====
+
+Navigate to *Certificates > Access certificates* and click the plus icon.
+
+image::csr-ready-for-access-certificate.png[Manage certificates in the Sandbox]
+
+The certificate request form looks like this:
+
+image::access-certificate-csr-form.png[Access certificate creation form with CSR upload field]
+
+1. Name the access certificate.
+2. Upload `cert.csr` via *Select CSR file*.
+3. Click *Create Access Certificate*.
+4. On the next page, download the issued certificate, for example as `cert.pem`.
+
+The access certificate is signed by the root CA of the Sandbox, which is needed when importing the keystore we create into Keycloak. Download and convert the CA from DER to PEM, then verify the issued certificate against it:
+
+[source,bash]
+----
+curl -fsSLo ca.der https://sandbox.eudi-wallet.org/api/ca.der
+openssl x509 -inform DER -in ca.der -out ca.pem
+openssl verify -CAfile ca.pem cert.pem
+----
+
+== Bundle the certificate into a PKCS#12 keystore
+
+Configure Keycloak to consume the signing key through an external keystore. Bundle the private key, the access certificate, and the CA chain into a PKCS#12 file:
+
+[source,bash]
+----
+openssl pkcs12 -export \
+  -in cert.pem \
+  -inkey priv.pem \
+  -certfile ca.pem \
+  -out keystore.p12 \
+  -name ecdsa-key \
+  -passout pass:changeit
+----
+
+Verify it:
+
+[source,bash]
+----
+openssl pkcs12 -info -in keystore.p12 -passin pass:changeit -noout
+----
+
+NOTE: The Key alias is the `-name` value used here (`ecdsa-key` in this example). The `-passout` option sets the keystore password, which also applies as the key password. `changeit` is used for illustration only — choose a strong password instead. Never commit `priv.pem`, `cert.csr`, the `.p12` file or its passwords.
+
+== Register the keystore as a Keycloak provider
+
+1. Mount or copy `keystore.p12` under a folder named after the realm inside Keycloak's `data` directory — the recommended location per the https://www.keycloak.org/docs/latest/server_admin/index.html#_java_keystore[official documentation] for isolating keystores between realms. For a realm of your choice, e.g. `/opt/keycloak/data/<realm>/keystore.p12`.
+2. Open the Keycloak Admin console.
+3. Navigate to *Realm Settings > Keys > Providers* and add a `java-keystore` provider.
+4. Configure the provider:
+
+|===
+|Field |Value
+
+|Name
+|`ecdsa-keystore`
+
+|Priority
+|`100` (higher than the current default key)
+
+|Enabled / Active
+|On / On
+
+|Algorithm
+|`ES256`
+
+|Keystore
+|`/opt/keycloak/data/<realm>/keystore.p12`
+
+|Keystore type
+|`PKCS12`
+
+|Key alias
+|`ecdsa-key`
+
+|Key use
+|`sig`
+
+|Keystore password / Key password
+|The passwords chosen above
+|===
+
+image::provider-configuration.png[Adding the java-keystore provider in Keycloak]
+
+[IMPORTANT]
+====
+The plugin signs OpenID4VP requests with preferably an *active ES256 signing key* it selects itself, regardless of provider priority or alias. The configured access certificate must match that key — disable any competing active ES256 keys in the realm to avoid an unintended mismatch. The plugin validates this on configuration load.
+====
+
+== Prepare the access certificate for the OpenID4VP authenticator
+
+The OpenID4VP authenticator expects the leaf access certificate as a single-line, Base64-encoded DER string (without PEM headers, whitespace or line breaks):
+
+[source,bash]
+----
+openssl x509 -in cert.pem -outform DER | openssl base64 -A
+----
+
+Paste the output into the *Access certificate* field of the authenticator configuration, and set the *Client Identifier Prefix* to `x509_hash` — the plugin defaults to `x509_san_dns`, which is not compatible with the Sandbox certificate carrying no SAN:DNS entry (see the warning in <<Create the access certificate>>). For more details, see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
+
+== Registration certificates
+
+A registration certificate describes *what* a relying party requests or issues. Obtaining one is a short workflow starting from the overview page; in both cases you first select the schema and claims, then provide metadata, then attach the access certificate created earlier.
+
+=== As a verifier
+
+. Specify the information to request: the credential schema, then the required claims—for example, `eu.europa.ec.eudi.pid.1` with `given_name` and `family_name`.
+. Specify the verifier metadata: name and description (description should explain the purpose of requesting a credential).
+. Attach the access certificate and confirm.
+
+image::verifier-registration.png[Verifier registration steps with schema, metadata, and access certificate]
+
+You obtain a `registration_cert` JWT, which you configure in the *Registration certificate* field of the OpenID4VP authenticator.
+
+=== As an issuer
+
+In most cases, you would also want Keycloak to act as an issuer. Registration for issuance is symmetric and can reuse the same access certificate:
+
+. Specify the schema to be issued.
+. Specify the issuer metadata: name and description.
+. Attach the access certificate and confirm.
+
+The resulting `registration_cert` JWT is configured as *Issuer info* in Keycloak so that it is published in the Credential Issuer Metadata. For details, refer to the https://www.keycloak.org/docs/latest/server_admin/index.html#configuring-realm-level-oid4vci-attributes[official documentation] (Configuring realm-level OID4VCI attributes).
+
+== Summary
+
+In this guide you prepared a CSR, obtained an access certificate bound to a Keycloak-controlled ES256 signing key, imported it through a `java-keystore` provider, and configured the certificate for OpenID4VP authentication. This enables Keycloak to operate as a trusted verifier in the German sandbox ecosystem.

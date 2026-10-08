@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.AbstractOID4VPClaimMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -29,6 +28,7 @@ import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.common.VerificationException;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderMapperSyncMode;
+import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.models.KeycloakSession;
@@ -76,7 +76,7 @@ class OID4VPUserSynchronizationTest {
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.FORCE),
                         mapper("first-name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.FORCE)));
         JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\",\"given_name\":\"New\"}");
-        OID4VPImportIdentityProviderConfig config = providerConfig(IdentityProviderSyncMode.FORCE);
+        IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.FORCE);
 
         provisioner.verifyAndSynchronizeExistingUser(request(claims), config, "external-id", user);
 
@@ -96,7 +96,7 @@ class OID4VPUserSynchronizationTest {
                         mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.IMPORT),
                         mapper("first-name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.IMPORT)));
         JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\",\"given_name\":\"New\"}");
-        OID4VPImportIdentityProviderConfig config = providerConfig(IdentityProviderSyncMode.IMPORT);
+        IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.IMPORT);
 
         provisioner.verifyAndSynchronizeExistingUser(request(claims), config, "external-id", user);
 
@@ -111,7 +111,7 @@ class OID4VPUserSynchronizationTest {
         // like the broker. Administrators wanting IMPORT stability must configure it explicitly.
         when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(emailMapper(), firstNameMapper()));
         JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\",\"given_name\":\"New\"}");
-        OID4VPImportIdentityProviderConfig config = providerConfig(IdentityProviderSyncMode.IMPORT);
+        IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.IMPORT);
 
         provisioner.verifyAndSynchronizeExistingUser(request(claims), config, "external-id", user);
 
@@ -121,7 +121,7 @@ class OID4VPUserSynchronizationTest {
     @Test
     void bindingFailurePreventsSynchronization() throws Exception {
         JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\"}");
-        OID4VPImportIdentityProviderConfig config = providerConfig(IdentityProviderSyncMode.FORCE);
+        IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.FORCE);
         doThrow(new VerificationException("mismatch"))
                 .when(authenticator)
                 .applyUserAttributeBindings(context, primaryRequirement, claims, user);
@@ -155,7 +155,7 @@ class OID4VPUserSynchronizationTest {
         when(session.getTransactionManager()).thenReturn(transactions);
 
         JsonNode claims = JsonSerialization.mapper.readTree("{\"given_name\":\"New\"}");
-        OID4VPImportIdentityProviderConfig config = providerConfig(IdentityProviderSyncMode.FORCE);
+        IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.FORCE);
 
         assertThrows(
                 IllegalStateException.class,
@@ -170,8 +170,8 @@ class OID4VPUserSynchronizationTest {
                 session, realm, authenticator, context, null, primaryRequirement, claims, Map.of(), null);
     }
 
-    private OID4VPImportIdentityProviderConfig providerConfig(IdentityProviderSyncMode syncMode) {
-        OID4VPImportIdentityProviderConfig config = new OID4VPImportIdentityProviderConfig();
+    private IdentityProviderModel providerConfig(IdentityProviderSyncMode syncMode) {
+        IdentityProviderModel config = new IdentityProviderModel();
         config.setAlias(ALIAS);
         config.setEnabled(true);
         config.setSyncMode(syncMode);

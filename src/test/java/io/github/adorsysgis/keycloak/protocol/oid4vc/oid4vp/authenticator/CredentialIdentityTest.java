@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -62,16 +64,33 @@ class CredentialIdentityTest {
     }
 
     @Test
-    void supportingCredentialResolvesBestEffort() {
+    void supportingCredentialExposesNoUserIdentity() {
         CredentialRequirement supporting = new CredentialRequirement().setId("supporting");
 
         assertNull(CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, null, "subject"));
         assertNull(CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, "issuer", null));
+        assertNull(CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, "issuer", "subject"));
+    }
 
-        CredentialIdentity identity =
-                CredentialIdentity.forCredential(supporting, CredentialOrigin.EXTERNAL, "issuer", "subject");
-        assertEquals("issuer", identity.issuer());
-        assertEquals("subject", identity.subject());
+    @Test
+    void primaryOriginComesFromVerifiedTrustPolicy() {
+        CredentialRequirement selfTrusted =
+                primaryLoginCredential().setTrust(List.of(new TrustPolicy().setType(TrustPolicy.SELF)));
+        CredentialRequirement externallyTrusted =
+                primaryLoginCredential().setTrust(List.of(new TrustPolicy().setType(TrustPolicy.EUDI_PID_TRUST_LIST)));
+
+        assertEquals(CredentialOrigin.CURRENT_REALM, CredentialOrigin.fromPrimaryTrust(selfTrusted));
+        assertEquals(CredentialOrigin.EXTERNAL, CredentialOrigin.fromPrimaryTrust(externallyTrusted));
+    }
+
+    @Test
+    void mixedPrimaryTrustHasNoAmbiguousOrigin() {
+        CredentialRequirement mixed = primaryLoginCredential()
+                .setTrust(List.of(
+                        new TrustPolicy().setType(TrustPolicy.SELF),
+                        new TrustPolicy().setType(TrustPolicy.EUDI_PID_TRUST_LIST)));
+
+        assertThrows(IllegalStateException.class, () -> CredentialOrigin.fromPrimaryTrust(mixed));
     }
 
     @Test

@@ -184,14 +184,11 @@ the stored user's attributes.
 What administrators and users should expect:
 
 * Import is disabled by default; linked users keep authenticating after it is turned off again.
-* Only credentials verified as issued by the current realm resolve local users directly by
-  `sub`. This is determined from the verified signing key, independently of whether trust used
-  `self`, `x5c`, or the EUDI trust list. Everything else is issuer-bound, so the same subject from
-  two issuers never cross-authenticates.
+* Only primary credentials successfully verified with `self` trust resolve local users directly by
+  `sub`. Primary credentials verified with `x5c` or the EUDI trust list are external and
+  issuer-bound, so the same subject from two issuers never cross-authenticates.
 * A locally issued login credential must put the Keycloak internal user ID in its configured
   `subjectClaim`; there is no fallback from user ID to username.
-* Each realm should use distinct credential-issuance signing keys. Sharing an issuance key between
-  realms makes origin ambiguous, especially for mdoc.
 * Username and email matches never link an account — collisions fail the login and leave the
   existing account untouched.
 * Disabled accounts stay disabled and are never re-enabled by a login.

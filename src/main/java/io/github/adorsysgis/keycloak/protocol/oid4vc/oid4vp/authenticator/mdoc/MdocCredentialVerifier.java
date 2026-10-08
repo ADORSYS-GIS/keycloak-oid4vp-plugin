@@ -18,7 +18,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOrigin;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialOriginResolver;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -126,17 +125,24 @@ public class MdocCredentialVerifier implements CredentialVerifier {
 
         JsonNode namespaces = payloadRef.get().get(L_NAME_SPACES);
         String subject = readClaim(namespaces, credentialReq.getSubjectClaim());
-        CredentialOrigin origin =
-                CredentialOriginResolver.forMdoc(session, verificationContext.getVerifiedIssuerCertificate());
-        String realmIssuer = Urls.realmIssuer(
+        CredentialIdentity identity = null;
+        if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
+            CredentialOrigin origin = CredentialOrigin.fromPrimaryTrust(credentialReq);
+            String issuer = trust.issuerNamespace();
+            if (origin == CredentialOrigin.CURRENT_REALM) {
+                issuer = realmIssuer(session);
+            } else if (issuer != null && realmIssuer(session).equals(issuer)) {
+                throw new VerificationException("External credential must not claim the current realm issuer");
+            }
+            identity = CredentialIdentity.forCredential(credentialReq, origin, issuer, subject);
+        }
+        return new VerifiedCredential(identity, namespaces);
+    }
+
+    private static String realmIssuer(KeycloakSession session) {
+        return Urls.realmIssuer(
                 session.getContext().getUri().getBaseUri(),
                 session.getContext().getRealm().getName());
-        String issuer = origin == CredentialOrigin.CURRENT_REALM ? realmIssuer : trust.issuerNamespace();
-        if (origin == CredentialOrigin.EXTERNAL && realmIssuer.equals(issuer)) {
-            throw new VerificationException("External credential must not claim the current realm issuer");
-        }
-        return new VerifiedCredential(
-                CredentialIdentity.forCredential(credentialReq, origin, issuer, subject), namespaces);
     }
 
     @Override

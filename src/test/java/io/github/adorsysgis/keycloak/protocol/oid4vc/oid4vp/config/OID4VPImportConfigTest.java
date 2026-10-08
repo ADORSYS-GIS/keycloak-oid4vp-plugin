@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import java.util.HashMap;
 import java.util.Map;
@@ -67,7 +66,7 @@ class OID4VPImportConfigTest {
         OID4VPImportConfig config = new OID4VPImportConfig(
                 authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true")));
 
-        OID4VPImportIdentityProviderConfig resolved =
+        IdentityProviderModel resolved =
                 config.resolveImportIdentityProvider(sessionWith(idpModel(true, true)), realm());
 
         assertEquals(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, resolved.getAlias());

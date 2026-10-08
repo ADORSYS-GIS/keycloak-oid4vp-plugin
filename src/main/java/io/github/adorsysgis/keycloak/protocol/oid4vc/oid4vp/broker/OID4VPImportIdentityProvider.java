@@ -7,6 +7,7 @@ import org.keycloak.broker.provider.AuthenticationRequest;
 import org.keycloak.broker.provider.IdentityBrokerException;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.FederatedIdentityModel;
+import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
@@ -20,7 +21,7 @@ import org.keycloak.models.UserSessionModel;
  * attribute mappers, and the federated identity links, so imported users behave like any other
  * brokered users.
  */
-public class OID4VPImportIdentityProvider extends AbstractIdentityProvider<OID4VPImportIdentityProviderConfig> {
+public class OID4VPImportIdentityProvider extends AbstractIdentityProvider<IdentityProviderModel> {
 
     private static final Logger logger = Logger.getLogger(OID4VPImportIdentityProvider.class);
 
@@ -31,7 +32,7 @@ public class OID4VPImportIdentityProvider extends AbstractIdentityProvider<OID4V
      */
     public static final String CREDENTIAL_CLAIMS = "OID4VP_CREDENTIAL_CLAIMS";
 
-    public OID4VPImportIdentityProvider(KeycloakSession session, OID4VPImportIdentityProviderConfig config) {
+    public OID4VPImportIdentityProvider(KeycloakSession session, IdentityProviderModel config) {
         super(session, config);
     }
 

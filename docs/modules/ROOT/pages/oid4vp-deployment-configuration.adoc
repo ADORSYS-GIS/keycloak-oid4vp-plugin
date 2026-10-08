@@ -193,7 +193,7 @@ Trust policies define how the issuer of a credential is verified.
 { "type": "self" }
 ----
 
-Used for credentials issued by the same Keycloak instance. Not supported for mDoc credentials.
+This is the default when `trust` is omitted. It is used for credentials issued by the same Keycloak realm. For SD-JWT VC, verification uses the realm's enabled signing keys. For mDoc, the leaf certificates of enabled realm signing keys are used as trust anchors. Active and passive keys are trusted so credentials remain valid across normal key rotation; disabled keys are not trusted.
 
 .X.509 certificate trust (`x5c`)
 [source,json]
@@ -229,7 +229,7 @@ Validates the credential issuer against a EUDI trust list. The `trustListSigning
 |Same-realm primary SD-JWT
 |One `self` policy
 |Standalone `x5c`, or `self` mixed with external policies
-|The current realm's enabled signing keys and the signed `iss` establish local origin.
+|The current realm's enabled signing keys verify the credential; `self` establishes local origin and the signed `iss` must name the realm.
 
 |External PID SD-JWT
 |`eudi_pid_trust_list`; normally pin `issuer` for a single-provider profile
@@ -510,13 +510,13 @@ Keycloak users. Never enable it without understanding the rules below.
 
 ==== How resolution works
 
-* Trust validation and issuer origin are separate. `self`, `x5c`, or the EUDI trust list first
-  decides whether the credential is accepted. The plugin then treats it as issued *by this realm*
-  only when the verified SD-JWT signature or mdoc issuer-certificate key matches a signing key
-  owned by the realm. It resolves the configured subject directly as a Keycloak user ID, without
-  any federated link. If that user no longer exists, login fails — a deleted account is never
-  recreated.
-* Any other credential is *external*: the plugin computes an issuer-qualified external ID from
+* A primary credential accepted by `self` trust is issued *by this realm*. `self` verifies SD-JWT
+  signatures with the realm's enabled signing keys and mDoc certificate chains with the leaf
+  certificates of enabled realm signing keys. The plugin resolves its configured subject directly
+  as a Keycloak user ID, without any federated link. If that user no longer exists, login fails — a
+  deleted account is never recreated.
+* A primary credential accepted by `x5c` or the EUDI trust list is *external*: the plugin computes
+  an issuer-qualified external ID from
   the verified issuer and the configured subject, and looks up the federated link
   (`<import-alias>.<external-ID>`). A linked user authenticates; an unknown identity is created
   only when import is enabled.
@@ -527,7 +527,8 @@ Keycloak users. Never enable it without understanding the rules below.
 
 Suppose `https://issuer.example/realms/source` issues the credential and
 `https://login.example/realms/target` runs the verifier. The target realm does not call the source
-realm or read its users. It verifies the wallet presentation, classifies the signing origin, and
+realm or read its users. It verifies the wallet presentation, classifies origin from the verified
+trust policy, and
 derives an opaque external ID from the verified `(issuer namespace, subject)` pair. That external ID
 selects a federated link in the target realm.
 
@@ -550,8 +551,8 @@ namespace-qualified.
 
 [IMPORTANT]
 ====
-Use different credential-signing keys in different realms. Username and email mappers populate the
-target account but never locate or merge one. Changing `trust.issuer`, `subjectClaim`, or the import
+Username and email mappers populate the target account but never locate or merge one. Changing
+`trust.issuer`, `subjectClaim`, or the import
 provider alias changes the federated-link namespace and can strand existing links. Retain rotated
 issuer keys or anchors for as long as credentials signed by them must remain usable.
 ====

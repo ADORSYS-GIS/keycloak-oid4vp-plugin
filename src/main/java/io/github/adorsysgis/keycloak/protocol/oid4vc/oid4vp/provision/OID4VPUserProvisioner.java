@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProvider;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPImportConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
@@ -24,6 +23,7 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.IdentityProviderMapperModel;
+import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelDuplicateException;
@@ -81,7 +81,7 @@ public class OID4VPUserProvisioner {
         KeycloakSession session = request.session();
         RealmModel realm = request.realm();
 
-        OID4VPImportIdentityProviderConfig idpConfig = resolveProvider(request);
+        IdentityProviderModel idpConfig = resolveProvider(request);
         OID4VPImportIdentityProvider provider = new OID4VPImportIdentityProvider(session, idpConfig);
         String alias = idpConfig.getAlias();
         // The mapper stream is one-shot; materialize it once and share it between staging and hooks.
@@ -171,7 +171,7 @@ public class OID4VPUserProvisioner {
      * imported values untouched).
      */
     public void verifyAndSynchronizeExistingUser(
-            Request request, OID4VPImportIdentityProviderConfig idpConfig, String externalId, UserModel user)
+            Request request, IdentityProviderModel idpConfig, String externalId, UserModel user)
             throws UserProvisioningException {
         evaluateExistingUserBindings(request, user);
         try {
@@ -183,7 +183,7 @@ public class OID4VPUserProvisioner {
     }
 
     private void synchronizeExistingUser(
-            Request request, OID4VPImportIdentityProviderConfig idpConfig, String externalId, UserModel user) {
+            Request request, IdentityProviderModel idpConfig, String externalId, UserModel user) {
         KeycloakSession session = request.session();
         RealmModel realm = request.realm();
         OID4VPImportIdentityProvider provider = new OID4VPImportIdentityProvider(session, idpConfig);
@@ -246,7 +246,7 @@ public class OID4VPUserProvisioner {
         }
     }
 
-    private OID4VPImportIdentityProviderConfig resolveProvider(Request request) throws UserProvisioningException {
+    private IdentityProviderModel resolveProvider(Request request) throws UserProvisioningException {
         try {
             return request.importConfig().resolveImportIdentityProvider(request.session(), request.realm());
         } catch (IllegalStateException e) {
@@ -257,7 +257,7 @@ public class OID4VPUserProvisioner {
     private BrokeredIdentityContext stageBrokeredContext(
             Request request,
             OID4VPImportIdentityProvider provider,
-            OID4VPImportIdentityProviderConfig idpConfig,
+            IdentityProviderModel idpConfig,
             String externalId,
             List<IdentityProviderMapperModel> mappers) {
         CredentialVerifier verifier = request.context()
@@ -281,7 +281,7 @@ public class OID4VPUserProvisioner {
             KeycloakSession session,
             RealmModel realm,
             OID4VPImportIdentityProvider provider,
-            OID4VPImportIdentityProviderConfig idpConfig,
+            IdentityProviderModel idpConfig,
             String externalId,
             JsonNode primaryClaims,
             UserModel user,
