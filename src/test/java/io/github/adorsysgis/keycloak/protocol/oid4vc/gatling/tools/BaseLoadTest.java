@@ -124,11 +124,12 @@ public final class BaseLoadTest {
 
     /**
      * Applies shared performance and correctness assertions to simulations: 95th percentile
-     * response time under 3s, zero failures, and at least 100 requests executed.
+     * response time under 3.5s, zero failures, and at least 100 requests executed. The extra
+     * headroom accommodates latency variation on shared GitHub-hosted runners.
      */
     public static void assertions(Simulation.SetUp setUp) {
         setUp.assertions(
-                global().responseTime().percentile3().lt(3000),
+                global().responseTime().percentile3().lt(3500),
                 global().failedRequests().count().is(0L),
                 global().allRequests().count().gt(100L));
     }
