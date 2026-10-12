@@ -656,7 +656,9 @@ attribute is updated. For a new external user, the same rules are checked agains
 mapper values before the user is created.
 
 If the hidden provider is later removed or disabled, an already-linked user can still authenticate, but
-claim synchronization is skipped. If the provider is available and synchronization starts, a mapper or
+claim synchronization is skipped. Primary and supporting credential-to-user binding rules still
+apply against the linked user's current attributes; an unavailable provider never bypasses these checks.
+If the provider is available and synchronization starts, a mapper or
 provider-hook failure fails the login and rolls back the attempted changes.
 
 [NOTE]

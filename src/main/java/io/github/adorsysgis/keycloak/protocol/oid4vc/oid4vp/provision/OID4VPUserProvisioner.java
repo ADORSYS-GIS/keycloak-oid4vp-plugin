@@ -189,7 +189,7 @@ public class OID4VPUserProvisioner {
     public void verifyAndSynchronizeExistingUser(
             Request request, IdentityProviderModel idpConfig, String externalId, UserModel user)
             throws UserProvisioningException {
-        evaluateExistingUserBindings(request, user);
+        verifyExistingUserBindings(request, user);
         try {
             synchronizeExistingUser(request, idpConfig, externalId, user);
         } catch (RuntimeException e) {
@@ -240,7 +240,12 @@ public class OID4VPUserProvisioner {
         }
     }
 
-    private void evaluateExistingUserBindings(Request request, UserModel user) throws UserProvisioningException {
+    /**
+     * Validates primary and supporting credential bindings against the linked user's current
+     * attributes without resolving the import provider or changing the user. The authenticator
+     * also uses this guard when provider configuration is unavailable and synchronization is skipped.
+     */
+    public void verifyExistingUserBindings(Request request, UserModel user) throws UserProvisioningException {
         OID4VPAuthenticator authenticator = request.authenticator();
         OID4VPAuthenticator.Context context = request.context();
 

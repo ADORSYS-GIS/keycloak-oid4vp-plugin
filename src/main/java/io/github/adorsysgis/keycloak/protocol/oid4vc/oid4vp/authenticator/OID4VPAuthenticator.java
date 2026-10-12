@@ -486,7 +486,14 @@ public class OID4VPAuthenticator implements Authenticator {
             idpConfig = importConfig.resolveImportIdentityProvider(session, realm);
         } catch (IllegalStateException e) {
             // The link outlives its provider configuration: log in without synchronizing rather
-            // than locking out a previously imported user.
+            // than locking out a previously imported user. Only synchronization is optional;
+            // primary and supporting user-attribute bindings must still pass.
+            try {
+                provisioner.verifyExistingUserBindings(request, linked);
+            } catch (UserProvisioningException bindingFailure) {
+                failProvisioning(ctx, bindingFailure);
+                return false;
+            }
             logger.warnf(
                     "Linked user '%s' resolves via alias '%s' but the import provider is unusable: %s."
                             + " Authenticating without claim synchronization.",

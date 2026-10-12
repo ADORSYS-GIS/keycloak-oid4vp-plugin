@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.KeycloakTestContainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.TestCryptoUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
@@ -40,6 +43,8 @@ import org.apache.http.util.EntityUtils;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
 import org.keycloak.representations.idm.FederatedIdentityRepresentation;
@@ -47,6 +52,7 @@ import org.keycloak.representations.idm.IdentityProviderMapperRepresentation;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.keycloak.util.JsonSerialization;
 
 /**
  * End-to-end proof of prompt-free user import: an externally issued mdoc or SD-JWT credential
@@ -375,10 +381,12 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
         assertEquals(importedUserId, users.getFirst().getId(), "The same linked user must authenticate");
     }
 
-    @Test
-    public void shouldNotSynchronizeLinkedUser_WhenUserAttributeBindingFails() throws Exception {
+    @ParameterizedTest(name = "provider: {0}")
+    @ValueSource(strings = {"enabled", "disabled", "wrong-provider"})
+    public void shouldNotSynchronizeLinkedUser_WhenUserAttributeBindingFails(String providerState) throws Exception {
         createImportIdpWithMappers();
         String importedUserId = loginExternalUser();
+        setImportProviderState(providerState, importedUserId);
 
         // The stored email is external@example.com. A later credential presents a different email
         // and requires it to match the stored user. Synchronizing first would overwrite the email
@@ -408,6 +416,80 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
                 "external@example.com",
                 user.getEmail(),
                 "A failed binding must leave the linked user's attributes unchanged");
+    }
+
+    @ParameterizedTest(name = "provider: {0}")
+    @ValueSource(strings = {"enabled", "disabled", "wrong-provider"})
+    public void shouldRejectLinkedUser_WhenSupportingBindingFails(String providerState) throws Exception {
+        createImportIdpWithMappers();
+        String importedUserId = loginExternalUser();
+        setImportProviderState(providerState, importedUserId);
+
+        withAuthenticationProfile(
+                importProfileJsonWithSupportingEmailBinding(), IMPORT_PROFILE_ID, (apiFlow, requestObject) -> {
+                    String primary = presentExternalMdoc(requestObject);
+                    String supporting = presentExternalMdoc(requestObject, EXTERNAL_SUBJECT, "changed@example.com");
+
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true);
+                    testFailingAuthenticationWithVPTokenMap(
+                            Map.of(
+                                    AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID, primary,
+                                    AuthenticationProfileSamples.SUPPORTING_CREDENTIAL_ID, supporting),
+                            opts,
+                            HttpStatus.SC_UNAUTHORIZED,
+                            ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
+                            "Supporting credential verification failed");
+                });
+
+        UserRepresentation user =
+                getActiveTestRealmResource().users().get(importedUserId).toRepresentation();
+        assertEquals("external@example.com", user.getEmail(), "Failed bindings must not update the linked user");
+        assertNotNull(usersFederatedLink(importedUserId), "Failed bindings must not remove the existing link");
+    }
+
+    @ParameterizedTest(name = "provider: {0}")
+    @ValueSource(strings = {"disabled", "wrong-provider"})
+    public void shouldAuthenticateWithoutSynchronization_WhenProviderUnavailableAndBindingsPass(String providerState)
+            throws Exception {
+        createImportIdpWithMappers();
+        String importedUserId = loginExternalUser();
+        setImportProviderState(providerState, importedUserId);
+
+        withAuthenticationProfile(
+                importProfileJsonWithSupportingEmailBinding(), IMPORT_PROFILE_ID, (apiFlow, requestObject) -> {
+                    // Matching email bindings permit login, but other claims must not synchronize.
+                    String token = presentMdoc(
+                            requestObject,
+                            Map.of(
+                                    MdocBaseTest.NAMESPACE,
+                                    Map.of(
+                                            "sub", EXTERNAL_SUBJECT,
+                                            "email", "external@example.com",
+                                            "given_name", "Changed",
+                                            "family_name", "Changed")));
+                    TestOpts opts = TestOpts.getDefault()
+                            .setAuthContext(apiFlow.authContext())
+                            .setCodeVerifier(apiFlow.codeVerifier())
+                            .setShouldForceUnencryptedResponse(true)
+                            .setTestUser(EXTERNAL_SUBJECT);
+                    testSuccessfulAuthenticationWithVPTokenMap(
+                            Map.of(
+                                    AuthenticationProfileSamples.PRIMARY_CREDENTIAL_ID, token,
+                                    AuthenticationProfileSamples.SUPPORTING_CREDENTIAL_ID, token),
+                            opts);
+                });
+
+        List<UserRepresentation> users = getActiveTestRealmResource().users().search(EXTERNAL_SUBJECT);
+        assertEquals(1, users.size(), "Fallback login must not create another user");
+        UserRepresentation user =
+                getActiveTestRealmResource().users().get(importedUserId).toRepresentation();
+        assertEquals("external@example.com", user.getEmail());
+        assertEquals("Ada", user.getFirstName(), "Unavailable providers must not synchronize claims");
+        assertEquals("Lovelace", user.getLastName(), "Unavailable providers must not synchronize claims");
+        assertNotNull(usersFederatedLink(importedUserId), "Fallback login must retain the existing link");
     }
 
     @Test
@@ -1110,6 +1192,42 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
                           }
                         ],
                 """.replace("{namespace}", MdocBaseTest.NAMESPACE));
+    }
+
+    private String importProfileJsonWithSupportingEmailBinding() throws Exception {
+        JsonNode profiles = JsonSerialization.mapper.readTree(importProfileJsonWithEmailBinding());
+        ArrayNode credentials = (ArrayNode) profiles.get(0).get("credentials");
+        ObjectNode supporting = credentials.get(0).deepCopy();
+        supporting.put("id", AuthenticationProfileSamples.SUPPORTING_CREDENTIAL_ID);
+        supporting.put("role", "supporting");
+        supporting.remove("subjectClaim");
+        credentials.add(supporting);
+        return profiles.toString();
+    }
+
+    private void setImportProviderState(String state, String linkedUserId) {
+        IdentityProviderRepresentation provider = getActiveTestRealmResource()
+                .identityProviders()
+                .get(IMPORT_IDP_ALIAS)
+                .toRepresentation();
+        switch (state) {
+            case "enabled" -> {
+                return;
+            }
+            case "disabled" -> provider.setEnabled(false);
+            case "wrong-provider" -> {
+                // Keycloak does not change a provider's type through an update. Replace it and
+                // restore the federated link so this really exercises the unexpected-type path.
+                removeImportIdp();
+                provider.setInternalId(null);
+                provider.setProviderId("oidc");
+                getActiveTestRealmResource().identityProviders().create(provider);
+                linkExternalUser(linkedUserId, TEST_ISSUER, EXTERNAL_SUBJECT);
+                return;
+            }
+            default -> throw new IllegalArgumentException("Unknown provider state: " + state);
+        }
+        getActiveTestRealmResource().identityProviders().get(IMPORT_IDP_ALIAS).update(provider);
     }
 
     /**
