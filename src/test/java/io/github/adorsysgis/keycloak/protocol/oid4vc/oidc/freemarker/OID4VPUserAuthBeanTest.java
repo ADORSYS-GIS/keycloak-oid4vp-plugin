@@ -288,6 +288,43 @@ public class OID4VPUserAuthBeanTest {
     }
 
     @Test
+    public void shouldRedirectPresentationDuringIssuanceToTheWallet() {
+        String walletUri =
+                "openid4vp://authorize?client_id=wallet&request_uri=https%3A%2F%2Fkeycloak.example%2Frequest";
+        AuthorizationContext walletContext = new AuthorizationContext().setAuthorizationRequest(walletUri);
+        Mockito.when(oid4vp.startAuthentication(
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class),
+                        nullable(PresentationDuringIssuanceSession.class)))
+                .thenReturn(walletContext);
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertEquals(URI.create(walletUri), OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectWhenPresentationDuringIssuanceProfileIsMissing() {
+        try (var ignored = Mockito.mockConstruction(PresentationDuringIssuanceService.class, (service, context) -> {
+            Mockito.when(service.requiresNestedPresentationDuringIssuance()).thenReturn(true);
+            Mockito.when(service.resolveEnforcedProfileId()).thenReturn(null);
+        })) {
+            OID4VPUserAuthBean bean = createTestBean(TEST_CLIENT_ID, false);
+            assertTrue(bean.isPresentationDuringIssuance());
+            assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+            assertTrue(bean.getAuthContext().getError());
+        }
+    }
+
+    @Test
+    public void shouldNotRedirectOrdinaryWalletLogin() {
+        OID4VPUserAuthBean bean = createTestBean();
+        assertFalse(bean.isPresentationDuringIssuance());
+        assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
     public void shouldCachePresentationDuringIssuanceContext() {
         OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
 

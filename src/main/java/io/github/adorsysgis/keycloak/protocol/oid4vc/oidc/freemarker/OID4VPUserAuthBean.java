@@ -107,8 +107,7 @@ public class OID4VPUserAuthBean {
     }
 
     /**
-     * Drive view to display consent page for redirecting to the wallet
-     * with a same-device authorization request.
+     * Whether this login must redirect to a same-device wallet presentation.
      */
     public boolean isPresentationDuringIssuance() {
         return presentationDuringIssuanceRequired;

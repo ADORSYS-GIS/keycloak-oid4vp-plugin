@@ -441,14 +441,15 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     }
 
     private Connection.Response startNestedAuthorization(String authEndpoint) throws Exception {
-        // The initial page must be the nested presentation prompt, not an error or redirect.
+        // The authorization response must redirect straight to the wallet.
         Connection.Response initial = requestAuthorizationPage(authEndpoint);
-        assertEquals(
-                HttpStatus.SC_OK,
-                initial.statusCode(),
+        assertTrue(
+                initial.statusCode() >= HttpStatus.SC_MULTIPLE_CHOICES
+                        && initial.statusCode() < HttpStatus.SC_BAD_REQUEST,
                 "Unexpected authorization response: " + initial.statusCode() + " "
                         + initial.header("Location") + " "
                         + initial.body().replaceAll("\\s+", " "));
+        assertTrue(nestedLink(initial).startsWith(OPENID4VP_SCHEME));
         return initial;
     }
 
@@ -477,20 +478,25 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
             }
             String location = response.header(HttpHeaders.LOCATION);
             assertNotNull(location, "Redirect response without Location header");
-            url = URI.create(url).resolve(location).toString();
+            URI next = URI.create(url).resolve(location);
+            // A wallet deep link is the end of the browser flow. Following it is not an HTTP request.
+            if (next.getScheme() == null
+                    || next.getScheme().equals("http")
+                    || next.getScheme().equals("https")) {
+                url = next.toString();
+                continue;
+            }
+            return response;
         }
         throw new IllegalStateException("Too many redirects fetching authorization page: " + authEndpoint);
     }
 
-    private String nestedLink(Connection.Response response) throws Exception {
-        // Find the wallet deep link among the surrounding Keycloak theme links.
-        var document = response.parse();
-        String location = document.select("a").stream()
-                .map(element -> element.attr("href"))
-                .filter(href -> href.startsWith(OPENID4VP_SCHEME))
-                .findFirst()
-                .orElse(null);
-        assertNotNull(location, "Nested authorization must render a same-device OpenID4VP link");
+    private String nestedLink(Connection.Response response) {
+        String location = response.header(HttpHeaders.LOCATION);
+        assertNotNull(location, "Nested authorization must redirect to a same-device OpenID4VP request");
+        assertTrue(
+                location.startsWith(OPENID4VP_SCHEME),
+                "Nested authorization must redirect to a same-device OpenID4VP request");
         return location;
     }
 
