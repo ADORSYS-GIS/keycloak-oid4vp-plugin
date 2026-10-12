@@ -325,6 +325,36 @@ public class OID4VPUserAuthBeanTest {
     }
 
     @Test
+    public void shouldNotRedirectWhenWalletLinkIsBlank() {
+        AuthorizationContext walletContext = new AuthorizationContext().setAuthorizationRequest("  ");
+        Mockito.when(oid4vp.startAuthentication(
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class),
+                        nullable(PresentationDuringIssuanceSession.class)))
+                .thenReturn(walletContext);
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectWhenWalletLinkIsMalformed() {
+        AuthorizationContext walletContext = new AuthorizationContext().setAuthorizationRequest("not a valid uri");
+        Mockito.when(oid4vp.startAuthentication(
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class),
+                        nullable(PresentationDuringIssuanceSession.class)))
+                .thenReturn(walletContext);
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
     public void shouldCachePresentationDuringIssuanceContext() {
         OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
 
