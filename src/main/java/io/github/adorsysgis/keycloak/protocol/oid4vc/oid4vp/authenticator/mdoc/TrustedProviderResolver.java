@@ -38,7 +38,8 @@ public final class TrustedProviderResolver {
     public static ResolvedMdocTrust resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())));
+            return new ResolvedMdocTrust(
+                    new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())), null);
         }
 
         if (requiresIssuerEnforcement(credential)) {
@@ -53,7 +54,7 @@ public final class TrustedProviderResolver {
                 trustAnchors.addAll(resolveStaticAnchors(session, trust, credential.getId()));
             }
         }
-        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors));
+        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors), null);
     }
 
     private static boolean requiresIssuerEnforcement(CredentialRequirement credential) {
@@ -69,19 +70,39 @@ public final class TrustedProviderResolver {
 
         TrustPolicy trust = credential.getTrust().getFirst();
         if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
+            if (TrustPolicy.X5C.equals(trust.getType())) {
+                return new ResolvedMdocTrust(
+                        new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())),
+                        pinnedIssuerNamespace(trust));
+            }
             List<X509Certificate> anchors = resolveStaticAnchors(session, trust, credential.getId());
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(anchors));
+            return new ResolvedMdocTrust(new StaticTruststoreProvider(anchors), null);
         }
 
         try {
             EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider(session).resolve(trust);
             TrustedPidProvider provider = snapshot.resolveIssuer(trust.getIssuer());
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(provider.trustedCertificates()));
+            return new ResolvedMdocTrust(
+                    new StaticTruststoreProvider(provider.trustedCertificates()), trust.getIssuer());
         } catch (EudiPidTrustException e) {
             throw new VerificationException(
                     String.format("Credential '%s' could not resolve its configured PID Provider", credential.getId()),
                     e);
         }
+    }
+
+    /**
+     * Returns the stable issuer namespace for pinned X.509 trust: the explicitly configured
+     * {@code trust.issuer}, or {@code null} when none is configured. A certificate thumbprint alone
+     * is not a stable long-term identity (leaf certificates rotate and a shared root can serve
+     * several issuers); a {@code null} namespace means the credential exposes no external identity
+     * and user import for it fails closed, while verification itself is unaffected.
+     */
+    private static String pinnedIssuerNamespace(TrustPolicy trust) {
+        if (trust.getIssuer() == null || trust.getIssuer().isBlank()) {
+            return null;
+        }
+        return trust.getIssuer();
     }
 
     private static List<X509Certificate> resolveStaticAnchors(
@@ -139,5 +160,11 @@ public final class TrustedProviderResolver {
         }
     }
 
-    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors) {}
+    /**
+     * Resolved trust anchors plus, for primary login credentials, the stable issuer namespace that
+     * identified them. The namespace is {@code null} for supporting credentials, session-bound
+     * presentations, and pinned-X.509 primary credentials without an explicit issuer; those paths
+     * expose no external identity.
+     */
+    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors, String issuerNamespace) {}
 }
