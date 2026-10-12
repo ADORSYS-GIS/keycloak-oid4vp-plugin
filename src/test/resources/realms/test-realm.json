@@ -141,6 +141,15 @@
         }
       },
       {
+        "name": "custom-rsa-enc",
+        "providerId": "rsa-enc-generated",
+        "config": {
+          "algorithm": [
+            "RSA-OAEP"
+          ]
+        }
+      },
+      {
         "name": "mdoc-self-trust-active-test-key",
         "providerId": "ecdsa-generated",
         "config": {

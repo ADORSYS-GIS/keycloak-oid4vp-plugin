@@ -123,9 +123,9 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         assertEquals(
                 authConfig.get(REGISTRATION_CERTIFICATE_CONFIG).asText(),
                 verifierInfo.getFirst().getData());
-        assertEquals(
-                List.of(requestObject.getDcqlQuery().getCredentials().getFirst().getId()),
-                verifierInfo.getFirst().getCredentialIds());
+        assertNull(
+                verifierInfo.getFirst().getCredentialIds(),
+                "registration certificate verifier_info must not carry credential_ids");
 
         // Request object must advertise an ephemeral key for response encryption
         ClientMetadata clientMetadata = requestObject.getClientMetadata();
