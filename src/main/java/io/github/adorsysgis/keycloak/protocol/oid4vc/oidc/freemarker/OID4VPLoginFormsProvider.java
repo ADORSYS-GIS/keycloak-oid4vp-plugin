@@ -21,6 +21,7 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
     private static final Logger logger = Logger.getLogger(OID4VPLoginFormsProvider.class);
 
     private final OID4VPUserAuthEndpoint oid4vp;
+    private OID4VPUserAuthBean oid4vpUserAuthBean;
 
     public OID4VPLoginFormsProvider(KeycloakSession session) {
         super(session);
@@ -29,14 +30,13 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
     }
 
     /**
-     * Redirect a nested presentation straight to the wallet. A missing wallet link still renders the
-     * login page so the configuration error can be shown.
+     * Redirect a nested presentation straight to the wallet. A missing or invalid wallet link still
+     * renders the login page so the configuration error can be shown.
      */
     @Override
     protected Response createResponse(LoginFormsPages page) {
         if (page == LoginFormsPages.LOGIN) {
-            URI walletUri =
-                    walletLocation(new OID4VPUserAuthBean(session, authenticationSession, this.actionUri, oid4vp));
+            URI walletUri = walletLocation(oid4vpBean());
             if (walletUri != null) {
                 logger.debugf("Redirecting presentation during issuance to the wallet");
                 return Response.status(Response.Status.FOUND)
@@ -59,7 +59,12 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
         if (context == null || context.getError() || StringUtil.isBlank(context.getAuthReqLink())) {
             return null;
         }
-        return URI.create(context.getAuthReqLink());
+        try {
+            return URI.create(context.getAuthReqLink());
+        } catch (IllegalArgumentException e) {
+            logger.warnf(e, "Invalid OID4VP authorization request link");
+            return null;
+        }
     }
 
     @Override
@@ -67,8 +72,16 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
             Theme theme, Locale locale, Properties messagesBundle, UriBuilder baseUriBuilder, LoginFormsPages page) {
         super.createCommonAttributes(theme, locale, messagesBundle, baseUriBuilder, page);
 
-        // Inject OID4VP specific attributes
-        this.attributes.put("oid4vp", new OID4VPUserAuthBean(session, authenticationSession, this.actionUri, oid4vp));
+        // Inject OID4VP specific attributes. Reuse the bean from createResponse so a failed wallet
+        // redirect does not start a second authentication transaction.
+        this.attributes.put("oid4vp", oid4vpBean());
         logger.debugf("Injected OID4VPUserAuthBean into login form attributes for realm %s", realm.getName());
+    }
+
+    private OID4VPUserAuthBean oid4vpBean() {
+        if (oid4vpUserAuthBean == null) {
+            oid4vpUserAuthBean = new OID4VPUserAuthBean(session, authenticationSession, this.actionUri, oid4vp);
+        }
+        return oid4vpUserAuthBean;
     }
 }
