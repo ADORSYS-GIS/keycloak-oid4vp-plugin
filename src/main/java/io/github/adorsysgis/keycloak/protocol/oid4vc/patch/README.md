@@ -13,6 +13,13 @@ The realm attribute to configure with a valid JSON array is `oid4vci.display`.
 }
 ```
 
+### Omit encryption parameters from Issuer Metadata
+
+By default the Credential Issuer Metadata advertises `credential_response_encryption` and
+`credential_request_encryption` as provided by Keycloak. When the realm attribute
+`oid4vci.omit_encryption` is `true`, the plugin sets both to `null` so they are omitted from the
+metadata. The attribute defaults to `false`.
+
 ### Presentation during issuance metadata
 
 When the realm attribute `oid4vci.presentation_during_issuance` is `true`, the plugin advertises
