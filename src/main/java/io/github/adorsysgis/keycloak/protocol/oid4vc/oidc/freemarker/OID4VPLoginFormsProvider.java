@@ -35,8 +35,8 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
     @Override
     protected Response createResponse(LoginFormsPages page) {
         if (page == LoginFormsPages.LOGIN) {
-            URI walletUri = walletLocation(
-                    new OID4VPUserAuthBean(session, authenticationSession, this.actionUri, oid4vp));
+            URI walletUri =
+                    walletLocation(new OID4VPUserAuthBean(session, authenticationSession, this.actionUri, oid4vp));
             if (walletUri != null) {
                 logger.debugf("Redirecting presentation during issuance to the wallet");
                 return Response.status(Response.Status.FOUND)
