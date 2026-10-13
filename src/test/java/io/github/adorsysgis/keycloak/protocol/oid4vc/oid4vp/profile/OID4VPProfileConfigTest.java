@@ -27,7 +27,7 @@ public class OID4VPProfileConfigTest {
                 [
                   {
                     "id": "dual",
-                    "displayCta": { "en": "Sign in with two credentials" },
+                    "displayCta": { "en": "Identity Wallet (two credentials)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -57,7 +57,7 @@ public class OID4VPProfileConfigTest {
 
         AuthenticationProfile profile = profileConfig.getProfile("dual");
         assertEquals("dual", profile.getId());
-        assertEquals("Sign in with two credentials", profile.getDisplayCta(Locale.ENGLISH));
+        assertEquals("Identity Wallet (two credentials)", profile.getDisplayCta(Locale.ENGLISH));
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());

@@ -17,10 +17,13 @@ public final class KeycloakTestContainer {
 
     private static final Logger logger = Logger.getLogger(KeycloakTestContainer.class);
 
-    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.7.3";
+    public static final String TEST_KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.8.0";
     public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar";
     private static final EudiPidTrustListTestServer EUDI_PID_TRUST_LIST_SERVER =
             EudiPidTrustListTestServer.start(Path.of("src/test/resources/truststore.jks"));
+
+    private static final String KEYSTORE_FILE_NAME = "keystore-rsa.p12";
+    private static final String KEYSTORE_CONTAINER_PATH = "/opt/keycloak/data/test/" + KEYSTORE_FILE_NAME;
 
     private KeycloakTestContainer() {}
 
@@ -49,6 +52,8 @@ public final class KeycloakTestContainer {
                 .withFeaturesEnabled(
                         "oid4vc-vci", "oid4vc-vci-rest-credential-offer", "oid4vc-vci-preauth-code", "client-auth-abca")
                 .withRealmImportFiles(realmImports.toArray(String[]::new))
+                .withCopyToContainer(
+                        MountableFile.forClasspathResource("/keystores/" + KEYSTORE_FILE_NAME), KEYSTORE_CONTAINER_PATH)
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")

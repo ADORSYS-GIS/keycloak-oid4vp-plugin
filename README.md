@@ -14,7 +14,7 @@ This plugin has been tested with:
 | **Requirement** | **Version** |
 |-----------------|-------------|
 | **Java**        | 21          |
-| **Keycloak**    | 26.7.3      |
+| **Keycloak**    | 26.8.0      |
 
 While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
 versions for best results.
@@ -138,7 +138,7 @@ flags), see:
 
 ### OID4VP authenticator configuration
 
-Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
+Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`,
 `responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 

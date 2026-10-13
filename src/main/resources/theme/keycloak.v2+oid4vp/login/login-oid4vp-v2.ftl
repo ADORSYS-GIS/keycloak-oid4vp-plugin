@@ -4,7 +4,7 @@
 <#global auth = {}>
 
 <@layout.registrationLayout displayMessage=false displayInfo=false; section>
-    <!-- template: login-oid4vp.ftl -->
+    <!-- template: login-oid4vp-v2.ftl -->
 
     <#if oid4vp.isPresentationDuringIssuance()>
         <#if section = "header">

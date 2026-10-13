@@ -42,7 +42,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
@@ -54,7 +54,7 @@ public final class AuthenticationProfileSamples {
                   },
                   {
                     "id": "{dualProfileId}",
-                    "displayCta": { "en": "Sign in with two credentials" },
+                    "displayCta": { "en": "Identity Wallet (two credentials)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -91,7 +91,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with a self-issued mDoc" },
+                    "displayCta": { "en": "Identity Wallet (self-issued mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -127,7 +127,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -160,7 +160,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -208,7 +208,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -237,7 +237,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
@@ -249,7 +249,7 @@ public final class AuthenticationProfileSamples {
                   },
                   {
                     "id": "{sdjwtMdocDualProfileId}",
-                    "displayCta": { "en": "Sign in with SD-JWT and mDoc" },
+                    "displayCta": { "en": "Identity Wallet (SD-JWT+mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -292,7 +292,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{profileId}",
-                    "displayCta": { "en": "Sign in with an identity credential" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "{primaryCredentialId}",
@@ -332,7 +332,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
