@@ -184,7 +184,7 @@ public class OID4VPLoginActionsServiceTest extends OID4VPBaseUserAuthEndpointTes
             String text = html.text();
             assertNotNull(html.selectFirst("form#kc-form-login"));
             assertNotNull(html.selectFirst("#kc-social-providers"));
-            assertTrue(text.contains("Sign in with a wallet"));
+            assertTrue(text.contains("Sign in with Identity Wallet"));
             assertFalse(text.contains("Presentation during issuance"));
         } finally {
             updateAuthenticatorConfig(originalConfig);

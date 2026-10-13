@@ -176,7 +176,7 @@ public class OID4VPUserAuthBeanTest {
                 .thenReturn(List.of(
                         new AuthenticationProfile()
                                 .setId(AuthenticationProfile.DEFAULT_PROFILE_ID)
-                                .setDisplayCta(Map.of("en", "Sign in with a wallet")),
+                                .setDisplayCta(Map.of("en", "Identity Wallet")),
                         new AuthenticationProfile().setId("dual").setDisplayCta(Map.of("en", "Dual login"))));
 
         OID4VPUserAuthBean bean = createTestBean();
@@ -186,7 +186,7 @@ public class OID4VPUserAuthBeanTest {
         assertEquals(
                 AuthenticationProfile.DEFAULT_PROFILE_ID,
                 loginProfiles.getFirst().getId());
-        assertEquals("Sign in with a wallet", loginProfiles.getFirst().getDisplayName());
+        assertEquals("Identity Wallet", loginProfiles.getFirst().getDisplayName());
         assertEquals("dual", loginProfiles.get(1).getId());
         assertEquals("Dual login", loginProfiles.get(1).getDisplayName());
 
@@ -205,10 +205,7 @@ public class OID4VPUserAuthBeanTest {
     public void shouldHideSessionIdentityProfilesFromLoginPage() {
         Mockito.when(oid4vp.getAuthenticationProfilesForClient(TEST_CLIENT_ID))
                 .thenReturn(List.of(
-                        profile(
-                                "wallet-login",
-                                "Sign in with wallet",
-                                CredentialRequirement.IDENTITY_SOURCE_CREDENTIAL),
+                        profile("wallet-login", "Identity Wallet", CredentialRequirement.IDENTITY_SOURCE_CREDENTIAL),
                         profile(
                                 "issuance-step",
                                 "Presentation during issuance",
@@ -219,7 +216,7 @@ public class OID4VPUserAuthBeanTest {
         var loginProfiles = bean.getLoginProfiles();
         assertEquals(1, loginProfiles.size());
         assertEquals("wallet-login", loginProfiles.getFirst().getId());
-        assertEquals("Sign in with wallet", loginProfiles.getFirst().getDisplayName());
+        assertEquals("Identity Wallet", loginProfiles.getFirst().getDisplayName());
     }
 
     @Test

@@ -91,7 +91,7 @@ Each profile specifies one or more credential requirements and how they relate t
   {
     "id": "my-profile",
     "description": "A descriptive label",
-    "displayCta": { "en": "Sign in with wallet" },
+    "displayCta": { "en": "Identity Wallet" },
     "enabledForClients": ["optional-client-filter"],
     "credentials": [ ... ],
     "credentialGroups": [ ... ]
@@ -110,7 +110,7 @@ Each profile specifies one or more credential requirements and how they relate t
 |Human-readable description of the profile.
 
 |`displayCta`
-|Map of locale to button text shown on the login page. Defaults to "Sign in with a wallet".
+|Map of locale to button text shown on the login page. Defaults to "Identity Wallet". Depending on the UI configuration, "Sign in with" may be prepended to the button text.
 
 |`enabledForClients`
 |Optional list of client IDs for which this profile is available. When empty or omitted, the profile is available to all clients.
