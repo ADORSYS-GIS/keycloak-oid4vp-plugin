@@ -8,6 +8,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import org.jboss.logging.Logger;
 import org.keycloak.forms.login.LoginFormsPages;
@@ -39,13 +40,23 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
             URI walletUri = walletLocation(oid4vpBean());
             if (walletUri != null) {
                 logger.debugf("Redirecting presentation during issuance to the wallet");
-                return Response.status(Response.Status.FOUND)
-                        .location(walletUri)
-                        .header(HttpHeaders.CACHE_CONTROL, "no-store, must-revalidate, max-age=0")
-                        .build();
+                return walletRedirect(walletUri, httpResponseHeaders);
             }
         }
         return super.createResponse(page);
+    }
+
+    /**
+     * 302 to the wallet, including headers registered through {@code setResponseHeader(...)}.
+     */
+    static Response walletRedirect(URI walletUri, Map<String, String> responseHeaders) {
+        Response.ResponseBuilder redirect = Response.status(Response.Status.FOUND)
+                .location(walletUri)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store, must-revalidate, max-age=0");
+        if (responseHeaders != null) {
+            responseHeaders.forEach(redirect::header);
+        }
+        return redirect.build();
     }
 
     /**
