@@ -107,7 +107,7 @@ public class OID4VPUserAuthBean {
     }
 
     /**
-     * Whether this login must redirect to a same-device wallet presentation.
+     * Whether this login requires a nested, same-device OpenID4VP presentation during issuance.
      */
     public boolean isPresentationDuringIssuance() {
         return presentationDuringIssuanceRequired;
