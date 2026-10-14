@@ -1,1 +1,1 @@
-io.github.adorsysgis.keycloak.protocol.oid4vc.patch.keybinding.PatchedJwtProofValidatorFactory
+io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance.PatchedJwtProofValidatorFactory

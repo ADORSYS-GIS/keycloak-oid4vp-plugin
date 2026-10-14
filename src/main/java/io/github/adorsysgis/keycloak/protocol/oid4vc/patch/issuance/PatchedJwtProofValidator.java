@@ -1,7 +1,8 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.keybinding;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
 import java.util.List;
 import java.util.Objects;
+import org.jboss.logging.Logger;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.KeycloakSession;
@@ -23,6 +24,8 @@ import org.keycloak.utils.StringUtil;
  * <p>Opt-in per realm via the attribute {@code oid4vci.allow_proof_iss_mismatch} set to {@code true}.
  */
 public final class PatchedJwtProofValidator extends JwtProofValidator {
+
+    private static final Logger logger = Logger.getLogger(PatchedJwtProofValidator.class);
 
     public static final String ATTR_ALLOW_PROOF_ISS_MISMATCH = "oid4vci.allow_proof_iss_mismatch";
 
@@ -93,6 +96,7 @@ public final class PatchedJwtProofValidator extends JwtProofValidator {
             }
             return issuer;
         } catch (Exception e) {
+            logger.errorf(e, "Could not extract proof issuer");
             return null;
         }
     }

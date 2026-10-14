@@ -1,4 +1,4 @@
-package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.keybinding;
+package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oid4vc.issuance.keybinding.AttestationKeyResolver;
