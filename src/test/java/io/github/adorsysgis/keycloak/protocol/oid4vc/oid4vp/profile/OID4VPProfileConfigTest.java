@@ -27,7 +27,7 @@ public class OID4VPProfileConfigTest {
                 [
                   {
                     "id": "dual",
-                    "displayCta": { "en": "Sign in with two credentials" },
+                    "displayCta": { "en": "Identity Wallet (two credentials)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -57,7 +57,7 @@ public class OID4VPProfileConfigTest {
 
         AuthenticationProfile profile = profileConfig.getProfile("dual");
         assertEquals("dual", profile.getId());
-        assertEquals("Sign in with two credentials", profile.getDisplayCta(Locale.ENGLISH));
+        assertEquals("Identity Wallet (two credentials)", profile.getDisplayCta(Locale.ENGLISH));
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
@@ -645,11 +645,10 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
-    void shouldRejectSelfTrustForMdocCredential() {
-        IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseMdocProfileWithTrust("""
-                        "trust": [{ "type": "self" }]
-                        """));
-        assertTrue(e.getMessage().contains("Self-trust is not supported for mDoc credentials"));
+    void shouldAcceptSelfTrustForMdocCredential() {
+        assertDoesNotThrow(() -> parseMdocProfileWithTrust("""
+                "trust": [{ "type": "self" }]
+                """));
     }
 
     @Test

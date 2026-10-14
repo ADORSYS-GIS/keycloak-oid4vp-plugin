@@ -42,7 +42,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
@@ -54,7 +54,7 @@ public final class AuthenticationProfileSamples {
                   },
                   {
                     "id": "{dualProfileId}",
-                    "displayCta": { "en": "Sign in with two credentials" },
+                    "displayCta": { "en": "Identity Wallet (two credentials)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -85,6 +85,34 @@ public final class AuthenticationProfileSamples {
         return new ProfileSample(json, DUAL_PROFILE_ID);
     }
 
+    /** Single primary mso_mdoc credential issued by a signing key of the same Keycloak realm. */
+    public static ProfileSample selfTrustedMdocPrimary() {
+        String json = """
+                [
+                  {
+                    "id": "{mdocPrimaryProfileId}",
+                    "displayCta": { "en": "Identity Wallet (self-issued mDoc)" },
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "format": "mso_mdoc",
+                        "credentialTypes": ["{docType}"],
+                        "claims": ["{namespace}/sub", "{namespace}/username"],
+                        "subjectClaim": "{namespace}/sub",
+                        "trust": [
+                          { "type": "self" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{mdocPrimaryProfileId}", MDOC_PRIMARY_PROFILE_ID)
+                .replace("{docType}", MdocBaseTest.DOC_TYPE)
+                .replace("{namespace}", MdocBaseTest.NAMESPACE);
+        return new ProfileSample(json, MDOC_PRIMARY_PROFILE_ID);
+    }
+
     /** Single primary mso_mdoc credential secured by an x5c trust anchor. */
     public static ProfileSample mdocPrimary() {
         return mdocPrimaryWithAnchor(MdocBaseTest.getIssuerCertBase64());
@@ -99,7 +127,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -132,7 +160,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -180,7 +208,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -209,7 +237,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
@@ -221,7 +249,7 @@ public final class AuthenticationProfileSamples {
                   },
                   {
                     "id": "{sdjwtMdocDualProfileId}",
-                    "displayCta": { "en": "Sign in with SD-JWT and mDoc" },
+                    "displayCta": { "en": "Identity Wallet (SD-JWT+mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -264,7 +292,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{profileId}",
-                    "displayCta": { "en": "Sign in with an identity credential" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "{primaryCredentialId}",
@@ -304,7 +332,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",

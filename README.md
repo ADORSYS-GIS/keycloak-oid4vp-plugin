@@ -138,7 +138,7 @@ flags), see:
 
 ### OID4VP authenticator configuration
 
-Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
+Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`,
 `responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 

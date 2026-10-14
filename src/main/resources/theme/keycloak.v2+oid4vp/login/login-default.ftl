@@ -17,7 +17,7 @@
                             <#assign label>
                                 <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>
                             </#assign>
-                            <@field.input name="username" label=label error=kcSanitize(messagesPerField.getFirstError('username','password'))?no_esc
+                            <@field.input name="username" label=label error=messagesPerField.getFirstError('username','password')
                                 autofocus=true autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" value=login.username!'' />
                             <@field.password name="password" label=msg("password") error="" forgotPassword=realm.resetPasswordAllowed autofocus=usernameHidden?? autocomplete="current-password">
                                 <#if realm.rememberMe && !usernameHidden??>
@@ -40,9 +40,19 @@
         </div>
         <@passkeys.conditionalUIData />
     <#elseif section = "socialProviders" >
-        <#assign hasSocial = social.providers?? && social.providers?has_content>
-        <#assign hasOid4vp = oid4vp?? && oid4vp.loginProfiles?? && oid4vp.loginProfiles?has_content>
-        <#if realm.password && (hasSocial || hasOid4vp)>
+        <#assign providers = social.providers>
+        <#if oid4vp?? && oid4vp.loginProfiles?? && oid4vp.loginProfiles?has_content>
+            <#list oid4vp.loginProfiles as profile>
+                <#assign providers = providers + [{
+                    "providerId": "oid4vp",
+                    "alias": "oid4vp-wallet-${profile.id}",
+                    "displayName": profile.displayName,
+                    "loginUrl": profile.loginUrl
+                }]>
+            </#list>
+        </#if>
+        <#assign social = social + { "providers": providers }>
+        <#if realm.password && social.providers?? && social.providers?has_content>
             <@identityProviders.show social=social/>
         </#if>
     <#elseif section = "info" >

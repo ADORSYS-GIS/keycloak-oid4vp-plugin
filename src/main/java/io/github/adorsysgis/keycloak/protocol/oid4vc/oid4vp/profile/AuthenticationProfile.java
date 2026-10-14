@@ -10,7 +10,7 @@ import org.keycloak.utils.StringUtil;
 public class AuthenticationProfile {
 
     public static final String DEFAULT_PROFILE_ID = "default";
-    public static final String DEFAULT_CTA = "Sign in with a wallet";
+    public static final String DEFAULT_CTA = "Identity Wallet";
 
     @JsonProperty("id")
     private String id;
