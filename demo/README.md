@@ -131,7 +131,7 @@ If you need deeper overrides for local debugging, the scripts still honor enviro
 ## Notes
 
 - The demo disables token-status enforcement to avoid external HTTP calls during local development.
-- The issuer key in `keys/keycloak.json` matches the realm key provider in `realm.json`, so local verification succeeds.
+- The issuer key in `keys/keycloak.json` matches the realm key provider in `realm.json`, so local verification succeeds. Keycloak loads it from the non-self-signed test keystore mounted by `docker-compose.yml`; these credentials are for local demo use only.
 - The wallet CLI accepts a raw `openid4vp` offer link. That keeps it reusable for future browser-assisted flows too.
 - The demo uses HTTP and `start-dev`. It is not production-ready.
 - If you previously ran the older one-shot demo, use `just stop` before your first interactive run so the realm is recreated cleanly.
