@@ -37,3 +37,14 @@ the authorization code and subsequently requiring a matching DPoP proof at the t
 This works around [Keycloak issue #51573](https://github.com/keycloak/keycloak/issues/51573),
 which describes Valera Wallet sending `dpop_jkt` for clients that do not use DPoP. The patch
 is to be removed once Valera addresses the issue.
+
+### Tolerate a mismatched `iss` claim in JWT proofs
+
+In compliance with the spec, Keycloak's `JwtProofValidator` rejects a JWT proof whose `iss`
+claim is not the requesting `client_id` (OID4VCI F.1). The German EUDI iOS wallet sets `iss`
+to the Credential Issuer identifier instead. See bug tracker:
+[german-national-wallet/issues-tracker-ios#36](https://github.com/german-national-wallet/issues-tracker-ios/issues/36).
+This patch relaxes this validation provided the realm attribute `oid4vci.allow_proof_iss_mismatch`
+is set to `true`. Only is allowed when the proof's `iss` equals the Credential Issuer identifier;
+any other `iss` value is rejected as before and all other validations remain enforced. The patch
+is to be removed once the wallet is fixed.
