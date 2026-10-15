@@ -65,6 +65,15 @@ public class ReferencedTokenValidator {
      */
     public void validate(JsonNode tokenPayload, boolean allowMissingStatusClaim)
             throws ReferencedTokenValidationException {
+        validate(tokenPayload, allowMissingStatusClaim, null);
+    }
+
+    /**
+     * Validates a Referenced Token using the selected trust-material providers for the fetched
+     * Status List JWT. A blank provider selection preserves legacy truststore validation.
+     */
+    public void validate(JsonNode tokenPayload, boolean allowMissingStatusClaim, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
         if (tokenPayload.get(STATUS_FIELD) == null && allowMissingStatusClaim) {
             return;
         }
@@ -76,7 +85,7 @@ public class ReferencedTokenValidator {
             StatusInfo statusInfo = extractStatusInfo(tokenPayload);
 
             // Fetch and validate status list token
-            JsonNode statusListToken = fetchStatusListToken(statusInfo.uri);
+            JsonNode statusListToken = fetchStatusListToken(statusInfo.uri, trustMaterialProviderAliases);
 
             // Extract and validate status list data
             StatusList statusList = extractStatusList(statusListToken);
@@ -191,9 +200,10 @@ public class ReferencedTokenValidator {
      * @return The status list token as JsonNode
      * @throws ReferencedTokenValidationException if fetching or validation fails
      */
-    private JsonNode fetchStatusListToken(String uri) throws ReferencedTokenValidationException {
+    private JsonNode fetchStatusListToken(String uri, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
         try {
-            String jwtToken = statusListJwtFetcher.fetchStatusListJwt(uri);
+            String jwtToken = statusListJwtFetcher.fetchStatusListJwt(uri, trustMaterialProviderAliases);
 
             JOSE joseToken = JOSEParser.parse(jwtToken);
 

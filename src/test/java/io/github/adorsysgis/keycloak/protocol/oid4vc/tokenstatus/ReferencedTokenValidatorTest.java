@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -493,6 +496,29 @@ public class ReferencedTokenValidatorTest {
     }
 
     @Test
+    public void testConfiguredTrustMaterialAliasesAreForwardedToFetcher() throws Exception {
+        String aliases = "status-trust-a,status-trust-b";
+        StatusListJwtFetcher fetcher = mock(StatusListJwtFetcher.class);
+        when(fetcher.fetchStatusListJwt(TEST_STATUS_LIST_URI, aliases))
+                .thenReturn(buildValidStatusListJwt(TEST_STATUS_LIST_URI));
+        ReferencedTokenValidator configuredValidator = new ReferencedTokenValidator(fetcher);
+
+        configuredValidator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), false, aliases);
+
+        verify(fetcher).fetchStatusListJwt(TEST_STATUS_LIST_URI, aliases);
+    }
+
+    @Test
+    public void testConfiguredTrustMaterialAliasesFailClosedForUnsupportedFetcher() {
+        ReferencedTokenValidationException error = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> validator.validate(credentialPayload(1, TEST_STATUS_LIST_URI), false, "status-trust"));
+
+        assertEquals(
+                "This Status List JWT fetcher does not support trust-material identity providers", error.getMessage());
+    }
+
+    @Test
     public void testStatusListJwt_RejectsMissingSub() {
         StatusListJwtFetcher fetcher = uri -> encodeMockJwt("""
                 {
@@ -624,7 +650,7 @@ public class ReferencedTokenValidatorTest {
                 {
                     "sub": "https://status.example.com/list",
                     "iat": 1700000000,
-                    "exp": 1001,
+                    "exp": 1010,
                     "status_list": {
                         "bits": 1,
                         "lst": "eNrbuRgAAhcBXQ"

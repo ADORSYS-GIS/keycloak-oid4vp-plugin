@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.TestCryptoUtils;
@@ -28,6 +29,18 @@ class EudiPidTrustListProviderTest {
     @BeforeAll
     static void setupCrypto() {
         CryptoIntegration.init(EudiPidTrustListProviderTest.class.getClassLoader());
+    }
+
+    @Test
+    void shouldAcceptAbsoluteHttpsTrustListUrlCaseInsensitively() {
+        assertTrue(EudiPidTrustListProvider.isAbsoluteHttpsUrl("HTTPS://example.test/lote.jwt"));
+    }
+
+    @Test
+    void shouldRejectInvalidTrustListUrls() {
+        assertFalse(EudiPidTrustListProvider.isAbsoluteHttpsUrl("http://example.test/lote.jwt"));
+        assertFalse(EudiPidTrustListProvider.isAbsoluteHttpsUrl("https:///lote.jwt"));
+        assertFalse(EudiPidTrustListProvider.isAbsoluteHttpsUrl("not a URI"));
     }
 
     @Test
