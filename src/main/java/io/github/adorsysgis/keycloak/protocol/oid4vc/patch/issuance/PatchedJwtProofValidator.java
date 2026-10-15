@@ -38,6 +38,10 @@ public final class PatchedJwtProofValidator extends JwtProofValidator {
 
     @Override
     public List<JWK> validateProof(VCIssuanceContext vcIssuanceContext) throws VCIssuerException {
+        if (!issuerMismatchAllowed()) {
+            return super.validateProof(vcIssuanceContext);
+        }
+
         String proofIssuer = extractProofIssuer(vcIssuanceContext);
         AccessToken token = authToken(vcIssuanceContext);
         String originalIssuedFor = token == null ? null : token.getIssuedFor();
@@ -45,8 +49,7 @@ public final class PatchedJwtProofValidator extends JwtProofValidator {
         if (StringUtil.isNotBlank(proofIssuer)
                 && StringUtil.isNotBlank(originalIssuedFor)
                 && isCredentialIssuer(proofIssuer)
-                && !Objects.equals(proofIssuer, originalIssuedFor)
-                && issuerMismatchAllowed()) {
+                && !Objects.equals(proofIssuer, originalIssuedFor)) {
             token.issuedFor(proofIssuer);
         }
 
@@ -96,7 +99,7 @@ public final class PatchedJwtProofValidator extends JwtProofValidator {
             }
             return issuer;
         } catch (Exception e) {
-            logger.errorf(e, "Could not extract proof issuer");
+            logger.debugf(e, "Could not extract proof issuer");
             return null;
         }
     }

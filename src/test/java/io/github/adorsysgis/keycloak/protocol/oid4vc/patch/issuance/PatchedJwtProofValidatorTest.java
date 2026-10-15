@@ -3,6 +3,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance.PatchedJwtProofValidator.ATTR_ALLOW_PROOF_ISS_MISMATCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.keycloak.OID4VCConstants.CRYPTOGRAPHIC_BINDING_METHOD_JWK;
 import static org.keycloak.models.oid4vci.CredentialScopeModel.VC_BINDING_REQUIRED;
@@ -112,6 +113,9 @@ class PatchedJwtProofValidatorTest extends PresentationDuringIssuanceBaseTest {
 
     @Test
     void rejectsProofWithIssuerMismatchWhenRealmAttributeDisabled() throws Exception {
+        var realmAttributes = getActiveTestRealmResource().toRepresentation().getAttributes();
+        assertNull(realmAttributes.get(ATTR_ALLOW_PROOF_ISS_MISMATCH));
+
         HttpResponse response = requestCredentialWithProofIss(getTestRealmEndpoint());
         OAuth2ErrorRepresentation error = parseErrorResponse(response);
 
