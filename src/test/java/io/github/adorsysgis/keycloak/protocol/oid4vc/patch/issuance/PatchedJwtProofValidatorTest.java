@@ -97,6 +97,20 @@ class PatchedJwtProofValidatorTest extends PresentationDuringIssuanceBaseTest {
     }
 
     @Test
+    void rejectsProofWithArbitraryIssuerMismatchWhenRealmAttributeEnabled() throws Exception {
+        withRealmAttributes(Map.of(ATTR_ALLOW_PROOF_ISS_MISMATCH, "true"), () -> {
+            HttpResponse response = requestCredentialWithProofIss("arbitrary-iss");
+            OAuth2ErrorRepresentation error = parseErrorResponse(response);
+
+            assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+            assertEquals(INVALID_PROOF.getValue(), error.getError());
+            assertTrue(
+                    error.getErrorDescription().contains("Issuer claim must be the client_id of the request"),
+                    error.getErrorDescription());
+        });
+    }
+
+    @Test
     void rejectsProofWithIssuerMismatchWhenRealmAttributeDisabled() throws Exception {
         HttpResponse response = requestCredentialWithProofIss(getTestRealmEndpoint());
         OAuth2ErrorRepresentation error = parseErrorResponse(response);
@@ -117,7 +131,7 @@ class PatchedJwtProofValidatorTest extends PresentationDuringIssuanceBaseTest {
         String accessToken = requestPreAuthorizedAccessToken(offer);
         String credentialIdentifier = extractCredentialIdentifier(accessToken);
         String cNonce = requestCNonce();
-        String proof = buildJwtProof(proofIssuer, cNonce);
+        String proof = buildJwtProof(proofIssuer, getTestRealmEndpoint(), cNonce);
         return requestCredentialWithProof(accessToken, credentialIdentifier, proof);
     }
 
@@ -149,9 +163,9 @@ class PatchedJwtProofValidatorTest extends PresentationDuringIssuanceBaseTest {
     }
 
     /**
-     * Builds a signed {@code openid4vci-proof+jwt} with the given {@code iss}/{@code aud} and nonce.
+     * Builds a signed {@code openid4vci-proof+jwt} with the given {@code iss}, {@code aud}, and nonce.
      */
-    private static String buildJwtProof(String proofIssuer, String nonce) throws Exception {
+    private static String buildJwtProof(String proofIssuer, String aud, String nonce) throws Exception {
         JWK holderKey = SdJwtVPTestUtils.getUserJwk();
         KeyWrapper keyWrapper = ECTestUtils.getEcKeyWrapper(holderKey);
         keyWrapper.setKid(null);
@@ -159,7 +173,7 @@ class PatchedJwtProofValidatorTest extends PresentationDuringIssuanceBaseTest {
         publicJwk.setAlgorithm(Algorithm.ES256);
 
         AccessToken token = new AccessToken();
-        token.addAudience(proofIssuer);
+        token.addAudience(aud);
         token.setNonce(nonce);
         token.issuer(proofIssuer);
         token.issuedNow();
