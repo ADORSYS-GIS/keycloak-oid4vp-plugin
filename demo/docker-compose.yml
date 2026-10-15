@@ -10,3 +10,4 @@ services:
     volumes:
       - ${PLUGIN_JAR}:/opt/keycloak/providers/keycloak-oid4vp-plugin.jar:ro
       - ./realm.json:/opt/keycloak/data/import/oid4vp-demo-realm.json:ro
+      - ../src/test/resources/keystores/keystore-rsa.p12:/opt/keycloak/data/oid4vp-demo/keystore-rsa.p12:ro
