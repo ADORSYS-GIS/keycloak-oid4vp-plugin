@@ -12,7 +12,7 @@ See [LICENSE](./LICENSE) for details.
 This plugin has been tested with:
 
 | **Requirement** | **Version** |
-|-----------------|-------------|
+| --------------- | ----------- |
 | **Java**        | 21          |
 | **Keycloak**    | 26.8.0      |
 
@@ -23,17 +23,18 @@ Additionally, the following features of [OpenID4VP](https://openid.net/specs/ope
 are supported:
 
 - **Draft20-compatible request/response behavior** ✅
-    - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
-    - Response Mode: `direct_post` and `direct_post.jwt`
-    - Response Type: `vp_token`
-    - Query Languages: DIF Presentation Exchange and DCQL
-    - Signed request object (`request_uri` dereferencing)
-    - Request object `x5c` support for verifier access certificate
+
+  - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
+  - Response Mode: `direct_post` and `direct_post.jwt`
+  - Response Type: `vp_token`
+  - Query Languages: DIF Presentation Exchange and DCQL
+  - Signed request object (`request_uri` dereferencing)
+  - Request object `x5c` support for verifier access certificate
 
 - **1.0-Final alignment (ongoing)** ⚠️
-    - DCQL request/response model is supported
-    - `verifier_info` support for registration certificate injection
-    - Compatibility and interoperability hardening are still evolving
+  - DCQL request/response model is supported
+  - `verifier_info` support for registration certificate injection
+  - Compatibility and interoperability hardening are still evolving
 
 Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
 
@@ -144,7 +145,8 @@ Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierP
 
 ## Documentation site (Antora)
 
-The AsciiDoc content in `docs/` is published with [Antora](https://docs.antora.org/antora/latest/).
+The AsciiDoc content in `docs/` is built with [Antora](https://docs.antora.org/antora/latest/)
+and published at [adorsys-gis.github.io/keycloak-oid4vp-plugin](https://adorsys-gis.github.io/keycloak-oid4vp-plugin/).
 See `docs/README.md` for build and preview instructions.
 
 ## Releasing to Maven Central
