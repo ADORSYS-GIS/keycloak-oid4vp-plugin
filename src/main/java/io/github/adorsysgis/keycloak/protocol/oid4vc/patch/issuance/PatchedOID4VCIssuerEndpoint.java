@@ -35,6 +35,7 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.managers.AppAuthManager;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.StringUtil;
 
 /**
  * Temporary patch: Translates {@code credential_configuration_id} to {@code credential_identifier}
@@ -83,8 +84,6 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
         KeycloakContext context = keycloakSession.getContext();
         EventBuilder eventBuilder = new EventBuilder(context.getRealm(), keycloakSession, context.getConnection())
                 .event(EventType.VERIFIABLE_CREDENTIAL_REQUEST);
-
-        logger.debugf("[Patch] Received credential request payload: %s", requestPayload);
 
         // Enforce presentation-marked access tokens on requested
         // credentials that require presentation during issuance
@@ -273,7 +272,7 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      * @return the (possibly patched) payload in the same form it arrived (plaintext or JWE)
      */
     protected String patchWalletRequest(String requestPayload) {
-        if (!isPatchCredentialRequestsEnabled() || requestPayload == null || requestPayload.isBlank()) {
+        if (!isPatchCredentialRequestsEnabled() || StringUtil.isBlank(requestPayload)) {
             return requestPayload;
         }
 
@@ -284,7 +283,6 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
 
             JWE jwe = EncryptedPayloadUtils.decrypt(keycloakSession, requestPayload);
             String plaintext = new String(jwe.getContent(), StandardCharsets.UTF_8);
-            logger.debugf("[Patch] Decrypted wallet credential request payload: %s", plaintext);
 
             String patched = patchPlaintextPayload(plaintext);
             if (plaintext.equals(patched)) {
@@ -292,7 +290,7 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
                 return requestPayload;
             }
 
-            logger.debugf("[Patch] Re-encrypting patched wallet credential request: %s", patched);
+            logger.debugf("[Patch] Re-encrypting patched wallet credential request");
             return EncryptedPayloadUtils.reEncrypt(keycloakSession, patched, jwe);
         } catch (Exception e) {
             logger.warn("[Patch] Failed to patch wallet credential request, forwarding as-is", e);
