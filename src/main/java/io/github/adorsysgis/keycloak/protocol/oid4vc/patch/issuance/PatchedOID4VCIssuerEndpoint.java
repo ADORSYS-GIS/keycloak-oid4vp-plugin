@@ -6,16 +6,19 @@ import static org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils.findCreden
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceMode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.utils.EncryptedPayloadUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.GuardedCredentialScope;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import org.jboss.logging.Logger;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
+import org.keycloak.jose.jwe.JWE;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
@@ -35,7 +38,8 @@ import org.keycloak.util.JsonSerialization;
 
 /**
  * Temporary patch: Translates {@code credential_configuration_id} to {@code credential_identifier}
- * in the incoming Wallet Credential Request.
+ * in the incoming Wallet Credential Request. Applies only when the realm attribute
+ * {@link #ATTR_PATCH_CREDENTIAL_REQUESTS} is enabled.
  * <p>
  * Some wallet applications incorrectly send {@code credential_configuration_id} instead of
  * {@code credential_identifier} (which is required if {@code credential_identifiers} are present
@@ -59,6 +63,14 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
 
     private static final Logger logger = Logger.getLogger(PatchedOID4VCIssuerEndpoint.class);
 
+    /**
+     * Realm attribute enabling the translation of {@code credential_configuration_id} into
+     * {@code credential_identifier} for wallets that send the former — whether the Credential
+     * Request is a plaintext JSON object or a JWE (OID4VCI §10). Defaults to {@code false}, i.e.,
+     * requests are forwarded untouched.
+     */
+    public static final String ATTR_PATCH_CREDENTIAL_REQUESTS = "oid4vci.patch_credential_requests";
+
     protected final KeycloakSession keycloakSession;
 
     public PatchedOID4VCIssuerEndpoint(KeycloakSession session) {
@@ -71,6 +83,8 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
         KeycloakContext context = keycloakSession.getContext();
         EventBuilder eventBuilder = new EventBuilder(context.getRealm(), keycloakSession, context.getConnection())
                 .event(EventType.VERIFIABLE_CREDENTIAL_REQUEST);
+
+        logger.debugf("[Patch] Received credential request payload: %s", requestPayload);
 
         // Enforce presentation-marked access tokens on requested
         // credentials that require presentation during issuance
@@ -246,28 +260,68 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
                 .build());
     }
 
-    protected static String patchWalletRequest(String requestPayload) {
-        if (requestPayload == null || requestPayload.isBlank()) {
+    /**
+     * Translates {@code credential_configuration_id} into {@code credential_identifier} for wallets
+     * that send the former instead of the latter — whether the Credential Request is a plaintext
+     * JSON object or a JWE (OID4VCI §10). Applies only when the realm attribute
+     * {@link #ATTR_PATCH_CREDENTIAL_REQUESTS} is enabled.
+     * <p>
+     * JWE-encrypted requests are decrypted with the realm encryption key, patched, and re-encrypted
+     * with the same key material, so that the upstream endpoint's request-encryption validation is
+     * unaffected.
+     *
+     * @return the (possibly patched) payload in the same form it arrived (plaintext or JWE)
+     */
+    protected String patchWalletRequest(String requestPayload) {
+        if (!isPatchCredentialRequestsEnabled() || requestPayload == null || requestPayload.isBlank()) {
             return requestPayload;
         }
-        try {
-            CredentialRequest req = JsonSerialization.readValue(requestPayload, CredentialRequest.class);
 
-            if (req.getCredentialIdentifier() != null || req.getCredentialConfigurationId() == null) {
-                return requestPayload; // Nothing to do
+        try {
+            if (!EncryptedPayloadUtils.isCompactJwe(requestPayload)) {
+                return patchPlaintextPayload(requestPayload);
             }
 
-            String configId = req.getCredentialConfigurationId();
-            logger.debugf(
-                    "[Patch] Wallet sent credential_configuration_id='%s', copying to credential_identifier", configId);
+            JWE jwe = EncryptedPayloadUtils.decrypt(keycloakSession, requestPayload);
+            String plaintext = new String(jwe.getContent(), StandardCharsets.UTF_8);
+            logger.debugf("[Patch] Decrypted wallet credential request payload: %s", plaintext);
 
-            req.setCredentialIdentifier(configId);
-            req.setCredentialConfigurationId(null);
-            return JsonSerialization.writeValueAsString(req);
+            String patched = patchPlaintextPayload(plaintext);
+            if (plaintext.equals(patched)) {
+                logger.debug("[Patch] No patch needed for encrypted credential request, forwarding as-is");
+                return requestPayload;
+            }
 
+            logger.debugf("[Patch] Re-encrypting patched wallet credential request: %s", patched);
+            return EncryptedPayloadUtils.reEncrypt(keycloakSession, patched, jwe);
         } catch (Exception e) {
             logger.warn("[Patch] Failed to patch wallet credential request, forwarding as-is", e);
             return requestPayload;
         }
+    }
+
+    /**
+     * Copies {@code credential_configuration_id} onto {@code credential_identifier} for a plaintext
+     * Credential Request when the wallet only sent the former.
+     */
+    private static String patchPlaintextPayload(String requestPayload) throws Exception {
+        CredentialRequest req = JsonSerialization.readValue(requestPayload, CredentialRequest.class);
+
+        if (req.getCredentialIdentifier() != null || req.getCredentialConfigurationId() == null) {
+            return requestPayload; // Nothing to do
+        }
+
+        String configId = req.getCredentialConfigurationId();
+        logger.debugf(
+                "[Patch] Wallet sent credential_configuration_id='%s', copying to credential_identifier", configId);
+
+        req.setCredentialIdentifier(configId);
+        req.setCredentialConfigurationId(null);
+        return JsonSerialization.writeValueAsString(req);
+    }
+
+    private boolean isPatchCredentialRequestsEnabled() {
+        return Boolean.parseBoolean(
+                keycloakSession.getContext().getRealm().getAttribute(ATTR_PATCH_CREDENTIAL_REQUESTS));
     }
 }
