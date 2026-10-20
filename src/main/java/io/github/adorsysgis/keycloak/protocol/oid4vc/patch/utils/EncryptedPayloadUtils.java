@@ -1,7 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.utils;
 
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.util.List;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
@@ -60,10 +59,8 @@ public final class EncryptedPayloadUtils {
     public static String reEncrypt(KeycloakSession session, String plaintext, JWE original) throws Exception {
         JWEHeader header = (JWEHeader) original.getHeader();
         KeyWrapper keyWrapper = resolveEncKey(session, header.getKeyId());
-        Key publicKey = keyWrapper.getPublicKey() != null ? keyWrapper.getPublicKey() : keyWrapper.getPrivateKey();
-
         JWE jwe = new JWE().header(header).content(plaintext.getBytes(StandardCharsets.UTF_8));
-        jwe.getKeyStorage().setEncryptionKey(publicKey);
+        jwe.getKeyStorage().setEncryptionKey(keyWrapper.getPublicKey());
         return jwe.encodeJwe();
     }
 

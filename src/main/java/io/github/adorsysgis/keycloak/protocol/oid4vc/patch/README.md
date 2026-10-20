@@ -42,7 +42,7 @@ instead of `credential_identifier` (OID4VCI §8.2). The plugin transcribes the f
 latter whether the request is plaintext JSON or a JWE (OID4VCI §10): plaintext requests are patched
 as is, while JWE-encrypted requests are first decrypted with the realm encryption key, then patched,
 and re-encrypted with the same key material before the request reaches the issuance endpoint. This
-patch only applies provided the realm attribute `oid4vci.patch_credential_requests` is set to`true`;
+patch only applies provided the realm attribute `oid4vci.patch_credential_requests` is set to `true`;
 otherwise requests are forwarded untouched.
 
 ### OIDC DPoP compatibility patch
