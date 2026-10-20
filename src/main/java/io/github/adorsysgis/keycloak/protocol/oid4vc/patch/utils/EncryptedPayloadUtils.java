@@ -45,6 +45,12 @@ public final class EncryptedPayloadUtils {
     public static JWE decrypt(KeycloakSession session, String jweString) throws Exception {
         JWE jwe = new JWE(jweString);
         JWEHeader header = (JWEHeader) jwe.getHeader();
+
+        String zip = header.getCompressionAlgorithm();
+        if (zip != null) {
+            throw new UnsupportedOperationException("Compressed credential requests are not supported by this patch");
+        }
+
         KeyWrapper keyWrapper = resolveEncKey(session, header.getKeyId());
         jwe.getKeyStorage().setDecryptionKey(keyWrapper.getPrivateKey());
         jwe.verifyAndDecodeJwe();
@@ -65,6 +71,10 @@ public final class EncryptedPayloadUtils {
     }
 
     private static KeyWrapper resolveEncKey(KeycloakSession session, String kid) {
+        if (kid == null) {
+            throw new IllegalArgumentException("Cannot resolve encryption key with null kid");
+        }
+
         KeyManager keyManager = session.keys();
         RealmModel realm = session.getContext().getRealm();
 

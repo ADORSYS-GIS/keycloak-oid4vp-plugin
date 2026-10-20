@@ -224,6 +224,38 @@ public class PatchedOID4VCIssuerEndpointTest {
             assertEquals(original, endpoint("true", duplicated).patchWalletRequest(original));
         }
 
+        @Test
+        public void shouldForwardEncryptedRequestAsIsWhenCompressed() throws Exception {
+            // zip=DEF requests are not supported: the patch must fail on them cleanly and leave
+            // the compressed payload untouched instead of mangling deflate'd content into JSON.
+            JWEHeader header = new JWEHeader.JWEHeaderBuilder()
+                    .keyId(MockPatchedOID4VCIssuerEndpoint.TEST_KID)
+                    .algorithm(JWEConstants.RSA_OAEP)
+                    .encryptionAlgorithm(JWEConstants.A256GCM)
+                    .compressionAlgorithm("DEF")
+                    .type("JWT")
+                    .build();
+            JWE jwe = new JWE().header(header).content(SUBJECT_ONLY.getBytes(StandardCharsets.UTF_8));
+            jwe.getKeyStorage().setEncryptionKey(realmEncKey.getPublicKey());
+            String compressed = jwe.encodeJwe();
+
+            assertEquals(compressed, endpoint("true", List.of(realmEncKey)).patchWalletRequest(compressed));
+        }
+
+        @Test
+        public void shouldForwardEncryptedRequestAsIsWhenKidMissing() throws Exception {
+            JWEHeader header = new JWEHeader.JWEHeaderBuilder()
+                    .algorithm(JWEConstants.RSA_OAEP)
+                    .encryptionAlgorithm(JWEConstants.A256GCM)
+                    .type("JWT")
+                    .build();
+            JWE jwe = new JWE().header(header).content(SUBJECT_ONLY.getBytes(StandardCharsets.UTF_8));
+            jwe.getKeyStorage().setEncryptionKey(realmEncKey.getPublicKey());
+            String noKid = jwe.encodeJwe();
+
+            assertEquals(noKid, endpoint("true", List.of(realmEncKey)).patchWalletRequest(noKid));
+        }
+
         private String encryptCredentialRequestJson(String payloadJson) throws Exception {
             JWEHeader header = new JWEHeader.JWEHeaderBuilder()
                     .keyId(MockPatchedOID4VCIssuerEndpoint.TEST_KID)
