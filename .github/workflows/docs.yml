@@ -16,9 +16,7 @@ on:
 permissions:
   contents: read
 
-# Ensure only the latest run for a given branch can publish: a newer push to
-# main cancels any in-progress older run, so a stale build can never deploy
-# over a newer one. PR runs are queued (not cancelled) per branch.
+# Cancel superseded push runs to reduce the chance of stale deployments.
 concurrency:
   group: docs-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' }}
@@ -28,10 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.x
           cache: "npm"
@@ -58,18 +56,34 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      contents: read
       pages: write
       id-token: write
-    
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
-    
+
     steps:
+      - name: Verify commit is still latest on main
+        id: freshness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          LATEST_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')
+
+          if [ "$CURRENT_SHA" != "$LATEST_SHA" ]; then
+            echo "Skipping deployment: $CURRENT_SHA is no longer the latest commit on main ($LATEST_SHA)."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Commit is up to date: $CURRENT_SHA"
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to GitHub Pages
+        if: steps.freshness.outputs.deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
