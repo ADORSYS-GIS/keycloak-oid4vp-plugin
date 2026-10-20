@@ -1,6 +1,6 @@
 site:
   title: Keycloak OID4VP Plugin Docs
-  start_page: keycloak-oid4vp-plugin::index.adoc
+  start_page: ROOT::index.adoc
 
 content:
   sources:
