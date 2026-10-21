@@ -310,6 +310,18 @@ public class OID4VPUserAuthBeanTest {
         assertEquals("DENY", response.getHeaderString("X-Frame-Options"));
         assertEquals("default-src 'none'", response.getHeaderString("Content-Security-Policy"));
         assertEquals("no-store, must-revalidate, max-age=0", response.getHeaderString(HttpHeaders.CACHE_CONTROL));
+        assertNull(response.getMediaType());
+        assertNull(response.getLanguage());
+    }
+
+    @Test
+    public void shouldKeepCacheControlRegisteredByTheLoginFlow() {
+        URI walletUri = URI.create("openid4vp://authorize?client_id=wallet");
+        Response response =
+                OID4VPLoginFormsProvider.walletRedirect(walletUri, Map.of(HttpHeaders.CACHE_CONTROL, "private"));
+
+        assertEquals("private", response.getHeaderString(HttpHeaders.CACHE_CONTROL));
+        assertEquals(1, response.getHeaders().get(HttpHeaders.CACHE_CONTROL).size());
     }
 
     @Test
@@ -346,6 +358,26 @@ public class OID4VPUserAuthBeanTest {
 
         OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
         assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldRedirectConfiguredCustomWalletScheme() {
+        String walletUri = "haip-vp://authorize?client_id=wallet&request_uri=https%3A%2F%2Fkeycloak.example%2Frequest";
+        mockPresentationWalletLink(walletUri);
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertEquals(URI.create(walletUri), OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectBrowserSchemes() {
+        for (String walletUri : new String[] {
+            "https://wallet.example/authorize?client_id=wallet", "javascript:alert(1)", "data:text/html,hello"
+        }) {
+            mockPresentationWalletLink(walletUri);
+            OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+            assertNull(OID4VPLoginFormsProvider.walletLocation(bean), walletUri);
+        }
     }
 
     @Test
