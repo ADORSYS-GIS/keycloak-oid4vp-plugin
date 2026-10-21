@@ -20,6 +20,13 @@ By default the Credential Issuer Metadata advertises `credential_response_encryp
 `oid4vci.omit_encryption_metadata` is `true`, the plugin sets both to `null` so they are omitted from the
 metadata. The attribute defaults to `false`.
 
+### Omit empty `zip_values_supported` arrays from Issuer Metadata
+
+The spec does not allow empty arrays. Keycloak, however, may advertise empty `zip_values_supported` arrays
+in the request and response encryption metadata due to https://github.com/keycloak/keycloak/issues/54115.
+The plugin omits such empty arrays (sets them to `null`) so they are dropped from the metadata. This patch
+is to be removed once the upstream bug is fixed.
+
 ### Presentation during issuance metadata
 
 When the realm attribute `oid4vci.presentation_during_issuance` is `true`, the plugin advertises
@@ -27,6 +34,16 @@ When the realm attribute `oid4vci.presentation_during_issuance` is `true`, the p
 
 - the Credential Issuer Metadata, as required by the German EUDI Wallet ecosystem profile; and
 - the OAuth Authorization Server Metadata, as defined by OAuth 2.0 for First-Party Applications.
+
+### Patch Wallet Credential Requests
+
+Some wallet applications send the OID4VCI Credential Request with `credential_configuration_id`
+instead of `credential_identifier` (OID4VCI §8.2). The plugin transcribes the former onto the
+latter whether the request is plaintext JSON or a JWE (OID4VCI §10): plaintext requests are patched
+as is, while JWE-encrypted requests are first decrypted with the realm encryption key, then patched,
+and re-encrypted with the same key material before the request reaches the issuance endpoint. This
+patch only applies provided the realm attribute `oid4vci.patch_credential_requests` is set to `true`;
+otherwise requests are forwarded untouched.
 
 ### OIDC DPoP compatibility patch
 

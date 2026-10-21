@@ -5,12 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint.DEFLATE_COMPRESSION;
+import static org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider.ATTR_REQUEST_ZIP_ALGS;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseKeycloakTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.PresentationDuringIssuanceBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
@@ -89,6 +93,61 @@ public class OID4VCIssuerMetadataProviderTest {
             assertEquals(
                     getTestRealmEndpoint() + "/" + AuthorizationChallengeEndpointFactory.PROVIDER_ID,
                     metadataJson.get("authorization_challenge_endpoint").asText());
+        }
+    }
+
+    @Nested
+    class TestPruneZipValuesSupportedValues extends PresentationDuringIssuanceBaseTest {
+
+        @Test
+        public void shouldOmitZipValuesSupportedWhenNotConfigured() throws Exception {
+            var realmAttributes =
+                    getActiveTestRealmResource().toRepresentation().getAttributes();
+            assertNull(realmAttributes.get(ATTR_REQUEST_ZIP_ALGS));
+
+            CredentialIssuer metadata = retrieveCredentialIssuerMetadata();
+            assertNull(
+                    metadata.getCredentialRequestEncryption().getZipValuesSupported(),
+                    "zip_values_supported must be omitted when oid4vci.request.zip.algorithms is not configured");
+            assertNull(
+                    metadata.getCredentialResponseEncryption().getZipValuesSupported(),
+                    "zip_values_supported must be omitted when oid4vci.request.zip.algorithms is not configured");
+        }
+
+        @Test
+        public void shouldPruneEmptyZipValuesSupportedForUnsupportedValue() throws Exception {
+            withRealmAttributes(Map.of(ATTR_REQUEST_ZIP_ALGS, "false"), () -> {
+                CredentialIssuer metadata = retrieveCredentialIssuerMetadata();
+                // Keycloak maps any non-DEFLATE value to an empty array, which is invalid per the
+                // spec; the plugin must omit it.
+                assertNull(
+                        metadata.getCredentialRequestEncryption().getZipValuesSupported(),
+                        "an unsupported value yields an empty array that must be omitted");
+                assertNull(
+                        metadata.getCredentialResponseEncryption().getZipValuesSupported(),
+                        "an unsupported value yields an empty array that must be omitted");
+            });
+        }
+
+        @Test
+        public void shouldKeepConfiguredZipValuesSupported() throws Exception {
+            withRealmAttributes(Map.of(ATTR_REQUEST_ZIP_ALGS, DEFLATE_COMPRESSION), () -> {
+                CredentialIssuer metadata = retrieveCredentialIssuerMetadata();
+                assertEquals(
+                        List.of(DEFLATE_COMPRESSION),
+                        metadata.getCredentialRequestEncryption().getZipValuesSupported(),
+                        "a supported value must be advertised");
+                assertEquals(
+                        List.of(DEFLATE_COMPRESSION),
+                        metadata.getCredentialResponseEncryption().getZipValuesSupported(),
+                        "a supported value must be advertised");
+            });
+        }
+
+        private CredentialIssuer retrieveCredentialIssuerMetadata() throws Exception {
+            JsonNode metadataJson =
+                    retrieveCredentialIssuerMetadataJson(httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm());
+            return JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class);
         }
     }
 
