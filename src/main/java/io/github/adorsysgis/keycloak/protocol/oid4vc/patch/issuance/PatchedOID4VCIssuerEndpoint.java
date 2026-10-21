@@ -85,11 +85,29 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
         EventBuilder eventBuilder = new EventBuilder(context.getRealm(), keycloakSession, context.getConnection())
                 .event(EventType.VERIFIABLE_CREDENTIAL_REQUEST);
 
+        // Do not exercise any patching on requests that fail authentication.
+        // Let the core endpoint emit the standard invalid-token error right away.
+        AuthenticationManager.AuthResult authResult = resolveAuthResultWithoutConsumingDPoP();
+        if (authResult == null || authResult.token() == null) {
+            return forwardToCoreEndpoint(requestPayload);
+        }
+
         // Enforce presentation-marked access tokens on requested
         // credentials that require presentation during issuance
-        enforcePresentationDuringIssuance(eventBuilder);
+        enforcePresentationDuringIssuance(authResult, eventBuilder);
 
-        return super.requestCredential(patchWalletRequest(requestPayload));
+        // Patch credential identifier in wallet requests
+        String patchedRequestPayload = patchWalletRequest(requestPayload);
+
+        return forwardToCoreEndpoint(patchedRequestPayload);
+    }
+
+    /**
+     * Delegates requests to the core endpoint untouched. Hooked out as a protected method so tests
+     * can intercept what the core endpoint receives.
+     */
+    protected Response forwardToCoreEndpoint(String requestPayload) {
+        return super.requestCredential(requestPayload);
     }
 
     /**
@@ -97,12 +115,8 @@ public class PatchedOID4VCIssuerEndpoint extends OID4VCIssuerEndpoint {
      * Presentation was verified. Non-gated credentials and cases the core endpoint rejects on its own
      * are left untouched.
      */
-    private void enforcePresentationDuringIssuance(EventBuilder eventBuilder) {
-        AuthenticationManager.AuthResult authResult = resolveAuthResultWithoutConsumingDPoP();
-        if (authResult == null || authResult.token() == null) {
-            return; // Let the core endpoint emit the standard invalid-token error.
-        }
-
+    private void enforcePresentationDuringIssuance(
+            AuthenticationManager.AuthResult authResult, EventBuilder eventBuilder) {
         String credentialConfigurationId = resolveRequestedCredentialConfigurationId(authResult, eventBuilder);
         if (credentialConfigurationId == null) {
             return; // Core endpoint validates authorization_details and rejects if missing.

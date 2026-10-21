@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
@@ -22,6 +23,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDu
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationVerifiedNote;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.patch.utils.EncryptedPayloadUtils;
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.keycloak.common.ClientConnection;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
@@ -67,6 +70,36 @@ public class PatchedOID4VCIssuerEndpointTest {
     private static final String IDENTIFIER_ONLY = "{\"credential_identifier\": \"my-id\"}";
     private static final String SUBJECT_AND_IDENTIFIER =
             "{\"credential_configuration_id\": \"my-config\", \"credential_identifier\": \"my-id\"}";
+
+    /**
+     * Covers the dispatch added for unauthenticated requests: the payload must reach the core
+     * endpoint byte-for-byte (no patching, no gate) instead of being touched by this endpoint.
+     */
+    @Nested
+    class UnauthenticatedRequestDispatch {
+
+        private final Response superResponse = mock(Response.class);
+        private String forwardedToSuper;
+
+        private PatchedOID4VCIssuerEndpoint authenticatedEndpoint() {
+            return new MockPatchedOID4VCIssuerEndpoint("true", null) {
+                @Override
+                protected Response forwardToCoreEndpoint(String requestPayload) {
+                    forwardedToSuper = requestPayload;
+                    return UnauthenticatedRequestDispatch.this.superResponse;
+                }
+            };
+        }
+
+        @Test
+        public void shouldForwardOriginalPayloadToCoreEndpointWhenRequestIsUnauthenticated() {
+            Response response = authenticatedEndpoint().requestCredential(SUBJECT_ONLY);
+            // The core endpoint received the payload exactly as the wallet sent it.
+            assertEquals(SUBJECT_ONLY, forwardedToSuper);
+            // The response is the one produced by the core endpoint, passed through untouched.
+            assertSame(superResponse, response);
+        }
+    }
 
     @Nested
     class PatchWalletRequest {
@@ -430,6 +463,7 @@ public class PatchedOID4VCIssuerEndpointTest {
 
             KeycloakContext context = mock(KeycloakContext.class);
             lenient().when(context.getRealm()).thenReturn(realm);
+            lenient().when(context.getConnection()).thenReturn(mock(ClientConnection.class));
 
             KeycloakSession session = mock(KeycloakSession.class);
             lenient().when(session.getKeycloakSessionFactory()).thenReturn(factory);
