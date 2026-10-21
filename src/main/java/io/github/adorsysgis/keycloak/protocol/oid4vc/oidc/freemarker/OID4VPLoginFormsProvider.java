@@ -10,6 +10,7 @@ import java.net.URI;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import org.jboss.logging.Logger;
 import org.keycloak.forms.login.LoginFormsPages;
 import org.keycloak.forms.login.freemarker.FreeMarkerLoginFormsProvider;
@@ -20,6 +21,13 @@ import org.keycloak.utils.StringUtil;
 public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
 
     private static final Logger logger = Logger.getLogger(OID4VPLoginFormsProvider.class);
+
+    /**
+     * Schemes the browser would navigate itself. A wallet redirect must use the configured custom
+     * scheme, such as {@code openid4vp} or {@code haip-vp}.
+     */
+    private static final Set<String> BROWSER_REDIRECT_SCHEMES =
+            Set.of("http", "https", "javascript", "data", "file", "blob", "about");
 
     private final OID4VPUserAuthEndpoint oid4vp;
     private OID4VPUserAuthBean oid4vpUserAuthBean;
@@ -47,20 +55,31 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
     }
 
     /**
-     * 302 to the wallet, including headers registered through {@code setResponseHeader(...)}.
+     * 302 to the wallet. Copies every header registered through {@code setResponseHeader(...)}.
+     * Template rendering also sets an HTML content type, language, and body; those stay off this
+     * redirect. {@code Cache-Control: no-store} is added only when the login flow did not set one.
      */
     static Response walletRedirect(URI walletUri, Map<String, String> responseHeaders) {
-        Response.ResponseBuilder redirect = Response.status(Response.Status.FOUND)
-                .location(walletUri)
-                .header(HttpHeaders.CACHE_CONTROL, "no-store, must-revalidate, max-age=0");
+        Response.ResponseBuilder redirect =
+                Response.status(Response.Status.FOUND).location(walletUri);
+        boolean cacheControlSet = false;
         if (responseHeaders != null) {
-            responseHeaders.forEach(redirect::header);
+            for (Map.Entry<String, String> header : responseHeaders.entrySet()) {
+                redirect.header(header.getKey(), header.getValue());
+                if (HttpHeaders.CACHE_CONTROL.equalsIgnoreCase(header.getKey())) {
+                    cacheControlSet = true;
+                }
+            }
+        }
+        if (!cacheControlSet) {
+            redirect.header(HttpHeaders.CACHE_CONTROL, "no-store, must-revalidate, max-age=0");
         }
         return redirect.build();
     }
 
     /**
      * Wallet URI for a nested presentation, or {@code null} when the login page must still be rendered.
+     * The URI scheme must be a custom wallet scheme. Browser schemes are refused.
      */
     static URI walletLocation(OID4VPUserAuthBean bean) {
         if (bean == null || !bean.isPresentationDuringIssuance()) {
@@ -70,12 +89,19 @@ public class OID4VPLoginFormsProvider extends FreeMarkerLoginFormsProvider {
         if (context == null || context.getError() || StringUtil.isBlank(context.getAuthReqLink())) {
             return null;
         }
+        URI walletUri;
         try {
-            return URI.create(context.getAuthReqLink());
+            walletUri = URI.create(context.getAuthReqLink());
         } catch (IllegalArgumentException e) {
             logger.warnf(e, "Invalid OID4VP authorization request link");
             return null;
         }
+        String scheme = walletUri.getScheme();
+        if (scheme == null || BROWSER_REDIRECT_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT))) {
+            logger.warnf("Refusing wallet redirect for scheme '%s'", scheme);
+            return null;
+        }
+        return walletUri;
     }
 
     @Override
