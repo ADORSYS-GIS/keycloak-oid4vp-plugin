@@ -112,7 +112,7 @@ public class MdocCredentialVerifier implements CredentialVerifier {
                 tokenStatusValidator.validate(
                         verificationContext.getVerifiedMsoPayload(),
                         authReqs.shouldAllowMissingStatusClaim(),
-                        authReqs.getStatusListTrustMaterialIdps());
+                        context.statusListTrustMaterialProviderAliases());
             } catch (ReferencedTokenValidationException e) {
                 throw new VerificationException(
                         String.format(

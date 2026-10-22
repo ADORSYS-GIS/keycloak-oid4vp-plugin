@@ -58,6 +58,7 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.util.PemUtils;
+import org.keycloak.crypto.X509CertificateChainValidator;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.representations.JsonWebToken;
@@ -1097,7 +1098,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     private X509Certificate statusListRootCertificate() throws Exception {
         String jwt = CustomOID4VPAuthenticatorFactory.MockTrustedStatusListJwtFetcher.exampleStatusListJwt(
                 "/tokenstatus/status-list-jwt.txt");
-        List<X509Certificate> chain = org.keycloak.crypto.X509CertificateChainValidator.decodeCertificateChain(
+        List<X509Certificate> chain = X509CertificateChainValidator.decodeCertificateChain(
                 new JWSInput(jwt).getHeader().getX5c());
         return chain.getLast();
     }

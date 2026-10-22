@@ -71,6 +71,12 @@ public class ReferencedTokenValidator {
     /**
      * Validates a Referenced Token using the selected trust-material providers for the fetched
      * Status List JWT. A blank provider selection preserves legacy truststore validation.
+     *
+     * @param tokenPayload The JSON payload of the Referenced Token
+     * @param allowMissingStatusClaim when {@code true}, a missing {@code status} claim is accepted
+     * @param trustMaterialProviderAliases comma-separated aliases of trust-material providers used to validate
+     *     the Status List JWT certificate chain; {@code null} or blank uses the global truststore
+     * @throws ReferencedTokenValidationException if validation fails
      */
     public void validate(JsonNode tokenPayload, boolean allowMissingStatusClaim, String trustMaterialProviderAliases)
             throws ReferencedTokenValidationException {
@@ -197,6 +203,8 @@ public class ReferencedTokenValidator {
      * The status list server returns a JWT token, not raw JSON.
      *
      * @param uri The URI to fetch the status list token from
+     * @param trustMaterialProviderAliases comma-separated aliases of trust-material providers used to validate
+     *     the Status List JWT certificate chain; {@code null} or blank uses the global truststore
      * @return The status list token as JsonNode
      * @throws ReferencedTokenValidationException if fetching or validation fails
      */

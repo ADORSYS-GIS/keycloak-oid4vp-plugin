@@ -49,6 +49,7 @@ import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.truststore.TruststoreProvider;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -107,12 +108,29 @@ public class TrustedStatusListJwtFetcherTest {
     public void shouldAcceptStatusListTrustedByConfiguredProvider() throws Exception {
         String aliases = "status-list-trust";
         TrustMaterialResolver resolver = mock(TrustMaterialResolver.class);
-        JWK trustedKey = trustedKeyForStatusListJwt();
+        JWSInput statusListJws =
+                new JWSInput(MockTrustedStatusListJwtFetcher.exampleStatusListJwt("/tokenstatus/status-list-jwt.txt"));
+        List<X509Certificate> certificateChain = X509CertificateChainValidator.decodeCertificateChain(
+                statusListJws.getHeader().getX5c());
+        // A provider's returned JWK is only a trust decision, not the verification key source.
+        JWK trustedKey =
+                X509CertificateChainValidator.toJwk(certificateChain.getLast(), Algorithm.ES256, certificateChain);
         when(resolver.validateX509Chain(eq(session), eq(aliases), any(), anyList(), eq(Algorithm.ES256)))
                 .thenReturn(trustedKey);
+
+        SignatureProvider signatureProvider = mock(SignatureProvider.class);
+        SignatureVerifierContext signatureVerifier = mock(SignatureVerifierContext.class);
+        when(session.getProvider(SignatureProvider.class, Algorithm.ES256)).thenReturn(signatureProvider);
+        when(signatureProvider.verifier(any(KeyWrapper.class))).thenReturn(signatureVerifier);
+        when(signatureVerifier.verify(any(), any())).thenReturn(true);
         TrustedStatusListJwtFetcher providerFetcher = new MockTrustedStatusListJwtFetcher(session, resolver);
 
         assertDoesNotThrow(() -> providerFetcher.fetchStatusListJwt("https://example.com/status-list-jwt", aliases));
+
+        ArgumentCaptor<KeyWrapper> keyCaptor = ArgumentCaptor.forClass(KeyWrapper.class);
+        Mockito.verify(signatureProvider).verifier(keyCaptor.capture());
+        assertEquals(
+                certificateChain.getFirst().getPublicKey(), keyCaptor.getValue().getPublicKey());
     }
 
     @Test
@@ -331,14 +349,6 @@ public class TrustedStatusListJwtFetcherTest {
     private void setupTrustForStatusListJwt() throws Exception {
         String statusListJwt = MockTrustedStatusListJwtFetcher.exampleStatusListJwt("/tokenstatus/status-list-jwt.txt");
         setupTrustForJwt(statusListJwt);
-    }
-
-    private JWK trustedKeyForStatusListJwt() throws Exception {
-        String jwt = MockTrustedStatusListJwtFetcher.exampleStatusListJwt("/tokenstatus/status-list-jwt.txt");
-        JWSInput jws = new JWSInput(jwt);
-        List<X509Certificate> chain = X509CertificateChainValidator.decodeCertificateChain(
-                jws.getHeader().getX5c());
-        return X509CertificateChainValidator.toJwk(chain.getFirst(), Algorithm.ES256, chain);
     }
 
     private void setupTrustForJwt(String jwt) throws Exception {

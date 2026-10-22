@@ -17,8 +17,8 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
+import org.keycloak.crypto.X509CertificateChainValidator;
 import org.keycloak.jose.jwk.JWK;
-import org.keycloak.jose.jwk.JWKParser;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.models.KeycloakSession;
@@ -77,47 +77,9 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
      */
     protected void verifyStatusListJwt(JWSInput jws, String trustMaterialProviderAliases)
             throws ReferencedTokenValidationException {
-        PublicKey verificationKey = StringUtil.isBlank(trustMaterialProviderAliases)
-                ? getLeafCertificateFromX5C(jws).getPublicKey()
-                : resolveVerificationKey(jws, trustMaterialProviderAliases);
-        SignatureVerifierContext verifier = getVerifierContext(jws, verificationKey);
+        X509Certificate leaf = getLeafCertificateFromX5C(jws, trustMaterialProviderAliases);
+        SignatureVerifierContext verifier = getVerifierContext(jws, leaf.getPublicKey());
         validateJwsSignature(jws, verifier);
-    }
-
-    private PublicKey resolveVerificationKey(JWSInput jws, String trustMaterialProviderAliases)
-            throws ReferencedTokenValidationException {
-        String algorithm = jws.getHeader().getRawAlgorithm();
-        TrustMaterialRequest request = TrustMaterialRequest.builder()
-                .kid(jws.getHeader().getKeyId())
-                .algorithm(algorithm)
-                .issuer(readIssuer(jws))
-                .build();
-        try {
-            JWK trustedKey = trustMaterialResolver.validateX509Chain(
-                    session,
-                    trustMaterialProviderAliases,
-                    request,
-                    jws.getHeader().getX5c(),
-                    algorithm);
-            if (trustedKey == null) {
-                throw new ReferencedTokenValidationException(
-                        "No configured trust-material identity provider supplied X.509 trust");
-            }
-            PublicKey publicKey = JWKParser.create(trustedKey).toPublicKey();
-            if (publicKey == null) {
-                throw new ReferencedTokenValidationException(
-                        "Configured trust-material identity provider returned an unsupported verification key");
-            }
-            return publicKey;
-        } catch (ReferencedTokenValidationException e) {
-            throw e;
-        } catch (VerificationException e) {
-            throw new ReferencedTokenValidationException(
-                    "Status List JWT x5c validation through configured trust-material providers failed", e);
-        } catch (RuntimeException e) {
-            throw new ReferencedTokenValidationException(
-                    "Could not resolve a Status List JWT verification key from configured trust-material providers", e);
-        }
     }
 
     private String readIssuer(JWSInput jws) throws ReferencedTokenValidationException {
@@ -155,7 +117,8 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         }
     }
 
-    protected X509Certificate getLeafCertificateFromX5C(JWSInput jws) throws ReferencedTokenValidationException {
+    protected X509Certificate getLeafCertificateFromX5C(JWSInput jws, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
         List<String> x5c = jws.getHeader().getX5c();
         if (x5c == null || x5c.isEmpty()) {
             throw new ReferencedTokenValidationException(
@@ -163,7 +126,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
                     new VerificationException("Missing x5c header"));
         }
 
-        X509Certificate[] chain = validateCertChain(x5c);
+        X509Certificate[] chain = validateCertChain(jws, trustMaterialProviderAliases, x5c);
         X509Certificate leaf = chain[0];
 
         try {
@@ -195,7 +158,48 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         }
     }
 
-    protected X509Certificate[] validateCertChain(List<String> x5c) throws ReferencedTokenValidationException {
+    protected X509Certificate[] validateCertChain(JWSInput jws, String trustMaterialProviderAliases, List<String> x5c)
+            throws ReferencedTokenValidationException {
+        if (!StringUtil.isBlank(trustMaterialProviderAliases)) {
+            return validateCertChainWithTrustMaterialProviders(jws, trustMaterialProviderAliases, x5c);
+        }
+
+        return validateCertChainWithGlobalTruststore(x5c);
+    }
+
+    private X509Certificate[] validateCertChainWithTrustMaterialProviders(
+            JWSInput jws, String trustMaterialProviderAliases, List<String> x5c)
+            throws ReferencedTokenValidationException {
+        String algorithm = jws.getHeader().getRawAlgorithm();
+        TrustMaterialRequest request = TrustMaterialRequest.builder()
+                .kid(jws.getHeader().getKeyId())
+                .algorithm(algorithm)
+                .issuer(readIssuer(jws))
+                .build();
+        try {
+            JWK trustedKey = trustMaterialResolver.validateX509Chain(
+                    session, trustMaterialProviderAliases, request, x5c, algorithm);
+            if (trustedKey == null) {
+                throw new ReferencedTokenValidationException(
+                        "No configured trust-material identity provider supplied X.509 trust");
+            }
+
+            // The provider decides whether this chain is trusted; signature verification must
+            // still use the public key from the presented leaf certificate itself.
+            return X509CertificateChainValidator.decodeCertificateChain(x5c).toArray(X509Certificate[]::new);
+        } catch (ReferencedTokenValidationException e) {
+            throw e;
+        } catch (VerificationException e) {
+            throw new ReferencedTokenValidationException(
+                    "Status List JWT x5c validation through configured trust-material providers failed", e);
+        } catch (RuntimeException e) {
+            throw new ReferencedTokenValidationException(
+                    "Could not validate a Status List JWT x5c chain with configured trust-material providers", e);
+        }
+    }
+
+    private X509Certificate[] validateCertChainWithGlobalTruststore(List<String> x5c)
+            throws ReferencedTokenValidationException {
         // Enforce trust in X5C chain
         TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
         if (truststoreProvider == null || truststoreProvider.getTruststore() == null) {

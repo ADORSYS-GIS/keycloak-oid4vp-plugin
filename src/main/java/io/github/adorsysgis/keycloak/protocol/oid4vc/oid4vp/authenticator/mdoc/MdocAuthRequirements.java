@@ -34,10 +34,6 @@ public class MdocAuthRequirements {
         return authRequirements.shouldAllowMissingStatusClaim();
     }
 
-    public String getStatusListTrustMaterialIdps() {
-        return authRequirements.getStatusListTrustMaterialIdps();
-    }
-
     public PresentationRequirements getPresentationRequirements() {
         return new SimpleMdocPresentationDefinition(expectedDocTypes, requiredClaims);
     }
