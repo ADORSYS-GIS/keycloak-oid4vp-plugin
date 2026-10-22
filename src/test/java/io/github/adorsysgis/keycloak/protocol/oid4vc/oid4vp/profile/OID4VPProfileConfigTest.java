@@ -1,6 +1,7 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,6 +20,23 @@ import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
 
 public class OID4VPProfileConfigTest {
+
+    @Test
+    void shouldValidateAndDeduplicateStatusListTrustMaterialProviderAliases() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, " eudi-pid, default-trust, eudi-pid "));
+
+        assertEquals(
+                "eudi-pid,default-trust", new VerifierConfig(null, config).getStatusListTrustMaterialProviderAliases());
+    }
+
+    @Test
+    void shouldRejectEmptyStatusListTrustMaterialProviderAlias() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,,default-trust"));
+
+        assertThrows(IllegalStateException.class, () -> new VerifierConfig(null, config));
+    }
 
     @Test
     void shouldParseConfiguredProfiles() {

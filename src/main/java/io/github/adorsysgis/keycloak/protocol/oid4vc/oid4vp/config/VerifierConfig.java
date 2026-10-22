@@ -12,7 +12,9 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDat
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
@@ -46,6 +48,7 @@ public class VerifierConfig {
     private final boolean requireCryptographicHolderBinding;
     private final List<String> transactionDataRaw;
     private final String verifierInfoConfig;
+    private final String statusListTrustMaterialProviderAliases;
 
     /**
      * Returns a cached {@code VerifierConfig} for the given authenticator config.
@@ -98,6 +101,8 @@ public class VerifierConfig {
                 requireCryptographicHolderBinding);
 
         this.verifierInfoConfig = config.get(OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG);
+        this.statusListTrustMaterialProviderAliases = validateTrustMaterialProviderAliases(
+                config.get(OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG));
     }
 
     private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
@@ -176,6 +181,21 @@ public class VerifierConfig {
         return transactionDataRaw;
     }
 
+    private static String validateTrustMaterialProviderAliases(String configuredAliases) {
+        if (StringUtils.isBlank(configuredAliases)) {
+            return null;
+        }
+
+        List<String> aliases = Arrays.stream(configuredAliases.split(",", -1))
+                .map(String::trim)
+                .toList();
+        if (aliases.stream().anyMatch(StringUtils::isBlank)) {
+            throw new IllegalStateException("Status List trust-material provider aliases must be non-empty");
+        }
+
+        return String.join(",", new LinkedHashSet<>(aliases));
+    }
+
     public ClientIdentifierPrefix getClientIdentifierPrefix() {
         return clientIdentifierPrefix;
     }
@@ -214,5 +234,9 @@ public class VerifierConfig {
 
     public String getVerifierInfoConfig() {
         return verifierInfoConfig;
+    }
+
+    public String getStatusListTrustMaterialProviderAliases() {
+        return statusListTrustMaterialProviderAliases;
     }
 }
