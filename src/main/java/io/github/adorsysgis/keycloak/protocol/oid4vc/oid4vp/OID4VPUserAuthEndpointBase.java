@@ -2,10 +2,8 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
-import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.interfaces.ECPrivateKey;
@@ -38,7 +36,6 @@ import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.urls.UrlType;
-import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -256,7 +253,7 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
      * @param ephemeralKey      the ephemeral key generated for the authentication
      *                          session
      */
-    protected ResponseObject decryptResponse(
+    protected String decryptResponse(
             String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
         try {
             JWE jwe = AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
@@ -268,11 +265,10 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
             }
 
             ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
-            String decryptedResponse = EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
-            return JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
-        } catch (JWEException | IOException e) {
+            return EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
+        } catch (JWEException e) {
             logger.error("Failed to decrypt response", e);
-            throw new IllegalArgumentException("Failed to decrypt and parse response", e);
+            throw new IllegalArgumentException("Failed to decrypt response", e);
         }
     }
 }

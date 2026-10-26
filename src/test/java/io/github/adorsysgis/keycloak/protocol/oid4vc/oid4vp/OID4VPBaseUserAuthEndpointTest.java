@@ -32,6 +32,7 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.common.VerificationException;
@@ -411,6 +412,31 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
         httpPost.setEntity(new UrlEncodedFormEntity(oid4vpErrorResponse));
         return httpClient.execute(httpPost);
+    }
+
+    protected HttpResponse sendEncryptedAuthorizationErrorResponse(
+            RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
+        HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
+        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair(
+                "response", buildEncryptedOpenid4vpErrorResponse(requestObject, error, errorDescription, state)))));
+        return httpClient.execute(httpPost);
+    }
+
+    protected String buildEncryptedOpenid4vpErrorResponse(
+            RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
+        Map<String, String> errorResponse = new LinkedHashMap<>();
+        errorResponse.put(OAuth2Constants.ERROR, error);
+        if (errorDescription != null) {
+            errorResponse.put(OAuth2Constants.ERROR_DESCRIPTION, errorDescription);
+        }
+        if (state != null) {
+            errorResponse.put(ResponseObject.STATE_KEY, state);
+        }
+
+        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
+        ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
+        return ECTestUtils.encryptMessage(
+                JsonSerialization.writeValueAsString(errorResponse), encKey, encJwk.getKeyId());
     }
 
     /**

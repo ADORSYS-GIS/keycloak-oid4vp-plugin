@@ -231,6 +231,24 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
     }
 
     @Test
+    public void shouldAcceptEncryptedWalletError() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        String walletError = OAuthErrorException.ACCESS_DENIED;
+        String errorDescription = "wallet canceled presentation";
+
+        HttpResponse response = sendEncryptedAuthorizationErrorResponse(
+                requestObject, walletError, errorDescription, requestObject.getState());
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext status = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
+        assertEquals(ProcessingError.WALLET_ERROR, status.getError());
+        assertEquals(walletError + ": " + errorDescription, status.getErrorDescription());
+    }
+
+    @Test
     public void shouldRejectEncryptedResponse_WithUnsupportedAlg() throws Exception {
         assertEncryptedJweRejected(
                 JWEConstants.ECDH_ES_A128KW, JWEConstants.A128GCM, null, "Unsupported JWE key management algorithm");

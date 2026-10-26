@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 import static org.keycloak.common.util.UriUtils.checkUrl;
 
 import com.apicatalog.jsonld.StringUtils;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
@@ -277,7 +276,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         AuthorizationContext authorizationContext =
                 new AuthenticationSessionStore(authSession).getAuthorizationContextByTransactionId(transactionId);
 
-        processAuthorizationResponse(
+        String walletError = processAuthorizationResponse(
                 authorizationContext,
                 authSession,
                 authorizationContext.getRequestId(),
@@ -297,7 +296,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         if (AuthorizationContextStatus.ERROR.equals(authorizationContext.getStatus())) {
             throw new BadRequestException(errorResponse(
                     Response.Status.BAD_REQUEST,
-                    StringUtil.isNotBlank(error) ? error : OAuthErrorException.INVALID_REQUEST,
+                    StringUtil.isNotBlank(walletError) ? walletError : OAuthErrorException.INVALID_REQUEST,
                     authorizationContext.getErrorDescription()));
         }
 
@@ -308,7 +307,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
      * Shared OpenID4VP Authorization Response processing for both the per-request response route
      * and the interactive (ia_post) challenge route.
      */
-    private void processAuthorizationResponse(
+    private String processAuthorizationResponse(
             AuthorizationContext authorizationContext,
             AuthenticationSessionModel authSession,
             String requestId,
@@ -319,24 +318,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String state) {
 
         if (StringUtil.isNotBlank(error)) {
-            if (StringUtil.isNotBlank(encryptedResponse) || StringUtil.isNotBlank(vpToken)) {
-                throw new BadRequestException(errorResponse(
-                        Response.Status.BAD_REQUEST,
-                        OAuthErrorException.INVALID_REQUEST,
-                        "Wallet error response must not include VP response parameters"));
-            }
-            try {
-                validateResponseState(state, authorizationContext, requestId);
-            } catch (IllegalArgumentException e) {
-                throw new BadRequestException(
-                        errorResponse(
-                                Response.Status.BAD_REQUEST,
-                                OAuthErrorException.INVALID_REQUEST,
-                                String.format("Unparseable response params (%s)", e.getMessage())),
-                        e);
-            }
-            persistWalletErrorResponse(authorizationContext, authSession, error, errorDescription);
-            return;
+            processWalletErrorResponse(
+                    authorizationContext,
+                    authSession,
+                    requestId,
+                    error,
+                    errorDescription,
+                    state,
+                    StringUtil.isNotBlank(encryptedResponse) || StringUtil.isNotBlank(vpToken));
+            return error;
         }
 
         // Validate that response is encrypted if required
@@ -353,15 +343,37 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                             StringUtils.isBlank(encryptedResponse) ? "encrypted" : "unencrypted")));
         }
 
-        // Parse a response object from the request parameters
+        // Decrypt before deciding whether the response is a successful VP response or an OAuth error response.
+        String decryptedResponse = null;
         ResponseObject responseObject;
         try {
+            if (hasEncrypted) {
+                decryptedResponse = decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
+                JsonNode decryptedPayload = JsonSerialization.mapper.readTree(decryptedResponse);
+                if (decryptedPayload == null || !decryptedPayload.isObject()) {
+                    throw new IllegalArgumentException("Decrypted response must be a JSON object");
+                }
+
+                String decryptedError = textOrNull(decryptedPayload, OAuth2Constants.ERROR);
+                if (StringUtil.isNotBlank(decryptedError)) {
+                    processWalletErrorResponse(
+                            authorizationContext,
+                            authSession,
+                            requestId,
+                            decryptedError,
+                            textOrNull(decryptedPayload, OAuth2Constants.ERROR_DESCRIPTION),
+                            textOrNull(decryptedPayload, ResponseObject.STATE_KEY),
+                            decryptedPayload.hasNonNull(ResponseObject.VP_TOKEN_KEY) || StringUtil.isNotBlank(vpToken));
+                    return decryptedError;
+                }
+            }
+
             responseObject = StringUtils.isBlank(encryptedResponse)
                     ? new ResponseObject(vpToken, state)
-                    : decryptResponse(encryptedResponse, ephemeralKey, authorizationContext);
+                    : JsonSerialization.readValue(decryptedResponse, ResponseObject.class);
 
             validateResponseState(responseObject.getState(), authorizationContext, requestId);
-        } catch (IllegalArgumentException | JsonProcessingException e) {
+        } catch (IllegalArgumentException | IOException e) {
             throw new BadRequestException(
                     errorResponse(
                             Response.Status.BAD_REQUEST,
@@ -378,6 +390,38 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
 
         authorizationResponseService.processAuthorizationResponse(
                 responseObject, authorizationContext, authSession, authProcessor, profile);
+        return null;
+    }
+
+    private void processWalletErrorResponse(
+            AuthorizationContext authorizationContext,
+            AuthenticationSessionModel authSession,
+            String requestId,
+            String error,
+            String errorDescription,
+            String state,
+            boolean includesVpResponseParameters) {
+        if (includesVpResponseParameters) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    OAuthErrorException.INVALID_REQUEST,
+                    "Wallet error response must not include VP response parameters"));
+        }
+        try {
+            validateResponseState(state, authorizationContext, requestId);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(
+                    errorResponse(
+                            Response.Status.BAD_REQUEST,
+                            OAuthErrorException.INVALID_REQUEST,
+                            String.format("Unparseable response params (%s)", e.getMessage())),
+                    e);
+        }
+        persistWalletErrorResponse(authorizationContext, authSession, error, errorDescription);
+    }
+
+    private static String textOrNull(JsonNode node, String field) {
+        return node.hasNonNull(field) ? node.get(field).asText() : null;
     }
 
     private void persistWalletErrorResponse(
