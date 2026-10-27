@@ -416,13 +416,26 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
     protected HttpResponse sendEncryptedAuthorizationErrorResponse(
             RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
+        Map<String, Object> errorResponse = new LinkedHashMap<>();
+        errorResponse.put(OAuth2Constants.ERROR, error);
+        if (errorDescription != null) {
+            errorResponse.put(OAuth2Constants.ERROR_DESCRIPTION, errorDescription);
+        }
+        if (state != null) {
+            errorResponse.put(ResponseObject.STATE_KEY, state);
+        }
+        return sendEncryptedAuthorizationResponse(requestObject, errorResponse);
+    }
+
+    protected HttpResponse sendEncryptedAuthorizationResponse(RequestObject requestObject, Object responsePayload)
+            throws Exception {
         HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
-        httpPost.setEntity(new UrlEncodedFormEntity(List.of(new BasicNameValuePair(
-                "response", buildEncryptedOpenid4vpErrorResponse(requestObject, error, errorDescription, state)))));
+        httpPost.setEntity(new UrlEncodedFormEntity(
+                List.of(new BasicNameValuePair("response", encryptOpenid4vpResponse(requestObject, responsePayload)))));
         return httpClient.execute(httpPost);
     }
 
-    protected String buildEncryptedOpenid4vpErrorResponse(
+    protected String buildEncryptedOpenid4vpErrorResponseJwe(
             RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
         Map<String, String> errorResponse = new LinkedHashMap<>();
         errorResponse.put(OAuth2Constants.ERROR, error);
@@ -433,10 +446,18 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             errorResponse.put(ResponseObject.STATE_KEY, state);
         }
 
+        return encryptOpenid4vpResponse(requestObject, errorResponse);
+    }
+
+    protected String encryptOpenid4vpResponse(RequestObject requestObject, Object responsePayload) throws Exception {
         JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
         ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
         return ECTestUtils.encryptMessage(
-                JsonSerialization.writeValueAsString(errorResponse), encKey, encJwk.getKeyId());
+                JsonSerialization.writeValueAsString(responsePayload), encKey, encJwk.getKeyId());
+    }
+
+    protected String wrapEncryptedOpenid4vpResponse(String responseJwe) throws IOException {
+        return JsonSerialization.writeValueAsString(Map.of("response", responseJwe));
     }
 
     /**
@@ -516,13 +537,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         String sdJwtVpToken = sdJwtVPTestUtils.presentSdJwt(
                 sdJwt, requestObject.getNonce(), requestObject.getClientId(), SdJwtVPTestUtils.getUserJwk());
         Map<String, List<String>> vpTokenMap = prepareVpTokenMap(sdJwtVpToken, requestObject);
-        String plaintext = JsonSerialization.writeValueAsString(Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap));
-
-        JWK encJwk = requestObject.getClientMetadata().getJwks().getKeys()[0];
-        ECPublicKey encKey = (ECPublicKey) JWKParser.create(encJwk).toPublicKey();
-        String encResp = ECTestUtils.encryptMessage(plaintext, encKey, encJwk.getKeyId());
-
-        return JsonSerialization.writeValueAsString(Map.of("response", encResp));
+        return wrapEncryptedOpenid4vpResponse(
+                encryptOpenid4vpResponse(requestObject, Map.of(ResponseObject.VP_TOKEN_KEY, vpTokenMap)));
     }
 
     @FunctionalInterface

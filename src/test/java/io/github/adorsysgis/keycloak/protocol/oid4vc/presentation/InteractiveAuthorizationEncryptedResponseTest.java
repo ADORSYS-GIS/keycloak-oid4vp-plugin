@@ -117,14 +117,14 @@ class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEn
     void encryptedInteractiveErrorResponsePreservesWalletError() throws Exception {
         Challenge challenge = initiateInteractiveChallengeVerbose();
         RequestObject requestObject = new JWSInput(challenge.requestJwt()).readJsonContent(RequestObject.class);
-        String encryptedResponse = buildEncryptedOpenid4vpErrorResponse(
+        String encryptedResponse = buildEncryptedOpenid4vpErrorResponseJwe(
                 requestObject, OAuthErrorException.ACCESS_DENIED, "User declined", requestObject.getState());
 
         HttpResponse resume = postAuthorizationChallenge(List.of(
                 new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.authSession()),
                 new BasicNameValuePair(
                         AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM,
-                        "{\"response\":\"" + encryptedResponse + "\"}")));
+                        wrapEncryptedOpenid4vpResponse(encryptedResponse))));
 
         assertEquals(HttpStatus.SC_BAD_REQUEST, resume.getStatusLine().getStatusCode());
         OAuth2ErrorRepresentation error = parseHttpResponse(resume, OAuth2ErrorRepresentation.class);

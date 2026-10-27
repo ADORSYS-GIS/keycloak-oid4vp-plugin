@@ -19,6 +19,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.Authorizatio
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationResponseService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.JsonNodeUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.ResponseStateValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPUserAuthBean.OIDCAuthSession;
 import jakarta.ws.rs.BadRequestException;
@@ -354,15 +355,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     throw new IllegalArgumentException("Decrypted response must be a JSON object");
                 }
 
-                String decryptedError = textOrNull(decryptedPayload, OAuth2Constants.ERROR);
+                String decryptedError = JsonNodeUtils.textOrNull(decryptedPayload, OAuth2Constants.ERROR);
                 if (StringUtil.isNotBlank(decryptedError)) {
                     processWalletErrorResponse(
                             authorizationContext,
                             authSession,
                             requestId,
                             decryptedError,
-                            textOrNull(decryptedPayload, OAuth2Constants.ERROR_DESCRIPTION),
-                            textOrNull(decryptedPayload, ResponseObject.STATE_KEY),
+                            JsonNodeUtils.textOrNull(decryptedPayload, OAuth2Constants.ERROR_DESCRIPTION),
+                            JsonNodeUtils.textOrNull(decryptedPayload, ResponseObject.STATE_KEY),
                             decryptedPayload.hasNonNull(ResponseObject.VP_TOKEN_KEY) || StringUtil.isNotBlank(vpToken));
                     return decryptedError;
                 }
@@ -418,10 +419,6 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     e);
         }
         persistWalletErrorResponse(authorizationContext, authSession, error, errorDescription);
-    }
-
-    private static String textOrNull(JsonNode node, String field) {
-        return node.hasNonNull(field) ? node.get(field).asText() : null;
     }
 
     private void persistWalletErrorResponse(
