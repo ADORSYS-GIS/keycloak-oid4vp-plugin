@@ -19,13 +19,15 @@ import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.KeycloakSession;
 
 /**
  * Access configurations that modulate the verifier's behavior.
  *
- * <p>Use {@link #resolve(String, AuthenticatorConfigModel)} to avoid re-parsing and re-validating
- * the same configuration on every request. The constructor remains public for direct use
- * in tests.
+ * <p>Use {@link #resolve(KeycloakSession, String, AuthenticatorConfigModel)} to avoid re-parsing
+ * the same configuration on every request while checking configured trust-material aliases
+ * against the current realm. The constructor remains public for direct use in tests.
  *
  * <p>Read full descriptions of configurations in {@link OID4VPAuthenticatorFactory}.
  */
@@ -54,11 +56,21 @@ public class VerifierConfig {
      * Returns a cached {@code VerifierConfig} for the given authenticator config.
      * The cache is scoped by realm ID and bounded by {@link #MAX_CACHE_SIZE} entries.
      */
-    public static VerifierConfig resolve(String realmId, AuthenticatorConfigModel authConfig) {
+    private static VerifierConfig resolveCachedConfig(String realmId, AuthenticatorConfigModel authConfig) {
         Map<String, String> config =
                 (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
         CacheKey key = new CacheKey(realmId, Map.copyOf(config));
         return CACHE.get(key, k -> new VerifierConfig(realmId, authConfig));
+    }
+
+    /**
+     * Returns the cached verifier configuration after confirming that each configured
+     * status-list trust-material alias exists in this realm.
+     */
+    public static VerifierConfig resolve(KeycloakSession session, String realmId, AuthenticatorConfigModel authConfig) {
+        VerifierConfig config = resolveCachedConfig(realmId, authConfig);
+        config.validateTrustMaterialProviderAliases(session);
+        return config;
     }
 
     private record CacheKey(String realmId, Map<String, String> config) {}
@@ -194,6 +206,20 @@ public class VerifierConfig {
         }
 
         return String.join(",", new LinkedHashSet<>(aliases));
+    }
+
+    private void validateTrustMaterialProviderAliases(KeycloakSession session) {
+        if (statusListTrustMaterialProviderAliases == null) {
+            return;
+        }
+
+        for (String alias : statusListTrustMaterialProviderAliases.split(",")) {
+            IdentityProviderModel identityProvider = session.identityProviders().getByAlias(alias);
+            if (identityProvider == null) {
+                throw new IllegalStateException(String.format(
+                        "Status List trust-material identity provider alias '%s' is not configured", alias));
+            }
+        }
     }
 
     public ClientIdentifierPrefix getClientIdentifierPrefix() {

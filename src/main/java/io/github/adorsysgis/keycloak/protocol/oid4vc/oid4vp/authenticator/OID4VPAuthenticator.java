@@ -106,7 +106,8 @@ public class OID4VPAuthenticator implements Authenticator {
         AuthorizationContext authContext = new AuthenticationSessionStore(authSession).getAuthorizationContext();
 
         String realmId = authFlowContext.getRealm().getId();
-        VerifierConfig verifierConfig = VerifierConfig.resolve(realmId, authFlowContext.getAuthenticatorConfig());
+        VerifierConfig verifierConfig =
+                VerifierConfig.resolve(authFlowContext.getSession(), realmId, authFlowContext.getAuthenticatorConfig());
         OID4VPProfileConfig profileConfig =
                 OID4VPProfileConfig.resolve(realmId, authFlowContext.getAuthenticatorConfig());
         AuthenticationProfile authProfile = profileConfig.getProfile(authContext.getProfileId());

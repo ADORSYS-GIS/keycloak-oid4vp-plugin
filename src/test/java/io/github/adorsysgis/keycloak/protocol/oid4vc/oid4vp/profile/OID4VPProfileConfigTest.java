@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
@@ -18,6 +20,9 @@ import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.IdentityProviderStorageProvider;
+import org.keycloak.models.KeycloakSession;
 
 public class OID4VPProfileConfigTest {
 
@@ -36,6 +41,41 @@ public class OID4VPProfileConfigTest {
         config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,,default-trust"));
 
         assertThrows(IllegalStateException.class, () -> new VerifierConfig(null, config));
+    }
+
+    @Test
+    void shouldAcceptConfiguredStatusListTrustMaterialProviderAliases() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,default-trust"));
+        KeycloakSession session = mock(KeycloakSession.class);
+        IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
+        when(session.identityProviders()).thenReturn(identityProviders);
+        when(identityProviders.getByAlias("eudi-pid")).thenReturn(mock(IdentityProviderModel.class));
+        when(identityProviders.getByAlias("default-trust")).thenReturn(mock(IdentityProviderModel.class));
+
+        assertDoesNotThrow(() -> VerifierConfig.resolve(session, "configured-aliases", config));
+
+        KeycloakSession sessionWithoutProvider = mock(KeycloakSession.class);
+        when(sessionWithoutProvider.identityProviders()).thenReturn(mock(IdentityProviderStorageProvider.class));
+        assertThrows(
+                IllegalStateException.class,
+                () -> VerifierConfig.resolve(sessionWithoutProvider, "configured-aliases", config));
+    }
+
+    @Test
+    void shouldRejectUnknownStatusListTrustMaterialProviderAlias() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "unknown-provider"));
+        KeycloakSession session = mock(KeycloakSession.class);
+        IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
+        when(session.identityProviders()).thenReturn(identityProviders);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, () -> VerifierConfig.resolve(session, "unknown-alias", config));
+
+        assertEquals(
+                "Status List trust-material identity provider alias 'unknown-provider' is not configured",
+                error.getMessage());
     }
 
     @Test
