@@ -70,6 +70,9 @@ behavior under heavy load. Run them with (as they are run in the CI/CD pipeline)
 For the full options on how to run Gatling simulations (e.g. running a single simulation
 non-interactively), refer to the [Gatling Maven plugin documentation](https://docs.gatling.io/integrations/build-tools/maven-plugin/#running-your-simulations).
 
+For end-to-end testing of the full credential lifecycle (issued credential → presentation
+login → revocation → rejected presentation), see the [`e2e/`](./e2e/README.md) suite.
+
 ## Deploying the Plugin
 
 Copy the JAR file to the `providers` directory of your Keycloak installation. For example:

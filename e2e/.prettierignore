@@ -1,0 +1,5 @@
+node_modules/
+build/
+playwright-report/
+test-results/
+pnpm-lock.yaml
