@@ -7,6 +7,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
@@ -217,6 +218,17 @@ public class VerifierConfig {
     }
 
     public String getRegistrationCertificate() {
+        return registrationCertificate;
+    }
+
+    /**
+     * Resolves the registration certificate for a selected authentication profile, falling back to
+     * the shared authenticator setting when the profile does not provide one.
+     */
+    public String getRegistrationCertificate(AuthenticationProfile profile) {
+        if (profile != null && !StringUtils.isBlank(profile.getRegistrationCertificate())) {
+            return profile.getRegistrationCertificate();
+        }
         return registrationCertificate;
     }
 
