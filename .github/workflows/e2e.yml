@@ -1,0 +1,102 @@
+name: E2E Testing
+
+on:
+  schedule:
+    # Every night at 01:00 UTC
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: e2e-testing
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Run end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Prepare pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v7.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node (latest LTS)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "lts/*"
+          cache: pnpm
+          cache-dependency-path: e2e/pnpm-lock.yaml
+
+      - name: Install Playwright browser
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm dlx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Run all journeys
+        run: pnpm play
+        working-directory: e2e
+
+      - name: Collect Keycloak and wallet logs
+        if: always()
+        run: |
+          cd e2e
+          mkdir -p build
+          # play.sh already dumped the stack logs to build/docker-compose.log
+          # on failure (before tearing down). Only fill it in if it is still
+          # empty, then remove whatever containers remain.
+          if [ ! -s build/docker-compose.log ]; then
+            docker compose logs > build/docker-compose.log || true
+          fi
+          docker compose down -v || true
+
+      - name: Show Keycloak crash log tail on failure
+        if: failure() && hashFiles('e2e/build/docker-compose.log') != ''
+        run: |
+          tail -n 100 e2e/build/docker-compose.log
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: e2e-playwright-report
+          path: |
+            e2e/playwright-report/**
+            e2e/build/docker-compose.log
+          if-no-files-found: warn
+
+      - name: Notify Discord on failure
+        if: failure()
+        run: |
+          curl -fsSL -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "E2E testing failed",
+                "description": "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "color": 15158332,
+                "fields": [
+                  {
+                    "name": "Repository",
+                    "value": "`${{ github.repository }}`",
+                    "inline": true
+                  },
+                  {
+                    "name": "Branch",
+                    "value": "`${{ github.ref_name }}`",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions"
+                }
+              }]
+            }'
