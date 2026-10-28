@@ -15,6 +15,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPLoginFormsProvider;
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -441,14 +443,8 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     }
 
     private Connection.Response startNestedAuthorization(String authEndpoint) throws Exception {
-        // The authorization response must redirect straight to the wallet.
+        // The authorization response ends on the page that opens the wallet.
         Connection.Response initial = requestAuthorizationPage(authEndpoint);
-        assertTrue(
-                initial.statusCode() >= HttpStatus.SC_MULTIPLE_CHOICES
-                        && initial.statusCode() < HttpStatus.SC_BAD_REQUEST,
-                "Unexpected authorization response: " + initial.statusCode() + " "
-                        + initial.header("Location") + " "
-                        + initial.body().replaceAll("\\s+", " "));
         nestedLink(initial);
         return initial;
     }
@@ -491,12 +487,21 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         throw new IllegalStateException("Too many redirects fetching authorization page: " + authEndpoint);
     }
 
-    private String nestedLink(Connection.Response response) {
-        String location = response.header(HttpHeaders.LOCATION);
-        assertNotNull(location, "Nested authorization must redirect to a same-device OpenID4VP request");
+    private String nestedLink(Connection.Response response) throws IOException {
+        assertEquals(
+                HttpStatus.SC_OK,
+                response.statusCode(),
+                "Nested authorization must return the wallet handoff page: " + response.statusCode());
+        String html = response.body();
+        var link = Jsoup.parse(html).selectFirst("a#kc-oid4vp-wallet");
+        assertNotNull(link, "Nested authorization must include a same-device OpenID4VP link");
+        String location = link.attr("href");
         assertTrue(
                 location.startsWith(OPENID4VP_SCHEME),
-                "Nested authorization must redirect to a same-device OpenID4VP request");
+                "Nested authorization must open a same-device OpenID4VP request");
+        assertTrue(
+                html.contains(OID4VPLoginFormsProvider.WALLET_HANDOFF_SCRIPT),
+                "Nested authorization must open the wallet from the handoff page");
         return location;
     }
 

@@ -301,17 +301,35 @@ public class OID4VPUserAuthBeanTest {
 
     @Test
     public void shouldCopyResponseHeadersOntoWalletRedirect() {
-        URI walletUri = URI.create("openid4vp://authorize?client_id=wallet");
+        URI walletUri = URI.create("openid4vp://authorize?client_id=wallet&request_uri=https://issuer.example/'req'");
         Response response = OID4VPLoginFormsProvider.walletRedirect(
-                walletUri, Map.of("X-Frame-Options", "DENY", "Content-Security-Policy", "default-src 'none'"));
+                walletUri,
+                Map.of(
+                        "X-Frame-Options",
+                        "DENY",
+                        "Content-Security-Policy",
+                        "default-src 'none'",
+                        HttpHeaders.CONTENT_TYPE,
+                        "text/plain"));
 
-        assertEquals(Response.Status.FOUND.getStatusCode(), response.getStatus());
-        assertEquals(walletUri, response.getLocation());
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertNull(response.getLocation());
         assertEquals("DENY", response.getHeaderString("X-Frame-Options"));
-        assertEquals("default-src 'none'", response.getHeaderString("Content-Security-Policy"));
+        assertEquals(
+                "default-src 'none'; script-src 'sha256-RnCmE4K3EQeFpIYwyF6YQfEwqnKpQisMCVI6aNJDJ5s='",
+                response.getHeaderString("Content-Security-Policy"));
         assertEquals("no-store, must-revalidate, max-age=0", response.getHeaderString(HttpHeaders.CACHE_CONTROL));
-        assertNull(response.getMediaType());
+        assertEquals("text", response.getMediaType().getType());
+        assertEquals("html", response.getMediaType().getSubtype());
         assertNull(response.getLanguage());
+
+        String body = response.getEntity().toString();
+        assertTrue(body.contains("id=\"kc-oid4vp-wallet\""));
+        assertTrue(body.contains(OID4VPLoginFormsProvider.WALLET_HANDOFF_SCRIPT));
+        assertTrue(
+                body.contains(
+                        "href=\"openid4vp://authorize?client_id=wallet&amp;request_uri=https://issuer.example/&#39;req&#39;\""));
+        assertFalse(body.contains(walletUri.toString()));
     }
 
     @Test
@@ -322,6 +340,17 @@ public class OID4VPUserAuthBeanTest {
 
         assertEquals("private", response.getHeaderString(HttpHeaders.CACHE_CONTROL));
         assertEquals(1, response.getHeaders().get(HttpHeaders.CACHE_CONTROL).size());
+    }
+
+    @Test
+    public void shouldExtendAnExistingScriptSrcWithoutTouchingScriptSrcElem() {
+        String policy = "script-src 'self'; script-src-elem 'none'";
+        String allowed = OID4VPLoginFormsProvider.allowHandoffScript(policy);
+
+        assertEquals(
+                "script-src 'self' 'sha256-RnCmE4K3EQeFpIYwyF6YQfEwqnKpQisMCVI6aNJDJ5s='; script-src-elem 'none'",
+                allowed);
+        assertEquals(allowed, OID4VPLoginFormsProvider.allowHandoffScript(allowed));
     }
 
     @Test
