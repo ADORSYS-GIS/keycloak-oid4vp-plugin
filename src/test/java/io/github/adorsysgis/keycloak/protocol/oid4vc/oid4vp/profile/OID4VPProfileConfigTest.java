@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
@@ -18,6 +20,11 @@ import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.IdentityProviderStorageProvider;
+import org.keycloak.models.KeycloakContext;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 
 public class OID4VPProfileConfigTest {
 
@@ -27,7 +34,9 @@ public class OID4VPProfileConfigTest {
         config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, " eudi-pid, default-trust, eudi-pid "));
 
         assertEquals(
-                "eudi-pid,default-trust", new VerifierConfig(null, config).getStatusListTrustMaterialProviderAliases());
+                "eudi-pid,default-trust",
+                new VerifierConfig(mockSession("normalized-aliases", "eudi-pid", "default-trust"), config)
+                        .getStatusListTrustMaterialProviderAliases());
     }
 
     @Test
@@ -35,7 +44,30 @@ public class OID4VPProfileConfigTest {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,,default-trust"));
 
-        assertThrows(IllegalStateException.class, () -> new VerifierConfig(null, config));
+        assertThrows(IllegalStateException.class, () -> new VerifierConfig(mockSession("empty-aliases"), config));
+    }
+
+    @Test
+    void shouldAcceptConfiguredStatusListTrustMaterialProviderAliases() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,default-trust"));
+        KeycloakSession session = mockSession("configured-aliases", "eudi-pid", "default-trust");
+
+        assertDoesNotThrow(() -> VerifierConfig.resolve(session, config));
+    }
+
+    @Test
+    void shouldRejectUnknownStatusListTrustMaterialProviderAlias() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "unknown-provider"));
+        KeycloakSession session = mockSession("unknown-alias");
+
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> VerifierConfig.resolve(session, config));
+
+        assertEquals(
+                "Status List trust-material identity provider alias 'unknown-provider' is not configured",
+                error.getMessage());
     }
 
     @Test
@@ -310,7 +342,22 @@ public class OID4VPProfileConfigTest {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(configMap);
 
-        assertDoesNotThrow(() -> new VerifierConfig(null, config));
+        assertDoesNotThrow(() -> new VerifierConfig(mockSession("transaction-data"), config));
+    }
+
+    private static KeycloakSession mockSession(String realmId, String... identityProviderAliases) {
+        KeycloakSession session = mock(KeycloakSession.class);
+        KeycloakContext context = mock(KeycloakContext.class);
+        RealmModel realm = mock(RealmModel.class);
+        IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
+        when(session.getContext()).thenReturn(context);
+        when(context.getRealm()).thenReturn(realm);
+        when(realm.getId()).thenReturn(realmId);
+        when(session.identityProviders()).thenReturn(identityProviders);
+        for (String alias : identityProviderAliases) {
+            when(identityProviders.getByAlias(alias)).thenReturn(mock(IdentityProviderModel.class));
+        }
+        return session;
     }
 
     @Test
