@@ -288,6 +288,72 @@ public class OID4VPUserAuthBeanTest {
     }
 
     @Test
+    public void shouldRedirectPresentationDuringIssuanceToTheWallet() {
+        String walletUri =
+                "openid4vp://authorize?client_id=wallet&request_uri=https%3A%2F%2Fkeycloak.example%2Frequest";
+        mockPresentationWalletLink(walletUri);
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertEquals(URI.create(walletUri), OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectWhenPresentationDuringIssuanceProfileIsMissing() {
+        try (var ignored = Mockito.mockConstruction(PresentationDuringIssuanceService.class, (service, context) -> {
+            Mockito.when(service.requiresNestedPresentationDuringIssuance()).thenReturn(true);
+            Mockito.when(service.resolveEnforcedProfileId()).thenReturn(null);
+        })) {
+            OID4VPUserAuthBean bean = createTestBean(TEST_CLIENT_ID, false);
+            assertTrue(bean.isPresentationDuringIssuance());
+            assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+            assertTrue(bean.getAuthContext().getError());
+        }
+    }
+
+    @Test
+    public void shouldNotRedirectOrdinaryWalletLogin() {
+        OID4VPUserAuthBean bean = createTestBean();
+        assertFalse(bean.isPresentationDuringIssuance());
+        assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectWhenWalletLinkIsBlank() {
+        mockPresentationWalletLink("  ");
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectWhenWalletLinkIsMalformed() {
+        mockPresentationWalletLink("not a valid uri");
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertNull(OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldRedirectConfiguredCustomWalletScheme() {
+        String walletUri = "haip-vp://authorize?client_id=wallet&request_uri=https%3A%2F%2Fkeycloak.example%2Frequest";
+        mockPresentationWalletLink(walletUri);
+
+        OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+        assertEquals(URI.create(walletUri), OID4VPLoginFormsProvider.walletLocation(bean));
+    }
+
+    @Test
+    public void shouldNotRedirectBrowserSchemes() {
+        for (String walletUri : new String[] {
+            "https://wallet.example/authorize?client_id=wallet", "javascript:alert(1)", "data:text/html,hello"
+        }) {
+            mockPresentationWalletLink(walletUri);
+            OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
+            assertNull(OID4VPLoginFormsProvider.walletLocation(bean), walletUri);
+        }
+    }
+
+    @Test
     public void shouldCachePresentationDuringIssuanceContext() {
         OID4VPUserAuthBean bean = createTestBeanForPresentationDuringIssuance();
 
@@ -332,6 +398,17 @@ public class OID4VPUserAuthBeanTest {
         URI uri = uriBuilder.build();
         mockContextUri(uri);
         return new OID4VPUserAuthBean(session, authSession, uri, oid4vp);
+    }
+
+    private void mockPresentationWalletLink(String link) {
+        AuthorizationContext walletContext = new AuthorizationContext().setAuthorizationRequest(link);
+        Mockito.when(oid4vp.startAuthentication(
+                        eq(TEST_CLIENT_ID),
+                        nullable(String.class),
+                        nullable(OIDCAuthSession.class),
+                        nullable(CodeChallengeDetails.class),
+                        nullable(PresentationDuringIssuanceSession.class)))
+                .thenReturn(walletContext);
     }
 
     private OID4VPUserAuthBean createTestBeanForPresentationDuringIssuance() {

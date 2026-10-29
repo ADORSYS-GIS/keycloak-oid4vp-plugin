@@ -384,7 +384,10 @@ public class OID4VPProfileConfigTest {
         assertEquals(List.of("legacy-vct"), new AuthRequirements(config).getCredentialTypes());
         assertEquals("openid4vp://", verifierConfig.getAuthReqUrlScheme());
         assertNotNull(verifierConfig.getAccessCertificate());
-        assertEquals("registration-certificate", verifierConfig.getRegistrationCertificate());
+        assertEquals(
+                "registration-certificate",
+                verifierConfig.getRegistrationCertificate(
+                        verifierConfig.getProfileConfig().getProfiles().getFirst()));
         assertEquals(List.of("transaction-data"), verifierConfig.getTransactionDataRaw());
         assertEquals("[{\"format\":\"example\",\"data\":\"value\"}]", verifierConfig.getVerifierInfoConfig());
         assertEquals("trust-provider", verifierConfig.getStatusListTrustMaterialProviderAliases());
