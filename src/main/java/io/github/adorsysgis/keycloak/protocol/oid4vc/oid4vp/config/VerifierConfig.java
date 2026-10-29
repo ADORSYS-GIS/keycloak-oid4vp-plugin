@@ -58,9 +58,8 @@ public class VerifierConfig {
      */
     public static VerifierConfig resolve(KeycloakSession session, AuthenticatorConfigModel authConfig) {
         String realmId = session.getContext().getRealm().getId();
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
-        CacheKey key = new CacheKey(realmId, Map.copyOf(config));
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
+        CacheKey key = new CacheKey(realmId, config);
         return CACHE.get(key, k -> new VerifierConfig(session, authConfig));
     }
 
@@ -70,8 +69,7 @@ public class VerifierConfig {
         logger.debugf("Collecting verifier config properties");
 
         String realmId = session.getContext().getRealm().getId();
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
 
         this.profileConfig = OID4VPProfileConfig.resolve(realmId, authConfig);
 
