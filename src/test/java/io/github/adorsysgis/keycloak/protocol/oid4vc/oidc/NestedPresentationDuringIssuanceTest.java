@@ -15,7 +15,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker.OID4VPLoginFormsProvider;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -24,6 +23,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
@@ -493,15 +494,14 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
                 response.statusCode(),
                 "Nested authorization must return the wallet handoff page: " + response.statusCode());
         String html = response.body();
-        var link = Jsoup.parse(html).selectFirst("a#kc-oid4vp-wallet");
-        assertNotNull(link, "Nested authorization must include a same-device OpenID4VP link");
-        String location = link.attr("href");
+        assertFalse(html.contains("Open with a wallet"), "The wallet handoff page must stay blank");
+        Matcher handoff = Pattern.compile("location\\.replace\\(\"(openid4vp://[^\"]*)\"\\)")
+                .matcher(html);
+        assertTrue(handoff.find(), "Nested authorization must open the wallet from the handoff page");
+        String location = handoff.group(1);
         assertTrue(
                 location.startsWith(OPENID4VP_SCHEME),
                 "Nested authorization must open a same-device OpenID4VP request");
-        assertTrue(
-                html.contains(OID4VPLoginFormsProvider.WALLET_HANDOFF_SCRIPT),
-                "Nested authorization must open the wallet from the handoff page");
         return location;
     }
 

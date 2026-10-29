@@ -84,8 +84,8 @@ presentation obtained through an accepted mode.
 === Nested OID4VP flow
 
 Use `nested_oid4vp_flow` when the presentation is nested inside the normal OIDC authorization
-request. When an authorization request targets a credential configuration with this mode, Keycloak
-returns a page that opens a same-device OpenID4VP authorization request in the wallet. After
+request. When an authorization request targets a credential configuration with this mode, the
+normal username/password login view is replaced by a same-device OpenID4VP presentation. After
 verification, Keycloak resumes the OIDC authorization flow and issues the authorization code.
 
 == Runtime behavior
