@@ -324,8 +324,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                     authorizationContext,
                     authSession,
                     requestId,
-                    walletError.getError(),
-                    walletError.getErrorDescription(),
+                    walletError,
                     state,
                     StringUtil.isNotBlank(encryptedResponse) || StringUtil.isNotBlank(vpToken));
             return walletError;
@@ -356,8 +355,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                             authorizationContext,
                             authSession,
                             requestId,
-                            decryptedError.getError(),
-                            decryptedError.getErrorDescription(),
+                            decryptedError,
                             JsonNodeUtils.textOrNull(decryptedPayload, ResponseObject.STATE_KEY),
                             decryptedPayload.hasNonNull(ResponseObject.VP_TOKEN_KEY) || StringUtil.isNotBlank(vpToken));
                     return decryptedError;
@@ -403,8 +401,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             AuthorizationContext authorizationContext,
             AuthenticationSessionModel authSession,
             String requestId,
-            String error,
-            String errorDescription,
+            OAuth2ErrorRepresentation walletError,
             String state,
             boolean includesVpResponseParameters) {
         if (includesVpResponseParameters) {
@@ -423,14 +420,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
                             String.format("Unparseable response params (%s)", e.getMessage())),
                     e);
         }
-        persistWalletErrorResponse(authorizationContext, authSession, error, errorDescription);
+        persistWalletErrorResponse(authorizationContext, authSession, walletError);
     }
 
     private void persistWalletErrorResponse(
             AuthorizationContext authorizationContext,
             AuthenticationSessionModel authSession,
-            String error,
-            String errorDescription) {
+            OAuth2ErrorRepresentation walletError) {
+        String error = walletError.getError();
+        String errorDescription = walletError.getErrorDescription();
         String walletErrorDetails =
                 StringUtil.isNotBlank(errorDescription) ? String.format("%s: %s", error, errorDescription) : error;
         authorizationContext
