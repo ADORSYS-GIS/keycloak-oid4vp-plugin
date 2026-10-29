@@ -37,6 +37,7 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
 import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.junit.jupiter.api.Test;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.util.PemUtils;
 import org.keycloak.crypto.KeyType;
@@ -228,6 +229,78 @@ public class OID4VPUserAuthEndpointHAIPTest extends OID4VPBaseUserAuthEndpointTe
         assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
         assertEquals(ProcessingError.WALLET_ERROR, status.getError());
         assertEquals(walletError + ": " + errorDescription, status.getErrorDescription());
+    }
+
+    @Test
+    public void shouldAcceptEncryptedWalletError() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        String walletError = OAuthErrorException.ACCESS_DENIED;
+        String errorDescription = "wallet canceled presentation";
+
+        HttpResponse response = sendEncryptedAuthorizationErrorResponse(
+                requestObject, walletError, errorDescription, requestObject.getState());
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext status = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
+        assertEquals(ProcessingError.WALLET_ERROR, status.getError());
+        assertEquals(walletError + ": " + errorDescription, status.getErrorDescription());
+    }
+
+    @Test
+    public void shouldRejectEncryptedWalletErrorResponseWithMismatchingState() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendEncryptedAuthorizationErrorResponse(
+                requestObject, OAuthErrorException.ACCESS_DENIED, "End-User denied consent", "wrong-state");
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("State param must match requestId"));
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.PENDING, statusPayload.getStatus());
+    }
+
+    @Test
+    public void shouldRejectEncryptedWalletErrorResponseWithVpToken() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        Map<String, Object> responsePayload = Map.of(
+                OAuth2Constants.ERROR,
+                OAuthErrorException.ACCESS_DENIED,
+                ResponseObject.VP_TOKEN_KEY,
+                Map.of("credential", List.of("vp-token")));
+
+        HttpResponse response = sendEncryptedAuthorizationResponse(requestObject, responsePayload);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertEquals("Wallet error response must not include VP response parameters", errorRep.getErrorDescription());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext statusPayload = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.PENDING, statusPayload.getStatus());
+    }
+
+    @Test
+    public void shouldRejectNonTextualEncryptedWalletErrorFields() throws Exception {
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+        Map<String, Object> responsePayload = Map.of(OAuth2Constants.ERROR, 123);
+
+        HttpResponse response = sendEncryptedAuthorizationResponse(requestObject, responsePayload);
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(OAuthErrorException.INVALID_REQUEST, errorRep.getError());
+        assertTrue(errorRep.getErrorDescription().contains("Field 'error' must be a JSON string"));
     }
 
     @Test
