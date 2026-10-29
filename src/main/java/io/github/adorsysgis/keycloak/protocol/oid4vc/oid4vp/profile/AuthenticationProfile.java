@@ -24,6 +24,9 @@ public class AuthenticationProfile {
     @JsonProperty("enabledForClients")
     private List<String> enabledForClients;
 
+    @JsonProperty("registrationCertificate")
+    private String registrationCertificate;
+
     @JsonProperty("credentials")
     private List<CredentialRequirement> credentials;
 
@@ -63,6 +66,15 @@ public class AuthenticationProfile {
 
     public AuthenticationProfile setEnabledForClients(List<String> enabledForClients) {
         this.enabledForClients = enabledForClients;
+        return this;
+    }
+
+    public String getRegistrationCertificate() {
+        return registrationCertificate;
+    }
+
+    public AuthenticationProfile setRegistrationCertificate(String registrationCertificate) {
+        this.registrationCertificate = registrationCertificate;
         return this;
     }
 

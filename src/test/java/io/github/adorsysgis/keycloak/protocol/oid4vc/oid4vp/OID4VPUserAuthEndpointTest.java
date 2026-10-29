@@ -8,9 +8,11 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAut
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ENFORCE_REVOCATION_STATUS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.FALLBACK_TO_ISO_SPEC_SESSION_TRANSCRIPT_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.RESPONSE_MODE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.AUTH_REQ_JWT;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.OpenId4VpConstants.REGISTRATION_CERT_FORMAT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -359,6 +361,16 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
 
             testSuccessfulAuthentication(sdJwt, opts);
         });
+    }
+
+    @Test
+    public void shouldUseProfileRegistrationCertificateInAuthorizationRequest() throws Exception {
+        withAuthenticationProfile(
+                AuthenticationProfileSamples.identityLoginWithRegistrationCertificate(
+                        "profile-registration-certificate"),
+                Map.of(REGISTRATION_CERTIFICATE_CONFIG, "shared-registration-certificate"),
+                (apiFlow, requestObject) ->
+                        assertRegistrationCertificate(requestObject, "profile-registration-certificate"));
     }
 
     @Test
@@ -1065,6 +1077,17 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
                     "Validity information verification failed");
         });
+    }
+
+    private static void assertRegistrationCertificate(RequestObject requestObject, String expectedCertificate) {
+        assertNotNull(requestObject.getVerifierInfo());
+        assertEquals(1, requestObject.getVerifierInfo().size());
+        assertEquals(
+                REGISTRATION_CERT_FORMAT,
+                requestObject.getVerifierInfo().getFirst().getFormat());
+        assertEquals(
+                expectedCertificate, requestObject.getVerifierInfo().getFirst().getData());
+        assertNull(requestObject.getVerifierInfo().getFirst().getCredentialIds());
     }
 
     private String presentSdJwt(RequestObject requestObject) throws Exception {

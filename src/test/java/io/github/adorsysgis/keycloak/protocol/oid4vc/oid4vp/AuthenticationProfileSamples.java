@@ -27,6 +27,8 @@ public final class AuthenticationProfileSamples {
 
     public static final String ALTERNATIVE_PRIMARY_CREDENTIAL_ID = "national-id";
 
+    public static final String IDENTITY_LOGIN_PROFILE_ID = "identity-login";
+
     /**
      * Bundles a profile's JSON configuration with its identifier, so callers of
      * {@code withAuthenticationProfile} need only pass the sample object rather than repeating
@@ -35,6 +37,29 @@ public final class AuthenticationProfileSamples {
     public record ProfileSample(String json, String profileId) {}
 
     private AuthenticationProfileSamples() {}
+
+    /** Single SD-JWT identity profile with a profile-specific verifier registration certificate. */
+    public static ProfileSample identityLoginWithRegistrationCertificate(String registrationCertificate) {
+        String json = """
+                [
+                  {
+                    "id": "{profileId}",
+                    "registrationCertificate": "{registrationCertificate}",
+                    "credentials": [
+                      {
+                        "id": "identity",
+                        "role": "primary",
+                        "credentialTypes": ["{defaultVct}"],
+                        "claims": ["sub"]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{profileId}", IDENTITY_LOGIN_PROFILE_ID)
+                .replace("{registrationCertificate}", registrationCertificate)
+                .replace("{defaultVct}", CREDENTIAL_TYPES_CONFIG_DEFAULT);
+        return new ProfileSample(json, IDENTITY_LOGIN_PROFILE_ID);
+    }
 
     /** Dual SD-JWT profile: primary + self-trusted supporting, bound on username. */
     public static ProfileSample dualProfile() {
