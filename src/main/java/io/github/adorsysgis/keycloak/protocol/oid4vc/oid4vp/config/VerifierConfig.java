@@ -217,10 +217,6 @@ public class VerifierConfig {
         return accessCertificate;
     }
 
-    public String getRegistrationCertificate() {
-        return registrationCertificate;
-    }
-
     /**
      * Resolves the registration certificate for a selected authentication profile, falling back to
      * the shared authenticator setting when the profile does not provide one.

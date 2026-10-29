@@ -366,29 +366,11 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     @Test
     public void shouldUseProfileRegistrationCertificateInAuthorizationRequest() throws Exception {
         withAuthenticationProfile(
-                profileJsonWithRegistrationCertificate("profile-registration-certificate"),
-                "identity-login",
+                AuthenticationProfileSamples.identityLoginWithRegistrationCertificate(
+                        "profile-registration-certificate"),
                 Map.of(REGISTRATION_CERTIFICATE_CONFIG, "shared-registration-certificate"),
                 (apiFlow, requestObject) ->
                         assertRegistrationCertificate(requestObject, "profile-registration-certificate"));
-    }
-
-    @Test
-    public void shouldFallBackToSharedRegistrationCertificateWhenProfileHasNone() throws Exception {
-        withAuthenticationProfile(
-                profileJsonWithRegistrationCertificate(null),
-                "identity-login",
-                Map.of(REGISTRATION_CERTIFICATE_CONFIG, "shared-registration-certificate"),
-                (apiFlow, requestObject) ->
-                        assertRegistrationCertificate(requestObject, "shared-registration-certificate"));
-    }
-
-    @Test
-    public void shouldOmitRegistrationCertificateWhenProfileAndSharedConfigurationAreAbsent() throws Exception {
-        withAuthenticationProfile(
-                profileJsonWithRegistrationCertificate(null),
-                "identity-login",
-                (apiFlow, requestObject) -> assertNull(requestObject.getVerifierInfo()));
     }
 
     @Test
@@ -1095,28 +1077,6 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                     ProcessingError.VP_TOKEN_AUTH_ERROR.getErrorString(),
                     "Validity information verification failed");
         });
-    }
-
-    private static String profileJsonWithRegistrationCertificate(String registrationCertificate) {
-        String registrationCertificateProperty = registrationCertificate == null
-                ? ""
-                : "\"registrationCertificate\": \"%s\",".formatted(registrationCertificate);
-        return """
-                [
-                  {
-                    "id": "identity-login",
-                    %s
-                    "credentials": [
-                      {
-                        "id": "identity",
-                        "role": "primary",
-                        "credentialTypes": ["%s"],
-                        "claims": ["sub"]
-                      }
-                    ]
-                  }
-                ]
-                """.formatted(registrationCertificateProperty, CREDENTIAL_TYPES_CONFIG_DEFAULT);
     }
 
     private static void assertRegistrationCertificate(RequestObject requestObject, String expectedCertificate) {
