@@ -1,0 +1,57 @@
+# Isolated test stack (see .env.example for the variable defaults).
+name: oid4vc-e2e
+
+services:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.0}
+    command: >-
+      start-dev --import-realm
+      --features=oid4vc-vci,oid4vc-vci-preauth-code,oid4vc-vci-rest-credential-offer
+      --log-level=INFO,io.github.adorsysgis.keycloakstatuslist:DEBUG,io.github.adorsysgis.keycloak.protocol.oid4vc:DEBUG
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "${KEYCLOAK_HTTP_PORT:-18080}:8080"
+    volumes:
+      - ./build/providers/keycloak-token-status-plugin.jar:/opt/keycloak/providers/keycloak-token-status-plugin.jar:ro
+      - ./build/providers/keycloak-oid4vp-plugin.jar:/opt/keycloak/providers/keycloak-oid4vp-plugin.jar:ro
+      # The import file name must equal the realm name (see assets/realm/*).
+      - ./build/realm.json:/opt/keycloak/data/import/oid4vc-vci-realm.json:ro
+      - ./assets/crypto/keystore.p12:/opt/keycloak/data/oid4vc-vci/keystore.p12:ro
+    healthcheck:
+      # The Keycloak image ships no curl/wget; a plain TCP probe is enough,
+      # realm readiness is awaited by scripts/play.sh before the tests.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  mock-fe:
+    image: ${MOCK_FE_IMAGE:-ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe:latest}
+    environment:
+      VITE_KEYCLOAK_URL: http://keycloak.localhost:${KEYCLOAK_HTTP_PORT:-18080}
+      VITE_KEYCLOAK_REALM: oid4vc-vci
+      VITE_KEYCLOAK_CLIENT_ID: oid4vc-demo-public
+      VITE_OID4VC_DEFAULT_CREDENTIAL_CONFIGURATION_ID: IdentityCredential
+      VITE_OID4VC_PRE_AUTHORIZED: "true"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    ports:
+      - "${MOCK_FE_HTTP_PORT:-14200}:8080"
+
+  wallet:
+    image: ${WALLET_IMAGE:-ghcr.io/eudi-dev/eudi-dev:latest}
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    environment:
+      EUDI_DEV_BASE_URL: http://localhost:${WALLET_HTTP_PORT:-18085}
+      EUDI_DEV_ALLOW_PRIVATE_NETWORKS: "true"
+      EUDI_DEV_LOG_FORMAT: text
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    ports:
+      - "${WALLET_HTTP_PORT:-18085}:8085"
