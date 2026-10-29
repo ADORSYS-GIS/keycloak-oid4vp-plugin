@@ -401,13 +401,8 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
     protected HttpResponse sendAuthorizationErrorResponse(
             RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
         List<BasicNameValuePair> oid4vpErrorResponse = new ArrayList<>();
-        oid4vpErrorResponse.add(new BasicNameValuePair("error", error));
-        if (errorDescription != null) {
-            oid4vpErrorResponse.add(new BasicNameValuePair("error_description", errorDescription));
-        }
-        if (state != null) {
-            oid4vpErrorResponse.add(new BasicNameValuePair(ResponseObject.STATE_KEY, state));
-        }
+        errorResponsePayload(error, errorDescription, state)
+                .forEach((name, value) -> oid4vpErrorResponse.add(new BasicNameValuePair(name, value)));
 
         HttpPost httpPost = new HttpPost(requestObject.getResponseUri());
         httpPost.setEntity(new UrlEncodedFormEntity(oid4vpErrorResponse));
@@ -416,15 +411,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
     protected HttpResponse sendEncryptedAuthorizationErrorResponse(
             RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
-        Map<String, Object> errorResponse = new LinkedHashMap<>();
-        errorResponse.put(OAuth2Constants.ERROR, error);
-        if (errorDescription != null) {
-            errorResponse.put(OAuth2Constants.ERROR_DESCRIPTION, errorDescription);
-        }
-        if (state != null) {
-            errorResponse.put(ResponseObject.STATE_KEY, state);
-        }
-        return sendEncryptedAuthorizationResponse(requestObject, errorResponse);
+        return sendEncryptedAuthorizationResponse(requestObject, errorResponsePayload(error, errorDescription, state));
     }
 
     protected HttpResponse sendEncryptedAuthorizationResponse(RequestObject requestObject, Object responsePayload)
@@ -437,6 +424,10 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
 
     protected String buildEncryptedOpenid4vpErrorResponseJwe(
             RequestObject requestObject, String error, String errorDescription, String state) throws Exception {
+        return encryptOpenid4vpResponse(requestObject, errorResponsePayload(error, errorDescription, state));
+    }
+
+    private Map<String, String> errorResponsePayload(String error, String errorDescription, String state) {
         Map<String, String> errorResponse = new LinkedHashMap<>();
         errorResponse.put(OAuth2Constants.ERROR, error);
         if (errorDescription != null) {
@@ -446,7 +437,7 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
             errorResponse.put(ResponseObject.STATE_KEY, state);
         }
 
-        return encryptOpenid4vpResponse(requestObject, errorResponse);
+        return errorResponse;
     }
 
     protected String encryptOpenid4vpResponse(RequestObject requestObject, Object responsePayload) throws Exception {

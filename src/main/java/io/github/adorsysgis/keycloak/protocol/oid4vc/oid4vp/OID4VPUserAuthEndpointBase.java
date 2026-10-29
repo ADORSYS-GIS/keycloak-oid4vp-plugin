@@ -1,9 +1,11 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.EphemeralKeyUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.validation.AuthorizationResponseJweValidator;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.interfaces.ECPrivateKey;
@@ -36,6 +38,7 @@ import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.urls.UrlType;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -244,7 +247,7 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
     }
 
     /**
-     * Decrypt response to authorization request.
+     * Decrypt and parse a response to an authorization request.
      *
      * <p>Extract and attach `apu` header to authorization context if set.
      * Needed for mDoc device response verification.</p>
@@ -252,9 +255,12 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
      * @param encryptedResponse the assumed JWE encrypted response string
      * @param ephemeralKey      the ephemeral key generated for the authentication
      *                          session
+     * @return the decrypted JSON object
+     * @throws IOException if the decrypted response cannot be parsed as JSON
      */
-    protected String decryptResponse(
-            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext) {
+    protected JsonNode decryptResponse(
+            String encryptedResponse, String ephemeralKey, AuthorizationContext authorizationContext)
+            throws IOException {
         try {
             JWE jwe = AuthorizationResponseJweValidator.validate(encryptedResponse, authorizationContext);
 
@@ -265,7 +271,12 @@ public class OID4VPUserAuthEndpointBase extends AuthorizationEndpointBase {
             }
 
             ECPrivateKey privKey = EphemeralKeyUtils.privateKeyFromBase64(ephemeralKey);
-            return EphemeralKeyUtils.decrypt(encryptedResponse, privKey);
+            JsonNode decryptedPayload =
+                    JsonSerialization.mapper.readTree(EphemeralKeyUtils.decrypt(encryptedResponse, privKey));
+            if (decryptedPayload == null || !decryptedPayload.isObject()) {
+                throw new IllegalArgumentException("Decrypted response must be a JSON object");
+            }
+            return decryptedPayload;
         } catch (JWEException e) {
             logger.error("Failed to decrypt response", e);
             throw new IllegalArgumentException("Failed to decrypt response", e);
