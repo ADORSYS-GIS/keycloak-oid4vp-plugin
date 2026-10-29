@@ -1,10 +1,16 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import java.util.HashMap;
 import java.util.List;
@@ -343,6 +350,44 @@ public class OID4VPProfileConfigTest {
         config.setConfig(configMap);
 
         assertDoesNotThrow(() -> new VerifierConfig(mockSession("transaction-data"), config));
+    }
+
+    @Test
+    void shouldAcceptTextConfigurationValuesWithSurroundingWhitespace() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(PROFILES_CONFIG, "  " + """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct"], "claims": ["sub"] }
+                    ]
+                  }
+                ]
+                """ + "  ");
+        configMap.put(CREDENTIAL_TYPES_CONFIG, "  legacy-vct  ");
+        configMap.put(CUSTOM_URL_SCHEME_CONFIG, "  openid4vp://  ");
+        configMap.put(ACCESS_CERTIFICATE_CONFIG, "  " + MdocBaseTest.getIssuerCertBase64() + "  ");
+        configMap.put(REGISTRATION_CERTIFICATE_CONFIG, "  registration-certificate  ");
+        configMap.put(TRANSACTION_DATA_CONFIG, "  transaction-data  ");
+        configMap.put(VERIFIER_INFO_CONFIG, "  [{\"format\":\"example\",\"data\":\"value\"}]  ");
+        configMap.put(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "  trust-provider  ");
+
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(configMap);
+
+        VerifierConfig verifierConfig = new VerifierConfig(mockSession("text-config", "trust-provider"), config);
+
+        assertEquals(
+                "login",
+                verifierConfig.getProfileConfig().getProfiles().getFirst().getId());
+        assertEquals(List.of("legacy-vct"), new AuthRequirements(config).getCredentialTypes());
+        assertEquals("openid4vp://", verifierConfig.getAuthReqUrlScheme());
+        assertNotNull(verifierConfig.getAccessCertificate());
+        assertEquals("registration-certificate", verifierConfig.getRegistrationCertificate());
+        assertEquals(List.of("transaction-data"), verifierConfig.getTransactionDataRaw());
+        assertEquals("[{\"format\":\"example\",\"data\":\"value\"}]", verifierConfig.getVerifierInfoConfig());
+        assertEquals("trust-provider", verifierConfig.getStatusListTrustMaterialProviderAliases());
     }
 
     private static KeycloakSession mockSession(String realmId, String... identityProviderAliases) {
