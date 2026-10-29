@@ -5,6 +5,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListProvider;
@@ -42,17 +43,15 @@ public class OID4VPProfileConfig {
      * The cache is scoped by realm ID, so different realms cannot share cached entries.
      */
     public static OID4VPProfileConfig resolve(String realmId, AuthenticatorConfigModel authConfig) {
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
-        CacheKey key = new CacheKey(realmId, Map.copyOf(config));
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
+        CacheKey key = new CacheKey(realmId, config);
         return CACHE.get(key, k -> new OID4VPProfileConfig(authConfig));
     }
 
     private record CacheKey(String realmId, Map<String, String> config) {}
 
     public OID4VPProfileConfig(AuthenticatorConfigModel authConfig) {
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
         String configuredProfiles = config.get(PROFILES_CONFIG);
         this.profiles = StringUtil.isBlank(configuredProfiles)
                 ? List.of(defaultProfile(authConfig))
