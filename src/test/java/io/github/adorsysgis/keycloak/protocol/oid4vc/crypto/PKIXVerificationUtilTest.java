@@ -14,12 +14,14 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Stream;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.keycloak.common.VerificationException;
@@ -136,6 +138,23 @@ class PKIXVerificationUtilTest {
     @AfterEach
     void tearDown() {
         Time.setOffset(0);
+    }
+
+    @Test
+    void shouldDecodeBase64EncodedCertificateChain() throws Exception {
+        List<String> encodedChain = List.of(
+                Base64.getEncoder().encodeToString(leaf.getEncoded()),
+                Base64.getEncoder().encodeToString(intermediate.getEncoded()));
+
+        assertEquals(list(leaf, intermediate), PKIXVerificationUtil.decodeBase64Chain(encodedChain));
+    }
+
+    @Test
+    void shouldRejectMalformedBase64Certificate() {
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> PKIXVerificationUtil.decodeBase64Chain(List.of("not-base64")));
+
+        assertEquals("Failed to parse X.509 certificate", error.getMessage());
     }
 
     private void pinTimeToOctober2026() {
