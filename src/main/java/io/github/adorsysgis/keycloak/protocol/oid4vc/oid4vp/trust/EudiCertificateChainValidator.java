@@ -7,14 +7,27 @@ import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.List;
 import org.keycloak.common.VerificationException;
-import org.keycloak.crypto.X509CertificateChainValidator;
 
 class EudiCertificateChainValidator {
 
     X509Certificate[] validate(List<String> x5c, Collection<X509Certificate> trustedAnchors)
             throws EudiPidTrustException {
+        return validateDecodedChain(decodeChain(x5c), trustedAnchors);
+    }
+
+    private List<X509Certificate> decodeChain(List<String> x5c) throws EudiPidTrustException {
         try {
-            X509Certificate[] chain = PKIXVerificationUtil.validateBase64Chain(x5c, trustedAnchors);
+            return PKIXVerificationUtil.decodeBase64Chain(x5c);
+        } catch (VerificationException e) {
+            throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
+        }
+    }
+
+    private X509Certificate[] validateDecodedChain(
+            List<X509Certificate> presentedChain, Collection<X509Certificate> trustedAnchors)
+            throws EudiPidTrustException {
+        try {
+            X509Certificate[] chain = PKIXVerificationUtil.validateChainToRoots(presentedChain, trustedAnchors);
             X509Certificate leaf = chain[0];
             validateLeafCertificate(leaf);
             return chain;
@@ -22,27 +35,19 @@ class EudiCertificateChainValidator {
             throw e;
         } catch (VerificationException e) {
             throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
-        } catch (Exception e) {
-            throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
         }
     }
 
     X509Certificate[] validatePublishedOrChained(List<String> x5c, Collection<X509Certificate> publishedCertificates)
             throws EudiPidTrustException {
-        try {
-            List<X509Certificate> presentedChain = X509CertificateChainValidator.decodeCertificateChain(x5c);
-            X509Certificate leaf = presentedChain.getFirst();
-            if (publishedCertificates.stream().anyMatch(leaf::equals)) {
-                validatePublishedSignerCertificate(leaf);
-                return presentedChain.toArray(X509Certificate[]::new);
-            }
-
-            return validate(x5c, publishedCertificates);
-        } catch (EudiPidTrustException e) {
-            throw e;
-        } catch (VerificationException e) {
-            throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
+        List<X509Certificate> presentedChain = decodeChain(x5c);
+        X509Certificate leaf = presentedChain.getFirst();
+        if (publishedCertificates.stream().anyMatch(leaf::equals)) {
+            validatePublishedSignerCertificate(leaf);
+            return presentedChain.toArray(X509Certificate[]::new);
         }
+
+        return validateDecodedChain(presentedChain, publishedCertificates);
     }
 
     private void validatePublishedSignerCertificate(X509Certificate certificate) throws EudiPidTrustException {

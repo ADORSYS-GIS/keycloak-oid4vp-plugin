@@ -35,12 +35,37 @@ public class PKIXVerificationUtil {
 
     public static X509Certificate[] validateBase64Chain(List<String> certs, TrustAnchorProvider trustAnchorProvider)
             throws VerificationException {
-        return validateChain(parseX509Certificates(certs), trustAnchorProvider);
+        return validateChain(decodeBase64Chain(certs), trustAnchorProvider);
     }
 
     public static X509Certificate[] validateBase64Chain(
             List<String> certs, Collection<X509Certificate> rootCertificates) throws VerificationException {
-        return validateChain(parseX509Certificates(certs), rootCertificates, List.of());
+        return validateChainToRoots(decodeBase64Chain(certs), rootCertificates);
+    }
+
+    /** Decodes the Base64-encoded certificates from an X.509 chain. */
+    public static List<X509Certificate> decodeBase64Chain(List<String> base64Certs) throws VerificationException {
+        if (base64Certs == null || base64Certs.isEmpty()) {
+            throw new VerificationException("Certificate chain is empty");
+        }
+
+        try {
+            List<X509Certificate> certs = new ArrayList<>();
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            for (String base64Cert : base64Certs) {
+                byte[] bytes = Base64.getDecoder().decode(base64Cert);
+                certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
+            }
+            return certs;
+        } catch (CertificateException | IllegalArgumentException e) {
+            throw new VerificationException("Failed to parse X.509 certificate", e);
+        }
+    }
+
+    /** Validates an already decoded chain against the provided root certificates. */
+    public static X509Certificate[] validateChainToRoots(
+            List<X509Certificate> certs, Collection<X509Certificate> rootCertificates) throws VerificationException {
+        return validateChain(certs, rootCertificates, List.of());
     }
 
     public static X509Certificate[] validateChain(List<X509Certificate> certs, TrustAnchorProvider trustAnchorProvider)
@@ -150,24 +175,6 @@ public class PKIXVerificationUtil {
             } catch (Exception e) {
                 throw new VerificationException("Certificate chain signature validation failed", e);
             }
-        }
-    }
-
-    private static List<X509Certificate> parseX509Certificates(List<String> base64Certs) throws VerificationException {
-        if (base64Certs == null || base64Certs.isEmpty()) {
-            throw new VerificationException("Certificate chain is empty");
-        }
-
-        try {
-            List<X509Certificate> certs = new ArrayList<>();
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            for (String base64Cert : base64Certs) {
-                byte[] bytes = Base64.getDecoder().decode(base64Cert);
-                certs.add((X509Certificate) cf.generateCertificate(new ByteArrayInputStream(bytes)));
-            }
-            return certs;
-        } catch (CertificateException e) {
-            throw new VerificationException("Failed to parse X.509 certificate", e);
         }
     }
 
