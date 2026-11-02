@@ -15,6 +15,14 @@ RED=$'\033[0;31m'; CYAN=$'\033[0;36m'; NC=$'\033[0m'
 log() { printf '%s[setup]%s %s\n' "$CYAN" "$NC" "$*"; }
 die() { printf '%s[error]%s %s\n' "$RED" "$NC" "$*" >&2; exit 1; }
 
+# Temp files created by fetch_latest_release_jar; removed on any exit so
+# neither a normal return, an early `die`, nor a failed download leaks them.
+TMP_FILES=()
+cleanup() {
+  [[ ${#TMP_FILES[@]} -gt 0 ]] && rm -f -- "${TMP_FILES[@]}"
+}
+trap cleanup EXIT
+
 # Resolve the latest release JAR of <owner/repo> into $PROVIDERS_DIR — or
 # skip entirely when the cached JAR still matches the resolved release tag.
 fetch_latest_release_jar() {
@@ -23,7 +31,7 @@ fetch_latest_release_jar() {
   local json tag version asset marker="$PROVIDERS_DIR/$out_name.latest"
   log "Resolving the latest release of $repo ..."
   json="$(mktemp)"
-  trap 'rm -f "$json"' RETURN
+  TMP_FILES+=("$json")
   curl -fsSL "https://api.github.com/repos/$repo/releases/latest" -o "$json" ||
     die "Could not resolve the latest release of $repo"
   tag="$(sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' "$json" | head -1)" ||
@@ -40,6 +48,7 @@ fetch_latest_release_jar() {
   log "Downloading $asset ..."
   local tmp_jar
   tmp_jar="$(mktemp)"
+  TMP_FILES+=("$tmp_jar")
   curl -fL "$asset" -o "$tmp_jar" || die "Download failed: $asset"
   mv "$tmp_jar" "$PROVIDERS_DIR/$out_name.jar"
   # Keycloak's container runs as uid 1000; mktemp files are 0600 and owned by
