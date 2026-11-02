@@ -29,15 +29,22 @@ against real spun-up components.
 ## Running
 
 The `pnpm` scripts in `package.json` are the front face (thin wrappers; the logic lives in
-`scripts/*.sh`):
+`scripts/*.sh`). Before the first run, install the dependencies and the Playwright browser:
 
 ```bash
-pnpm play                        # bring the stack up, run the journey, tear it down
-pnpm play -- --keep-stack-alive  # keep the stack up afterwards (logs under build/)
-pnpm clean:play                  # wipe generated artifacts first, then run
-pnpm clean:play -- --keep-stack-alive
-pnpm clean                       # only wipe generated artifacts
-pnpm stop                        # tear a kept-alive stack down
+pnpm install
+pnpm exec playwright install chromium
+```
+
+Then run journeys:
+
+```bash
+pnpm play                           # bring the stack up, run the journey, tear it down
+pnpm play --keep-stack-alive        # keep the stack up afterwards (logs under build/)
+pnpm clean:play                     # wipe generated artifacts first, then run
+pnpm clean:play --keep-stack-alive  # wipe generated artifacts first, keep the stack up afterwards
+pnpm clean                          # only wipe generated artifacts
+pnpm stop                           # tear a kept-alive stack down
 ```
 
 Re-runs are cheap: `setup.sh` is idempotent (it only re-downloads the plugin JARs when a newer

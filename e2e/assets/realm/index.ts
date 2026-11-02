@@ -112,7 +112,6 @@ const realm = {
         "oid4vci.enabled": "true",
         "post.logout.redirect.uris": "+",
       },
-      defaultClientScopes: ["web-origins", "acr", "roles", "profile", "basic", "email"],
       optionalClientScopes: ["IdentityCredential"],
     },
     {

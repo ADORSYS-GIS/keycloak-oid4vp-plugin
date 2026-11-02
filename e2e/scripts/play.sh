@@ -44,24 +44,19 @@ compose() { docker compose "$@"; }
 
 # Whenever the script exits with an error, dump the stack logs to
 # build/docker-compose.log — the primary evidence for a crashed Keycloak or
-# wallet (e.g. "dependency failed to start" in CI).
+# wallet (e.g. "dependency failed to start" in CI) — then tear the stack down
+# so failed runs never leave containers behind, unless the stack was explicitly
+# kept alive.
 on_error() {
   if [ $? -ne 0 ]; then
     mkdir -p build
     compose logs > build/docker-compose.log 2>/dev/null || true
+    if [ "$KEEP_STACK_ALIVE" != "1" ]; then
+      compose down -v >/dev/null 2>&1 || true
+    fi
   fi
 }
 trap on_error EXIT
-
-install_npm_deps() {
-  if [[ ! -d node_modules ]]; then
-    log "Installing dependencies (pnpm install) ..."
-    if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
-      corepack enable pnpm
-    fi
-    pnpm install --frozen-lockfile
-  fi
-}
 
 compose up -d --wait
 
@@ -156,14 +151,11 @@ done
 log "Running journeys ..."
 
 declare -i FAILED=0
-install_npm_deps || FAILED=1
-if [[ $FAILED == 0 ]]; then
-  pnpm exec playwright test || FAILED=1
-fi
+pnpm exec playwright test || FAILED=1
 EXIT_CODE=$FAILED
 
 log "Tearing stack down ..."
-if [ "${E2E_KEEP_STACK:-0}" = "1" ] || [ "$KEEP_STACK_ALIVE" == "1" ]; then
+if [ "$KEEP_STACK_ALIVE" == "1" ]; then
   log "Leaving the stack up (logs: build/docker-compose.log)."
   compose logs > build/docker-compose.log || true
   exit $EXIT_CODE

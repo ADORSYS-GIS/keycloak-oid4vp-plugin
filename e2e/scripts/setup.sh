@@ -23,6 +23,7 @@ fetch_latest_release_jar() {
   local json tag version asset marker="$PROVIDERS_DIR/$out_name.latest"
   log "Resolving the latest release of $repo ..."
   json="$(mktemp)"
+  trap 'rm -f "$json"' RETURN
   curl -fsSL "https://api.github.com/repos/$repo/releases/latest" -o "$json" ||
     die "Could not resolve the latest release of $repo"
   tag="$(sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' "$json" | head -1)" ||
