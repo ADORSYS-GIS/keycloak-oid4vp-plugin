@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
@@ -153,6 +154,17 @@ class PKIXVerificationUtilTest {
     void shouldRejectMalformedBase64Certificate() {
         VerificationException error = assertThrows(
                 VerificationException.class, () -> PKIXVerificationUtil.decodeBase64Chain(List.of("not-base64")));
+
+        assertEquals("Failed to parse X.509 certificate", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectBase64EncodedInvalidCertificate() {
+        String invalidCertificate =
+                Base64.getEncoder().encodeToString("not a certificate".getBytes(StandardCharsets.UTF_8));
+
+        VerificationException error = assertThrows(
+                VerificationException.class, () -> PKIXVerificationUtil.decodeBase64Chain(List.of(invalidCertificate)));
 
         assertEquals("Failed to parse X.509 certificate", error.getMessage());
     }

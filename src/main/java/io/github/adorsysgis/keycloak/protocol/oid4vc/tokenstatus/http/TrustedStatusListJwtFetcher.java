@@ -17,7 +17,6 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
-import org.keycloak.crypto.X509CertificateChainValidator;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
@@ -191,7 +190,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
             // The provider decides whether this chain is trusted; signature verification must
             // still use the public key from the presented leaf certificate itself.
-            return X509CertificateChainValidator.decodeCertificateChain(x5c).toArray(X509Certificate[]::new);
+            return PKIXVerificationUtil.decodeBase64Chain(x5c).toArray(X509Certificate[]::new);
         } catch (ReferencedTokenValidationException e) {
             throw e;
         } catch (VerificationException e) {
