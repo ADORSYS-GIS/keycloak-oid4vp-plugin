@@ -2,7 +2,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil.LeafCertificateValidationException;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil.LeafCertificateViolation;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.List;
@@ -16,11 +15,12 @@ class EudiCertificateChainValidator {
             List<X509Certificate> presentedChain = PKIXVerificationUtil.decodeBase64Chain(x5c);
             return PKIXVerificationUtil.validateSigningChainToRoots(presentedChain, trustedAnchors);
         } catch (LeafCertificateValidationException e) {
-            String message = switch (e.violation()) {
-                case CA_CERTIFICATE -> "Credential issuer leaf certificate must not be a CA";
-                case DIGITAL_SIGNATURE_USAGE_MISSING ->
-                    "Credential issuer leaf certificate missing digitalSignature usage";
-            };
+            String message =
+                    switch (e.violation()) {
+                        case CA_CERTIFICATE -> "Credential issuer leaf certificate must not be a CA";
+                        case DIGITAL_SIGNATURE_USAGE_MISSING ->
+                            "Credential issuer leaf certificate missing digitalSignature usage";
+                    };
             throw new EudiPidTrustException(message, e);
         } catch (VerificationException e) {
             throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
