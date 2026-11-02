@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { TestWallet } from "../lib/wallet";
-import { APP_URL, STATUS_LIST_SERVER_URL } from "../lib/config";
+import { STATUS_LIST_SERVER_URL } from "../lib/config";
 import {
   captureOfferLink,
   logInWithPassword,
@@ -65,20 +65,6 @@ test("Alice exercises the full credential lifecycle", async ({ page }) => {
 
   // Step 4 — revoke the credential from the app.
   await test.step("She revokes her credential from the app", async () => {
-    // TODO(plugin): the token-status plugin's revoke endpoint does not emit
-    // CORS headers itself, so the browser blocks the cross-origin revoke call
-    // from the mock frontend (localhost) to Keycloak (keycloak.localhost).
-    // The app's own origin already lies within the client's webOrigins; the
-    // missing headers should come from the plugin. Inject them here for now.
-    // See https://github.com/ADORSYS-GIS/token-status-link/issues/171
-    await page.route(/\/status-list\/revoke$/, async (route) => {
-      const upstream = await route.fetch();
-      const headers = upstream.headers();
-      headers["access-control-allow-origin"] = APP_URL;
-      headers["access-control-allow-credentials"] = "true";
-      await route.fulfill({ response: upstream, headers });
-    });
-
     await page.getByRole("button", { name: "Credentials" }).click();
     const revoke = page.getByRole("button", { name: "Revoke" }).first();
     await expect(revoke, "a revocable credential row is present").toBeVisible();
