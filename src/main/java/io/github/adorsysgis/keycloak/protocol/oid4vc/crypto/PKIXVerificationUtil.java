@@ -31,6 +31,27 @@ public class PKIXVerificationUtil {
 
     private static final int MAX_CHAIN_LENGTH = 5;
 
+    public enum LeafCertificateViolation {
+        CA_CERTIFICATE,
+        DIGITAL_SIGNATURE_USAGE_MISSING
+    }
+
+    public static class LeafCertificateValidationException extends VerificationException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final LeafCertificateViolation violation;
+
+        private LeafCertificateValidationException(LeafCertificateViolation violation, String message) {
+            super(message);
+            this.violation = violation;
+        }
+
+        public LeafCertificateViolation violation() {
+            return violation;
+        }
+    }
+
     private PKIXVerificationUtil() {}
 
     public static X509Certificate[] validateBase64Chain(List<String> certs, TrustAnchorProvider trustAnchorProvider)
@@ -41,6 +62,12 @@ public class PKIXVerificationUtil {
     public static X509Certificate[] validateBase64Chain(
             List<String> certs, Collection<X509Certificate> rootCertificates) throws VerificationException {
         return validateChainToRoots(decodeBase64Chain(certs), rootCertificates);
+    }
+
+    /** Decodes and validates a certificate chain used to verify a signed token. */
+    public static X509Certificate[] validateBase64SigningChain(
+            List<String> certs, TrustAnchorProvider trustAnchorProvider) throws VerificationException {
+        return validateSigningChain(decodeBase64Chain(certs), trustAnchorProvider);
     }
 
     /** Decodes the Base64-encoded certificates from an X.509 chain. */
@@ -66,6 +93,37 @@ public class PKIXVerificationUtil {
     public static X509Certificate[] validateChainToRoots(
             List<X509Certificate> certs, Collection<X509Certificate> rootCertificates) throws VerificationException {
         return validateChain(certs, rootCertificates, List.of());
+    }
+
+    /** Validates a decoded signing-certificate chain against the provided roots. */
+    public static X509Certificate[] validateSigningChainToRoots(
+            List<X509Certificate> certs, Collection<X509Certificate> rootCertificates) throws VerificationException {
+        return validateSigningChain(validateChainToRoots(certs, rootCertificates));
+    }
+
+    /** Validates a decoded signing-certificate chain using the provided trust anchors. */
+    public static X509Certificate[] validateSigningChain(
+            List<X509Certificate> certs, TrustAnchorProvider trustAnchorProvider) throws VerificationException {
+        return validateSigningChain(validateChain(certs, trustAnchorProvider));
+    }
+
+    private static X509Certificate[] validateSigningChain(X509Certificate[] chain) throws VerificationException {
+        validateLeafCertificate(chain[0]);
+        return chain;
+    }
+
+    /** Validates that the certificate is an end-entity signing certificate. */
+    public static void validateLeafCertificate(X509Certificate leaf) throws LeafCertificateValidationException {
+        if (leaf.getBasicConstraints() != -1) {
+            throw new LeafCertificateValidationException(
+                    LeafCertificateViolation.CA_CERTIFICATE, "Leaf certificate must not be a CA");
+        }
+        boolean[] keyUsage = leaf.getKeyUsage();
+        if (keyUsage != null && (keyUsage.length == 0 || !keyUsage[0])) {
+            throw new LeafCertificateValidationException(
+                    LeafCertificateViolation.DIGITAL_SIGNATURE_USAGE_MISSING,
+                    "Leaf certificate missing Digital Signature KeyUsage");
+        }
     }
 
     public static X509Certificate[] validateChain(List<X509Certificate> certs, TrustAnchorProvider trustAnchorProvider)

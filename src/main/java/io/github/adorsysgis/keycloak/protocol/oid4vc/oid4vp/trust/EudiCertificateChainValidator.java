@@ -1,8 +1,8 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil.LeafCertificateValidationException;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.crypto.PKIXVerificationUtil.LeafCertificateViolation;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.List;
@@ -12,60 +12,18 @@ class EudiCertificateChainValidator {
 
     X509Certificate[] validate(List<String> x5c, Collection<X509Certificate> trustedAnchors)
             throws EudiPidTrustException {
-        return validateDecodedChain(decodeChain(x5c), trustedAnchors);
-    }
-
-    private List<X509Certificate> decodeChain(List<String> x5c) throws EudiPidTrustException {
         try {
-            return PKIXVerificationUtil.decodeBase64Chain(x5c);
+            List<X509Certificate> presentedChain = PKIXVerificationUtil.decodeBase64Chain(x5c);
+            return PKIXVerificationUtil.validateSigningChainToRoots(presentedChain, trustedAnchors);
+        } catch (LeafCertificateValidationException e) {
+            String message = switch (e.violation()) {
+                case CA_CERTIFICATE -> "Credential issuer leaf certificate must not be a CA";
+                case DIGITAL_SIGNATURE_USAGE_MISSING ->
+                    "Credential issuer leaf certificate missing digitalSignature usage";
+            };
+            throw new EudiPidTrustException(message, e);
         } catch (VerificationException e) {
             throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
-        }
-    }
-
-    private X509Certificate[] validateDecodedChain(
-            List<X509Certificate> presentedChain, Collection<X509Certificate> trustedAnchors)
-            throws EudiPidTrustException {
-        try {
-            X509Certificate[] chain = PKIXVerificationUtil.validateChainToRoots(presentedChain, trustedAnchors);
-            X509Certificate leaf = chain[0];
-            validateLeafCertificate(leaf);
-            return chain;
-        } catch (EudiPidTrustException e) {
-            throw e;
-        } catch (VerificationException e) {
-            throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
-        }
-    }
-
-    X509Certificate[] validatePublishedOrChained(List<String> x5c, Collection<X509Certificate> publishedCertificates)
-            throws EudiPidTrustException {
-        List<X509Certificate> presentedChain = decodeChain(x5c);
-        X509Certificate leaf = presentedChain.getFirst();
-        if (publishedCertificates.stream().anyMatch(leaf::equals)) {
-            validatePublishedSignerCertificate(leaf);
-            return presentedChain.toArray(X509Certificate[]::new);
-        }
-
-        return validateDecodedChain(presentedChain, publishedCertificates);
-    }
-
-    private void validatePublishedSignerCertificate(X509Certificate certificate) throws EudiPidTrustException {
-        try {
-            certificate.checkValidity();
-        } catch (CertificateExpiredException | CertificateNotYetValidException e) {
-            throw new EudiPidTrustException("The published signer certificate is not currently valid", e);
-        }
-        validateLeafCertificate(certificate);
-    }
-
-    private void validateLeafCertificate(X509Certificate leaf) throws EudiPidTrustException {
-        if (leaf.getBasicConstraints() != -1) {
-            throw new EudiPidTrustException("Credential issuer leaf certificate must not be a CA");
-        }
-        boolean[] keyUsage = leaf.getKeyUsage();
-        if (keyUsage != null && (keyUsage.length == 0 || !keyUsage[0])) {
-            throw new EudiPidTrustException("Credential issuer leaf certificate missing digitalSignature usage");
         }
     }
 }
