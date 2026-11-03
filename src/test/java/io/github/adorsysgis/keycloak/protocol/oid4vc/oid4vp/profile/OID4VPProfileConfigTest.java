@@ -377,14 +377,14 @@ public class OID4VPProfileConfigTest {
         config.setConfig(configMap);
 
         VerifierConfig verifierConfig = new VerifierConfig(mockSession("text-config", "trust-provider"), config);
+        AuthenticationProfile profile =
+                verifierConfig.getProfileConfig().getProfiles().getFirst();
 
-        assertEquals(
-                "login",
-                verifierConfig.getProfileConfig().getProfiles().getFirst().getId());
+        assertEquals("login", profile.getId());
         assertEquals(List.of("legacy-vct"), new AuthRequirements(config).getCredentialTypes());
         assertEquals("openid4vp://", verifierConfig.getAuthReqUrlScheme());
         assertNotNull(verifierConfig.getAccessCertificate());
-        assertEquals("registration-certificate", verifierConfig.getRegistrationCertificate());
+        assertEquals("registration-certificate", verifierConfig.getRegistrationCertificate(profile));
         assertEquals(List.of("transaction-data"), verifierConfig.getTransactionDataRaw());
         assertEquals("[{\"format\":\"example\",\"data\":\"value\"}]", verifierConfig.getVerifierInfoConfig());
         assertEquals("trust-provider", verifierConfig.getStatusListTrustMaterialProviderAliases());

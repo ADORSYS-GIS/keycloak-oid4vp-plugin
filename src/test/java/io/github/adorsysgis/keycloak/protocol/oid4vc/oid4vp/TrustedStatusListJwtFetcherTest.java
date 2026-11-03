@@ -134,6 +134,30 @@ public class TrustedStatusListJwtFetcherTest {
     }
 
     @Test
+    public void shouldRejectCaLeafEvenWhenProviderTrustsChain() throws Exception {
+        String aliases = "status-list-trust";
+        KeyPair caKeyPair = TestCryptoUtils.generateECKeyPair(TestCryptoUtils.ECCurves.SECP256R1);
+        X509Certificate caCertificate = TestCryptoUtils.createSelfSignedCaCert(caKeyPair);
+        String jwt = createJwtWithX5c(caCertificate, caCertificate);
+        TrustMaterialResolver resolver = mock(TrustMaterialResolver.class);
+        when(resolver.validateX509Chain(eq(session), eq(aliases), any(), anyList(), eq(Algorithm.ES256)))
+                .thenReturn(mock(JWK.class));
+        TrustedStatusListJwtFetcher providerFetcher = new MockTrustedStatusListJwtFetcher(session, resolver) {
+            @Override
+            protected String fetchStatusListFromUri(String uri) {
+                return jwt;
+            }
+        };
+
+        ReferencedTokenValidationException error = assertThrows(
+                ReferencedTokenValidationException.class,
+                () -> providerFetcher.fetchStatusListJwt("https://example.com/status-list-jwt", aliases));
+
+        assertEquals("Leaf certificate validation failed", error.getMessage());
+        assertEquals("Leaf certificate must not be a CA", error.getCause().getMessage());
+    }
+
+    @Test
     public void shouldNotFallBackToGlobalTruststoreWhenProvidersAreConfigured() throws Exception {
         String aliases = "missing-x509-trust";
         setupTrustForStatusListJwt();
