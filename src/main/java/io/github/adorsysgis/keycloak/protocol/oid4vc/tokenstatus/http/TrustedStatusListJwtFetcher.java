@@ -17,7 +17,6 @@ import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.crypto.SignatureVerifierContext;
-import org.keycloak.crypto.X509CertificateChainValidator;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.jose.jws.JWSInputException;
@@ -130,7 +129,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         X509Certificate leaf = chain[0];
 
         try {
-            validateLeafCertificate(leaf);
+            PKIXVerificationUtil.validateLeafCertificate(leaf);
         } catch (VerificationException e) {
             throw new ReferencedTokenValidationException("Leaf certificate validation failed", e);
         }
@@ -186,7 +185,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
 
             // The provider decides whether this chain is trusted; signature verification must
             // still use the public key from the presented leaf certificate itself.
-            return X509CertificateChainValidator.decodeCertificateChain(x5c).toArray(X509Certificate[]::new);
+            return PKIXVerificationUtil.decodeBase64Chain(x5c).toArray(X509Certificate[]::new);
         } catch (ReferencedTokenValidationException e) {
             throw e;
         } catch (VerificationException e) {
@@ -211,16 +210,6 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
             return PKIXVerificationUtil.validateBase64Chain(x5c, new TrustAnchorAdapter(truststoreProvider));
         } catch (VerificationException e) {
             throw new ReferencedTokenValidationException(e.getMessage(), e);
-        }
-    }
-
-    public void validateLeafCertificate(X509Certificate leaf) throws VerificationException {
-        if (leaf.getBasicConstraints() != -1) {
-            throw new VerificationException("Leaf certificate must not be a CA");
-        }
-        boolean[] keyUsage = leaf.getKeyUsage();
-        if (keyUsage != null && !keyUsage[0]) {
-            throw new VerificationException("Leaf certificate missing Digital Signature KeyUsage");
         }
     }
 

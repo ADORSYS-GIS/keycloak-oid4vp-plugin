@@ -47,7 +47,7 @@ public class EudiPidTrustIdentityProvider implements TrustMaterialIdentityProvid
                     ? snapshot.trustedIssuerCertificates()
                     : snapshot.resolveIssuer(config.getIssuer()).trustedCertificates();
 
-            X509Certificate[] validatedChain = chainValidator.validatePublishedOrChained(x5c, trustedCertificates);
+            X509Certificate[] validatedChain = chainValidator.validate(x5c, trustedCertificates);
             return X509CertificateChainValidator.toJwk(validatedChain[0], algorithm, List.of(validatedChain));
         } catch (EudiPidTrustException e) {
             throw new VerificationException("Could not resolve X.509 trust from the EUDI PID trust list", e);
