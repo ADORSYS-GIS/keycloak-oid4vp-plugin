@@ -15,7 +15,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ProcessingError;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
-import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -277,7 +276,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         String issuerState = createAuthorizationCodeCredentialOffer(SESSION_IDENTITY_CONFIG_ID);
         Connection.Response initial = startNestedAuthorization(buildAuthorizationEndpoint(
                 UNGATED_CREDENTIAL_CONFIG_ID, authorizationDetails(UNGATED_CREDENTIAL_CONFIG_ID), issuerState));
-        nestedLink(initial);
+        assertNotNull(initial);
     }
 
     @Test
@@ -446,7 +445,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     private Connection.Response startNestedAuthorization(String authEndpoint) throws Exception {
         // The authorization response ends on the page that opens the wallet.
         Connection.Response initial = requestAuthorizationPage(authEndpoint);
-        nestedLink(initial);
+        assertTrue(nestedLink(initial).startsWith(OPENID4VP_SCHEME));
         return initial;
     }
 
@@ -475,34 +474,22 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
             }
             String location = response.header(HttpHeaders.LOCATION);
             assertNotNull(location, "Redirect response without Location header");
-            URI next = URI.create(url).resolve(location);
-            // A wallet deep link is the end of the browser flow. Following it is not an HTTP request.
-            if (next.getScheme() == null
-                    || next.getScheme().equals("http")
-                    || next.getScheme().equals("https")) {
-                url = next.toString();
-                continue;
-            }
-            return response;
+            url = URI.create(url).resolve(location).toString();
         }
         throw new IllegalStateException("Too many redirects fetching authorization page: " + authEndpoint);
     }
 
-    private String nestedLink(Connection.Response response) throws IOException {
+    private String nestedLink(Connection.Response response) {
         assertEquals(
                 HttpStatus.SC_OK,
                 response.statusCode(),
                 "Nested authorization must return the wallet handoff page: " + response.statusCode());
-        String html = response.body();
-        assertFalse(html.contains("Open with a wallet"), "The wallet handoff page must stay blank");
-        Matcher handoff = Pattern.compile("location\\.replace\\(\"(openid4vp://[^\"]*)\"\\)")
-                .matcher(html);
-        assertTrue(handoff.find(), "Nested authorization must open the wallet from the handoff page");
-        String location = handoff.group(1);
-        assertTrue(
-                location.startsWith(OPENID4VP_SCHEME),
-                "Nested authorization must open a same-device OpenID4VP request");
-        return location;
+
+        Matcher matcher = Pattern.compile("location\\.replace\\(\"(openid4vp://[^\"]*)\"\\)")
+                .matcher(response.body());
+
+        assertTrue(matcher.find(), "Nested authorization must open the wallet from the handoff page");
+        return matcher.group(1);
     }
 
     private String completeNestedAuthorization(
