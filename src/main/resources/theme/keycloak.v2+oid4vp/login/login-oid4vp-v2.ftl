@@ -10,7 +10,7 @@
         <#if section = "header">
             ${msg('oid4vpPresentationDuringIssuanceTitle')}
         <#elseif section = "form">
-            <#if oid4vp.authContext.error || !oid4vp.authContext.authReqLink?has_content>
+            <#if oid4vp.authContext.error>
                 <p class="pf-v5-u-mb-md">
                     ${msg('oid4vpPresentationDuringIssuanceError')}
                 </p>
