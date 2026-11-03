@@ -128,15 +128,10 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         X509Certificate[] chain = validateCertChain(jws, trustMaterialProviderAliases, x5c);
         X509Certificate leaf = chain[0];
 
-        // PKIXVerificationUtil applies these constraints during global-truststore validation.
-        // For configured trust-material providers, the provider validates trust and this check
-        // still enforces the Status List signing-certificate requirements.
-        if (!StringUtil.isBlank(trustMaterialProviderAliases)) {
-            try {
-                PKIXVerificationUtil.validateLeafCertificate(leaf);
-            } catch (VerificationException e) {
-                throw new ReferencedTokenValidationException("Leaf certificate validation failed", e);
-            }
+        try {
+            PKIXVerificationUtil.validateLeafCertificate(leaf);
+        } catch (VerificationException e) {
+            throw new ReferencedTokenValidationException("Leaf certificate validation failed", e);
         }
 
         return leaf;
@@ -212,7 +207,7 @@ public class TrustedStatusListJwtFetcher extends SimpleStatusListJwtFetcher {
         }
 
         try {
-            return PKIXVerificationUtil.validateBase64SigningChain(x5c, new TrustAnchorAdapter(truststoreProvider));
+            return PKIXVerificationUtil.validateBase64Chain(x5c, new TrustAnchorAdapter(truststoreProvider));
         } catch (VerificationException e) {
             throw new ReferencedTokenValidationException(e.getMessage(), e);
         }
