@@ -34,8 +34,8 @@ fetch_latest_release_jar() {
   TMP_FILES+=("$json")
   curl -fsSL "https://api.github.com/repos/$repo/releases/latest" -o "$json" ||
     die "Could not resolve the latest release of $repo"
-  tag="$(sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' "$json" | head -1)" ||
-    die "Could not resolve the latest release tag of $repo"
+  tag="$(sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' "$json" | head -1)"
+  [[ -n "$tag" ]] || die "Could not resolve the latest release tag of $repo"
   version="${tag#v}"
   asset="https://github.com/$repo/releases/download/$tag/$out_name-$version.jar"
 

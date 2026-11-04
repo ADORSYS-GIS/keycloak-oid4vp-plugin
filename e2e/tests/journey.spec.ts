@@ -21,6 +21,16 @@ test("Alice exercises the full credential lifecycle", async ({ page }) => {
   // Step 1 — log in with username and password.
   await test.step("Alice logs in to the app with her username and password", async () => {
     await logInWithPassword(page);
+    // Before issuance there are no revocable credentials yet. Asserting this up
+    // front guarantees the single revocable row seen later in the revoke step is
+    // the credential issued in this test, not a leftover from an earlier run.
+    await page.getByRole("button", { name: "Credentials" }).click();
+    await expect(
+      page.getByRole("button", { name: "Revoke" }),
+      "no revocable credential exists before issuance",
+    ).toHaveCount(0);
+    // Back to the offer tab so the journey can issue a fresh credential.
+    await page.getByRole("button", { name: "Credential Offer" }).click();
   });
 
   // Step 2 — obtain the identity credential in her wallet.
@@ -66,15 +76,15 @@ test("Alice exercises the full credential lifecycle", async ({ page }) => {
   // Step 4 — revoke the credential from the app.
   await test.step("She revokes her credential from the app", async () => {
     await page.getByRole("button", { name: "Credentials" }).click();
-    const revoke = page.getByRole("button", { name: "Revoke" }).first();
-    await expect(revoke, "a revocable credential row is present").toBeVisible();
+    const revoke = page.getByRole("button", { name: "Revoke" });
+    await expect(revoke, "exactly one revocable credential is present").toHaveCount(1);
     await revoke.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog, "the revocation dialog opens").toBeVisible();
     await dialog.locator("#revocation-reason").fill("Revoke the first issued credential");
     await dialog.getByRole("button", { name: /revoke/i }).click();
     await expect(
-      page.getByText("Revoked", { exact: true }).first(),
+      page.getByText("Revoked", { exact: true }),
       "the credential shows as revoked",
     ).toBeVisible({ timeout: 30_000 });
   });
@@ -98,6 +108,10 @@ test("Alice exercises the full credential lifecycle", async ({ page }) => {
       rejection?.error,
       "Keycloak rejected the revoked presentation with an invalid-presentation error",
     ).toBe("vp_token_auth_error");
+    expect(
+      rejection?.error_description,
+      "the rejection was caused by the credential's revoked status-list entry",
+    ).toContain("Token status verification failed");
     expect(verifier?.status_code, "the rejection is an HTTP 401").toBe(401);
   });
 });

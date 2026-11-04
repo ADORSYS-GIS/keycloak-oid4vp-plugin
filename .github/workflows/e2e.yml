@@ -4,6 +4,10 @@ on:
   schedule:
     # Every night at 01:00 UTC
     - cron: "0 1 * * *"
+  pull_request:
+    # Only run on PRs that touch the e2e harness itself.
+    paths:
+      - "e2e/**"
   workflow_dispatch:
 
 permissions:
@@ -39,6 +43,10 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Type-check and lint the e2e tests
+        run: pnpm check
         working-directory: e2e
 
       - name: Run all journeys

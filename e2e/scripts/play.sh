@@ -58,7 +58,8 @@ on_error() {
 }
 trap on_error EXIT
 
-compose up -d --wait
+# `--pull always` forces re-pulling actual latest images
+compose up -d --wait --pull always
 
 log "Waiting for realm $KEYCLOAK_REALM to be ready ..."
 for i in $(seq 1 60); do
@@ -166,6 +167,12 @@ if [ "$EXIT_CODE" != 0 ]; then
   mkdir -p build
   compose logs > build/docker-compose.log || true
 fi
-compose down -v || true
+# Tear the stack down. A failed teardown must still surface as a failure
+# (leaked containers/volumes), but it must not mask a test failure: the test's
+# exit code takes precedence.
+if ! compose down -v; then
+  echo "Teardown failed; the stack may not have been removed." >&2
+  [ "$EXIT_CODE" == 0 ] && EXIT_CODE=1
+fi
 
 exit $EXIT_CODE

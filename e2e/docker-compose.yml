@@ -11,6 +11,7 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS: "true"
     ports:
       - "${KEYCLOAK_HTTP_PORT:-18080}:8080"
     volumes:
