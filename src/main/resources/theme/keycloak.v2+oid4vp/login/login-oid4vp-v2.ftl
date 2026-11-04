@@ -14,17 +14,6 @@
                 <p class="pf-v5-u-mb-md">
                     ${msg('oid4vpPresentationDuringIssuanceError')}
                 </p>
-            <#else>
-                <p class="pf-v5-u-mb-md">
-                    ${msg('oid4vpPresentationDuringIssuancePrompt')}
-                </p>
-                <div class="pf-v5-u-text-align-center">
-                    <a href="${oid4vp.authContext.authReqLink}"
-                       id="kc-oid4vp-continue"
-                       class="pf-v5-c-button pf-m-primary">
-                        ${msg('oid4vpContinueBtnMessage')}
-                    </a>
-                </div>
             </#if>
         </#if>
     <#else>

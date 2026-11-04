@@ -22,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
@@ -274,7 +276,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         String issuerState = createAuthorizationCodeCredentialOffer(SESSION_IDENTITY_CONFIG_ID);
         Connection.Response initial = startNestedAuthorization(buildAuthorizationEndpoint(
                 UNGATED_CREDENTIAL_CONFIG_ID, authorizationDetails(UNGATED_CREDENTIAL_CONFIG_ID), issuerState));
-        assertTrue(nestedLink(initial).startsWith(OPENID4VP_SCHEME));
+        assertNotNull(initial);
     }
 
     @Test
@@ -441,14 +443,9 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     }
 
     private Connection.Response startNestedAuthorization(String authEndpoint) throws Exception {
-        // The initial page must be the nested presentation prompt, not an error or redirect.
+        // The authorization response ends on the page that opens the wallet.
         Connection.Response initial = requestAuthorizationPage(authEndpoint);
-        assertEquals(
-                HttpStatus.SC_OK,
-                initial.statusCode(),
-                "Unexpected authorization response: " + initial.statusCode() + " "
-                        + initial.header("Location") + " "
-                        + initial.body().replaceAll("\\s+", " "));
+        assertTrue(nestedLink(initial).startsWith(OPENID4VP_SCHEME));
         return initial;
     }
 
@@ -482,16 +479,17 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         throw new IllegalStateException("Too many redirects fetching authorization page: " + authEndpoint);
     }
 
-    private String nestedLink(Connection.Response response) throws Exception {
-        // Find the wallet deep link among the surrounding Keycloak theme links.
-        var document = response.parse();
-        String location = document.select("a").stream()
-                .map(element -> element.attr("href"))
-                .filter(href -> href.startsWith(OPENID4VP_SCHEME))
-                .findFirst()
-                .orElse(null);
-        assertNotNull(location, "Nested authorization must render a same-device OpenID4VP link");
-        return location;
+    private String nestedLink(Connection.Response response) {
+        assertEquals(
+                HttpStatus.SC_OK,
+                response.statusCode(),
+                "Nested authorization must return the wallet handoff page: " + response.statusCode());
+
+        Matcher matcher = Pattern.compile("location\\.replace\\(\"(openid4vp://[^\"]*)\"\\)")
+                .matcher(response.body());
+
+        assertTrue(matcher.find(), "Nested authorization must open the wallet from the handoff page");
+        return matcher.group(1);
     }
 
     private String completeNestedAuthorization(
