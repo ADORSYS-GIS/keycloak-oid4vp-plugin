@@ -8,6 +8,7 @@ export const APP_URL = `http://localhost:${process.env.MOCK_FE_HTTP_PORT ?? 1420
 // The test wallet's HTTP API (see lib/wallet.ts).
 export const WALLET_BASE_URL = `http://localhost:${process.env.WALLET_HTTP_PORT ?? 18085}`;
 
-// The public status-list server (mirrors assets/realm/config.ts).
+// The local status-list-server, behind the TLS proxy (mirrors
+// assets/realm/config.ts).
 export const STATUS_LIST_SERVER_URL =
-  process.env.STATUS_LIST_SERVER_URL ?? "https://statuslist.eudi-adorsys.com";
+  process.env.STATUS_LIST_SERVER_URL ?? "https://status-list:8443";
