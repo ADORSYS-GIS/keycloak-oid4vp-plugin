@@ -11,6 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.jboss.logging.Logger;
+import org.keycloak.crypto.KeyWrapper;
+import org.keycloak.jose.jws.JWSBuilder;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider;
@@ -28,6 +30,8 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     public static final String ATTR_DISPLAY = "oid4vci.display";
     public static final String ATTR_OMIT_ENCRYPTION_METADATA = "oid4vci.omit_encryption_metadata";
     public static final String ATTR_PRESENTATION_DURING_ISSUANCE = "oid4vci.presentation_during_issuance";
+    public static final String ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY =
+            "oid4vci.patch_metadata_x5c_to_leaf_cert_only";
 
     private final RealmModel realm;
 
@@ -75,12 +79,41 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         return metadata;
     }
 
+    /**
+     * The German EUDI Wallet (Android) only tolerates the leaf certificate in the {@code x5c} header of
+     * the signed Credential Issuer Metadata. Upstream Keycloak advertises the whole certificate chain
+     * (minus the trailing self-signed trust anchor), which the wallet rejects. When the realm
+     * attribute {@value ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY} is enabled, only the leaf certificate
+     * is advertised; otherwise the upstream behavior is preserved.
+     */
+    @Override
+    public Optional<String> generateSignedMetadata(CredentialIssuer metadata, KeycloakSession session) {
+        if (!isPatchMetadataX5cToLeafCertOnlyEnabled()) {
+            return super.generateSignedMetadata(metadata, session);
+        }
+
+        return OID4VCIssuerWellKnownProviderCopy.generateSignedMetadata(
+                metadata, session, this::addLeafCertificateHeader);
+    }
+
+    private void addLeafCertificateHeader(JWSBuilder jwsBuilder, KeyWrapper keyWrapper) {
+        if (keyWrapper.getCertificate() != null) {
+            jwsBuilder.x5c(List.of(keyWrapper.getCertificate()));
+        } else {
+            logger.debugf("No leaf certificate available for x5c header in realm: %s", realm.getName());
+        }
+    }
+
     private boolean isOmitEncryptionEnabled() {
         return Boolean.parseBoolean(realm.getAttribute(ATTR_OMIT_ENCRYPTION_METADATA));
     }
 
     private boolean isPresentationDuringIssuanceEnabled() {
         return Boolean.parseBoolean(realm.getAttribute(ATTR_PRESENTATION_DURING_ISSUANCE));
+    }
+
+    private boolean isPatchMetadataX5cToLeafCertOnlyEnabled() {
+        return Boolean.parseBoolean(realm.getAttribute(ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY));
     }
 
     private String authorizationChallengeEndpoint() {

@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider.ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,8 +14,12 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseKeycloakTe
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.PresentationDuringIssuanceBaseTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
@@ -23,9 +28,12 @@ import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.keycloak.common.util.KeycloakUriBuilder;
+import org.keycloak.crypto.X509CertificateChainValidator;
+import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.protocol.oid4vc.model.CredentialIssuer;
 import org.keycloak.protocol.oid4vc.model.DisplayObject;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.utils.MediaType;
 
 public class OID4VCIssuerMetadataProviderTest {
 
@@ -148,6 +156,64 @@ public class OID4VCIssuerMetadataProviderTest {
             JsonNode metadataJson =
                     retrieveCredentialIssuerMetadataJson(httpClient, keycloak.getAuthServerUrl(), getActiveTestRealm());
             return JsonSerialization.mapper.treeToValue(metadataJson, CredentialIssuer.class);
+        }
+    }
+
+    @Nested
+    class TestSignedMetadataLeafOnlyX5c extends PresentationDuringIssuanceBaseTest {
+
+        @Override
+        public String getActiveTestRealm() {
+            // The active RS256 signing key of this realm carries a certificate chain
+            // [leaf, intermediate CA, root CA] (see keystore-chain-rsa.p12).
+            return TEST_REALM_CHAIN_NAME;
+        }
+
+        @Test
+        public void shouldAdvertiseOnlyLeafCertificateInSignedMetadataX5c() throws Exception {
+            // By default the patch is disabled and the whole chain (leaf + intermediate) is
+            // advertised, because the trailing self-signed root is dropped.
+            assertEquals(2, signedMetadataX5c().size());
+
+            withRealmAttributes(Map.of(ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY, "true"), () -> {
+                List<X509Certificate> x5c = signedMetadataX5c();
+                assertEquals(1, x5c.size(), "only the leaf certificate must be advertised in x5c");
+                assertEquals(leafCertificate(), x5c.getFirst(), "the advertised certificate must be the leaf");
+            });
+        }
+
+        private List<X509Certificate> signedMetadataX5c() throws Exception {
+            String wellKnownEndpoint = KeycloakUriBuilder.fromUri(keycloak.getAuthServerUrl())
+                    .path("/.well-known/openid-credential-issuer/realms/{realm}")
+                    .build(getActiveTestRealm())
+                    .toString();
+
+            HttpGet httpGet = new HttpGet(wellKnownEndpoint);
+            httpGet.setHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JWT);
+            HttpResponse response = httpClient.execute(httpGet);
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            assertEquals(
+                    MediaType.APPLICATION_JWT,
+                    response.getFirstHeader(HttpHeaders.CONTENT_TYPE).getValue());
+
+            String jwt = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            return X509CertificateChainValidator.decodeCertificateChain(
+                    new JWSInput(jwt).getHeader().getX5c());
+        }
+
+        private X509Certificate leafCertificate() throws Exception {
+            return loadChain().getFirst();
+        }
+
+        private static List<X509Certificate> loadChain() throws Exception {
+            try (var in =
+                    OID4VCIssuerMetadataProviderTest.class.getResourceAsStream("/keystores/keystore-chain-rsa.p12")) {
+                KeyStore ks = KeyStore.getInstance("PKCS12");
+                ks.load(in, "password".toCharArray());
+                return Arrays.stream(ks.getCertificateChain("test-metadata-leaf"))
+                        .map(X509Certificate.class::cast)
+                        .toList();
+            }
         }
     }
 

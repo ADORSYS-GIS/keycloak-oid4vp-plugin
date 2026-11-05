@@ -49,3 +49,12 @@ AwEHoUQDQgAE61gaU80eYFTzNCOtCbhS4E+3JnO/+/+pe+sUuZ03BgKPatT+hdaY
 ```
 
 > Test-only credentials. Never use them in production.
+
+## `keystore-chain-rsa.p12`
+
+A PKCS#12 keystore for the `test-chain` realm whose signing key carries a three-level certificate
+chain `[leaf, intermediate CA, root CA]`.
+
+- Alias: `test-metadata-leaf`
+- Keystore/Key password: `password`
+- Chain: `CN=test-metadata-leaf` ← `CN=Test Intermediate CA` ← `CN=Test Root CA` (self-signed)
