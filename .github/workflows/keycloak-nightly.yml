@@ -76,13 +76,13 @@ jobs:
                 "color": 15158332,
                 "fields": [
                   {
-                    "name": "Nightly branch",
-                    "value": "`nightly`",
+                    "name": "Repository",
+                    "value": "`${{ github.repository }}`",
                     "inline": true
                   },
                   {
-                    "name": "Keycloak image",
-                    "value": "`quay.io/keycloak/keycloak:nightly`",
+                    "name": "Branch",
+                    "value": "`${{ github.ref_name }}`",
                     "inline": true
                   }
                 ],
