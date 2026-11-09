@@ -24,6 +24,9 @@ public final class KeycloakTestContainer {
 
     private static final String KEYSTORE_FILE_NAME = "keystore-rsa.p12";
     private static final String KEYSTORE_CONTAINER_PATH = "/opt/keycloak/data/test/" + KEYSTORE_FILE_NAME;
+    private static final String KEYSTORE_CHAIN_FILE_NAME = "keystore-chain-rsa.p12";
+    private static final String KEYSTORE_CHAIN_CONTAINER_PATH =
+            "/opt/keycloak/data/test-chain/" + KEYSTORE_CHAIN_FILE_NAME;
 
     private KeycloakTestContainer() {}
 
@@ -54,6 +57,9 @@ public final class KeycloakTestContainer {
                 .withRealmImportFiles(realmImports.toArray(String[]::new))
                 .withCopyToContainer(
                         MountableFile.forClasspathResource("/keystores/" + KEYSTORE_FILE_NAME), KEYSTORE_CONTAINER_PATH)
+                .withCopyToContainer(
+                        MountableFile.forClasspathResource("/keystores/" + KEYSTORE_CHAIN_FILE_NAME),
+                        KEYSTORE_CHAIN_CONTAINER_PATH)
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
