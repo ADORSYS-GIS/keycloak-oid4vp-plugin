@@ -503,7 +503,7 @@ class OID4VPUserProvisionerTest {
         AuthenticationFlowContext flowContext = mock(AuthenticationFlowContext.class);
         when(flowContext.getSession()).thenReturn(session);
         OID4VPAuthenticator.Context context = new OID4VPAuthenticator.Context(
-                "id", flowContext, null, null, null, null, Map.of(), Map.of("pid", verifier));
+                "id", flowContext, null, null, null, null, null, Map.of(), Map.of("pid", verifier));
         AuthenticatorConfigModel authConfig = new AuthenticatorConfigModel();
         authConfig.setConfig(Map.of("importUnknownUsers", "true"));
 
