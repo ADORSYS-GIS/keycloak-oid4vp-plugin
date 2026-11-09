@@ -19,6 +19,7 @@ public class ContextBuilder {
     private AuthorizationContext authorizationContext;
     private AuthenticationProfile authenticationProfile;
     private AuthRequirements authRequirements;
+    private String statusListTrustMaterialProviderAliases;
     private final Map<String, String> presentedTokens = new HashMap<>();
     private final Map<String, CredentialVerifier> credentialVerifiers = new HashMap<>();
 
@@ -52,6 +53,11 @@ public class ContextBuilder {
         return this;
     }
 
+    public ContextBuilder statusListTrustMaterialProviderAliases(String aliases) {
+        this.statusListTrustMaterialProviderAliases = aliases;
+        return this;
+    }
+
     public ContextBuilder presentedToken(String credentialId, String token) {
         this.presentedTokens.put(credentialId, token);
         return this;
@@ -70,6 +76,7 @@ public class ContextBuilder {
                 authorizationContext,
                 authenticationProfile,
                 authRequirements,
+                statusListTrustMaterialProviderAliases,
                 presentedTokens,
                 credentialVerifiers);
     }

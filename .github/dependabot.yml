@@ -57,3 +57,15 @@ updates:
       time: "06:00"
       timezone: "Africa/Douala"
     open-pull-requests-limit: 5
+
+  # End-to-end test suite npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    target-branch: "main"
+    cooldown:
+      default-days: 14
+    schedule:
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Africa/Douala"
+    open-pull-requests-limit: 5

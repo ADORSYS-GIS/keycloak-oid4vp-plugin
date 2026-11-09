@@ -65,6 +65,21 @@ public class ReferencedTokenValidator {
      */
     public void validate(JsonNode tokenPayload, boolean allowMissingStatusClaim)
             throws ReferencedTokenValidationException {
+        validate(tokenPayload, allowMissingStatusClaim, null);
+    }
+
+    /**
+     * Validates a Referenced Token using the selected trust-material providers for the fetched
+     * Status List JWT. A blank provider selection preserves legacy truststore validation.
+     *
+     * @param tokenPayload The JSON payload of the Referenced Token
+     * @param allowMissingStatusClaim when {@code true}, a missing {@code status} claim is accepted
+     * @param trustMaterialProviderAliases comma-separated aliases of trust-material providers used to validate
+     *     the Status List JWT certificate chain; {@code null} or blank uses the global truststore
+     * @throws ReferencedTokenValidationException if validation fails
+     */
+    public void validate(JsonNode tokenPayload, boolean allowMissingStatusClaim, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
         if (tokenPayload.get(STATUS_FIELD) == null && allowMissingStatusClaim) {
             return;
         }
@@ -76,7 +91,7 @@ public class ReferencedTokenValidator {
             StatusInfo statusInfo = extractStatusInfo(tokenPayload);
 
             // Fetch and validate status list token
-            JsonNode statusListToken = fetchStatusListToken(statusInfo.uri);
+            JsonNode statusListToken = fetchStatusListToken(statusInfo.uri, trustMaterialProviderAliases);
 
             // Extract and validate status list data
             StatusList statusList = extractStatusList(statusListToken);
@@ -188,12 +203,15 @@ public class ReferencedTokenValidator {
      * The status list server returns a JWT token, not raw JSON.
      *
      * @param uri The URI to fetch the status list token from
+     * @param trustMaterialProviderAliases comma-separated aliases of trust-material providers used to validate
+     *     the Status List JWT certificate chain; {@code null} or blank uses the global truststore
      * @return The status list token as JsonNode
      * @throws ReferencedTokenValidationException if fetching or validation fails
      */
-    private JsonNode fetchStatusListToken(String uri) throws ReferencedTokenValidationException {
+    private JsonNode fetchStatusListToken(String uri, String trustMaterialProviderAliases)
+            throws ReferencedTokenValidationException {
         try {
-            String jwtToken = statusListJwtFetcher.fetchStatusListJwt(uri);
+            String jwtToken = statusListJwtFetcher.fetchStatusListJwt(uri, trustMaterialProviderAliases);
 
             JOSE joseToken = JOSEParser.parse(jwtToken);
 

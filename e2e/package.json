@@ -1,0 +1,25 @@
+{
+  "name": "keycloak-oid4vp-plugin-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "test": "playwright test",
+    "check": "prettier --check . && tsc --noEmit",
+    "format": "prettier --write .",
+    "play": "bash scripts/play.sh",
+    "clean": "bash scripts/clean.sh",
+    "clean:play": "bash scripts/clean.sh && bash scripts/play.sh",
+    "stop": "bash scripts/stop.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^26.6.5",
+    "@types/pngjs": "^6.0.5",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2"
+  }
+}

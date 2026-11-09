@@ -12,25 +12,10 @@ class EudiCertificateChainValidator {
             throws EudiPidTrustException {
         try {
             X509Certificate[] chain = PKIXVerificationUtil.validateBase64Chain(x5c, trustedAnchors);
-            X509Certificate leaf = chain[0];
-            validateLeafCertificate(leaf);
+            PKIXVerificationUtil.validateLeafCertificate(chain[0]);
             return chain;
-        } catch (EudiPidTrustException e) {
-            throw e;
         } catch (VerificationException e) {
             throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
-        } catch (Exception e) {
-            throw new EudiPidTrustException("Credential issuer certificate chain validation failed", e);
-        }
-    }
-
-    private void validateLeafCertificate(X509Certificate leaf) throws EudiPidTrustException {
-        if (leaf.getBasicConstraints() != -1) {
-            throw new EudiPidTrustException("Credential issuer leaf certificate must not be a CA");
-        }
-        boolean[] keyUsage = leaf.getKeyUsage();
-        if (keyUsage != null && !keyUsage[0]) {
-            throw new EudiPidTrustException("Credential issuer leaf certificate missing digitalSignature usage");
         }
     }
 }

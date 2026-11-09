@@ -50,6 +50,11 @@ public final class SmokeDemo {
         String accessTokenStr = tokenResponse.path(OAuth2Constants.ACCESS_TOKEN).asText(null);
         AccessToken accessToken = oid4vpClient.readAccessToken(accessTokenStr);
 
+        if (!cfg.aliceUsername().equals(accessToken.getPreferredUsername())
+                || !(cfg.aliceUsername() + "-id").equals(accessToken.getSubject())) {
+            throw new IllegalStateException("Access token does not identify the expected demo user Alice");
+        }
+
         log("Access token issued for user: " + accessToken.getPreferredUsername());
         log("Issuer: " + accessToken.getIssuer());
         log("Smoke flow complete.");

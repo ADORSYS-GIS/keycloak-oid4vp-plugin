@@ -15,3 +15,11 @@ docker-compose.*.yml
 
 # Free local notes
 .local/
+
+# e2e build artifacts / local state
+e2e/build/
+e2e/.env
+e2e/node_modules/
+e2e/pnpm-store/
+e2e/playwright-report/
+e2e/test-results/

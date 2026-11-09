@@ -16,6 +16,7 @@ import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
 import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
@@ -86,6 +87,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     public static final String ALLOW_MISSING_STATUS_CLAIM_CONFIG = "allowMissingStatusClaim";
     public static final boolean ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT = false;
 
+    public static final String STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG = "statusListTrustMaterialIdps";
+
     static {
         ProviderConfigProperty property;
 
@@ -146,7 +149,7 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property = new ProviderConfigProperty();
         property.setName(ACCESS_CERTIFICATE_CONFIG);
         property.setLabel("Access certificate");
-        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setType(ProviderConfigProperty.TEXT_TYPE);
         property.setHelpText(
                 "PEM-encoded certificate to include in the X5C header of request objects. Do not include PEM delimiters.");
         configProperties.add(property);
@@ -154,14 +157,14 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property = new ProviderConfigProperty();
         property.setName(REGISTRATION_CERTIFICATE_CONFIG);
         property.setLabel("Registration certificate");
-        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setType(ProviderConfigProperty.TEXT_TYPE);
         property.setHelpText("Opaque string to advertise under the verifier_info claim of request objects.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
         property.setName(TRANSACTION_DATA_CONFIG);
         property.setLabel("Transaction data (base64url)");
-        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setType(ProviderConfigProperty.TEXT_TYPE);
         property.setHelpText(
                 "Optional comma-separated or newline-separated base64url-encoded transaction_data JSON objects (OpenID4VP §5.1). Requires holder binding. Entries are normalized before signing; use the signed request JWT payload as the canonical wire form when debugging hash mismatches. Only sha-256 is supported for transaction_data_hashes.");
         configProperties.add(property);
@@ -169,7 +172,7 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property = new ProviderConfigProperty();
         property.setName(VERIFIER_INFO_CONFIG);
         property.setLabel("Verifier info (JSON array)");
-        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setType(ProviderConfigProperty.TEXT_TYPE);
         property.setHelpText(
                 "Optional JSON array of verifier_info objects ({format, data, credential_ids?}) merged with the registration certificate entry.");
         configProperties.add(property);
@@ -267,6 +270,41 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
                         + "credentials without any status claim are treated as invalid. Such credentials cannot "
                         + "participate in revocation via the Token Status List mechanism because they have no status to revoke.");
         configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG);
+        property.setLabel("Status List trust-material identity providers");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setHelpText(
+                "Optional comma-separated aliases of trust-material identity providers used to validate Status List JWT x5c chains. When configured, only these providers establish trust. When empty, the Keycloak global truststore is used for backward compatibility.");
+        configProperties.add(property);
+    }
+
+    /**
+     * Removes accidental surrounding whitespace from values configured through text inputs.
+     *
+     * <p>Whitespace within a value is preserved because it can be meaningful in JSON or
+     * multiline transaction data.
+     */
+    public static Map<String, String> normalizeTextConfigValues(Map<String, String> config) {
+        if (config == null || config.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, String> normalized = new LinkedHashMap<>(config);
+        for (ProviderConfigProperty property : configProperties) {
+            if (ProviderConfigProperty.STRING_TYPE.equals(property.getType())
+                    || ProviderConfigProperty.TEXT_TYPE.equals(property.getType())) {
+                normalized.computeIfPresent(property.getName(), (key, value) -> value.trim());
+            }
+        }
+        return Map.copyOf(normalized);
+    }
+
+    public static Map<String, String> normalizeTextConfigValues(AuthenticatorConfigModel authConfig) {
+        Map<String, String> config =
+                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        return normalizeTextConfigValues(config);
     }
 
     @Override

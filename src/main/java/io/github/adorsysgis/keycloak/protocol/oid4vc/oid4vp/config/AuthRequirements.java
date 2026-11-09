@@ -34,8 +34,7 @@ public class AuthRequirements {
     public AuthRequirements(AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting authentication requirement properties");
 
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
 
         this.credentialTypes = parseMultiStr(config.getOrDefault(
                 OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG,

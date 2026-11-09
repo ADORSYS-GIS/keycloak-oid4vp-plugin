@@ -24,9 +24,11 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.OID4VCConstants;
 import org.keycloak.admin.client.resource.ClientScopeResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.util.KeycloakUriBuilder;
+import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oid4vc.issuance.mappers.OID4VCMapper;
 import org.keycloak.protocol.oid4vc.issuance.mappers.OID4VCSubjectIdMapper;
@@ -36,6 +38,7 @@ import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
+import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -130,6 +133,24 @@ public abstract class PresentationDuringIssuanceBaseTest extends OID4VPBaseUserA
         }
         var client = realm.clients().get(clients.getFirst().getId());
         client.addOptionalClientScope(scopeId);
+    }
+
+    /**
+     * Removes the credential configuration client scope, first detaching it from the test client's
+     * optional scopes so the deletion is clean. No-op when the scope does not exist.
+     */
+    protected static void removeCredentialScope(RealmResource realm, String configurationId) {
+        realm.clientScopes().findAll().stream()
+                .filter(candidate -> configurationId.equals(candidate.getName()))
+                .map(ClientScopeRepresentation::getId)
+                .findFirst()
+                .ifPresent(scopeId -> {
+                    var clients = realm.clients().findByClientId(TEST_CLIENT_ID);
+                    if (!clients.isEmpty()) {
+                        realm.clients().get(clients.getFirst().getId()).removeOptionalClientScope(scopeId);
+                    }
+                    realm.clientScopes().get(scopeId).remove();
+                });
     }
 
     private static void ensureCredentialClaimMappers(RealmResource realm, String scopeId) {
@@ -274,5 +295,57 @@ public abstract class PresentationDuringIssuanceBaseTest extends OID4VPBaseUserA
 
     protected JsonNode parseJsonResponse(HttpResponse response) throws IOException {
         return JsonSerialization.mapper.readTree(EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Runs {@code action} with the given realm attributes set, restoring each previous value
+     * (or removing the attribute if it was absent) afterwards.
+     */
+    protected void withRealmAttributes(Map<String, String> attributes, ThrowingRunnable action) throws Exception {
+        RealmResource realm = getActiveTestRealmResource();
+        RealmRepresentation rep = realm.toRepresentation();
+        Map<String, String> current = new HashMap<>(rep.getAttributes() == null ? Map.of() : rep.getAttributes());
+
+        Map<String, String> originals = new HashMap<>();
+        for (Map.Entry<String, String> entry : attributes.entrySet()) {
+            originals.put(entry.getKey(), current.get(entry.getKey()));
+            current.put(entry.getKey(), entry.getValue());
+        }
+        rep.setAttributes(current);
+        realm.update(rep);
+
+        try {
+            action.run();
+        } finally {
+            RealmRepresentation fresh = realm.toRepresentation();
+            Map<String, String> attrs = new HashMap<>(fresh.getAttributes() == null ? Map.of() : fresh.getAttributes());
+            for (Map.Entry<String, String> entry : originals.entrySet()) {
+                if (entry.getValue() == null) {
+                    attrs.remove(entry.getKey());
+                } else {
+                    attrs.put(entry.getKey(), entry.getValue());
+                }
+            }
+            fresh.setAttributes(attrs);
+            realm.update(fresh);
+        }
+    }
+
+    protected String extractCredentialIdentifier(String accessToken) throws Exception {
+        JsonNode payload = new JWSInput(accessToken).readJsonContent(JsonNode.class);
+        String identifier = payload.path(OAuth2Constants.AUTHORIZATION_DETAILS)
+                .path(0)
+                .path(OID4VCConstants.CREDENTIAL_IDENTIFIERS)
+                .path(0)
+                .asText(null);
+        if (identifier == null) {
+            throw new IllegalStateException("Access token advertises no credential identifier");
+        }
+        return identifier;
+    }
+
+    @FunctionalInterface
+    protected interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }

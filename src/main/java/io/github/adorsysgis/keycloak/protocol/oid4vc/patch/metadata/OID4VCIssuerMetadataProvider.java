@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -25,6 +26,7 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     private static final Logger logger = Logger.getLogger(OID4VCIssuerMetadataProvider.class);
 
     public static final String ATTR_DISPLAY = "oid4vci.display";
+    public static final String ATTR_OMIT_ENCRYPTION_METADATA = "oid4vci.omit_encryption_metadata";
     public static final String ATTR_PRESENTATION_DURING_ISSUANCE = "oid4vci.presentation_during_issuance";
 
     private final RealmModel realm;
@@ -48,11 +50,33 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         // Add root display metadata
         metadata.setDisplay(parseDisplay());
 
-        // Always omit encryption parameters from metadata
-        metadata.setCredentialResponseEncryption(null);
-        metadata.setCredentialRequestEncryption(null);
+        // Omit encryption parameters from metadata when the realm attribute is enabled (default off)
+        if (isOmitEncryptionEnabled()) {
+            metadata.setCredentialResponseEncryption(null);
+            metadata.setCredentialRequestEncryption(null);
+        }
+
+        // The spec forbids empty arrays: an empty zip_values_supported must be omitted from
+        // the request encryption metadata. Keycloak may expose an empty array due to this
+        // bug: https://github.com/keycloak/keycloak/issues/54115
+        if (metadata.getCredentialRequestEncryption() != null) {
+            pruneEmptyValues(
+                    metadata.getCredentialRequestEncryption().getZipValuesSupported(),
+                    metadata.getCredentialRequestEncryption()::setZipValuesSupported);
+        }
+
+        // Same for the response encryption metadata: omit an empty zip_values_supported array.
+        if (metadata.getCredentialResponseEncryption() != null) {
+            pruneEmptyValues(
+                    metadata.getCredentialResponseEncryption().getZipValuesSupported(),
+                    metadata.getCredentialResponseEncryption()::setZipValuesSupported);
+        }
 
         return metadata;
+    }
+
+    private boolean isOmitEncryptionEnabled() {
+        return Boolean.parseBoolean(realm.getAttribute(ATTR_OMIT_ENCRYPTION_METADATA));
     }
 
     private boolean isPresentationDuringIssuanceEnabled() {
@@ -63,6 +87,15 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
         String baseRealmUrl = Urls.realmIssuer(
                 keycloakSession.getContext().getUri(UrlType.FRONTEND).getBaseUri(), realm.getName());
         return baseRealmUrl + "/" + AuthorizationChallengeEndpointFactory.PROVIDER_ID;
+    }
+
+    /**
+     * Helper to nullify empty arrays (often not permitted by the spec).
+     */
+    static <T> void pruneEmptyValues(List<T> values, Consumer<List<T>> setter) {
+        if (values != null && values.isEmpty()) {
+            setter.accept(null);
+        }
     }
 
     private List<DisplayObject> parseDisplay() {

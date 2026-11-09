@@ -1,15 +1,25 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.CUSTOM_URL_SCHEME_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.PROFILES_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.REGISTRATION_CERTIFICATE_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.TRANSACTION_DATA_CONFIG;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import java.util.HashMap;
 import java.util.List;
@@ -17,8 +27,55 @@ import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.IdentityProviderStorageProvider;
+import org.keycloak.models.KeycloakContext;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 
 public class OID4VPProfileConfigTest {
+
+    @Test
+    void shouldValidateAndDeduplicateStatusListTrustMaterialProviderAliases() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, " eudi-pid, default-trust, eudi-pid "));
+
+        assertEquals(
+                "eudi-pid,default-trust",
+                new VerifierConfig(mockSession("normalized-aliases", "eudi-pid", "default-trust"), config)
+                        .getStatusListTrustMaterialProviderAliases());
+    }
+
+    @Test
+    void shouldRejectEmptyStatusListTrustMaterialProviderAlias() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,,default-trust"));
+
+        assertThrows(IllegalStateException.class, () -> new VerifierConfig(mockSession("empty-aliases"), config));
+    }
+
+    @Test
+    void shouldAcceptConfiguredStatusListTrustMaterialProviderAliases() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "eudi-pid,default-trust"));
+        KeycloakSession session = mockSession("configured-aliases", "eudi-pid", "default-trust");
+
+        assertDoesNotThrow(() -> VerifierConfig.resolve(session, config));
+    }
+
+    @Test
+    void shouldRejectUnknownStatusListTrustMaterialProviderAlias() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "unknown-provider"));
+        KeycloakSession session = mockSession("unknown-alias");
+
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> VerifierConfig.resolve(session, config));
+
+        assertEquals(
+                "Status List trust-material identity provider alias 'unknown-provider' is not configured",
+                error.getMessage());
+    }
 
     @Test
     void shouldParseConfiguredProfiles() {
@@ -27,7 +84,7 @@ public class OID4VPProfileConfigTest {
                 [
                   {
                     "id": "dual",
-                    "displayCta": { "en": "Sign in with two credentials" },
+                    "displayCta": { "en": "Identity Wallet (two credentials)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -57,7 +114,7 @@ public class OID4VPProfileConfigTest {
 
         AuthenticationProfile profile = profileConfig.getProfile("dual");
         assertEquals("dual", profile.getId());
-        assertEquals("Sign in with two credentials", profile.getDisplayCta(Locale.ENGLISH));
+        assertEquals("Identity Wallet (two credentials)", profile.getDisplayCta(Locale.ENGLISH));
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
@@ -292,7 +349,60 @@ public class OID4VPProfileConfigTest {
         AuthenticatorConfigModel config = new AuthenticatorConfigModel();
         config.setConfig(configMap);
 
-        assertDoesNotThrow(() -> new VerifierConfig(null, config));
+        assertDoesNotThrow(() -> new VerifierConfig(mockSession("transaction-data"), config));
+    }
+
+    @Test
+    void shouldAcceptTextConfigurationValuesWithSurroundingWhitespace() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(PROFILES_CONFIG, "  " + """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct"], "claims": ["sub"] }
+                    ]
+                  }
+                ]
+                """ + "  ");
+        configMap.put(CREDENTIAL_TYPES_CONFIG, "  legacy-vct  ");
+        configMap.put(CUSTOM_URL_SCHEME_CONFIG, "  openid4vp://  ");
+        configMap.put(ACCESS_CERTIFICATE_CONFIG, "  " + MdocBaseTest.getIssuerCertBase64() + "  ");
+        configMap.put(REGISTRATION_CERTIFICATE_CONFIG, "  registration-certificate  ");
+        configMap.put(TRANSACTION_DATA_CONFIG, "  transaction-data  ");
+        configMap.put(VERIFIER_INFO_CONFIG, "  [{\"format\":\"example\",\"data\":\"value\"}]  ");
+        configMap.put(STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG, "  trust-provider  ");
+
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(configMap);
+
+        VerifierConfig verifierConfig = new VerifierConfig(mockSession("text-config", "trust-provider"), config);
+        AuthenticationProfile profile =
+                verifierConfig.getProfileConfig().getProfiles().getFirst();
+
+        assertEquals("login", profile.getId());
+        assertEquals(List.of("legacy-vct"), new AuthRequirements(config).getCredentialTypes());
+        assertEquals("openid4vp://", verifierConfig.getAuthReqUrlScheme());
+        assertNotNull(verifierConfig.getAccessCertificate());
+        assertEquals("registration-certificate", verifierConfig.getRegistrationCertificate(profile));
+        assertEquals(List.of("transaction-data"), verifierConfig.getTransactionDataRaw());
+        assertEquals("[{\"format\":\"example\",\"data\":\"value\"}]", verifierConfig.getVerifierInfoConfig());
+        assertEquals("trust-provider", verifierConfig.getStatusListTrustMaterialProviderAliases());
+    }
+
+    private static KeycloakSession mockSession(String realmId, String... identityProviderAliases) {
+        KeycloakSession session = mock(KeycloakSession.class);
+        KeycloakContext context = mock(KeycloakContext.class);
+        RealmModel realm = mock(RealmModel.class);
+        IdentityProviderStorageProvider identityProviders = mock(IdentityProviderStorageProvider.class);
+        when(session.getContext()).thenReturn(context);
+        when(context.getRealm()).thenReturn(realm);
+        when(realm.getId()).thenReturn(realmId);
+        when(session.identityProviders()).thenReturn(identityProviders);
+        for (String alias : identityProviderAliases) {
+            when(identityProviders.getByAlias(alias)).thenReturn(mock(IdentityProviderModel.class));
+        }
+        return session;
     }
 
     @Test

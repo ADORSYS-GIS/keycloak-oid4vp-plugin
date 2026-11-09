@@ -18,9 +18,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.OAuthErrorException;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
+import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 
 /**
  * End-to-end tests for the encrypted variant of the OID4VCI §6 interactive authorization flow. On a
@@ -108,6 +110,26 @@ class InteractiveAuthorizationEncryptedResponseTest extends OID4VPBaseUserAuthEn
         assertEquals(HttpStatus.SC_OK, resume.getStatusLine().getStatusCode());
         assertNotNull(
                 parseHttpResponse(resume, AuthorizationChallengeResponse.class).getAuthorizationCode());
+    }
+
+    @Test
+    @DisplayName("an encrypted OpenID4VP error response preserves the wallet OAuth error")
+    void encryptedInteractiveErrorResponsePreservesWalletError() throws Exception {
+        Challenge challenge = initiateInteractiveChallengeVerbose();
+        RequestObject requestObject = new JWSInput(challenge.requestJwt()).readJsonContent(RequestObject.class);
+        String encryptedResponse = buildEncryptedOpenid4vpErrorResponseJwe(
+                requestObject, OAuthErrorException.ACCESS_DENIED, "User declined", requestObject.getState());
+
+        HttpResponse resume = postAuthorizationChallenge(List.of(
+                new BasicNameValuePair(AuthorizationChallengeEndpoint.AUTH_SESSION_PARAM, challenge.authSession()),
+                new BasicNameValuePair(
+                        AuthorizationChallengeEndpoint.OPENID4VP_RESPONSE_PARAM,
+                        wrapEncryptedOpenid4vpResponse(encryptedResponse))));
+
+        assertEquals(HttpStatus.SC_BAD_REQUEST, resume.getStatusLine().getStatusCode());
+        OAuth2ErrorRepresentation error = parseHttpResponse(resume, OAuth2ErrorRepresentation.class);
+        assertEquals(OAuthErrorException.ACCESS_DENIED, error.getError());
+        assertEquals(OAuthErrorException.ACCESS_DENIED + ": User declined", error.getErrorDescription());
     }
 
     private RequestObject initiateInteractiveChallenge() throws Exception {

@@ -27,6 +27,8 @@ public final class AuthenticationProfileSamples {
 
     public static final String ALTERNATIVE_PRIMARY_CREDENTIAL_ID = "national-id";
 
+    public static final String IDENTITY_LOGIN_PROFILE_ID = "identity-login";
+
     /**
      * Bundles a profile's JSON configuration with its identifier, so callers of
      * {@code withAuthenticationProfile} need only pass the sample object rather than repeating
@@ -36,13 +38,36 @@ public final class AuthenticationProfileSamples {
 
     private AuthenticationProfileSamples() {}
 
+    /** Single SD-JWT identity profile with a profile-specific verifier registration certificate. */
+    public static ProfileSample identityLoginWithRegistrationCertificate(String registrationCertificate) {
+        String json = """
+                [
+                  {
+                    "id": "{profileId}",
+                    "registrationCertificate": "{registrationCertificate}",
+                    "credentials": [
+                      {
+                        "id": "identity",
+                        "role": "primary",
+                        "credentialTypes": ["{defaultVct}"],
+                        "claims": ["sub"]
+                      }
+                    ]
+                  }
+                ]
+                """.replace("{profileId}", IDENTITY_LOGIN_PROFILE_ID)
+                .replace("{registrationCertificate}", registrationCertificate)
+                .replace("{defaultVct}", CREDENTIAL_TYPES_CONFIG_DEFAULT);
+        return new ProfileSample(json, IDENTITY_LOGIN_PROFILE_ID);
+    }
+
     /** Dual SD-JWT profile: primary + self-trusted supporting, bound on username. */
     public static ProfileSample dualProfile() {
         String json = """
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
@@ -54,7 +79,7 @@ public final class AuthenticationProfileSamples {
                   },
                   {
                     "id": "{dualProfileId}",
-                    "displayCta": { "en": "Sign in with two credentials" },
+                    "displayCta": { "en": "Identity Wallet (two credentials)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -91,7 +116,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with a self-issued mDoc" },
+                    "displayCta": { "en": "Identity Wallet (self-issued mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -168,7 +193,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -201,7 +226,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -249,7 +274,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{mdocPrimaryProfileId}",
-                    "displayCta": { "en": "Sign in with an mDoc wallet" },
+                    "displayCta": { "en": "Identity Wallet (mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -311,7 +336,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",
@@ -323,7 +348,7 @@ public final class AuthenticationProfileSamples {
                   },
                   {
                     "id": "{sdjwtMdocDualProfileId}",
-                    "displayCta": { "en": "Sign in with SD-JWT and mDoc" },
+                    "displayCta": { "en": "Identity Wallet (SD-JWT+mDoc)" },
                     "credentials": [
                       {
                         "id": "primary",
@@ -366,7 +391,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "{profileId}",
-                    "displayCta": { "en": "Sign in with an identity credential" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "{primaryCredentialId}",
@@ -406,7 +431,7 @@ public final class AuthenticationProfileSamples {
                 [
                   {
                     "id": "default",
-                    "displayCta": { "en": "Sign in with a wallet" },
+                    "displayCta": { "en": "Identity Wallet" },
                     "credentials": [
                       {
                         "id": "identity",

@@ -277,7 +277,7 @@ public class AuthorizationRequestService {
                 : TransactionDataSupport.prepareWireEntries(config.getTransactionDataRaw(), primaryCredentialIds);
 
         var verifierInfo = VerifierInfoSupport.build(
-                config.getRegistrationCertificate(), config.getVerifierInfoConfig(), primaryCredentialIds);
+                config.getRegistrationCertificate(profile), config.getVerifierInfoConfig(), primaryCredentialIds);
 
         // Resolve effective response mode
         boolean isInteractive = pdiSession != null && pdiSession.isInteractive();

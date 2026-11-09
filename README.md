@@ -12,9 +12,9 @@ See [LICENSE](./LICENSE) for details.
 This plugin has been tested with:
 
 | **Requirement** | **Version** |
-|-----------------|-------------|
+| --------------- | ----------- |
 | **Java**        | 21          |
-| **Keycloak**    | 26.7.3      |
+| **Keycloak**    | 26.8.0      |
 
 While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
 versions for best results.
@@ -23,17 +23,18 @@ Additionally, the following features of [OpenID4VP](https://openid.net/specs/ope
 are supported:
 
 - **Draft20-compatible request/response behavior** ✅
-    - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
-    - Response Mode: `direct_post` and `direct_post.jwt`
-    - Response Type: `vp_token`
-    - Query Languages: DIF Presentation Exchange and DCQL
-    - Signed request object (`request_uri` dereferencing)
-    - Request object `x5c` support for verifier access certificate
+
+  - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
+  - Response Mode: `direct_post` and `direct_post.jwt`
+  - Response Type: `vp_token`
+  - Query Languages: DIF Presentation Exchange and DCQL
+  - Signed request object (`request_uri` dereferencing)
+  - Request object `x5c` support for verifier access certificate
 
 - **1.0-Final alignment (ongoing)** ⚠️
-    - DCQL request/response model is supported
-    - `verifier_info` support for registration certificate injection
-    - Compatibility and interoperability hardening are still evolving
+  - DCQL request/response model is supported
+  - `verifier_info` support for registration certificate injection
+  - Compatibility and interoperability hardening are still evolving
 
 Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
 
@@ -68,6 +69,9 @@ behavior under heavy load. Run them with (as they are run in the CI/CD pipeline)
 
 For the full options on how to run Gatling simulations (e.g. running a single simulation
 non-interactively), refer to the [Gatling Maven plugin documentation](https://docs.gatling.io/integrations/build-tools/maven-plugin/#running-your-simulations).
+
+For end-to-end testing of the full credential lifecycle (issued credential → presentation
+login → revocation → rejected presentation), see the [`e2e/`](./e2e/README.md) suite.
 
 ## Deploying the Plugin
 
@@ -138,13 +142,14 @@ flags), see:
 
 ### OID4VP authenticator configuration
 
-Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`, `queryLanguage`,
+Deployment-facing `oid4vp-authenticator` options (for example `clientIdentifierPrefix`,
 `responseMode`, `customUrlScheme`, `accessCertificate`, and `registrationCertificate`) are documented in:
 [`docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc`](./docs/modules/ROOT/pages/oid4vp-deployment-configuration.adoc).
 
 ## Documentation site (Antora)
 
-The AsciiDoc content in `docs/` is published with [Antora](https://docs.antora.org/antora/latest/).
+The AsciiDoc content in `docs/` is built with [Antora](https://docs.antora.org/antora/latest/)
+and published at [adorsys-gis.github.io/keycloak-oid4vp-plugin](https://adorsys-gis.github.io/keycloak-oid4vp-plugin/).
 See `docs/README.md` for build and preview instructions.
 
 ## Releasing to Maven Central

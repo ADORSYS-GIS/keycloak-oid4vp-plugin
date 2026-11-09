@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import java.net.URI;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -108,8 +109,7 @@ public class EudiPidTrustListProvider {
         if (policy == null || !TrustPolicy.EUDI_PID_TRUST_LIST.equals(policy.getType())) {
             throw new EudiPidTrustException("Trust policy is not an EUDI PID trust-list policy");
         }
-        if (StringUtil.isBlank(policy.getTrustListUrl())
-                || !policy.getTrustListUrl().startsWith("https://")) {
+        if (!isAbsoluteHttpsUrl(policy.getTrustListUrl())) {
             throw new EudiPidTrustException("EUDI PID trust-list URL must be configured and use HTTPS");
         }
         if (StringUtil.isBlank(policy.getTrustListSigningCertificate())) {
@@ -119,6 +119,18 @@ public class EudiPidTrustListProvider {
 
     private String serviceType(TrustPolicy policy) {
         return StringUtil.isBlank(policy.getServiceType()) ? PID_ISSUANCE_SERVICE_TYPE : policy.getServiceType();
+    }
+
+    static boolean isAbsoluteHttpsUrl(String value) {
+        if (StringUtil.isBlank(value)) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(value);
+            return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private String realmId() {

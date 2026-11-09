@@ -16,15 +16,14 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Processing
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.ResponseToWallet;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
@@ -47,12 +46,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.protocol.oid4vc.model.ErrorType;
 import org.keycloak.protocol.oid4vc.model.IssuerState;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
-import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -170,14 +167,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         // A pre-authorized token for an ungated credential must remain usable without an OID4VP marker.
         JsonNode offer = createCredentialOffer(UNGATED_CREDENTIAL_CONFIG_ID, true);
         String accessToken = requestPreAuthorizedAccessToken(offer);
-        JsonNode tokenPayload = decodeJwtPayload(accessToken);
-        String credentialIdentifier = tokenPayload
-                .path(OAuth2Constants.AUTHORIZATION_DETAILS)
-                .path(0)
-                .path("credential_identifiers")
-                .path(0)
-                .asText(null);
-        assertNotNull(credentialIdentifier, "The access token must advertise a credential identifier");
+        String credentialIdentifier = extractCredentialIdentifier(accessToken);
 
         HttpResponse response = requestCredentialWithIdentifier(accessToken, credentialIdentifier);
         String body = EntityUtils.toString(response.getEntity());
@@ -229,19 +219,9 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     @Test
     @DisplayName("should not start nested presentation when presentation during issuance is disabled")
     void shouldNotStartNestedPresentationWhenRealmFeatureDisabled() throws Exception {
-        RealmResource realm = getActiveTestRealmResource();
-        RealmRepresentation rep = realm.toRepresentation();
-        Map<String, String> attributes =
-                new HashMap<>(Optional.ofNullable(rep.getAttributes()).orElseGet(Map::of));
-        String original = attributes.get(ATTR_PRESENTATION_DURING_ISSUANCE);
-
-        try {
-            attributes.put(ATTR_PRESENTATION_DURING_ISSUANCE, "false");
-            rep.setAttributes(attributes);
-            realm.update(rep);
-
-            // The gated credential binding remains in place, but the disabled realm feature must
-            // keep the login flow ordinary instead of starting a nested presentation.
+        // The gated credential binding remains in place, but the disabled realm feature must
+        // keep the login flow ordinary instead of starting a nested presentation.
+        withRealmAttributes(Map.of(ATTR_PRESENTATION_DURING_ISSUANCE, "false"), () -> {
             Connection.Response response =
                     requestAuthorizationPage(buildAuthorizationEndpoint(CREDENTIAL_IDENTITY_CONFIG_ID, null, null));
 
@@ -249,15 +229,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
             assertTrue(
                     response.parse().select("a[href^=openid4vp://]").isEmpty(),
                     "Nested presentation must not start while the realm feature is disabled");
-        } finally {
-            if (original == null) {
-                attributes.remove(ATTR_PRESENTATION_DURING_ISSUANCE);
-            } else {
-                attributes.put(ATTR_PRESENTATION_DURING_ISSUANCE, original);
-            }
-            rep.setAttributes(attributes);
-            realm.update(rep);
-        }
+        });
     }
 
     @Test
@@ -304,7 +276,7 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         String issuerState = createAuthorizationCodeCredentialOffer(SESSION_IDENTITY_CONFIG_ID);
         Connection.Response initial = startNestedAuthorization(buildAuthorizationEndpoint(
                 UNGATED_CREDENTIAL_CONFIG_ID, authorizationDetails(UNGATED_CREDENTIAL_CONFIG_ID), issuerState));
-        assertTrue(nestedLink(initial).startsWith(OPENID4VP_SCHEME));
+        assertNotNull(initial);
     }
 
     @Test
@@ -471,14 +443,9 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     }
 
     private Connection.Response startNestedAuthorization(String authEndpoint) throws Exception {
-        // The initial page must be the nested presentation prompt, not an error or redirect.
+        // The authorization response ends on the page that opens the wallet.
         Connection.Response initial = requestAuthorizationPage(authEndpoint);
-        assertEquals(
-                HttpStatus.SC_OK,
-                initial.statusCode(),
-                "Unexpected authorization response: " + initial.statusCode() + " "
-                        + initial.header("Location") + " "
-                        + initial.body().replaceAll("\\s+", " "));
+        assertTrue(nestedLink(initial).startsWith(OPENID4VP_SCHEME));
         return initial;
     }
 
@@ -512,16 +479,17 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
         throw new IllegalStateException("Too many redirects fetching authorization page: " + authEndpoint);
     }
 
-    private String nestedLink(Connection.Response response) throws Exception {
-        // Find the wallet deep link among the surrounding Keycloak theme links.
-        var document = response.parse();
-        String location = document.select("a").stream()
-                .map(element -> element.attr("href"))
-                .filter(href -> href.startsWith(OPENID4VP_SCHEME))
-                .findFirst()
-                .orElse(null);
-        assertNotNull(location, "Nested authorization must render a same-device OpenID4VP link");
-        return location;
+    private String nestedLink(Connection.Response response) {
+        assertEquals(
+                HttpStatus.SC_OK,
+                response.statusCode(),
+                "Nested authorization must return the wallet handoff page: " + response.statusCode());
+
+        Matcher matcher = Pattern.compile("location\\.replace\\(\"(openid4vp://[^\"]*)\"\\)")
+                .matcher(response.body());
+
+        assertTrue(matcher.find(), "Nested authorization must open the wallet from the handoff page");
+        return matcher.group(1);
     }
 
     private String completeNestedAuthorization(
@@ -564,25 +532,12 @@ class NestedPresentationDuringIssuanceTest extends PresentationDuringIssuanceBas
     private void assertCredentialIssued(String authorizationCode) throws Exception {
         // Exchange the parent code and verify that the credential endpoint returns the gated VC.
         String accessToken = requestAccessToken(authorizationCode, true);
-        JsonNode tokenPayload = decodeJwtPayload(accessToken);
-        String credentialIdentifier = tokenPayload
-                .path(OAuth2Constants.AUTHORIZATION_DETAILS)
-                .path(0)
-                .path("credential_identifiers")
-                .path(0)
-                .asText(null);
-        assertNotNull(credentialIdentifier, "The access token must advertise a credential identifier");
+        String credentialIdentifier = extractCredentialIdentifier(accessToken);
         HttpResponse response = requestCredentialWithIdentifier(accessToken, credentialIdentifier);
         String body = EntityUtils.toString(response.getEntity());
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode(), body);
         JsonNode credentialResponse = JsonSerialization.mapper.readTree(body);
         assertTrue(credentialResponse.has("credentials"), "A gated credential must be returned: " + body);
-    }
-
-    private JsonNode decodeJwtPayload(String jwt) throws Exception {
-        String encodedPayload = jwt.split("\\.")[1];
-        return JsonSerialization.mapper.readTree(
-                new String(Base64.getUrlDecoder().decode(encodedPayload), StandardCharsets.UTF_8));
     }
 
     private void assertErrorResponse(

@@ -26,10 +26,7 @@ public final class VerifierInfoSupport {
         List<VerifierInfo> entries = new ArrayList<>();
 
         if (!StringUtil.isBlank(registrationCertificate)) {
-            entries.add(new VerifierInfo()
-                    .setFormat(REGISTRATION_CERT_FORMAT)
-                    .setData(registrationCertificate)
-                    .setCredentialIds(dcqlCredentialIds));
+            entries.add(new VerifierInfo().setFormat(REGISTRATION_CERT_FORMAT).setData(registrationCertificate));
         }
 
         entries.addAll(parseConfigEntries(verifierInfoConfigJson));
@@ -48,8 +45,7 @@ public final class VerifierInfoSupport {
         }
 
         try {
-            List<VerifierInfo> parsed =
-                    JsonSerialization.readValue(verifierInfoConfigJson, new TypeReference<List<VerifierInfo>>() {});
+            List<VerifierInfo> parsed = JsonSerialization.readValue(verifierInfoConfigJson, new TypeReference<>() {});
             return parsed != null ? parsed : List.of();
         } catch (Exception e) {
             throw new IllegalArgumentException("verifierInfo must be a JSON array of verifier_info objects", e);

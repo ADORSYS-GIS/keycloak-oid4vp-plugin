@@ -12,6 +12,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.Authorizat
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.CorsService;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.JsonNodeUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.CredentialRequestResolver;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -364,20 +365,24 @@ public class AuthorizationChallengeEndpoint extends OID4VPUserAuthEndpointBase i
 
         // vp_token keeps its JSON shape so it can be parsed into the wire-level token map downstream.
         String vpToken = node.hasNonNull("vp_token") ? node.get("vp_token").toString() : null;
-        String encryptedResponse = textOrNull(node, "response");
-        String state = textOrNull(node, ResponseObject.STATE_KEY);
-        String error = textOrNull(node, OAuth2Constants.ERROR);
-        String errorDescription = textOrNull(node, OAuth2Constants.ERROR_DESCRIPTION);
+        String encryptedResponse;
+        String state;
+        String error;
+        String errorDescription;
+        try {
+            encryptedResponse = JsonNodeUtils.textOrNull(node, "response");
+            state = JsonNodeUtils.textOrNull(node, ResponseObject.STATE_KEY);
+            error = JsonNodeUtils.textOrNull(node, OAuth2Constants.ERROR);
+            errorDescription = JsonNodeUtils.textOrNull(node, OAuth2Constants.ERROR_DESCRIPTION);
+        } catch (IllegalArgumentException e) {
+            throw badRequest(e.getMessage());
+        }
 
         if (vpToken == null && encryptedResponse == null && error == null) {
             throw badRequest("openid4vp_response must contain at least vp_token, response, or error");
         }
 
         return new OpenID4VPResponse(vpToken, encryptedResponse, state, error, errorDescription);
-    }
-
-    private static String textOrNull(JsonNode node, String field) {
-        return node.hasNonNull(field) ? node.get(field).asText() : null;
     }
 
     private record OpenID4VPResponse(

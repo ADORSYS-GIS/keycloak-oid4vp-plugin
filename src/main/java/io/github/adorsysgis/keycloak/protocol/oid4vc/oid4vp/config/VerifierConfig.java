@@ -7,23 +7,28 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientIdentifierPrefix;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestUriMethod;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ResponseMode;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataSupport;
 import java.io.ByteArrayInputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.KeycloakSession;
 
 /**
  * Access configurations that modulate the verifier's behavior.
  *
- * <p>Use {@link #resolve(String, AuthenticatorConfigModel)} to avoid re-parsing and re-validating
- * the same configuration on every request. The constructor remains public for direct use
- * in tests.
+ * <p>Use {@link #resolve(KeycloakSession, AuthenticatorConfigModel)} to avoid re-parsing and
+ * re-validating the same configuration on every request. The constructor remains public for
+ * direct use in tests.
  *
  * <p>Read full descriptions of configurations in {@link OID4VPAuthenticatorFactory}.
  */
@@ -46,25 +51,26 @@ public class VerifierConfig {
     private final boolean requireCryptographicHolderBinding;
     private final List<String> transactionDataRaw;
     private final String verifierInfoConfig;
+    private final String statusListTrustMaterialProviderAliases;
 
     /**
      * Returns a cached {@code VerifierConfig} for the given authenticator config.
      * The cache is scoped by realm ID and bounded by {@link #MAX_CACHE_SIZE} entries.
      */
-    public static VerifierConfig resolve(String realmId, AuthenticatorConfigModel authConfig) {
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
-        CacheKey key = new CacheKey(realmId, Map.copyOf(config));
-        return CACHE.get(key, k -> new VerifierConfig(realmId, authConfig));
+    public static VerifierConfig resolve(KeycloakSession session, AuthenticatorConfigModel authConfig) {
+        String realmId = session.getContext().getRealm().getId();
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
+        CacheKey key = new CacheKey(realmId, config);
+        return CACHE.get(key, k -> new VerifierConfig(session, authConfig));
     }
 
     private record CacheKey(String realmId, Map<String, String> config) {}
 
-    public VerifierConfig(String realmId, AuthenticatorConfigModel authConfig) {
+    public VerifierConfig(KeycloakSession session, AuthenticatorConfigModel authConfig) {
         logger.debugf("Collecting verifier config properties");
 
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        String realmId = session.getContext().getRealm().getId();
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
 
         this.profileConfig = OID4VPProfileConfig.resolve(realmId, authConfig);
 
@@ -98,6 +104,9 @@ public class VerifierConfig {
                 requireCryptographicHolderBinding);
 
         this.verifierInfoConfig = config.get(OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG);
+        this.statusListTrustMaterialProviderAliases = parseTrustMaterialProviderAliases(
+                config.get(OID4VPAuthenticatorFactory.STATUS_LIST_TRUST_MATERIAL_IDPS_CONFIG));
+        validateConfiguredTrustMaterialProviderAliases(session);
     }
 
     private static ClientIdentifierPrefix validateClientIdentifierPrefix(String clientIdentifierPrefix) {
@@ -176,6 +185,35 @@ public class VerifierConfig {
         return transactionDataRaw;
     }
 
+    private static String parseTrustMaterialProviderAliases(String configuredAliases) {
+        if (StringUtils.isBlank(configuredAliases)) {
+            return null;
+        }
+
+        List<String> aliases = Arrays.stream(configuredAliases.split(",", -1))
+                .map(String::trim)
+                .toList();
+        if (aliases.stream().anyMatch(StringUtils::isBlank)) {
+            throw new IllegalStateException("Status List trust-material provider aliases must be non-empty");
+        }
+
+        return String.join(",", new LinkedHashSet<>(aliases));
+    }
+
+    private void validateConfiguredTrustMaterialProviderAliases(KeycloakSession session) {
+        if (statusListTrustMaterialProviderAliases == null) {
+            return;
+        }
+
+        for (String alias : statusListTrustMaterialProviderAliases.split(",")) {
+            IdentityProviderModel identityProvider = session.identityProviders().getByAlias(alias);
+            if (identityProvider == null) {
+                throw new IllegalStateException(String.format(
+                        "Status List trust-material identity provider alias '%s' is not configured", alias));
+            }
+        }
+    }
+
     public ClientIdentifierPrefix getClientIdentifierPrefix() {
         return clientIdentifierPrefix;
     }
@@ -196,7 +234,14 @@ public class VerifierConfig {
         return accessCertificate;
     }
 
-    public String getRegistrationCertificate() {
+    /**
+     * Resolves the registration certificate for a selected authentication profile, falling back to
+     * the shared authenticator setting when the profile does not provide one.
+     */
+    public String getRegistrationCertificate(AuthenticationProfile profile) {
+        if (profile != null && !StringUtils.isBlank(profile.getRegistrationCertificate())) {
+            return profile.getRegistrationCertificate();
+        }
         return registrationCertificate;
     }
 
@@ -214,5 +259,9 @@ public class VerifierConfig {
 
     public String getVerifierInfoConfig() {
         return verifierInfoConfig;
+    }
+
+    public String getStatusListTrustMaterialProviderAliases() {
+        return statusListTrustMaterialProviderAliases;
     }
 }

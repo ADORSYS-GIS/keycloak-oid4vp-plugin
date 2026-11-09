@@ -7,6 +7,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValue
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPImportConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.VerifierConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.Credential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dcql.DcqlQuery;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
@@ -141,6 +142,8 @@ public class OID4VPAuthenticator implements Authenticator {
         AuthorizationContext authContext = new AuthenticationSessionStore(authSession).getAuthorizationContext();
 
         String realmId = authFlowContext.getRealm().getId();
+        VerifierConfig verifierConfig =
+                VerifierConfig.resolve(authFlowContext.getSession(), authFlowContext.getAuthenticatorConfig());
         OID4VPProfileConfig profileConfig =
                 OID4VPProfileConfig.resolve(realmId, authFlowContext.getAuthenticatorConfig());
         AuthenticationProfile authProfile = profileConfig.getProfile(authContext.getProfileId());
@@ -156,6 +159,7 @@ public class OID4VPAuthenticator implements Authenticator {
                 authContext,
                 authProfile,
                 authRequirements,
+                verifierConfig.getStatusListTrustMaterialProviderAliases(),
                 presentedTokens,
                 credentialVerifiers);
     }
@@ -693,6 +697,7 @@ public class OID4VPAuthenticator implements Authenticator {
             AuthorizationContext authorizationContext,
             AuthenticationProfile authenticationProfile,
             AuthRequirements authRequirements,
+            String statusListTrustMaterialProviderAliases,
             Map<String, String> presentedTokens,
             Map<String, CredentialVerifier> credentialVerifiers) {
 

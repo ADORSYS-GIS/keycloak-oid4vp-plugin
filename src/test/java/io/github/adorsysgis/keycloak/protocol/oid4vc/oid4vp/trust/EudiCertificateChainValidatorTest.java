@@ -48,7 +48,10 @@ class EudiCertificateChainValidatorTest {
                 assertThrows(EudiPidTrustException.class, () -> new EudiCertificateChainValidator()
                         .validate(x5c(leafCertificate, caCertificate), List.of(caCertificate)));
 
-        assertEquals("Credential issuer leaf certificate missing digitalSignature usage", error.getMessage());
+        assertEquals("Credential issuer certificate chain validation failed", error.getMessage());
+        assertEquals(
+                "Leaf certificate missing Digital Signature KeyUsage",
+                error.getCause().getMessage());
     }
 
     @Test
@@ -60,7 +63,8 @@ class EudiCertificateChainValidatorTest {
                 assertThrows(EudiPidTrustException.class, () -> new EudiCertificateChainValidator()
                         .validate(x5c(caCertificate), List.of(caCertificate)));
 
-        assertEquals("Credential issuer leaf certificate must not be a CA", error.getMessage());
+        assertEquals("Credential issuer certificate chain validation failed", error.getMessage());
+        assertEquals("Leaf certificate must not be a CA", error.getCause().getMessage());
     }
 
     private List<String> x5c(X509Certificate... certificates) throws Exception {

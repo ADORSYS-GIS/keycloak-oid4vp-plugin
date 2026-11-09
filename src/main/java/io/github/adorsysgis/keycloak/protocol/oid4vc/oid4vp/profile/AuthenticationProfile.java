@@ -10,7 +10,7 @@ import org.keycloak.utils.StringUtil;
 public class AuthenticationProfile {
 
     public static final String DEFAULT_PROFILE_ID = "default";
-    public static final String DEFAULT_CTA = "Sign in with a wallet";
+    public static final String DEFAULT_CTA = "Identity Wallet";
 
     @JsonProperty("id")
     private String id;
@@ -23,6 +23,9 @@ public class AuthenticationProfile {
 
     @JsonProperty("enabledForClients")
     private List<String> enabledForClients;
+
+    @JsonProperty("registrationCertificate")
+    private String registrationCertificate;
 
     @JsonProperty("credentials")
     private List<CredentialRequirement> credentials;
@@ -63,6 +66,15 @@ public class AuthenticationProfile {
 
     public AuthenticationProfile setEnabledForClients(List<String> enabledForClients) {
         this.enabledForClients = enabledForClients;
+        return this;
+    }
+
+    public String getRegistrationCertificate() {
+        return registrationCertificate;
+    }
+
+    public AuthenticationProfile setRegistrationCertificate(String registrationCertificate) {
+        this.registrationCertificate = registrationCertificate;
         return this;
     }
 
