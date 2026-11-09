@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.io.IOException;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -97,8 +98,10 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     }
 
     private void addLeafCertificateHeader(JWSBuilder jwsBuilder, KeyWrapper keyWrapper) {
-        if (keyWrapper.getCertificate() != null) {
-            jwsBuilder.x5c(List.of(keyWrapper.getCertificate()));
+        List<X509Certificate> chain = keyWrapper.getCertificateChain();
+        X509Certificate leaf = (chain != null && !chain.isEmpty()) ? chain.get(0) : keyWrapper.getCertificate();
+        if (leaf != null) {
+            jwsBuilder.x5c(List.of(leaf));
         } else {
             logger.debugf("No leaf certificate available for x5c header in realm: %s", realm.getName());
         }

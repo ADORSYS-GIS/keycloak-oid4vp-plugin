@@ -1,30 +1,40 @@
-# Test signing keystore for OID4VCI (Keycloak 26.8+)
+# Test signing keystores for OID4VCI (Keycloak 26.8+)
 
-A ready-to-use RSA 2048 signing keystore for integration tests. The private key
-certificate is signed by a dedicated test CA (not self-signed), which Keycloak
-26.8 requires for the SD-JWT `x5c` header (HAIP-6.1.1). The private key is the
-same one historically configured directly in `test-realm.json` under the
-`custom-rsa` provider, so no test-private-key material changes are introduced.
+Ready-to-use RSA 2048 signing keystores for integration tests. Their leaf
+certificates are signed by dedicated test CAs (not self-signed), which Keycloak
+26.8 requires for the SD-JWT `x5c` header (HAIP-6.1.1). The `oid4vci-issuer`
+private key is the same one historically configured directly in
+`test-realm.json` under the `custom-rsa` provider, so no test-private-key
+material changes are introduced.
+
+Both keystores share the **same RSA 2048 leaf private key** and the **same root
+CA** (`Test Signing CA`). `keystore-chain-rsa.p12` reuses that same private key,
+wrapped in a three-level chain `[leaf, intermediate, root]`, so the two realms
+sign with the identical key while exercising different `x5c` chain shapes.
 
 ## Files
 
-| File               | Description                                                          |
-| ------------------ | -------------------------------------------------------------------- |
-| `keystore-rsa.p12` | PKCS#12 keystore: `oid4vci-issuer` key + chain `[leaf, test CA]`     |
+| File                     | Description                                                                                        |
+|--------------------------|----------------------------------------------------------------------------------------------------|
+| `keystore-rsa.p12`       | PKCS#12 keystore: `oid4vci-issuer` key + chain `[leaf, Test Signing CA]`                           |
+| `keystore-chain-rsa.p12` | PKCS#12 keystore: `test-metadata-leaf` key + chain `[leaf, Test Intermediate CA, Test Signing CA]` |
 
 ## Credentials
 
-- **Keystore password:** `password`
-- **Key alias:** `oid4vci-issuer`
-- **Key password:** `password`
+Shared by both keystores:
+
+- **Keystore/Key password:** `password`
 - **Keystore type:** `PKCS12`
 - **Algorithm:** `RS256` (RSA 2048)
+- **Key alias (`keystore-rsa.p12`):** `oid4vci-issuer`
+- **Key alias (`keystore-chain-rsa.p12`):** `test-metadata-leaf`
 
-## Test CA
+## Root CA (`Test Signing CA`)
 
-The leaf certificate is signed by a dedicated EC P-256 test CA named
-`Test Signing CA`. Its certificate and private key are reproduced below so the
-keystore can be regenerated deterministically.
+The self-signed EC P-256 root CA named `Test Signing CA` roots both keystores.
+It signs the `oid4vci-issuer` leaf directly in `keystore-rsa.p12`, and the `Test
+Intermediate CA` of `keystore-chain-rsa.p12`. Its certificate and private key
+are reproduced below so the keystores can be regenerated deterministically.
 
 ```text
 -----BEGIN CERTIFICATE-----
@@ -50,11 +60,28 @@ AwEHoUQDQgAE61gaU80eYFTzNCOtCbhS4E+3JnO/+/+pe+sUuZ03BgKPatT+hdaY
 
 > Test-only credentials. Never use them in production.
 
-## `keystore-chain-rsa.p12`
+## Intermediate CA (`Test Intermediate CA`)
 
-A PKCS#12 keystore for the `test-chain` realm whose signing key carries a three-level certificate
-chain `[leaf, intermediate CA, root CA]`.
+```text
+-----BEGIN CERTIFICATE-----
+MIIBoTCCAUegAwIBAgIUfA5pXRYhbKaU/sMugTgJYJQOjUIwCgYIKoZIzj0EAwIw
+GjEYMBYGA1UEAwwPVGVzdCBTaWduaW5nIENBMB4XDTI2MTEwOTA4MjEzMloXDTM2
+MTEwNjA4MjEzMlowHzEdMBsGA1UEAwwUVGVzdCBJbnRlcm1lZGlhdGUgQ0EwWTAT
+BgcqhkjOPQIBBggqhkjOPQMBBwNCAAT68cwVIIt8BETrme3x3BTMyij35i9iwwlm
+pvf0bQDSYaeQ3dlCwYfSmgqRZZBSiVOKYlQsYfZC65foEf8SLbB0o2YwZDASBgNV
+HRMBAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4EFgQUdP6gv8dz
+we0LeXx8FI0BH4ecDdwwHwYDVR0jBBgwFoAUkVC6931MsP/cHuaJHX5PS/clNLAw
+CgYIKoZIzj0EAwIDSAAwRQIhAJQb9DMKH5SoOcSCDNr/jzdz3N6jB4V3rSCO9P/N
+zcgOAiB3Emx+0L0qnldNCNv47xMAKB5BqzWdjDWRWTX5MSjIpw==
+-----END CERTIFICATE-----
+```
 
-- Alias: `test-metadata-leaf`
-- Keystore/Key password: `password`
-- Chain: `CN=test-metadata-leaf` ← `CN=Test Intermediate CA` ← `CN=Test Root CA` (self-signed)
+```text
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgpe8nxDw7vno0XqVL
+CBLEsDJ2A+GH7rTODwpOc7D9MXehRANCAAT68cwVIIt8BETrme3x3BTMyij35i9i
+wwlmpvf0bQDSYaeQ3dlCwYfSmgqRZZBSiVOKYlQsYfZC65foEf8SLbB0
+-----END PRIVATE KEY-----
+```
+
+> Test-only credentials. Never use them in production.
