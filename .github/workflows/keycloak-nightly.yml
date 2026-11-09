@@ -1,0 +1,93 @@
+name: Keycloak Nightly Compatibility
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keycloak-nightly-compatibility
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    name: Rebase and test against Keycloak nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Rebase nightly branch onto main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main:refs/remotes/origin/main
+          if git ls-remote --exit-code --heads origin nightly >/dev/null; then
+            git fetch origin nightly:refs/remotes/origin/nightly
+            git switch --create nightly --track origin/nightly
+            git rebase origin/main
+            git push --force-with-lease=refs/heads/nightly:$(git rev-parse origin/nightly) origin HEAD:refs/heads/nightly
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              exit "$status"
+            fi
+            git switch --create nightly origin/main
+            git push origin HEAD:refs/heads/nightly
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: "maven"
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
+
+      - name: Build plugin against Keycloak nightly
+        run: >-
+          ./mvnw clean package -DskipTests --batch-mode -U
+          -Dkeycloak.version=999.0.0-SNAPSHOT
+
+      - name: Run all tests against Keycloak nightly
+        run: >-
+          ./mvnw test --batch-mode -U
+          -Dkeycloak.version=999.0.0-SNAPSHOT
+          -Dtest.keycloak.image=quay.io/keycloak/keycloak:nightly
+
+      - name: Notify Discord on failure
+        if: failure()
+        run: |
+          curl -fsSL -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "Keycloak nightly compatibility failed",
+                "description": "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "color": 15158332,
+                "fields": [
+                  {
+                    "name": "Nightly branch",
+                    "value": "`nightly`",
+                    "inline": true
+                  },
+                  {
+                    "name": "Keycloak image",
+                    "value": "`quay.io/keycloak/keycloak:nightly`",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions"
+                }
+              }]
+            }'
