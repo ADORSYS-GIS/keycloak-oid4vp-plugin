@@ -890,6 +890,25 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldAcceptStatusListJwtTrustedByConfiguredEudiPidTrustList() throws Exception {
+        String trustProviderAlias = "status-list-eudi-trust";
+        RealmResource realm = getActiveTestRealmResource();
+        EudiPidTrustListTestServer trustListServer = KeycloakTestContainer.eudiPidTrustListServer();
+        trustListServer.serveSignedTrustList(statusListRootCertificate());
+
+        try {
+            createEudiTrustProvider(
+                    realm,
+                    trustProviderAlias,
+                    trustListServer.urlFromKeycloakContainer(),
+                    MdocBaseTest.getIssuerCertBase64());
+            assertStatusListAuthentication(trustProviderAlias, true);
+        } finally {
+            removeIdentityProviderIfPresent(realm, trustProviderAlias);
+        }
+    }
+
+    @Test
     public void shouldFailAuthentication_SdJwtSignedWithDisabledKey() throws Exception {
         String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(
                 CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER, true, true, SdJwtVPTestUtils.getDisabledKeycloakJwk());
@@ -1133,6 +1152,21 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         provider.setEnabled(true);
         provider.setConfig(new HashMap<>(
                 Map.of("useX509", "true", "trustedCertificates", PemUtils.encodeCertificate(rootCertificate))));
+
+        try (var response = realm.identityProviders().create(provider)) {
+            assertEquals(HttpStatus.SC_CREATED, response.getStatus());
+        }
+    }
+
+    private void createEudiTrustProvider(
+            RealmResource realm, String alias, String trustListUrl, String trustListSigningCertificate) {
+        IdentityProviderRepresentation provider = new IdentityProviderRepresentation();
+        provider.setAlias(alias);
+        provider.setProviderId("eudi-pid-trust-list");
+        provider.setEnabled(true);
+        provider.setConfig(new HashMap<>(Map.of(
+                "trustListUrl", trustListUrl,
+                "trustListSigningCertificate", trustListSigningCertificate)));
 
         try (var response = realm.identityProviders().create(provider)) {
             assertEquals(HttpStatus.SC_CREATED, response.getStatus());
