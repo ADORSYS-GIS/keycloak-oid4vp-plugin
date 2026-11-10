@@ -18,25 +18,15 @@ public class EudiPidTrustIdentityProviderFactory extends AbstractIdentityProvide
                     "Trust-list URL",
                     ProviderConfigProperty.STRING_TYPE,
                     null,
-                    "Absolute HTTPS URL of the signed ETSI PID Provider List of Trusted Entities."),
+                    "Absolute HTTPS URL of the signed ETSI PID Provider List of Trusted Entities.",
+                    true),
             property(
                     EudiPidTrustIdentityProviderConfig.TRUST_LIST_SIGNING_CERTIFICATE,
                     "Trust-list signing certificate",
                     ProviderConfigProperty.TEXT_TYPE,
                     null,
-                    "Base64 DER or PEM certificate trusted to sign the ETSI trust list."),
-            property(
-                    EudiPidTrustIdentityProviderConfig.SERVICE_TYPE,
-                    "Service type",
-                    ProviderConfigProperty.STRING_TYPE,
-                    EudiPidTrustListProvider.PID_ISSUANCE_SERVICE_TYPE,
-                    "ETSI service type whose X.509 service identities establish trust."),
-            property(
-                    EudiPidTrustIdentityProviderConfig.ISSUER,
-                    "PID Provider identifier",
-                    ProviderConfigProperty.STRING_TYPE,
-                    null,
-                    "Optional official PID Provider registration identifier. When set, only that provider's service certificates establish trust."));
+                    "Base64 DER or PEM certificate trusted to sign the ETSI trust list.",
+                    true));
 
     @Override
     public String getName() {
@@ -74,13 +64,14 @@ public class EudiPidTrustIdentityProviderFactory extends AbstractIdentityProvide
     }
 
     private static ProviderConfigProperty property(
-            String name, String label, String type, Object defaultValue, String helpText) {
+            String name, String label, String type, Object defaultValue, String helpText, boolean required) {
         ProviderConfigProperty property = new ProviderConfigProperty();
         property.setName(name);
         property.setLabel(label);
         property.setType(type);
         property.setDefaultValue(defaultValue);
         property.setHelpText(helpText);
+        property.setRequired(required);
         return property;
     }
 }
