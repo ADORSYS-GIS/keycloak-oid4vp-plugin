@@ -1,10 +1,10 @@
 [[oid4vp-deployment-configuration]]
-== OpenID4VP deployment configuration reference
+= OpenID4VP deployment configuration reference
 
 The following `oid4vp-authenticator` settings control how the verifier builds
 OpenID4VP authorization requests and validates responses.
 
-=== Core settings
+== Core settings
 
 [cols="1,1,2"]
 |===
@@ -45,7 +45,7 @@ When set to `post`, the wallet sends an HTTP POST to the request URI with `walle
 |Opaque registration certificate value exposed via `verifier_info`.
 |===
 
-=== Supported credential formats
+== Supported credential formats
 
 The plugin supports two credential formats:
 
@@ -55,7 +55,7 @@ The plugin supports two credential formats:
 Both formats can be used individually or combined in a single authentication profile.
 For mDoc credentials, claims must be specified using the `namespace/elementIdentifier` notation (for example `eu.europa.ec.eudi.pid.1/given_name`).
 
-=== Authentication profile settings
+== Authentication profile settings
 
 [cols="1,1,2"]
 |===
@@ -74,12 +74,12 @@ Only applies when no authentication profile is configured.
 Interpreted per credential format (for example `vct` for SD-JWT VC, `docType` for mDoc).
 |===
 
-=== Authentication profiles
+== Authentication profiles
 
 Authentication profiles define which credentials are requested during the OpenID4VP flow and how they are verified.
 Each profile specifies one or more credential requirements and how they relate to each other.
 
-==== Profile structure
+=== Profile structure
 
 [source,json]
 ----
@@ -122,7 +122,7 @@ Each profile specifies one or more credential requirements and how they relate t
 |Optional array of credential group objects for alternative credential selection.
 |===
 
-==== Credential requirements
+=== Credential requirements
 
 Each credential requirement object defines a single credential to be requested:
 
@@ -184,7 +184,7 @@ A profile must have exactly one primary credential, except when `credentialGroup
 The primary credential must request the configured `subjectClaim`—`sub` by default (unless `identitySource` is `session`).
 ====
 
-==== Trust policies
+=== Trust policies
 
 Trust policies define how the issuer of a credential is verified.
 
@@ -223,7 +223,7 @@ Validates the credential issuer against a EUDI trust list. The `trustListSigning
 
 ETSI TS 119 602 V1.1.1 Annex D, Table D.3 prohibits `ServiceStatus` in the PID Providers LoTE profile. Current approval is represented by membership in the list; a provider that loses its mandate must be removed. Generic `granted`/`withdrawn` service-status filtering therefore does not apply to this profile. Cached snapshots can delay observation of removal until refresh (at most 15 minutes, capped by `NextUpdate`).
 
-==== Binding rules
+=== Binding rules
 
 Binding rules ensure that supporting credentials are bound to the primary credential or the authenticated user.
 They are configured on supporting credentials only.
@@ -252,7 +252,7 @@ Verifies that a claim in the supporting credential matches a claim in the primar
 
 Verifies that a claim in the supporting credential matches a Keycloak user attribute. Built-in attribute mappings: `given_name`/`firstName`, `family_name`/`lastName`, `username`/`preferred_username`. Any other value is looked up as a custom user attribute.
 
-==== Credential groups
+=== Credential groups
 
 Credential groups allow the wallet to choose between alternative credential combinations.
 This is useful when multiple credential types can satisfy the same authentication requirement.
@@ -287,7 +287,7 @@ When credential groups are used, the profile may contain multiple primary creden
 Exactly one credential group must select a primary credential, and that group must be required.
 
 [[presentation-during-issuance]]
-==== Presentation during issuance
+=== Presentation during issuance
 
 Presentation during issuance allows Keycloak to request a credential presentation as part of an OID4VCI issuance flow.
 In this mode, the user identity comes from the issuance session rather than from claims in the presented credential.
@@ -323,7 +323,7 @@ Binding rules are mandatory for session-identity credentials so that the present
 
 Session-identity profiles are hidden from the login page and are only activated through internal OID4VCI flows.
 
-=== Request and response settings
+== Request and response settings
 
 [cols="1,1,2"]
 |===
@@ -341,7 +341,7 @@ Only `sha-256` is supported for `transaction_data_hashes`.
 |Optional JSON array of `verifier_info` objects (`{format, data, credential_ids?}`) merged with the registration certificate entry.
 |===
 
-=== Holder binding settings
+== Holder binding settings
 
 [cols="1,1,2"]
 |===
@@ -359,7 +359,7 @@ Used as a replay protection measure.
 Currently only applies to SD-JWT VC; mDoc does not specify a device-signed timestamp that would allow a holder-binding age check.
 |===
 
-=== Verification policy settings
+== Verification policy settings
 
 [cols="1,1,2"]
 |===
@@ -394,7 +394,7 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
 |Comma-separated aliases of Keycloak trust-material identity providers used to validate the `x5c` chain of fetched Status List JWTs. When aliases are configured, only those providers establish trust and validation fails if none accepts the chain. When empty, the global Keycloak `TruststoreProvider` is used for backward compatibility.
 |===
 
-==== Status List signer trust
+=== Status List signer trust
 
 For static X.509 CA roots, configure Keycloak's built-in *Default Trust* identity provider with X.509 trust enabled and reference its alias from `statusListTrustMaterialIdps`.
 The provider validates the complete Status List JWT `x5c` chain; the certificate carried in the JWT is not trusted merely because it is present.
@@ -428,7 +428,7 @@ Its settings are:
 Configured trust-material providers are authoritative. The global truststore is not used as a fallback when `statusListTrustMaterialIdps` is non-empty. Remove the setting to explicitly restore legacy global-truststore validation.
 ====
 
-=== Generic example (realm JSON import format)
+== Generic example (realm JSON import format)
 
 [source,json]
 ----
@@ -456,7 +456,7 @@ Configured trust-material providers are authoritative. The global truststore is 
 If you provision Keycloak using Terraform or similar tooling, map these settings to your own
 module/input variable names according to your deployment conventions.
 
-=== Configuring primary credential identity claims
+== Configuring primary credential identity claims
 
 When the primary credential is used to identify the Keycloak user, `subjectClaim` controls which claim is used for user resolution.
 
@@ -501,7 +501,7 @@ The `trust` configuration is omitted for brevity — refer to the trust configur
 
 For SD-JWT VC credentials, use standard claim names such as `sub` — no namespace is needed.
 
-=== SPRIN-D wallet sandbox profile (example)
+== SPRIN-D wallet sandbox profile (example)
 
 For the German wallet ecosystem profile (HAIP/OpenID4VP PID presentation), use the
 generic options above with profile-specific values and constraints from:
@@ -515,7 +515,7 @@ In that profile, it is typical to use:
 - request-object signature and certificate material (`accessCertificate`, `registrationCertificate`)
 - a custom wallet invocation URL scheme (`openid4vp://`)
 
-==== Access certificate guidance for sandbox onboarding
+=== Access certificate guidance for sandbox onboarding
 
 To register a verifier in the SPRIN-D sandbox, it is recommended to bind `accessCertificate`
 to an ES256 signing key in the realm and to a DNS name representing your deployment.
