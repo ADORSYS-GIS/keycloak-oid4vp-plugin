@@ -3,7 +3,7 @@ name: oid4vc-e2e
 
 services:
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.0}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.2}
     command: >-
       start-dev --import-realm
       --features=oid4vc-vci,oid4vc-vci-preauth-code,oid4vc-vci-rest-credential-offer
