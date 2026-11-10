@@ -19,13 +19,15 @@ Welcome to the documentation hub for the Keycloak OpenID4VP plugin. Use this pag
 
 Add new topics under `docs/modules/ROOT/pages/` and register them in `docs/modules/ROOT/nav.adoc`. Run these commands from the `docs/` folder:
 
-```
+[source,bash]
+----
 npm install --ignore-scripts
 npm run docs:build
-```
+----
 
 Preview locally:
 
-```
+[source,bash]
+----
 npm run docs:serve
-```
+----
