@@ -11,7 +11,8 @@ class EudiPidTrustIdentityProviderFactoryTest {
     @Test
     void shouldExposeOnlyRequiredTrustListSettingsInAdminConsole() {
         List<ProviderConfigProperty> properties = new EudiPidTrustIdentityProviderFactory().getConfigProperties();
-        List<String> propertyNames = properties.stream().map(ProviderConfigProperty::getName).toList();
+        List<String> propertyNames =
+                properties.stream().map(ProviderConfigProperty::getName).toList();
 
         assertEquals(
                 List.of(
