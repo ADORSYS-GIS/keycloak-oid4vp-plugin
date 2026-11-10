@@ -3,10 +3,13 @@ name: Keycloak Nightly Compatibility
 on:
   schedule:
     - cron: "0 2 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/keycloak-nightly.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: keycloak-nightly-compatibility
@@ -14,34 +17,12 @@ concurrency:
 
 jobs:
   nightly:
-    name: Rebase and test against Keycloak nightly
+    name: Test against Keycloak nightly
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout main
+      - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Rebase nightly branch onto main
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main:refs/remotes/origin/main
-          if git ls-remote --exit-code --heads origin nightly >/dev/null; then
-            git fetch origin nightly:refs/remotes/origin/nightly
-            git switch --create nightly --track origin/nightly
-            git rebase origin/main
-            git push --force-with-lease=refs/heads/nightly:$(git rev-parse origin/nightly) origin HEAD:refs/heads/nightly
-          else
-            status=$?
-            if [ "$status" -ne 2 ]; then
-              exit "$status"
-            fi
-            git switch --create nightly origin/main
-            git push origin HEAD:refs/heads/nightly
-          fi
 
       - name: Set up JDK 21
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -66,28 +47,7 @@ jobs:
 
       - name: Notify Discord on failure
         if: failure()
-        run: |
-          curl -fsSL -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "embeds": [{
-                "title": "Keycloak nightly compatibility failed",
-                "description": "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "color": 15158332,
-                "fields": [
-                  {
-                    "name": "Repository",
-                    "value": "`${{ github.repository }}`",
-                    "inline": true
-                  },
-                  {
-                    "name": "Branch",
-                    "value": "`${{ github.ref_name }}`",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions"
-                }
-              }]
-            }'
+        uses: ./.github/actions/discord-notification
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: Keycloak nightly compatibility failed
