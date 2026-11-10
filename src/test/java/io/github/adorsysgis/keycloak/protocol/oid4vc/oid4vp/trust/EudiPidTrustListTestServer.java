@@ -97,6 +97,15 @@ public final class EudiPidTrustListTestServer {
 
     /** Installs a fresh, valid LoTE containing two distinct provider/certificate associations. */
     public void serveSignedTrustList() {
+        serveSignedTrustList(MdocBaseTest.getIssuerCertRef1(), MdocBaseTest.getIssuerCertRef2());
+    }
+
+    /** Installs a fresh LoTE that trusts the supplied PID issuance service certificate. */
+    public void serveSignedTrustList(X509Certificate providerACertificate) {
+        serveSignedTrustList(providerACertificate, MdocBaseTest.getIssuerCertRef2());
+    }
+
+    private void serveSignedTrustList(X509Certificate providerACertificate, X509Certificate providerBCertificate) {
         try {
             X509Certificate signingCertificate = MdocBaseTest.getIssuerCertRef1();
             String payload = """
@@ -117,8 +126,8 @@ public final class EudiPidTrustListTestServer {
                             EudiPidTrustListProvider.PID_PROVIDERS_LOTE_TYPE,
                             Instant.now().minusSeconds(60),
                             Instant.now().plusSeconds(3600),
-                            provider(PROVIDER_A_ID, MdocBaseTest.getIssuerCertRef1()),
-                            provider(PROVIDER_B_ID, MdocBaseTest.getIssuerCertRef2()));
+                            provider(PROVIDER_A_ID, providerACertificate),
+                            provider(PROVIDER_B_ID, providerBCertificate));
 
             KeyWrapper signingKey = new KeyWrapper();
             signingKey.setPrivateKey(MdocBaseTest.getIssuerKeyRef1().toECPrivateKey());
