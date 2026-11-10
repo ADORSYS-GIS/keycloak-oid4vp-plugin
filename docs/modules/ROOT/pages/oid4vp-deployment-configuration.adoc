@@ -414,14 +414,9 @@ Its settings are:
 |_(required)_
 |Base64 DER or PEM certificate trusted to sign the LoTE.
 
-|`serviceType`
-|`http://uri.etsi.org/19602/SvcType/PID/Issuance`
-|Only certificates belonging to services of this type establish trust.
-
-|`issuer`
-|_(empty)_
-|Optional official PID Provider registration identifier. When set, only that provider's service certificates establish trust.
 |===
+
+The Admin Console exposes only the trust-list URL and its signing certificate. Existing realm configurations can continue to set `serviceType` or `issuer` directly; when omitted, the provider uses the PID Issuance service type and trusts matching certificates from the whole list.
 
 [IMPORTANT]
 ====

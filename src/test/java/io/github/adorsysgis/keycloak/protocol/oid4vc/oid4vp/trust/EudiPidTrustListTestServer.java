@@ -15,7 +15,10 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import org.keycloak.crypto.Algorithm;
@@ -43,7 +46,8 @@ public final class EudiPidTrustListTestServer {
 
     private final HttpsServer server;
     private final Path keycloakTruststore;
-    private volatile String trustListJwt;
+    private final AtomicLong trustListVersion = new AtomicLong();
+    private final Map<Long, String> trustLists = new ConcurrentHashMap<>();
 
     private EudiPidTrustListTestServer(HttpsServer server, Path keycloakTruststore) {
         this.server = server;
@@ -65,7 +69,8 @@ public final class EudiPidTrustListTestServer {
                 return thread;
             }));
             server.createContext(PATH, exchange -> {
-                String body = fixture.trustListJwt;
+                String body = fixture.trustLists.get(
+                        fixture.requestedVersion(exchange.getRequestURI().getRawQuery()));
                 if (body == null) {
                     exchange.sendResponseHeaders(503, -1);
                     exchange.close();
@@ -88,7 +93,8 @@ public final class EudiPidTrustListTestServer {
     }
 
     public String urlFromKeycloakContainer() {
-        return "https://host.testcontainers.internal:" + server.getAddress().getPort() + PATH;
+        return "https://host.testcontainers.internal:" + server.getAddress().getPort() + PATH + "?version="
+                + trustListVersion.get();
     }
 
     public Path keycloakTruststore() {
@@ -97,6 +103,15 @@ public final class EudiPidTrustListTestServer {
 
     /** Installs a fresh, valid LoTE containing two distinct provider/certificate associations. */
     public void serveSignedTrustList() {
+        serveSignedTrustList(MdocBaseTest.getIssuerCertRef1(), MdocBaseTest.getIssuerCertRef2());
+    }
+
+    /** Installs a fresh LoTE that trusts the supplied PID issuance service certificate. */
+    public void serveSignedTrustList(X509Certificate providerACertificate) {
+        serveSignedTrustList(providerACertificate, MdocBaseTest.getIssuerCertRef2());
+    }
+
+    private void serveSignedTrustList(X509Certificate providerACertificate, X509Certificate providerBCertificate) {
         try {
             X509Certificate signingCertificate = MdocBaseTest.getIssuerCertRef1();
             String payload = """
@@ -117,8 +132,8 @@ public final class EudiPidTrustListTestServer {
                             EudiPidTrustListProvider.PID_PROVIDERS_LOTE_TYPE,
                             Instant.now().minusSeconds(60),
                             Instant.now().plusSeconds(3600),
-                            provider(PROVIDER_A_ID, MdocBaseTest.getIssuerCertRef1()),
-                            provider(PROVIDER_B_ID, MdocBaseTest.getIssuerCertRef2()));
+                            provider(PROVIDER_A_ID, providerACertificate),
+                            provider(PROVIDER_B_ID, providerBCertificate));
 
             KeyWrapper signingKey = new KeyWrapper();
             signingKey.setPrivateKey(MdocBaseTest.getIssuerKeyRef1().toECPrivateKey());
@@ -127,14 +142,23 @@ public final class EudiPidTrustListTestServer {
             signingKey.setType(KeyType.EC);
             signingKey.setUse(KeyUse.SIG);
 
-            trustListJwt = new JWSBuilder()
+            String trustListJwt = new JWSBuilder()
                     .type("trustlist+jwt")
                     .x5c(List.of(signingCertificate))
                     .content(payload.getBytes(StandardCharsets.UTF_8))
                     .sign(new ECDSASignatureSignerContext(signingKey));
+            long version = trustListVersion.incrementAndGet();
+            trustLists.put(version, trustListJwt);
         } catch (Exception e) {
             throw new IllegalStateException("Could not build signed EUDI PID trust list", e);
         }
+    }
+
+    private long requestedVersion(String query) {
+        if (query == null || !query.startsWith("version=")) {
+            return trustListVersion.get();
+        }
+        return Long.parseLong(query.substring("version=".length()));
     }
 
     private static String provider(String providerId, X509Certificate certificate) throws Exception {
