@@ -19,7 +19,7 @@ against real spun-up components.
 
 | Component               | Where it comes from                                                  |
 | ----------------------- | -------------------------------------------------------------------- |
-| Keycloak                | `quay.io/keycloak/keycloak:26.8.0` with both plugins mounted as JARs |
+| Keycloak                | `quay.io/keycloak/keycloak:26.8.2` with both plugins mounted as JARs |
 | Plugin: OpenID4VP login | latest release of this very repo                                     |
 | Plugin: token status    | latest release of `ADORSYS-GIS/token-status-link`                    |
 | Mock FE                 | latest `ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe`                 |

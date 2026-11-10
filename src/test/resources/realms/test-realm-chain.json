@@ -1,0 +1,57 @@
+{
+  "id": "test-chain",
+  "realm": "test-chain",
+  "enabled": true,
+  "sslRequired": "none",
+  "verifiableCredentialsEnabled": true,
+  "clients": [
+    {
+      "clientId": "test-app",
+      "enabled": true,
+      "secret": "password",
+      "redirectUris": [
+        "http://localhost:4200/*"
+      ],
+      "attributes": {
+        "oid4vci.enabled": "true"
+      }
+    }
+  ],
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "custom-rsa-chain",
+        "providerId": "java-keystore",
+        "config": {
+          "algorithm": [
+            "RS256"
+          ],
+          "active": [
+            "true"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "priority": [
+            "100"
+          ],
+          "keystore": [
+            "keystore-chain-rsa.p12"
+          ],
+          "keystorePassword": [
+            "password"
+          ],
+          "keystoreType": [
+            "PKCS12"
+          ],
+          "keyAlias": [
+            "test-metadata-leaf"
+          ],
+          "keyPassword": [
+            "password"
+          ]
+        }
+      }
+    ]
+  }
+}

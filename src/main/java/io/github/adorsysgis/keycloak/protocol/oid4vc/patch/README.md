@@ -35,6 +35,15 @@ When the realm attribute `oid4vci.presentation_during_issuance` is `true`, the p
 - the Credential Issuer Metadata, as required by the German EUDI Wallet ecosystem profile; and
 - the OAuth Authorization Server Metadata, as defined by OAuth 2.0 for First-Party Applications.
 
+### Advertise only the leaf certificate in signed Credential Issuer Metadata
+
+Upstream Keycloak advertises the whole certificate chain in the `x5c` header of the signed Credential
+Issuer Metadata, minus the trailing self-signed trust anchor. The German EUDI Wallet (Android) only
+tolerates the leaf certificate and rejects the signed metadata when an intermediate/issuing CA is
+appended. When the realm attribute `oid4vci.patch_metadata_x5c_to_leaf_cert_only` is `true`, the plugin
+signs the metadata with only the leaf certificate in the `x5c` header. The attribute defaults to `false`.
+This patch is to be removed once the wallet tolerates intermediate certificates.
+
 ### Patch Wallet Credential Requests
 
 Some wallet applications send the OID4VCI Credential Request with `credential_configuration_id`
