@@ -37,4 +37,4 @@ Pages must be enabled in the repository settings with source **GitHub Actions**
 - `antora.yml`: component metadata (name/title/version/nav).
 - `modules/ROOT/pages/`: pages.
 - `modules/ROOT/nav.adoc`: navigation.
-- `ui/ui-bundle.zip`: bundled Antora UI (kept locally for reliable builds).
+- `ui/`: supplemental UI files that augment the remote UI bundle (e.g., `css/custom.css` hides the default UI's placeholder nav items).

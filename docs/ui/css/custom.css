@@ -1,0 +1,7 @@
+#topbar-nav, .navbar-burger, .panels .nav-panel-explore {
+  display: none;
+}
+
+.nav-panel-menu {
+  flex: 1 1 auto;
+}
