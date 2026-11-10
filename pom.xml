@@ -42,6 +42,7 @@
     <properties>
         <revision>999.0.0-SNAPSHOT</revision>
         <keycloak.version>26.8.2</keycloak.version>
+        <test.keycloak.image>quay.io/keycloak/keycloak:${keycloak.version}</test.keycloak.image>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <gatling.virtualUsers>30</gatling.virtualUsers>
@@ -203,6 +204,10 @@
                 <version>3.5.4</version>
                 <configuration>
                     <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <systemPropertyVariables>
+                        <keycloak.version>${keycloak.version}</keycloak.version>
+                        <test.keycloak.image>${test.keycloak.image}</test.keycloak.image>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>

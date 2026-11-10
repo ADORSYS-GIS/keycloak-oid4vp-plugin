@@ -83,28 +83,7 @@ jobs:
 
       - name: Notify Discord on failure
         if: failure()
-        run: |
-          curl -fsSL -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "embeds": [{
-                "title": "E2E testing failed",
-                "description": "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "color": 15158332,
-                "fields": [
-                  {
-                    "name": "Repository",
-                    "value": "`${{ github.repository }}`",
-                    "inline": true
-                  },
-                  {
-                    "name": "Branch",
-                    "value": "`${{ github.ref_name }}`",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions"
-                }
-              }]
-            }'
+        uses: ./.github/actions/discord-notification
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: E2E testing failed
