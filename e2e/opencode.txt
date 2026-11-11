@@ -1,0 +1,31 @@
+Done. The e2e suite now runs fully self-contained, and `pnpm play` passes from a clean state.
+
+## What the issue asked and what I did
+
+Added a local status list server to `e2e/docker-compose.yml` (plus Postgres, since the published image is a postgres build), pointed the realm at it, and recorded how. The journey — issuance, revocation, and rejection of the revoked credential — passes with **zero** references to `statuslist.eudi-adorsys.com` (checked the rendered realm, stack logs, and the server's own database).
+
+## Issues I hit (and how I resolved them)
+
+1. **The published image is not the new code.** `latest-fscert` is v1.2.0 (Sept 14). It has **one listener on :8000**, serves `POST /api/v1/credentials`, has **no** `public_base_url` and **no** `PROVISIONING_STRATEGY` setting. My earlier draft targeted `main` and would have failed. I verified the image's revision digest against upstream and rewrote the config for v1.2.0.
+
+2. **The base URL is derived from `APP_SERVER__DOMAIN`, including the port.** It's signed as `https://{domain}/api/v1/status-lists/{id}`, so it has to be `status-list:8443` (the proxy), not `status-list`.
+
+3. **HTTPS is genuinely required by both plugins.** The server is plain HTTP only, so I put a small `nginx` in front to terminate TLS. Its cert is issued for `status-list`, so both plugins' hostname verification succeeds (the token-status plugin only skips hostname checks with trust-all, which I avoided).
+
+4. **Trust material:** the CA is mounted into Keycloak as a PEM (`status-list-tls-ca-cert-path` for the token-status plugin) and as a JKS truststore (`KC_SPI_TRUSTSTORE_FILE_*` for the OID4VP plugin's x5c validation). These serve different purposes — both were needed.
+
+5. **Smaller traps:** the server binds `localhost` by default (unreachable from other containers) → `0.0.0.0`; nginx binds IPv4 only while `localhost` resolves to `::1` first → healthcheck uses `127.0.0.1`; the server image is distroless, so its readiness is asserted via the proxy instead.
+
+## Files
+
+- `e2e/docker-compose.yml` — three new services, Keycloak trusts the proxy's CA and waits for it.
+- `e2e/assets/crypto/status-list/` — committed self-signed certs, `chain.crt`, `nginx.conf`, `truststore.jks`; `ca.key` is gitignored.
+- `e2e/scripts/gen-status-list-certs.sh` — regenerates that material (tested).
+- `e2e/assets/realm/config.ts`, `index.ts`, `e2e/lib/config.ts`, `.env.example`, `README.md`.
+- CI needs no change; `pnpm check` (prettier + tsc) passes.
+
+## Caveats worth flagging
+
+- **Issue #251 is still marked blocked** by token-status-link#173 ("breaking changes in the next release"). I tested against the current releases (v0.5.2 / v1.2.0); if that upstream release changes routes, the nginx config and env keys will need revisiting.
+- The test asserts the credential's status-list URI starts with `https://status-list:8443` — a name that only resolves inside the compose network, so `pnpm play` now requires the stack to be running (it always was).
+- I did not commit or open a PR; changes are on `251-spin-up-status-list-server`, and your branch has diverged from `origin` (5 local vs 6 remote commits) — worth reconciling before pushing.

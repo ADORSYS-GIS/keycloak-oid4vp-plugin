@@ -7,6 +7,7 @@ import {
   MOCK_FE_HTTP_PORT,
   REALM_NAME,
   STATUS_LIST_SERVER_URL,
+  STATUS_LIST_TLS_CA_CERT_PATH,
   STATUS_LIST_TOKEN_ISSUER_PREFIX,
 } from "./config.ts";
 import { mapper } from "./mappers.ts";
@@ -26,6 +27,9 @@ const realm = {
     "status-list-enabled": "true",
     "status-list-server-url": STATUS_LIST_SERVER_URL,
     "status-list-token-issuer-prefix": STATUS_LIST_TOKEN_ISSUER_PREFIX,
+    // The local server's CA (mounted into Keycloak), so the token-status
+    // plugin's HTTPS client trusts the local TLS certificate.
+    "status-list-tls-ca-cert-path": STATUS_LIST_TLS_CA_CERT_PATH,
   },
 
   users: [

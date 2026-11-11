@@ -1,0 +1,3 @@
+# The CA private key only re-issues the leaf; it is regenerated on demand by
+# scripts/gen-status-list-certs.sh and never needed by the stack itself.
+ca.key

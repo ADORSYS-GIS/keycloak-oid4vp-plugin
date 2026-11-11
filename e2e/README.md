@@ -24,7 +24,16 @@ against real spun-up components.
 | Plugin: token status    | latest release of `ADORSYS-GIS/token-status-link`                    |
 | Mock FE                 | latest `ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe`                 |
 | Test wallet             | latest `ghcr.io/eudi-dev/eudi-dev` (headless, auto-accepting)        |
-| Status server           | public instance `https://statuslist.eudi-adorsys.com`                |
+| Status server           | `ghcr.io/adorsys/status-list-server:latest-fscert` + Postgres, local |
+| TLS proxy for it        | stock `nginx:1.27-alpine` (`assets/crypto/status-list/nginx.conf`)   |
+
+The status list server runs as part of the stack, so the journey never talks to a remote status-list
+service. Its published `latest-fscert` image serves plain HTTP only while the plugins require an
+HTTPS base URL, so a small nginx container terminates TLS in front of it (`https://status-list:8443`
+inside the compose network). The certificate chain is committed in `assets/crypto/status-list/`: its
+CA is mounted into Keycloak as a PEM trust for the token-status plugin, and bundled as a JKS
+truststore for the OpenID4VP plugin's x5c-chain validation. These are test-only, self-signed,
+short-lived materials — regenerate them rather than reuse them anywhere else.
 
 ## Running
 
@@ -65,6 +74,10 @@ There is little to configure: the container images, ports and the status-list se
 `.env` (copy `.env.example` if you want any non-default — the file itself explains everything). The
 realm rendered from `assets/realm/` is intentionally fixed so the tests, the import file name and
 the mounts always agree.
+
+The status-list server is part of the stack and reachable only from it (`https://status-list:8443`).
+The tests read the same URL through `STATUS_LIST_SERVER_URL`, so they compare the issued
+credential's status-list claim against the local instance, not a remote one.
 
 One thing worth knowing: the signing keystore in `assets/crypto/keystore.p12` uses the test-only
 password `password` for both entries (`oid4vci-ec-issuer` for ES256 key and `oid4vci-issuer` for
