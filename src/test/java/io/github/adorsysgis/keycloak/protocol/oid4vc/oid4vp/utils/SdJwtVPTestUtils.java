@@ -13,15 +13,22 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedToken
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.common.util.Time;
+import org.keycloak.crypto.Algorithm;
 import org.keycloak.crypto.AsymmetricSignatureSignerContext;
 import org.keycloak.crypto.ECDSASignatureSignerContext;
+import org.keycloak.crypto.KeyType;
+import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureSignerContext;
 import org.keycloak.jose.jwk.JWK;
@@ -135,6 +142,54 @@ public class SdJwtVPTestUtils {
                 .withIssuerSigningContext(signer)
                 .build()
                 .toSdJwtString();
+    }
+
+    /**
+     * Creates an externally issued PID-shaped SD-JWT with an x5c issuer certificate. The EUDI PID
+     * trust-list integration tests use this to exercise the complete external-user import path.
+     */
+    public String requestExternalSdJwtCredential(
+            String issuer,
+            String vct,
+            String subject,
+            String email,
+            String givenName,
+            String familyName,
+            PrivateKey issuerPrivateKey,
+            List<X509Certificate> issuerCertificateChain) {
+        X509Certificate issuerCertificate = issuerCertificateChain.getFirst();
+        ObjectNode claims = baseCredentialClaims(issuer, vct, false);
+        claims.put(JsonWebToken.SUBJECT, subject);
+        claims.put(IDToken.EMAIL, email);
+        claims.put(IDToken.GIVEN_NAME, givenName);
+        claims.put(IDToken.FAMILY_NAME, familyName);
+
+        KeyWrapper issuerKey = new KeyWrapper();
+        issuerKey.setPrivateKey(issuerPrivateKey);
+        issuerKey.setPublicKey(issuerCertificate.getPublicKey());
+        issuerKey.setAlgorithm(Algorithm.ES256);
+        issuerKey.setType(KeyType.EC);
+        issuerKey.setUse(KeyUse.SIG);
+
+        IssuerSignedJWT issuerSignedJwt = IssuerSignedJWT.builder()
+                .withClaims(claims)
+                .withX5c(issuerCertificateChain.stream()
+                        .map(SdJwtVPTestUtils::certificateBase64)
+                        .toList())
+                .build();
+        return SdJwt.builder()
+                .withIssuerSignedJwt(issuerSignedJwt)
+                .withIssuerSigningContext(new ECDSASignatureSignerContext(issuerKey))
+                .build()
+                .toSdJwtString();
+    }
+
+    private static String certificateBase64(X509Certificate certificate) {
+        try {
+            return Base64.getEncoder().encodeToString(certificate.getEncoded());
+        } catch (CertificateEncodingException e) {
+            throw new IllegalStateException("Could not encode external SD-JWT issuer certificate", e);
+        }
     }
 
     /**

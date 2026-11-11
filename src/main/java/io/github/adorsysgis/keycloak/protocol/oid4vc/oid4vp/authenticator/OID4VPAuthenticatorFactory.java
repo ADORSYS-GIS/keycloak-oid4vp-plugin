@@ -78,6 +78,12 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     public static final String ENFORCE_REVOCATION_STATUS_CONFIG = "enforceRevocationStatus";
     public static final boolean ENFORCE_REVOCATION_STATUS_CONFIG_DEFAULT = false;
 
+    public static final String IMPORT_UNKNOWN_USERS_CONFIG = "importUnknownUsers";
+    public static final boolean IMPORT_UNKNOWN_USERS_CONFIG_DEFAULT = false;
+
+    public static final String IMPORT_IDP_ALIAS_CONFIG = "importIdentityProviderAlias";
+    public static final String IMPORT_IDP_ALIAS_CONFIG_DEFAULT = "oid4vp-import";
+
     public static final String ALLOW_MISSING_STATUS_CLAIM_CONFIG = "allowMissingStatusClaim";
     public static final boolean ALLOW_MISSING_STATUS_CLAIM_CONFIG_DEFAULT = false;
 
@@ -236,6 +242,24 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
+        property.setName(IMPORT_UNKNOWN_USERS_CONFIG);
+        property.setLabel("Import unknown users");
+        property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
+        property.setDefaultValue(IMPORT_UNKNOWN_USERS_CONFIG_DEFAULT);
+        property.setHelpText(
+                "Allow creation of a Keycloak user for an unknown, fully verified external identity. Off by default.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
+        property.setName(IMPORT_IDP_ALIAS_CONFIG);
+        property.setLabel("User import identity provider alias");
+        property.setType(ProviderConfigProperty.STRING_TYPE);
+        property.setDefaultValue(IMPORT_IDP_ALIAS_CONFIG_DEFAULT);
+        property.setHelpText(
+                "Alias of the enabled OpenID4VP Plugin Import provider instance used for federated links and mapper synchronization. Create this provider in the realm.");
+        configProperties.add(property);
+
+        property = new ProviderConfigProperty();
         property.setName(ALLOW_MISSING_STATUS_CLAIM_CONFIG);
         property.setLabel("Allow credentials without status claims");
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
@@ -295,9 +319,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     }
 
     /**
-     * Returns the set of {@link CredentialVerifier} instances the authenticator should
-     * dispatch verification to. Subclasses can override this method to register additional
-     * handlers (e.g. for {@code mso_mdoc}) alongside the default SD-JWT handler.
+     * Returns the format-to-verifier map used by the authenticator. Subclasses can override this
+     * method to customize the supported credential formats.
      */
     protected Map<String, CredentialVerifier> defaultHandlers(KeycloakSession session) {
         StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);

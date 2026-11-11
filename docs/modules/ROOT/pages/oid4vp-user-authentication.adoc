@@ -160,6 +160,21 @@ When a primary credential is used to identify the Keycloak user, use `subjectCla
 
 For the full configuration reference — including the mDoc namespace/element format, defaults, and examples — see link:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference — Configuring primary credential identity claims].
 
+== Importing unknown external users
+
+User import is disabled by default. When enabled and the hidden `oid4vp-plugin-import` provider is
+configured, a verified external credential with no existing federated link can create a user on
+first login. The plugin validates mapped claims against the realm profile before creating and
+linking the account. Credential-to-user bindings pass before an existing user's mapped attributes
+are synchronized.
+
+Current-realm credentials resolve only to an existing Keycloak user ID; they never create a user.
+Username or email collisions reject an external import instead of linking accounts. This flow has
+no interactive profile review or account-linking screen.
+
+For provider, mapper, trust, and sync-mode setup, see
+xref:oid4vp-deployment-configuration.adoc[Importing users previously unknown to Keycloak].
+
 == Technical Configuration (Performance & Security)
 
 For details on certificate caching, lifespan, and other performance/security configurations, see xref:non-functional-requirements.adoc[Non-Functional Requirements & Technical Configuration].
