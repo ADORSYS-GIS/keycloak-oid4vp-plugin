@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProvider;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPImportConfig;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import java.util.ArrayList;
@@ -309,35 +308,29 @@ public class OID4VPUserProvisioner {
         brokerContext.setBrokerUserId(idpConfig.getAlias() + "." + externalId);
         brokerContext.getContextData().put(OID4VPImportIdentityProvider.CREDENTIAL_CLAIMS, request.primaryClaims());
 
-        stageSupportedMappers(request.session(), request.realm(), mappers, brokerContext);
+        preprocessMappers(request.session(), request.realm(), mappers, brokerContext);
         return brokerContext;
     }
 
     /**
-     * Runs the supported, context-only mapper to stage values on the context. Third-party mappers
-     * stay out of staging; their import and update hooks still run once a user exists.
+     * Runs every configured mapper's preprocessing hook, matching Keycloak's broker lifecycle so
+     * mapper-provided usernames, emails, and attributes are present before binding and profile checks.
      */
-    private void stageSupportedMappers(
+    private void preprocessMappers(
             KeycloakSession session,
             RealmModel realm,
             List<IdentityProviderMapperModel> mappers,
             BrokeredIdentityContext brokerContext) {
         for (IdentityProviderMapperModel mapperModel : mappers) {
             IdentityProviderMapper mapper = mapper(session, mapperModel);
-            if (mapper instanceof OID4VPUserAttributeMapper supported) {
-                try {
-                    supported.preprocessFederatedIdentity(session, realm, mapperModel, brokerContext);
-                } catch (RuntimeException e) {
-                    logger.warnf(
-                            e,
-                            "User import mapper '%s' failed during staging; import cannot continue",
-                            mapperModel.getName());
-                    throw e;
-                }
-            } else {
-                logger.debugf(
-                        "Skipping mapper '%s' during import staging; only the supported attribute mapper stages values",
+            try {
+                mapper.preprocessFederatedIdentity(session, realm, mapperModel, brokerContext);
+            } catch (RuntimeException e) {
+                logger.warnf(
+                        e,
+                        "User import mapper '%s' failed during preprocessing; import cannot continue",
                         mapperModel.getName());
+                throw e;
             }
         }
     }

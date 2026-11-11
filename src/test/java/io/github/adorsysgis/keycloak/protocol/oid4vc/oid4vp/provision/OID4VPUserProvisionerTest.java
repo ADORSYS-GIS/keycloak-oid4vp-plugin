@@ -199,6 +199,46 @@ class OID4VPUserProvisionerTest {
     }
 
     @Test
+    void preprocessesNonPluginMapperBeforeProfileValidation() throws Exception {
+        IdentityProviderMapperModel mapperModel = mapperModel("test-context-mapper");
+        when(identityProviders.getMappersByAliasStream(ALIAS)).thenReturn(Stream.of(mapperModel));
+        KeycloakSessionFactory sessionFactory = newSessionFactory();
+        when(session.getKeycloakSessionFactory()).thenReturn(sessionFactory);
+        IdentityProviderMapper mapper = mock(IdentityProviderMapper.class);
+        when(sessionFactory.getProviderFactory(IdentityProviderMapper.class, "test-context-mapper"))
+                .thenReturn(mapper);
+        doAnswer(invocation -> {
+                    BrokeredIdentityContext brokerContext = invocation.getArgument(3);
+                    brokerContext.setUserAttribute("department", List.of("engineering"));
+                    return null;
+                })
+                .when(mapper)
+                .preprocessFederatedIdentity(
+                        any(KeycloakSession.class),
+                        any(RealmModel.class),
+                        any(IdentityProviderMapperModel.class),
+                        any(BrokeredIdentityContext.class));
+
+        UserModel created = mock(UserModel.class);
+        when(users.addUser(realm, "sub-1")).thenReturn(created);
+
+        provisioner.provisionNewUser(request(JsonSerialization.mapper.createObjectNode()), EXTERNAL_ID);
+
+        verify(mapper)
+                .preprocessFederatedIdentity(
+                        eq(session),
+                        eq(realm),
+                        any(IdentityProviderMapperModel.class),
+                        any(BrokeredIdentityContext.class));
+        verify(profiles)
+                .create(
+                        eq(UserProfileContext.REGISTRATION),
+                        org.mockito.ArgumentMatchers.<Map<String, ?>>argThat(
+                                attributes -> List.of("engineering").equals(attributes.get("department"))));
+        verify(profile).validate();
+    }
+
+    @Test
     void refusesDuplicateUsernameWithoutWriting() {
         OID4VPUserProvisioner.Request request = request(JsonSerialization.mapper.createObjectNode());
         when(users.getUserByUsername(realm, "sub-1")).thenReturn(mock(UserModel.class));
