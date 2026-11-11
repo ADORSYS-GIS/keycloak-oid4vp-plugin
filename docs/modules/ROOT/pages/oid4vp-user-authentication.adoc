@@ -1,7 +1,7 @@
 :project_name: Keycloak
 
 [[oid4vp-authentication]]
-== Authenticate users with verifiable credentials over OpenID4VP
+= Authenticate users with verifiable credentials over OpenID4VP
 
 {project_name} implements support for authenticating users as they present verifiable credentials issued to them by itself.
 This is done over https://openid.net/specs/openid-4-verifiable-presentations-1_0.html[OpenID for Verifiable Presentation (OpenID4VP)].
@@ -12,7 +12,7 @@ This chapter describes how to interact with this feature.
 This feature is experimental. Backward compatibility is not guaranteed, and future updates may introduce breaking changes.
 ====
 
-=== What is covered in this chapter
+== What is covered in this chapter
 
 - Enabling user authentication over OpenID4VP
 - Initiating the flow by retrieving an authentication request
@@ -22,7 +22,7 @@ This feature is experimental. Backward compatibility is not guaranteed, and futu
 
 For detailed configuration of credential formats, authentication profiles, trust policies, binding rules, and presentation during issuance, see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
 
-=== Enabling user authentication over OpenID4VP
+== Enabling user authentication over OpenID4VP
 
 To enable user authentication over OpenID4VP, make sure to add the following flags to the startup command:
 
@@ -34,7 +34,7 @@ To enable user authentication over OpenID4VP, make sure to add the following fla
 Verify activation by checking the server logs.
 The `oid4vc-vci` feature must equally be activated because the feature relies on {project_name} being able to https://www.keycloak.org/docs/latest/server_admin/index.html#_oid4vci[issue verifiable credentials] to users itself.
 
-=== Initiating the flow by retrieving an authentication request
+== Initiating the flow by retrieving an authentication request
 
 To retrieve an authentication request, send a GET request to the `/oid4vp-auth/request` endpoint.
 The request must carry a `client_id` query parameter to indicate the client to link with the authentication session.
@@ -44,7 +44,7 @@ The request must carry a `client_id` query parameter to indicate the client to l
 GET /realms/<realm>/oid4vp-auth/request?client_id=<client_id>
 ----
 
-==== Optional parameters
+=== Optional parameters
 
 [cols="1,1,3"]
 |===
@@ -63,7 +63,7 @@ GET /realms/<realm>/oid4vp-auth/request?client_id=<client_id>
 |Must be `S256` when `code_challenge` is provided.
 |===
 
-==== Response
+=== Response
 
 The endpoint returns an object containing:
 
@@ -78,7 +78,7 @@ The endpoint returns an object containing:
 }
 ----
 
-=== Polling for the status of the authentication session
+== Polling for the status of the authentication session
 
 Because the OpenID4VP authentication flow is implied to be pursued cross-device, the initiating client needs to asynchronously check the status of the authentication session.
 For this, send a GET request to the `/oid4vp-auth/status` endpoint, passing the transaction ID received in the previous step.
@@ -119,7 +119,7 @@ In case of an error, the response contains error details.
 }
 ----
 
-=== Redeeming an authorization code (API-driven flows)
+== Redeeming an authorization code (API-driven flows)
 
 For API-driven flows that use PKCE, the client must exchange the authorization code obtained from the status endpoint by calling the `/oid4vp-auth/code` endpoint.
 
@@ -140,11 +140,11 @@ The response contains the authorization code that can be exchanged for an access
 }
 ----
 
-=== Complete OIDC login with OpenID4VP authentication
+== Complete OIDC login with OpenID4VP authentication
 
 The integration of OpenID4VP authentication into the OIDC login flow is readily available provided you enable the `keycloak.v2+oid4vp` login theme that supports the feature.
 
-=== Configuring the verifier policy for OpenID4VP authentication
+== Configuring the verifier policy for OpenID4VP authentication
 
 Find the authentication flow dedicated to OpenID4VP authentication under authentication flows in the admin console.
 The OpenID4VP authenticator in the flow is pre-configured with sensible defaults that can be adjusted to meet specific needs.
@@ -154,7 +154,7 @@ These policy settings are deployed through the authenticator configuration surfa
 
 For the complete set of authenticator configuration properties, including credential formats, authentication profiles, trust policies, and binding rules, see xref:oid4vp-deployment-configuration.adoc[OpenID4VP deployment configuration reference].
 
-=== Configuring primary credential identity claims
+== Configuring primary credential identity claims
 
 When a primary credential is used to identify the Keycloak user, use `subjectClaim` to control which claim is read from the presented credential.
 

@@ -1,0 +1,44 @@
+name: Notify Discord
+description: Send a workflow failure notification to Discord.
+inputs:
+  webhook-url:
+    description: Discord webhook URL; leave empty when notifications are unavailable.
+    required: false
+  title:
+    description: Notification title.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        DISCORD_WEBHOOK_URL: ${{ inputs.webhook-url }}
+        NOTIFICATION_TITLE: ${{ inputs.title }}
+        REPOSITORY: ${{ github.repository }}
+        BRANCH: ${{ github.ref_name }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+          echo "::warning::Discord webhook is not configured; skipping notification."
+          exit 0
+        fi
+
+        payload=$(jq -n \
+          --arg title "$NOTIFICATION_TITLE" \
+          --arg run_url "$RUN_URL" \
+          --arg repository "$REPOSITORY" \
+          --arg branch "$BRANCH" \
+          '{embeds: [{
+            title: $title,
+            description: ("See " + $run_url),
+            color: 15158332,
+            fields: [
+              {name: "Repository", value: ("`" + $repository + "`"), inline: true},
+              {name: "Branch", value: ("`" + $branch + "`"), inline: true}
+            ],
+            footer: {text: "GitHub Actions"}
+          }]}')
+
+        curl -fsSL -X POST "$DISCORD_WEBHOOK_URL" \
+          -H "Content-Type: application/json" \
+          -d "$payload"

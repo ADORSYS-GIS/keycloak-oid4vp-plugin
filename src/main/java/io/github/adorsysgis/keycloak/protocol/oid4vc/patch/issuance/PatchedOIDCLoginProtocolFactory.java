@@ -1,8 +1,9 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.issuance;
 
-import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.protocol.LoginProtocol;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocolFactory;
 import org.keycloak.protocol.oidc.OIDCProviderConfig;
 
@@ -11,9 +12,11 @@ public class PatchedOIDCLoginProtocolFactory extends OIDCLoginProtocolFactory {
     private OIDCProviderConfig providerConfig;
 
     @Override
-    public void init(Config.Scope config) {
-        super.init(config);
-        this.providerConfig = new OIDCProviderConfig(config);
+    public void postInit(KeycloakSessionFactory factory) {
+        super.postInit(factory);
+        try (KeycloakSession session = factory.create()) {
+            this.providerConfig = ((OIDCLoginProtocol) super.create(session)).getConfig();
+        }
     }
 
     @Override

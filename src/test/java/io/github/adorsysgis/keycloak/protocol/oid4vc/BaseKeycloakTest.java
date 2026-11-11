@@ -47,6 +47,7 @@ public abstract class BaseKeycloakTest {
     public static final String TEST_REALM_HAIP_NAME = "test-haip";
     public static final String TEST_REALM_V2_NAME = "test-v2";
     public static final String TEST_REALM_LEGACY_V1_2_6_NAME = "test-legacy-v1-2-6";
+    public static final String TEST_REALM_CHAIN_NAME = "test-chain";
 
     public static final String TEST_USER = "test-user";
     public static final String TEST_USER_ID = "test-user-id";
@@ -64,7 +65,8 @@ public abstract class BaseKeycloakTest {
                 "/realms/test-realm.json",
                 "/realms/test-realm-haip.json",
                 "/realms/test-realm-v2.json",
-                "/realms/test-realm-legacy-v1-2-6.json"));
+                "/realms/test-realm-legacy-v1-2-6.json",
+                "/realms/test-realm-chain.json"));
     }
 
     @BeforeAll
