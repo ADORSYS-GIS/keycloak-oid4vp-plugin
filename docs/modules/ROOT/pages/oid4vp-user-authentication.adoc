@@ -142,7 +142,22 @@ The response contains the authorization code that can be exchanged for an access
 
 == Complete OIDC login with OpenID4VP authentication
 
-The integration of OpenID4VP authentication into the OIDC login flow is readily available provided you enable the `keycloak.v2+oid4vp` login theme that supports the feature.
+The integration of OpenID4VP authentication into the OIDC login flow is readily available provided you enable a login theme that supports the feature.
+Configure either of the login themes provided by the plugin, `keycloak.v2+oid4vp` or ``keycloak.v2+oid4vp+dyou`, or add your own custom theme as described in the https://www.keycloak.org/docs/latest/server_admin/index.html#_themes[Keycloak documentation on customizing themes].
+
+[[login-themes]]
+=== Login themes provided by the plugin for OpenID4VP authentication
+
+[cols="1,3"]
+|===
+|Theme |Description
+
+|`keycloak.v2+oid4vp`
+|Extends the standard `keycloak.v2` theme with OpenID4VP capabilities. Prefer it to keep the standard {project_name} look.
+
+|`keycloak.v2+oid4vp+dyou`
+|Extends `keycloak.v2+oid4vp` and restyles the presentation page after the https://bmi.usercontent.opencode.de/eudi-wallet/developer-guide/eaa/guide/touchpoint_design/[d-you Wallet touchpoint design guidelines].
+|===
 
 == Configuring the verifier policy for OpenID4VP authentication
 

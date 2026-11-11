@@ -76,7 +76,7 @@ Claims:
   eu.europa.ec.eudi.pid.1 / family_name
 ----
 
-The login theme must support OpenID4VP login buttons. For this plugin, use the `keycloak.v2+oid4vp` login theme.
+The login theme must support OpenID4VP login buttons. Configure either of the following themes provided by the plugin: `keycloak.v2+oid4vp` or `keycloak.v2+oid4vp+you`. See xref:oid4vp-user-authentication.adoc#login-themes[Login themes provided by the plugin] for details.
 
 == Dual-credential German wallet PID profile
 
