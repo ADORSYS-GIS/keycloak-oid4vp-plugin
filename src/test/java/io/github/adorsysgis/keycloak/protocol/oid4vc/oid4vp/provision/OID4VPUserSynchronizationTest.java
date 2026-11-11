@@ -203,11 +203,15 @@ class OID4VPUserSynchronizationTest {
 
     @Test
     void importSyncModeKeepsImportedAttributes() throws Exception {
-        // Mapper-level IMPORT leaves imported values untouched.
+        // Inherited mapper modes use the provider's IMPORT setting and leave values untouched.
         when(identityProviders.getMappersByAliasStream(ALIAS))
                 .thenReturn(Stream.of(
-                        mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.IMPORT),
-                        mapper("first-name-mapper", "given_name", "firstName", IdentityProviderMapperSyncMode.IMPORT)));
+                        mapper("email-mapper", "email", "email", IdentityProviderMapperSyncMode.INHERIT),
+                        mapper(
+                                "first-name-mapper",
+                                "given_name",
+                                "firstName",
+                                IdentityProviderMapperSyncMode.INHERIT)));
         JsonNode claims = JsonSerialization.mapper.readTree("{\"email\":\"new@example.com\",\"given_name\":\"New\"}");
         IdentityProviderModel config = providerConfig(IdentityProviderSyncMode.IMPORT);
 

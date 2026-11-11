@@ -118,10 +118,14 @@ public class OID4VPProfileConfig {
             throw new IllegalStateException("At least one OpenID4VP profile must be configured");
         }
 
+        Set<String> profileIds = new HashSet<>();
         for (AuthenticationProfile profile : profiles) {
             String profileId = profile.getId();
             if (StringUtil.isBlank(profileId)) {
                 throw new IllegalStateException("OpenID4VP profile id must not be blank");
+            }
+            if (!profileIds.add(profileId)) {
+                throw new IllegalStateException("OpenID4VP profile ids must be unique: " + profileId);
             }
 
             if (profile.getCredentials() == null || profile.getCredentials().isEmpty()) {
@@ -147,6 +151,17 @@ public class OID4VPProfileConfig {
                             String.format("OpenID4VP credential id must not be blank in profile: %s", profileId));
                 }
 
+                CredentialFormat format;
+                try {
+                    format = CredentialFormat.fromValue(credential.getFormat());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalStateException(
+                            String.format(
+                                    "Unsupported credential format '%s': %s/%s",
+                                    credential.getFormat(), profileId, credentialId),
+                            e);
+                }
+
                 if (credential.getCredentialTypes() == null
                         || credential.getCredentialTypes().isEmpty()) {
                     throw new IllegalStateException(String.format(
@@ -158,7 +173,7 @@ public class OID4VPProfileConfig {
                             "OpenID4VP credential must request at least one claim: %s/%s", profileId, credentialId));
                 }
 
-                if (CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat())) {
+                if (format == CredentialFormat.MSO_MDOC) {
                     if (credential.getCredentialTypes().size() != 1) {
                         throw new IllegalStateException(String.format(
                                 "mDoc credential must define exactly one credentialType (the docType): %s/%s",
@@ -177,7 +192,7 @@ public class OID4VPProfileConfig {
                 validateTrustPolicy(credential, profileId);
 
                 if (credential.isPrimary()) {
-                    validatePrimaryCredential(profile, credential);
+                    validatePrimaryCredential(profile, credential, format);
                 }
             }
 
@@ -423,7 +438,8 @@ public class OID4VPProfileConfig {
      *       requirement would be security-wise meaningless).
      * </ul>
      */
-    private static void validatePrimaryCredential(AuthenticationProfile profile, CredentialRequirement credential) {
+    private static void validatePrimaryCredential(
+            AuthenticationProfile profile, CredentialRequirement credential, CredentialFormat format) {
         if (credential.isSessionIdentity()) {
             if (credential.getBinding() == null || credential.getBinding().isEmpty()) {
                 throw new IllegalStateException(
@@ -437,7 +453,7 @@ public class OID4VPProfileConfig {
                     + profile.getId() + "/" + credential.getId());
         }
 
-        boolean isMdoc = CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat());
+        boolean isMdoc = format == CredentialFormat.MSO_MDOC;
 
         if (isMdoc) {
             validatePrimaryMdocIssuerPolicy(profile, credential);

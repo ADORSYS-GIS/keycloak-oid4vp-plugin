@@ -107,6 +107,22 @@ class SplitBindingEvaluationTest {
     }
 
     @Test
+    void userAttributeBindingRejectsMissingStagedAttribute() {
+        OID4VPAuthenticator.Context ctx = context(supportingWithUserAttributeBinding());
+        BrokeredIdentityContext staged = stagedContext(null);
+
+        VerificationException error = assertThrows(
+                VerificationException.class,
+                () -> authenticator.applyUserAttributeBindings(
+                        ctx,
+                        supportingWithUserAttributeBinding(),
+                        supportingClaims,
+                        attribute -> OID4VPAuthenticator.readStagedUserAttribute(staged, attribute)));
+
+        assertEquals("Credential 'sup' failed binding rule 'claim_equals_user_attribute'", error.getMessage());
+    }
+
+    @Test
     void stagedMismatchFailsLikeUserMismatch() {
         OID4VPAuthenticator.Context ctx = context(supportingWithUserAttributeBinding());
         BrokeredIdentityContext staged = stagedContext("Hopper");

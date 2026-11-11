@@ -46,6 +46,8 @@ class CredentialIdentityTest {
     @Test
     void externalIdRejectsBlankValues() {
         assertThrows(IllegalArgumentException.class, () -> CredentialIdentity.externalId(null, "subject"));
+        assertThrows(IllegalArgumentException.class, () -> CredentialIdentity.externalId("  ", "subject"));
+        assertThrows(IllegalArgumentException.class, () -> CredentialIdentity.externalId("issuer", null));
         assertThrows(IllegalArgumentException.class, () -> CredentialIdentity.externalId("issuer", "  "));
     }
 

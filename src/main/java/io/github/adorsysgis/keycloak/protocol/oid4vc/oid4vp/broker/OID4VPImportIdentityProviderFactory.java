@@ -1,17 +1,15 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker;
 
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPEnvironmentProviderFactory;
-import java.util.List;
 import org.keycloak.broker.provider.AbstractIdentityProviderFactory;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.provider.ProviderConfigProperty;
 
 /**
  * Factory of the hidden OpenID4VP Plugin Import identity provider.
  *
- * <p>The provider id deliberately differs from upstream Keycloak's {@code oid4vp} broker so both
- * can coexist once upstream support ships.
+ * <p>The provider id deliberately differs from Keycloak's upstream {@code oid4vp} broker so both
+ * implementations can coexist.
  */
 public class OID4VPImportIdentityProviderFactory extends AbstractIdentityProviderFactory<OID4VPImportIdentityProvider>
         implements OID4VPEnvironmentProviderFactory {
@@ -36,10 +34,5 @@ public class OID4VPImportIdentityProviderFactory extends AbstractIdentityProvide
     @Override
     public IdentityProviderModel createConfig() {
         return new IdentityProviderModel();
-    }
-
-    @Override
-    public List<ProviderConfigProperty> getConfigProperties() {
-        return List.of();
     }
 }

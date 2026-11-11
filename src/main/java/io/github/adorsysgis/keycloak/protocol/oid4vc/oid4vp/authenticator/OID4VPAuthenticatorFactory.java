@@ -247,7 +247,7 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setDefaultValue(IMPORT_UNKNOWN_USERS_CONFIG_DEFAULT);
         property.setHelpText(
-                "Create a Keycloak user for a fully verified credential whose external identity matches no existing user. When disabled, such logins are rejected.");
+                "Allow creation of a Keycloak user for an unknown, fully verified external identity. Off by default.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -256,7 +256,7 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
         property.setType(ProviderConfigProperty.STRING_TYPE);
         property.setDefaultValue(IMPORT_IDP_ALIAS_CONFIG_DEFAULT);
         property.setHelpText(
-                "Alias of the hidden OpenID4VP Plugin Import identity provider used to link imported users. The provider must be created explicitly by a realm administrator.");
+                "Alias of the enabled OpenID4VP Plugin Import provider instance used for federated links and mapper synchronization. Create this provider in the realm.");
         configProperties.add(property);
 
         property = new ProviderConfigProperty();
@@ -319,9 +319,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     }
 
     /**
-     * Returns the set of {@link CredentialVerifier} instances the authenticator should
-     * dispatch verification to. Subclasses can override this method to register additional
-     * handlers (e.g. for {@code mso_mdoc}) alongside the default SD-JWT handler.
+     * Returns the format-to-verifier map used by the authenticator. Subclasses can override this
+     * method to customize the supported credential formats.
      */
     protected Map<String, CredentialVerifier> defaultHandlers(KeycloakSession session) {
         StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);

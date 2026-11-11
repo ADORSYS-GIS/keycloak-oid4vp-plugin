@@ -6,9 +6,8 @@ import java.util.Objects;
 /**
  * Result of format-specific credential verification.
  *
- * @param identity verified origin, issuer, and subject when the credential exposes a stable
- *     identity; {@code null} for session-bound presentations or credentials without one. User
- *     resolution uses only the primary credential's identity.
+ * @param identity the verified primary credential's origin, issuer, and subject; {@code null} for
+ *     supporting credentials, session-bound presentations, or when no stable identity is exposed
  * @param claims verified credential claims
  */
 public record VerifiedCredential(CredentialIdentity identity, JsonNode claims) {

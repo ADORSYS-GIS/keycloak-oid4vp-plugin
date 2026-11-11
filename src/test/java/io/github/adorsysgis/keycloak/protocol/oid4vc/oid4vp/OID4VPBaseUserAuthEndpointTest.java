@@ -626,7 +626,9 @@ public abstract class OID4VPBaseUserAuthEndpointTest extends OID4VPBaseKeycloakT
         idp.setAlias(IMPORT_IDP_ALIAS);
         idp.setProviderId(OID4VPImportIdentityProviderFactory.PROVIDER_ID);
         idp.setEnabled(true);
-        getActiveTestRealmResource().identityProviders().create(idp);
+        try (var response = getActiveTestRealmResource().identityProviders().create(idp)) {
+            assertEquals(HttpStatus.SC_CREATED, response.getStatus());
+        }
     }
 
     /**

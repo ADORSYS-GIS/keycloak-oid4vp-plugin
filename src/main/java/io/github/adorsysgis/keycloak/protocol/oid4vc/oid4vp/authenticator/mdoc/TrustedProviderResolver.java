@@ -95,8 +95,9 @@ public final class TrustedProviderResolver {
      * Returns the stable issuer namespace for pinned X.509 trust: the explicitly configured
      * {@code trust.issuer}, or {@code null} when none is configured. A certificate thumbprint alone
      * is not a stable long-term identity (leaf certificates rotate and a shared root can serve
-     * several issuers); a {@code null} namespace means the credential exposes no external identity
-     * and user import for it fails closed, while verification itself is unaffected.
+     * several issuers). Without a configured namespace, cryptographic verification can still
+     * succeed, but the credential cannot be resolved to an external Keycloak identity and login
+     * fails closed.
      */
     private static String pinnedIssuerNamespace(TrustPolicy trust) {
         if (trust.getIssuer() == null || trust.getIssuer().isBlank()) {

@@ -76,7 +76,7 @@ public class OID4VPUserProvisioner {
     /**
      * Creates, links, and returns the user for an unknown external identity.
      *
-     * @throws UserProvisioningException for every expected refusal; nothing is written then
+     * @throws UserProvisioningException for expected refusals; no changes are committed
      * @throws IllegalStateException after the first write failed, with the transaction marked
      *     rollback-only, so no partial user, link, or attribute survives
      */
@@ -143,7 +143,7 @@ public class OID4VPUserProvisioner {
             }
             throw new UserProvisioningException(
                     UserProvisioningException.Reason.DUPLICATE,
-                    "An account with username '" + finalUsername + "' already exists",
+                    "An account with the derived username or email already exists",
                     e);
         } catch (RuntimeException e) {
             markRollbackOnly(session);

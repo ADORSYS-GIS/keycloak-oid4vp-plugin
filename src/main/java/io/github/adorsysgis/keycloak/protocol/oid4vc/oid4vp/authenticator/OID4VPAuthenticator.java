@@ -165,8 +165,8 @@ public class OID4VPAuthenticator implements Authenticator {
     }
 
     /**
-     * Verifies the selected primary credential and every presented supporting credential, including
-     * transaction data, without resolving or changing any user. Claim-to-primary-claim bindings are
+     * Verifies the primary credential (including transaction data) and every presented supporting
+     * credential without resolving or changing any user. Claim-to-primary-claim bindings are
      * validated here as well since they need no user; claim-to-user-attribute bindings run later
      * against the resolved user or staged import attributes.
      */
@@ -214,7 +214,7 @@ public class OID4VPAuthenticator implements Authenticator {
                 VerifiedCredential verified = supportingVerifier.verifyCredential(ctx, credential, token);
                 applyPrimaryClaimBindings(ctx, primaryCredential.claims(), credential, verified.claims());
                 supporting.put(credential, verified);
-            } catch (VerificationException | IllegalStateException e) {
+            } catch (VerificationException | IllegalArgumentException | IllegalStateException e) {
                 String msg = "Supporting credential verification failed";
                 failRejectingPresentedCredential(ctx, String.format("%s: %s", msg, e.getMessage()));
                 throw new VerificationException(msg, e);
@@ -331,7 +331,7 @@ public class OID4VPAuthenticator implements Authenticator {
 
     private RecoveredUser recoverAuthenticatingUser(Context ctx, VerifiedPresentation presentation) {
         logger.infof("Recovering authenticating user (authSession = %s)", ctx.id());
-        CredentialRequirement primaryCredentialReq = getPresentedPrimaryCredential(ctx);
+        CredentialRequirement primaryCredentialReq = presentation.primaryRequirement();
 
         RecoveredUser recovered = primaryCredentialReq.isSessionIdentity()
                 ? withoutDeferredMutation(recoverPresentationDuringIssuanceUser(ctx))
@@ -363,23 +363,23 @@ public class OID4VPAuthenticator implements Authenticator {
         KeycloakSession session = ctx.authenticationFlowContext().getSession();
         RealmModel realm = ctx.authenticationFlowContext().getRealm();
         VerifiedCredential primaryCredential = presentation.primaryCredential();
+        CredentialIdentity identity = primaryCredential.identity();
 
-        if (isSameRealmCredential(session, realm, primaryCredential.identity())) {
-            return withoutDeferredMutation(recoverLocalUser(ctx, primaryCredentialReq, primaryCredential));
+        if (identity != null) {
+            String realmIssuer = Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName());
+            if (identity.origin() == Origin.CURRENT_REALM) {
+                if (!realmIssuer.equals(identity.issuer())) {
+                    failRejectingPresentedCredential(ctx, "Current-realm credential issuer does not match this realm");
+                    return null;
+                }
+                return withoutDeferredMutation(recoverLocalUser(ctx, primaryCredentialReq, primaryCredential));
+            }
+            if (realmIssuer.equals(identity.issuer())) {
+                failRejectingPresentedCredential(ctx, "External credential must not claim the current realm issuer");
+                return null;
+            }
         }
         return recoverExternalUser(ctx, primaryCredentialReq, presentation);
-    }
-
-    /**
-     * Origin is established by the format verifier from the trust policy that verified the primary
-     * credential. The issuer URL comparison is an additional namespace consistency check.
-     */
-    private boolean isSameRealmCredential(KeycloakSession session, RealmModel realm, CredentialIdentity identity) {
-        if (identity == null || identity.origin() != Origin.CURRENT_REALM) {
-            return false;
-        }
-        String realmIssuer = Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName());
-        return realmIssuer.equals(identity.issuer());
     }
 
     private UserModel recoverLocalUser(

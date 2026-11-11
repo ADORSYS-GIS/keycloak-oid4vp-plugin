@@ -11,17 +11,17 @@ import org.keycloak.jose.jws.crypto.HashUtils;
 import org.keycloak.utils.StringUtil;
 
 /**
- * Verified identity exposed by a credential: its cryptographically established origin, issuer
- * namespace, and subject. These values must come from information covered by successful credential
- * and trust verification. User resolution consumes the primary credential's identity; supporting
- * credentials do not define the authenticating user's identity.
+ * Identity resolved for a verified primary credential: its trust-policy origin, stable issuer
+ * namespace, and configured subject claim. Depending on the format and origin, the issuer comes
+ * from signed credential data, the trust configuration that validated it, or the current realm
+ * URL. Supporting credentials do not define the authenticating user's identity.
  *
  * <p>Presentation-during-issuance credentials keep using the session-bound Keycloak user and carry
  * no external identity.
  */
 public record CredentialIdentity(Origin origin, String issuer, String subject) {
 
-    /** Cryptographically established origin of this verified identity. */
+    /** Origin established by the credential's configured trust policy after verification. */
     public enum Origin {
         CURRENT_REALM,
         EXTERNAL;
@@ -70,12 +70,10 @@ public record CredentialIdentity(Origin origin, String issuer, String subject) {
     /**
      * Resolves the identity to expose on a {@link VerifiedCredential}.
      *
-     * <p>Returns the primary identity when both the issuer namespace and the subject are available,
-     * {@code null} otherwise. Supporting and session-bound credentials do not identify the
-     * authenticating user. Verification itself never fails for a missing identity: existing trust
-     * configurations (e.g. mdoc {@code x5c} anchors without an explicit issuer) keep authenticating
-     * exactly as before. Callers that require an external identity, such as user import, must refuse
-     * credentials that expose none.
+     * <p>Returns the primary identity when both the issuer namespace and subject are available, or
+     * {@code null} for supporting/session-bound credentials or when either value is missing.
+     * Credential verification can still succeed without an issuer namespace, but the authenticator
+     * cannot resolve an identity-less primary credential to a Keycloak user.
      */
     public static CredentialIdentity forCredential(
             CredentialRequirement credentialReq, Origin origin, String issuer, String subject) {

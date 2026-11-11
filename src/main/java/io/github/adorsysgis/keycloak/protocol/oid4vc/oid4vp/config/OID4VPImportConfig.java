@@ -19,8 +19,7 @@ public class OID4VPImportConfig {
     private final String importIdentityProviderAlias;
 
     public OID4VPImportConfig(AuthenticatorConfigModel authConfig) {
-        Map<String, String> config =
-                (authConfig != null && authConfig.getConfig() != null) ? authConfig.getConfig() : Map.of();
+        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
 
         this.importUnknownUsers = Boolean.parseBoolean(config.getOrDefault(
                 OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG,

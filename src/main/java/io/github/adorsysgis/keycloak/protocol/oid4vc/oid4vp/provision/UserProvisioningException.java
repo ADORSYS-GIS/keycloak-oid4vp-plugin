@@ -14,7 +14,7 @@ public class UserProvisioningException extends Exception {
         BINDING,
         /** The staged profile violates the realm user-profile rules. */
         INVALID_PROFILE,
-        /** A different account already uses the derived username or email. */
+        /** A duplicate account or concurrent federated link prevents import. */
         DUPLICATE
     }
 

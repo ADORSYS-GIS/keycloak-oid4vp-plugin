@@ -50,8 +50,9 @@ public class OID4VPImportIdentityProvider extends AbstractIdentityProvider<Ident
         logger.warnf(
                 "Direct callback through the hidden import provider '%s' is not supported",
                 getConfig().getAlias());
-        throw new IdentityBrokerException("Direct login through the OpenID4VP Plugin Import provider is not supported."
-                + " Authenticate through the OpenID4VP login page instead.");
+        throw new IdentityBrokerException(
+                "Direct callback through the OpenID4VP Plugin Import provider is not supported."
+                        + " Authenticate through the OpenID4VP login page instead.");
     }
 
     @Override

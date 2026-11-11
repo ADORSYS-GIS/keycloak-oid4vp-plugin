@@ -95,17 +95,17 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
         }
 
         JsonNode verifiedClaims = verificationResult.getClaims();
-        String issuer = Optional.ofNullable(sdJwt.getIssuerSignedJWT().getPayload())
-                .map(payload -> payload.get(OID4VCConstants.CLAIM_NAME_ISSUER))
-                .filter(node -> !node.isNull())
-                .map(JsonNode::asText)
-                .orElse(null);
-        String subject = readClaim(verifiedClaims, credentialReq.getSubjectClaim());
-        String realmIssuer = Urls.realmIssuer(
-                session.getContext().getUri().getBaseUri(),
-                session.getContext().getRealm().getName());
         CredentialIdentity identity = null;
         if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
+            String issuer = Optional.ofNullable(sdJwt.getIssuerSignedJWT().getPayload())
+                    .map(payload -> payload.get(OID4VCConstants.CLAIM_NAME_ISSUER))
+                    .filter(node -> !node.isNull())
+                    .map(JsonNode::asText)
+                    .orElse(null);
+            String subject = readClaim(verifiedClaims, credentialReq.getSubjectClaim());
+            String realmIssuer = Urls.realmIssuer(
+                    session.getContext().getUri().getBaseUri(),
+                    session.getContext().getRealm().getName());
             Origin origin = Origin.fromPrimaryTrust(credentialReq);
             if (origin == Origin.CURRENT_REALM && !realmIssuer.equals(issuer)) {
                 throw new VerificationException("Credential signed by this realm has an unexpected issuer");

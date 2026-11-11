@@ -62,6 +62,27 @@ class OID4VPImportConfigTest {
     }
 
     @Test
+    void aliasWithSurroundingWhitespaceIsTrimmed() {
+        OID4VPImportConfig config = new OID4VPImportConfig(
+                authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG, "  custom-import  ")));
+
+        assertEquals("custom-import", config.getImportIdentityProviderAlias());
+    }
+
+    @Test
+    void resolvesProviderUsingConfiguredAlias() {
+        OID4VPImportConfig config = new OID4VPImportConfig(
+                authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG, "custom-import")));
+        IdentityProviderModel provider = idpModel(true, true);
+        provider.setAlias("custom-import");
+
+        IdentityProviderModel resolved =
+                config.resolveImportIdentityProvider(sessionWith("custom-import", provider), realm());
+
+        assertEquals("custom-import", resolved.getAlias());
+    }
+
+    @Test
     void resolvesEnabledImportProvider() {
         OID4VPImportConfig config = new OID4VPImportConfig(
                 authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true")));
@@ -116,9 +137,12 @@ class OID4VPImportConfigTest {
     }
 
     private static KeycloakSession sessionWith(IdentityProviderModel idp) {
+        return sessionWith(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, idp);
+    }
+
+    private static KeycloakSession sessionWith(String alias, IdentityProviderModel idp) {
         IdentityProviderStorageProvider storage = mock(IdentityProviderStorageProvider.class);
-        when(storage.getByAlias(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT))
-                .thenReturn(idp);
+        when(storage.getByAlias(alias)).thenReturn(idp);
         KeycloakSession session = mock(KeycloakSession.class);
         when(session.identityProviders()).thenReturn(storage);
         return session;

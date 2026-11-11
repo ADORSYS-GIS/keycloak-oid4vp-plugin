@@ -393,9 +393,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential() throws Exception {
         // The x5c profile declares an explicit issuer, so the subject resolves as an external
         // federated identity; the user is pre-linked exactly as a previous import would have.
-        createImportIdp();
-        linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
         try {
+            createImportIdp();
+            linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
             withAuthenticationProfile(
                     AuthenticationProfileSamples.mdocPrimaryWithIssuer(TEST_MDOC_ISSUER), (apiFlow, requestObject) -> {
                         Credential mdocCredential =
@@ -477,9 +477,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
                         MdocBaseTest.getIssuerCertBase64(),
                         EudiPidTrustListTestServer.PROVIDER_A_ID);
 
-        createImportIdp();
-        linkExternalUser(TEST_USER_ID, EudiPidTrustListTestServer.PROVIDER_A_ID, TEST_USER_ID);
         try {
+            createImportIdp();
+            linkExternalUser(TEST_USER_ID, EudiPidTrustListTestServer.PROVIDER_A_ID, TEST_USER_ID);
             withAuthenticationProfile(profile, (apiFlow, requestObject) -> {
                 Map<String, Object> claims = Map.of(MdocBaseTest.NAMESPACE, Map.of(JsonWebToken.SUBJECT, TEST_USER_ID));
                 String mdocToken = presentMdoc(requestObject, claims);
@@ -537,9 +537,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     public void shouldAuthenticateSuccessfully_WithMdocPrimaryCredential_MdlIdentityClaim() throws Exception {
         // Regression for issue 001: a standard ISO 18013-5 mDL carries no sub claim, so
         // identity must be derivable from a configured standard mDL claim (document_number).
-        createImportIdp();
-        linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
         try {
+            createImportIdp();
+            linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
             withAuthenticationProfile(
                     AuthenticationProfileSamples.mdocPrimaryWithMdlIdentityAndIssuer(TEST_MDOC_ISSUER),
                     (apiFlow, requestObject) -> {
@@ -567,9 +567,9 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         // extracts it and binds the mDoc device signature to the ISO-spec session transcript.
         String mdocGeneratedNonce = "mdoc-generated-nonce-9f3a7c";
 
-        createImportIdp();
-        linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
         try {
+            createImportIdp();
+            linkExternalUser(TEST_USER_ID, TEST_MDOC_ISSUER, TEST_USER_ID);
             withAuthenticationProfile(
                     AuthenticationProfileSamples.mdocPrimaryWithIssuer(TEST_MDOC_ISSUER),
                     Map.of(

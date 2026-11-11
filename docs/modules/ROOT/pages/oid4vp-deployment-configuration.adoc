@@ -541,71 +541,33 @@ For SD-JWT VC credentials, use standard claim names such as `sub` — no namespa
 
 === Importing users previously unknown to Keycloak
 
-By default the plugin only authenticates users that already exist: a verified credential whose
-identity matches no user is rejected with `UNKNOWN_USER`. When third-party-issued credentials
-should also work for first-time users, enable opt-in user import.
+Import is disabled by default. When enabled, an unknown, fully verified **external** identity can
+be created during the existing OID4VP login. The verifier realm does not query the issuer realm's
+users.
 
-[IMPORTANT]
-====
-Import is disabled by default. Enabling it lets fully verified external credentials create
-Keycloak users. Never enable it without understanding the rules below.
-====
+==== User resolution
 
-==== How resolution works
+* A primary credential accepted by `self` trust is treated as a current-realm credential. The
+  configured `subjectClaim` resolves directly to the Keycloak user ID. If that user is missing,
+  login fails; the credential does not recreate a deleted account.
+* An externally trusted primary credential resolves through a federated identity link keyed by
+  the import-provider alias and a stable ID derived from the verified issuer and subject. A linked
+  user can authenticate; an unknown user is created only when import is enabled.
+* The external subject is never searched as a local user ID, username, or email. Username/email
+  collisions fail instead of linking or merging accounts.
 
-* A primary credential accepted by `self` trust is issued *by this realm*. `self` verifies SD-JWT
-  signatures with the realm's enabled signing keys and mDoc certificate chains with the leaf
-  certificates of enabled realm signing keys. The plugin resolves its configured subject directly
-  as a Keycloak user ID, without any federated link. If that user no longer exists, login fails — a
-  deleted account is never recreated.
-* A primary credential accepted by `x5c` or the EUDI trust list is *external*: the plugin computes
-  an issuer-qualified external ID from
-  the verified issuer and the configured subject, and looks up the federated link
-  (`<import-alias>.<external-ID>`). A linked user authenticates; an unknown identity is created
-  only when import is enabled.
-* An external subject is never looked up as a local user ID, username, or email. Username and
-  email matches never link or merge accounts: a collision fails the login instead.
+For locally issued login credentials, configure issuance so `subjectClaim` contains the Keycloak
+internal user ID (`UserModel.ID`); there is no username fallback.
 
-==== Cross-realm Keycloak example
+For import, the primary credential must provide a stable subject and the trust policy must provide
+a stable issuer namespace. SD-JWT uses the verified signed `iss`; external SD-JWT currently uses
+`eudi_pid_trust_list`. An mDoc has no JWT `iss`, so an external `x5c` profile must configure a
+stable `trust.issuer` and dedicated anchors; EUDI PID mDoc uses the registered provider identifier.
+See <<_trust_policies>> for format-specific trust configuration.
 
-Suppose `https://issuer.example/realms/source` issues the credential and
-`https://login.example/realms/target` runs the verifier. The target realm does not call the source
-realm or read its users. It verifies the wallet presentation, classifies origin from the verified
-trust policy, and
-derives an opaque external ID from the verified `(issuer namespace, subject)` pair. That external ID
-selects a federated link in the target realm.
-
-The target realm must configure all of the following:
-
-. A primary requirement whose stable `subjectClaim` is included in `claims`.
-. Format-appropriate trust which establishes a stable external issuer namespace.
-. `importUnknownUsers=true` and the intended `importIdentityProviderAlias`.
-. An enabled, hidden `oid4vp-plugin-import` provider with that alias.
-. Plugin-owned attribute mappers for every field required by the target realm user profile.
-
-For an SD-JWT, the signed `iss` is the issuer namespace and `sub` is normally the subject. External
-SD-JWT uses `eudi_pid_trust_list`; standalone `x5c` is not implemented for this format. The signed
-`iss` must resolve to a provider in the list and, when `trust.issuer` is configured, must equal it.
-
-For an mDoc, there is no signed JWT-style `iss`. An `x5c` primary intended for import must therefore
-configure a stable, nonblank `trust.issuer` and dedicated CA anchors. An EUDI PID primary instead
-uses the exact registered provider identifier from its LoTE policy. The mDoc `subjectClaim` must be
-namespace-qualified.
-
-[IMPORTANT]
-====
-Username and email mappers populate the target account but never locate or merge one. Changing
-`trust.issuer`, `subjectClaim`, or the import
-provider alias changes the federated-link namespace and can strand existing links. Retain rotated
-issuer keys or anchors for as long as credentials signed by them must remain usable.
-====
-
-[IMPORTANT]
-====
-For a credential issued by this realm, configure `subjectClaim` and the matching OID4VC issuance
-mapper so the claim contains the Keycloak internal user ID (`UserModel.ID`). Keycloak may map the
-subject to the username by default; the plugin deliberately has no username fallback.
-====
+Changing `subjectClaim`, the external issuer namespace (`trust.issuer`), or the import-provider
+alias changes the federated-link identity and can leave existing links unreachable. Retain old
+issuer keys/anchors for as long as credentials signed with them must remain usable.
 
 ==== Authenticator settings
 
@@ -623,24 +585,16 @@ subject to the username by default; the plugin deliberately has no username fall
 mode, and the attribute mappers.
 |===
 
-==== The hidden import identity provider
+==== Import identity provider and mappers
 
-Import provisioning is an explicit realm administrator action: create an identity provider with
+Create an enabled identity-provider instance with provider type `oid4vp-plugin-import` and an
+alias matching `importIdentityProviderAlias` (default `oid4vp-import`). The provider hosts
+federated links, mapper configuration, and sync settings; it does not start a wallet login or
+verify presentations. It is distinct from Keycloak's `oid4vp` login provider so it can anchor
+imports without starting another wallet flow. Keep it hidden from the login page. Create an
+instance in each realm that uses import.
 
-* provider ID `oid4vp-plugin-import` (deliberately distinct from upstream Keycloak's `oid4vp`
-  broker, so both can coexist),
-* alias `oid4vp-import` (or update `importIdentityProviderAlias` to match),
-* display name e.g. `OpenID4VP Plugin Import`,
-* hidden on the login page.
-
-The provider is a configuration and mapping host only. It sends no authorization requests and
-verifies no presentations; direct login through it is unsupported. It owns the link namespace,
-the sync mode, and the attribute mappers described next. Keep it hidden so Keycloak does not show
-users a login option that cannot start an authentication flow. Direct access is also rejected by
-the provider, so hiding it is not the security boundary. Do not expect an automatic realm migration
-to create it.
-
-==== Attribute mappers
+==== Claim mappings
 
 Configure `oid4vp-user-attribute-idp-mapper` entries on the import provider to stage credential
 claims onto username, email, first/last name, or custom attributes. Each mapper takes a claim
@@ -655,61 +609,30 @@ subject. mDoc claims arrive namespaced, so their paths include the (escaped) nam
 
 [IMPORTANT]
 ====
-Keycloak's default declarative user profile commonly requires `email` in the registration context.
-Some authoritative credentials, including the German PID, cannot supply an email. In that case,
-explicitly make email optional in the target realm before enabling import; do not synthesize an
-email or weaken the plugin's staged-profile validation. The plugin validates the complete staged
-account before any user or federated link is written and fails closed when a required value is
-missing.
-
-Custom mapped attributes must also be declared in the realm user-profile schema, or the realm's
-unmanaged-attribute policy must permit writes in the registration context. Import uses Keycloak's
-user-profile persistence, including its normalization and writable-attribute permissions. Binding
-rules are checked against the values that will actually be stored; a filtered attribute cannot
-satisfy a binding. `ADMIN_VIEW` permits administrative inspection only, not import writes.
+Import validates mapped data with the realm's registration user profile before creating a user.
+If the profile requires email but the credential cannot provide it, make email optional in that
+realm; do not invent an address or bypass profile validation. Custom attributes must be allowed by
+the user-profile schema or unmanaged-attribute policy. Bindings are checked against the values
+Keycloak will persist.
 ====
 
-Only this plugin-owned mapper runs while staging values before the user exists. Third-party
-mappers stay out of staging; their import and update hooks still run once the user exists.
-
-==== Supported issuer sources
-
-The verified issuer must come from information covered by successful trust verification:
-
-* SD-JWT VC: the signed `iss` value after signature and trust validation.
-* mDoc with an EUDI PID trust list: the configured PID Provider identifier whose scoped
-  certificates validated the document.
-* mDoc with pinned X.509 trust: an explicit non-blank `trust.issuer`, with anchors dedicated
-  to that issuer. A certificate thumbprint alone is not a stable identity (leaf certificates
-  rotate, a shared root can serve several issuers). Without a stable namespace, import for
-  that credential fails closed — verification itself is unaffected.
+Every configured mapper's preprocessing hook runs before profile and binding validation. The
+provider and mapper import hooks run after the user exists.
 
 ==== Sync mode and relogin
 
-Linked users keep working after import is disabled; the flag gates creation only. On relogin
-the staged claims resynchronize through Keycloak's mapper sync-mode delegate. Each mapper's
-effective mode governs both basic properties and custom attributes: `INHERIT` follows the provider,
-`FORCE` updates mapped values, and `IMPORT` keeps imported values untouched even when the provider
-uses `FORCE`.
-Configure the mode explicitly: a mapper without one falls back to legacy update behavior.
-
-Credential-to-user binding rules are checked against the linked user's current Keycloak
-attributes before synchronization. If a binding fails, authentication is rejected and no mapped
-attribute is updated. For a new external user, the same rules are checked against the staged
-mapper values before the user is created.
-
-If the hidden provider is later removed or disabled, an already-linked user can still authenticate, but
-claim synchronization is skipped. Primary and supporting credential-to-user binding rules still
-apply against the linked user's current attributes; an unavailable provider never bypasses these checks.
-If the provider is available and synchronization starts, a mapper or
-provider-hook failure fails the login and rolls back the attempted changes.
+On later logins, Keycloak's mapper sync mode controls updates: `IMPORT` preserves imported values,
+`FORCE` refreshes mapped values, and `INHERIT` follows the provider. Credential-to-user bindings
+are checked before synchronization, so a failed binding does not update the user. Disabling import
+stops creation only; linked users can still authenticate. If the provider is unavailable,
+synchronization is skipped after bindings pass. A failure during synchronization rolls back the
+attempted changes.
 
 [NOTE]
 ====
-There is no interactive profile review, email verification, duplicate confirmation, or account
-linking in prompt-free import. Collisions fail instead of offering confirmation, and invalid
-or incomplete staged profiles refuse the import. Interactive First Broker Login screens are a
-separate future feature.
+Import is prompt-free: there is no profile review, email-verification step, or account-linking
+screen. Incomplete profiles and username/email collisions reject the login instead of offering
+confirmation.
 ====
 
 === SPRIN-D wallet sandbox profile (example)
