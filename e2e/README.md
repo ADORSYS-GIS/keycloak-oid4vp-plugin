@@ -17,14 +17,30 @@ against real spun-up components.
 
 ## The components
 
-| Component               | Where it comes from                                                  |
-| ----------------------- | -------------------------------------------------------------------- |
-| Keycloak                | `quay.io/keycloak/keycloak:26.8.2` with both plugins mounted as JARs |
-| Plugin: OpenID4VP login | latest release of this very repo                                     |
-| Plugin: token status    | latest release of `ADORSYS-GIS/token-status-link`                    |
-| Mock FE                 | latest `ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe`                 |
-| Test wallet             | latest `ghcr.io/eudi-dev/eudi-dev` (headless, auto-accepting)        |
-| Status server           | public instance `https://statuslist.eudi-adorsys.com`                |
+| Component               | Where it comes from                                                       |
+| ----------------------- | ------------------------------------------------------------------------- |
+| Keycloak                | `quay.io/keycloak/keycloak:26.8.2` with both plugins mounted as JARs      |
+| Plugin: OpenID4VP login | latest release of this very repo                                          |
+| Plugin: token status    | latest release of `ADORSYS-GIS/token-status-link`                         |
+| Mock FE                 | latest `ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe`                      |
+| Test wallet             | latest `ghcr.io/eudi-dev/eudi-dev` (headless, auto-accepting)             |
+| Status server           | `ghcr.io/adorsys/status-list-server:latest-fscert`, local, no DB          |
+| TLS proxy for it        | stock `nginx:1.27-alpine` (`assets/crypto/status-list-server/nginx.conf`) |
+
+The status list server runs as part of the stack, so the journey never talks to a remote status-list
+service. It uses in-memory storage (`APP_DATABASE__BACKEND=memory`), so the stack needs no database,
+even though the published image is built with the Postgres driver. Its image serves plain HTTP only
+while the plugins require an HTTPS base URL, so a small nginx container terminates TLS in front of
+it (`https://status-list:8443` inside the compose network).
+
+The signing key is the status list server's own development fixture (`dev.key` from
+`test_data/certs/` in its repository), and the certificate is a self-signed certificate for that key
+covering `status-list` — see `assets/crypto/status-list-server/README.md` for the one `openssl`
+command that produces it. A single PEM trust entry for that certificate is enough: Keycloak merges
+it into its global truststore with `--truststore-paths` (which the OpenID4VP plugin's x5c-chain
+validation uses), and the token-status plugin trusts the same file through
+`status-list-tls-ca-cert-path`. No JKS conversion is needed. These are public test fixtures; never
+reuse them outside this folder.
 
 ## Running
 
@@ -65,6 +81,10 @@ There is little to configure: the container images, ports and the status-list se
 `.env` (copy `.env.example` if you want any non-default — the file itself explains everything). The
 realm rendered from `assets/realm/` is intentionally fixed so the tests, the import file name and
 the mounts always agree.
+
+The status-list server is part of the stack and reachable only from it (`https://status-list:8443`).
+The tests read the same URL through `STATUS_LIST_SERVER_URL`, so they compare the issued
+credential's status-list claim against the local instance, not a remote one.
 
 One thing worth knowing: the signing keystore in `assets/crypto/keystore.p12` uses the test-only
 password `password` for both entries (`oid4vci-ec-issuer` for ES256 key and `oid4vci-issuer` for

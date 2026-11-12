@@ -1,0 +1,59 @@
+Revised after review. `pnpm play` passes from a clean state (`pnpm clean` first), with no database
+container and no JKS anywhere.
+
+## Corrections to the previous attempt
+
+1. **Postgres was not necessary.** The `fscert` image is built with
+   `FEATURES="postgres,redis"`, but the runtime backend is a config choice: with
+   `APP_DATABASE__BACKEND=memory` it starts and serves with no database. I ran the image
+   standalone (no db) to confirm before changing the stack; the `status-list-db` service is gone.
+2. **The JKS was not necessary.** The OID4VP plugin never reads a truststore file; it validates
+   x5c chains through Keycloak's `TruststoreProvider` (`TrustAnchorAdapter`). One PEM entry is
+   enough for both plugins.
+3. **`KC_SPI_TRUSTSTORE_FILE_FILE` cannot take a PEM.** It is deprecated, detects the type from the
+   file extension (`.jks`/`.p12`/`.pfx`, default `pkcs12`) and fails on PEM with
+   "toDerInputStream rejects tag type 45". The supported form is `--truststore-paths=<file|dir>`,
+   which does merge PEM. That is what the stack uses now.
+4. **No generator script**, per review. The signing key is upstream's `test_data/certs/dev.key`,
+   copied unchanged. One thing upstream cannot supply: its certificate is only valid for
+   `DNS:localhost`, and the token-status plugin enforces hostname verification, so the stack
+   reaches the server as `https://status-list:8443` and needs `status-list` in the SAN. The
+   certificate is therefore self-signed from that same key for `DNS:localhost,DNS:status-list`; the
+   exact `openssl req -x509` command is documented in
+   `e2e/assets/crypto/status-list-server/README.md` (no script committed).
+
+## Things that cost time (worth knowing)
+
+- A `localhost:host-gateway` mapping is not reliable: here the container resolves `localhost` to
+  `::1` first *and* `host-gateway` pointed at a stale `172.17.0.1`, so Keycloak kept getting
+  `Connection refused` although the proxy was up. Using the compose service name avoids the whole
+  class of problem.
+- The realm URL is baked at render time (`assets/realm/index.ts` reads `STATUS_LIST_SERVER_URL`), so
+  changing the default in `lib/config.ts` alone leaves the rendered realm stale — re-run
+  `scripts/setup.sh` (or `pnpm clean`).
+- `pnpm test` without the stack running fails with `ERR_CONNECTION_REFUSED` at `:14200`; use
+  `pnpm play` (or `--keep-stack-alive`).
+- Both a stray container on `:18092` and leftover `/tmp` compose projects broke early attempts;
+  `docker compose down -v` in `e2e/` clears the stack.
+
+## Files
+
+- `e2e/docker-compose.yml` — no Postgres, no JKS; `--truststore-paths` with the PEM; in-memory
+  backend; `APP_SERVER__DOMAIN: status-list:8443`.
+- `e2e/assets/crypto/status-list-server/` — `dev.key` (upstream), `dev.crt` (self-signed, two
+  SANs), `nginx.conf` (both IP families), `README.md` (origins + the openssl command).
+- `e2e/assets/realm/config.ts`, `e2e/lib/config.ts`, `e2e/.env.example`, `e2e/README.md` —
+  `https://status-list:8443` and the PEM path.
+
+## Verified
+
+- `pnpm clean && pnpm play` → 1 passed.
+- Logs: no `postgres`/`database`/`storage error` lines; the proxy serves the two status-list GETs
+  (valid presentation + revoked one); after revocation Keycloak rejects with
+  `Token status is not valid. Status: INVALID (value: 1)`.
+
+## Open points
+
+- Issue #251 is still blocked upstream by token-status-link#173; I tested the current releases
+  (v0.5.2 / v1.2.0).
+- Not committed, no PR. The branch is behind `origin/251-spin-up-status-list-server` by 1.
