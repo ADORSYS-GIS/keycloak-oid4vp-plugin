@@ -1,0 +1,99 @@
+@font-face {
+    font-family: Inter;
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/InterVariable.woff2") format("woff2");
+}
+
+body:has(.dyou-card) #kc-header,
+body:has(.dyou-card) .pf-v5-c-login__main-header * {
+    display: none;
+}
+
+body:has(.dyou-card) .pf-v5-c-login {
+    width: max-content;
+    min-width: 100%;
+}
+
+body:has(.dyou-card)  .pf-v5-c-login__container {
+    width: max-content;
+    max-width: unset;
+}
+
+body:has(.dyou-card) .pf-v5-c-login__main-header {
+    padding: 0;
+}
+
+body:has(.dyou-card) .pf-v5-c-login__main {
+    margin-block-end: 0;
+    width: max-content;
+}
+
+body:has(.dyou-card) .pf-v5-c-login__main-body {
+    padding-block-start: 32px;
+    width: max-content;
+}
+
+.dyou-card {
+    background-color: #e8e8e8;
+    width: min(500px, max(320px, calc(100vw - 96px)));
+    border-radius: 16px;
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+    color: #000000;
+}
+
+.dyou-title,
+.dyou-text {
+    max-width: 80%;
+    margin-inline: auto;
+    line-height: 1.4;
+}
+
+.kc-qr-code {
+    line-height: 0;
+}
+
+.kc-qr-code img {
+    width: 250px;
+    height: auto;
+    border: 0;
+    border-radius: 32px;
+    box-shadow: unset;
+}
+
+.dyou-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 170px;
+    margin-inline: auto;
+    line-height: 1.4;
+}
+
+.dyou-divider::before,
+.dyou-divider::after {
+    content: "";
+    flex: 1;
+    border-block-start: 1px solid #000000;
+}
+
+.kc-dyou-wallet-button {
+    display: block;
+    width: max-content;
+    margin-inline: auto;
+    line-height: 0;
+}
+
+.kc-dyou-wallet-button img {
+    height: 54px;
+    width: auto;
+}
+
+.dyou-info-link,
+.dyou-info-link:hover,
+.dyou-info-link:focus,
+.dyou-info-link:visited {
+    color: #000000;
+    text-decoration: underline;
+}

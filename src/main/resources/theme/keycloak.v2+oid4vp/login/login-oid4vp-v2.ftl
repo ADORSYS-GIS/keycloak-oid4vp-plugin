@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "login-oid4vp-v2-macros.ftl" as oid4vpLayout>
 
 <#-- OID4VP has no username step; prevent keycloak.v2 from rendering its attempted-username block. -->
 <#global auth = {}>
@@ -7,15 +8,7 @@
     <!-- template: login-oid4vp-v2.ftl -->
 
     <#if oid4vp.isPresentationDuringIssuance()>
-        <#if section = "header">
-            ${msg('oid4vpPresentationDuringIssuanceTitle')}
-        <#elseif section = "form">
-            <#if oid4vp.authContext.error>
-                <p class="pf-v5-u-mb-md">
-                    ${msg('oid4vpPresentationDuringIssuanceError')}
-                </p>
-            </#if>
-        </#if>
+        <@oid4vpLayout.presentationDuringIssuance section=section />
     <#else>
         <#if section = "header">
             ${msg('oid4vpScanPageTitle')}
@@ -37,25 +30,7 @@
                 </p>
             </div>
 
-            <form action="${oid4vp.loginActionUrl}"
-                  id="kc-oid4vp-completion-form"
-                  method="post"
-                  style="display:none;">
-                <input type="hidden" id="kc-oid4vp-code-input" name="code" value="" />
-            </form>
-
-            <script type="module">
-                import { checkAuthStatus } from "${url.resourcesPath}/js/oid4vp.js";
-                const transactionId = "${oid4vp.authContext.transactionId!""}";
-                const codeVerifier = "${oid4vp.authContext.codeVerifier!""}";
-                checkAuthStatus(
-                    "${oid4vp.authContext.authStatusUrl}",
-                    "${oid4vp.authContext.authCodeRedemptionUrl}",
-                    transactionId,
-                    codeVerifier,
-                    2500
-                );
-            </script>
+            <@oid4vpLayout.completionForm />
         </#if>
     </#if>
 
