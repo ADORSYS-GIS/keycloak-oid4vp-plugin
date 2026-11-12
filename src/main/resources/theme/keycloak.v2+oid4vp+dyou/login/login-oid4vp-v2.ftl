@@ -27,9 +27,9 @@
                          alt="QR Code" />
                 </div>
 
-                <div class="dyou-divider pf-v5-u-mt-lg pf-v5-u-mb-lg pf-v5-u-font-size-md">
+                <p class="dyou-divider pf-v5-u-mt-lg pf-v5-u-mb-lg pf-v5-u-font-size-md">
                     ${msg('dyouWalletDividerLbl')}
-                </div>
+                </p>
 
                 <p class="dyou-text pf-v5-u-mt-0 pf-v5-u-mb-md pf-v5-u-font-size-md">
                     ${msg('dyouSameDevicePrompt')}
@@ -38,7 +38,7 @@
                 <a href="${oid4vp.authContext.authReqLink}"
                    id="kc-oid4vp-link" class="kc-dyou-wallet-button pf-v5-u-mt-0 pf-v5-u-mb-lg">
                     <img src="${url.resourcesPath}/img/${msg('dyouWalletButtonAsset')}"
-                         alt="${msg('oid4vpLoginBtnMessage')}" />
+                         alt="${msg('dyouWalletButtonLbl')}" />
                 </a>
 
                 <a href="https://eudi-wallet.gov.de"

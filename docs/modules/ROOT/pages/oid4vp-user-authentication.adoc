@@ -143,7 +143,7 @@ The response contains the authorization code that can be exchanged for an access
 == Complete OIDC login with OpenID4VP authentication
 
 The integration of OpenID4VP authentication into the OIDC login flow is readily available provided you enable a login theme that supports the feature.
-Configure either of the login themes provided by the plugin, `keycloak.v2+oid4vp` or ``keycloak.v2+oid4vp+dyou`, or add your own custom theme as described in the https://www.keycloak.org/docs/latest/server_admin/index.html#_themes[Keycloak documentation on customizing themes].
+Configure either of the login themes provided by the plugin, `keycloak.v2+oid4vp` or `keycloak.v2+oid4vp+dyou`, or add your own custom theme as described in the https://www.keycloak.org/docs/latest/server_admin/index.html#_themes[Keycloak documentation on customizing themes].
 
 [[login-themes]]
 === Login themes provided by the plugin for OpenID4VP authentication
