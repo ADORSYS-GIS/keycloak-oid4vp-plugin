@@ -17,14 +17,15 @@ against real spun-up components.
 
 ## The components
 
-| Component               | Where it comes from                                                  |
-| ----------------------- | -------------------------------------------------------------------- |
-| Keycloak                | `quay.io/keycloak/keycloak:26.8.2` with both plugins mounted as JARs |
-| Plugin: OpenID4VP login | latest release of this very repo                                     |
-| Plugin: token status    | latest release of `ADORSYS-GIS/token-status-link`                    |
-| Mock FE                 | latest `ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe`                 |
-| Test wallet             | latest `ghcr.io/eudi-dev/eudi-dev` (headless, auto-accepting)        |
-| Status server           | public instance `https://statuslist.eudi-adorsys.com`                |
+| Component               | Where it comes from                                                       |
+| ----------------------- | ------------------------------------------------------------------------- |
+| Keycloak                | `quay.io/keycloak/keycloak:26.8.2` with both plugins mounted as JARs      |
+| Plugin: OpenID4VP login | latest release of this very repo                                          |
+| Plugin: token status    | latest release of `ADORSYS-GIS/token-status-link`                         |
+| Mock FE                 | latest `ghcr.io/adorsys-gis/keycloak-oid4vc-mock-fe`                      |
+| Test wallet             | latest `ghcr.io/eudi-dev/eudi-dev` (headless, auto-accepting)             |
+| Status server           | `ghcr.io/adorsys/status-list-server:latest-fscert`, local, no DB          |
+| TLS proxy for it        | stock `nginx:1.27-alpine` (`assets/crypto/status-list-server/nginx.conf`) |
 
 ## Running
 

@@ -7,6 +7,7 @@ services:
     command: >-
       start-dev --import-realm
       --features=oid4vc-vci,oid4vc-vci-preauth-code,oid4vc-vci-rest-credential-offer
+      --truststore-paths=/opt/keycloak/data/status-list-server
       --log-level=INFO,io.github.adorsysgis.keycloakstatuslist:DEBUG,io.github.adorsysgis.keycloak.protocol.oid4vc:DEBUG
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -14,12 +15,17 @@ services:
       KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS: "true"
     ports:
       - "${KEYCLOAK_HTTP_PORT:-18080}:8080"
+    depends_on:
+      status-list-server-tls:
+        condition: service_healthy
     volumes:
       - ./build/providers/keycloak-token-status-plugin.jar:/opt/keycloak/providers/keycloak-token-status-plugin.jar:ro
       - ./build/providers/keycloak-oid4vp-plugin.jar:/opt/keycloak/providers/keycloak-oid4vp-plugin.jar:ro
       # The import file name must equal the realm name (see assets/realm/*).
       - ./build/realm.json:/opt/keycloak/data/import/oid4vc-vci-realm.json:ro
       - ./assets/crypto/keystore.p12:/opt/keycloak/data/oid4vc-vci/keystore.p12:ro
+      # The status-list-server's certificate merged into Keycloak's truststore via `--truststore-paths`.
+      - ./assets/crypto/status-list-server/dev.crt:/opt/keycloak/data/status-list-server/dev.crt:ro
     healthcheck:
       # The Keycloak image ships no curl/wget; a plain TCP probe is enough,
       # realm readiness is awaited by scripts/play.sh before the tests.
@@ -56,3 +62,48 @@ services:
         condition: service_healthy
     ports:
       - "${WALLET_HTTP_PORT:-18085}:8085"
+
+  status-list-server:
+    image: ${STATUS_LIST_SERVER_IMAGE:-ghcr.io/adorsys/status-list-server:latest-fscert}
+    environment:
+      APP_ENV: development
+      APP_TELEMETRY__ENABLED: "false"
+      APP_SERVER__HOST: 0.0.0.0
+      APP_SERVER__PORT: "8000"
+      APP_SERVER__DOMAIN: status-list-server-tls
+      # The -fscert image loads static certificate material from these files
+      # (this release has no ACME provisioning strategy switch).
+      APP_SERVER__CERT__STORE__CERTIFICATE_PATH: /certs/dev.crt
+      APP_SERVER__CERT__STORE__SIGNING_KEY_PATH: /certs/dev.key
+      # In-memory storage: no database container is needed.
+      APP_DATABASE__BACKEND: memory
+      APP_CACHE__BACKEND: memory
+    volumes:
+      - ./assets/crypto/status-list-server/dev.crt:/certs/dev.crt:ro
+      - ./assets/crypto/status-list-server/dev.key:/certs/dev.key:ro
+
+  # TLS-terminating proxy. The published status-list-server image serves plain
+  # HTTP only, while both Keycloak plugins require an HTTPS base URL. This
+  # proxy terminates TLS for them and forwards to the server's single listener.
+  # It is also the readiness gate of the pair.
+  status-list-server-tls:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./assets/crypto/status-list-server/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./assets/crypto/status-list-server/dev.crt:/certs/dev.crt:ro
+      - ./assets/crypto/status-list-server/dev.key:/certs/dev.key:ro
+    depends_on:
+      status-list-server:
+        condition: service_started
+    healthcheck:
+      # Proves the proxy answers over TLS, and with it that the status list
+      # server behind it is up (503/500 until then).
+      test:
+        ["CMD-SHELL", "wget -q -O /dev/null --no-check-certificate https://127.0.0.1:443/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    ports:
+      # Debug-only TLS access from the host.
+      - "${STATUS_LIST_HTTPS_PORT:-18090}:443"
