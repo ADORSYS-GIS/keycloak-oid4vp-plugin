@@ -51,14 +51,18 @@ body:has(.dyou-card) .pf-v5-c-login__main-body {
 }
 
 .kc-qr-code {
+    width: max-content;
+    margin-inline: auto;
+    border-radius: 32px;
+    background: white;
     line-height: 0;
 }
 
 .kc-qr-code img {
     width: 250px;
     height: auto;
+    padding: 16px;
     border: 0;
-    border-radius: 32px;
     box-shadow: unset;
 }
 

@@ -17,18 +17,9 @@ public class QRCodeTestUtils {
 
     public static String decodeQrCodeFromDataUrl(String src) {
         try {
-            // Strip data URL prefix
-            // Example input: data:image/png;base64,iVBORw0KGgoAAAANS...
-            String base64 = src.substring(src.indexOf(",") + 1);
-
-            // Decode base64
-            byte[] imageBytes = Base64.getDecoder().decode(base64);
-
-            // Read image
-            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
-
             // Convert for ZXing
-            LuminanceSource source = new BufferedImageLuminanceSource(bufferedImage);
+            BufferedImage image = dataUrltoImage(src);
+            LuminanceSource source = new BufferedImageLuminanceSource(image);
             BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
 
             // Decode QR
@@ -36,6 +27,20 @@ public class QRCodeTestUtils {
             return result.getText();
         } catch (Exception e) {
             throw new RuntimeException("QR code decoding failed", e);
+        }
+    }
+
+    public static BufferedImage dataUrltoImage(String src) {
+        try {
+            // Strip data URL prefix
+            // Example input: data:image/png;base64,iVBORw0KGgoAAAANS...
+            String base64 = src.substring(src.indexOf(",") + 1);
+
+            // Decode base64 and read image
+            byte[] imageBytes = Base64.getDecoder().decode(base64);
+            return ImageIO.read(new ByteArrayInputStream(imageBytes));
+        } catch (Exception e) {
+            throw new RuntimeException("QR code image reading failed", e);
         }
     }
 }
