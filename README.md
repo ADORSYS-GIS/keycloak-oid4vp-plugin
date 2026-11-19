@@ -1,15 +1,24 @@
 # keycloak-oid4vp-plugin
 
-This plugin adds OpenID4VP authentication to Keycloak
+This plugin adds OpenID4VP authentication to Keycloak.
 
-## License
+## Contents
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only).
-See [LICENSE](./LICENSE) for details.
+- [Compatibility](#compatibility)
+  - [Supported features](#supported-features)
+  - [Tested wallets](#tested-wallets)
+- [Build the Plugin](#build-the-plugin)
+- [Deploying the Plugin](#deploying-the-plugin)
+- [Running Keycloak for Testing (Docker Compose)](#running-keycloak-for-testing-docker-compose)
+- [Configuration](#configuration)
+  - [OID4VP authenticator configuration](#oid4vp-authenticator-configuration)
+- [Documentation site (Antora)](#documentation-site-antora)
+- [Releasing to Maven Central](#releasing-to-maven-central)
+- [License](#license)
 
 ## Compatibility
 
-This plugin has been tested with:
+The plugin has been tested with:
 
 | **Requirement** | **Version** |
 | --------------- | ----------- |
@@ -19,24 +28,58 @@ This plugin has been tested with:
 While it may work with other versions, compatibility is not guaranteed. Ensure your environment matches the tested
 versions for best results.
 
-Additionally, the following features of [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
-are supported:
+### Supported features
 
-- **Draft20-compatible request/response behavior** ✅
+The plugin implements the verifier side of
+[OpenID for Verifiable Presentations 1.0](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
+(OpenID4VP final, July 2025). The following features are supported:
 
-  - Client Identifier Scheme: `x509_san_dns` and `x509_hash`
-  - Response Mode: `direct_post` and `direct_post.jwt`
-  - Response Type: `vp_token`
-  - Query Languages: DIF Presentation Exchange and DCQL
-  - Signed request object (`request_uri` dereferencing)
-  - Request object `x5c` support for verifier access certificate
+- **Authorization request.** Signed request object (JAR) delivered through `request_uri`, with
+  `request_uri_method` `get` (default) or `post` and a custom wallet invocation URL scheme.
+- **Client identifier prefixes.** `x509_san_dns` (default) and `x509_hash`.
+- **Client authentication.** Request object signed with the realm key, `x5c` header carrying the access
+  certificate, and registration certificate or extra attestations advertised through `verifier_info`.
+- **Query language.** DCQL (`dcql_query`) with credential sets, Claims Path Pointers for JSON-based
+  credentials and ISO mDoc, and per-format `meta` parameters. Support for DIF Presentation Exchange was
+  removed in line with the evolution of the spec.
+- **Credential formats.** SD-JWT VC (`dc+sd-jwt`) and ISO/IEC 18013-5 mDoc (`mso_mdoc`), alone or
+  combined in one profile.
+- **Response.** Response type `vp_token`, with response modes `direct_post` and encrypted
+  `direct_post.jwt` (JWE, ECDH-ES, A128GCM/A256GCM), plus error responses from the wallet in both
+  plaintext and encrypted form.
+- **Holder binding.** Key Binding JWT for SD-JWT VC with proof age limit, non-cryptographic
+  presentations with state binding (OpenID4VP §5.3), and mDoc device authentication.
+- **Transaction data.** `transaction_data` (OpenID4VP §5.1) with `sha-256` hashes.
+- **Credential verification.** SD-JWT VC issuer signature with `nbf`/`exp`/`iss` checks, and mDoc
+  issuer and device authentication with ISO-spec session transcript fallback.
+- **Issuer trust.** Self-trust for credentials issued by the same realm, X.509 trust anchors (`x5c`),
+  and EUDI PID trust lists (ETSI TS 119 602 LoTE).
+- **Revocation.** Token Status List checks with configurable trust in the Status List signer.
+- **Verifier policy.** JSON authentication profiles with primary and supporting credentials,
+  credential groups, per-profile registration certificates, client filters, and claim-binding rules.
+- **Login integration.** OIDC login through the plugin's login themes, and API-driven flows with
+  status polling and PKCE S256 code exchange.
+- **Presentation during issuance.** [OpenID4VCI](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html)
+  issuance gated on a verified presentation, through the [Interactive Authorization Endpoint](https://openid.github.io/OpenID4VCI/openid-4-verifiable-credential-issuance-1_1-wg-draft.html#name-interactive-authorization)
+  of OpenID4VCI 1.1 or through a [nested OpenID4VP flow](https://bmi.usercontent.opencode.de/eudi-wallet/wallet-development-documentation-public/latest/architecture-concept/03-data-flows/31-eaa-issuance.html#presentation-during-issuance)
+  in the OpenID4VCI 1.0 authorization code flow.
 
-- **1.0-Final alignment (ongoing)** ⚠️
-  - DCQL request/response model is supported
-  - `verifier_info` support for registration certificate injection
-  - Compatibility and interoperability hardening are still evolving
+Conversely, the following features are notably **not** supported:
 
-Confirmed support for OpenID4VP 1.0 is pending further updates, review, and testing.
+- W3C Verifiable Credentials (VCDM) formats (`jwt_vc_json`, `ldp_vc`)
+- OpenID4VP over the Digital Credentials API
+- DCQL Trusted Authorities Queries
+
+### Tested wallets
+
+The plugin has been tested successfully against the following real wallets:
+
+- The [d-you](https://d-you.gov.de/en) Sandbox wallet (on Android and iOS) – Germany's official EUDI Wallet to be 
+  launched in January 2027.
+- The [Valera](https://github.com/a-sit-plus/valera) wallet (on Android) – an open-source EUDI Wallet implementation.
+
+Additionally, the plugin's end-to-end suite covers the [eudi-dev](https://github.com/eudi-dev/eudi-dev) headless test
+wallet, an OpenID-certified wallet for testing EUDI issuers and verifiers; see [`e2e/`](./e2e/README.md).
 
 ## Build the Plugin
 
@@ -166,3 +209,8 @@ The workflow expects these repository secrets:
 - `GPG_PASSPHRASE`
 
 The release build publishes signed artifacts (`jar`, `sources`, `javadoc`) for version `X.Y.Z`.
+
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only).
+See [LICENSE](./LICENSE) for details.
