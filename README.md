@@ -32,7 +32,7 @@ versions for best results.
 
 The plugin implements the verifier side of
 [OpenID for Verifiable Presentations 1.0](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
-(OpenID4VP final, July 2025). The following features are supported:
+(OpenID4VP 1.0, finalized in July 2025). The following features are supported:
 
 - **Authorization request.** Signed request object (JAR) delivered through `request_uri`, with
   `request_uri_method` `get` (default) or `post` and a custom wallet invocation URL scheme.
@@ -46,7 +46,8 @@ The plugin implements the verifier side of
   combined in one profile.
 - **Response.** Response type `vp_token`, with response modes `direct_post` and encrypted
   `direct_post.jwt` (JWE, ECDH-ES, A128GCM/A256GCM), plus error responses from the wallet in both
-  plaintext and encrypted form.
+  plaintext and encrypted form. The interactive authorization flow of presentation during issuance
+  uses `ia_post` or `ia_post.jwt` instead.
 - **Holder binding.** Key Binding JWT for SD-JWT VC with proof age limit, non-cryptographic
   presentations with state binding (OpenID4VP §5.3), and mDoc device authentication.
 - **Transaction data.** `transaction_data` (OpenID4VP §5.1) with `sha-256` hashes.
@@ -54,14 +55,16 @@ The plugin implements the verifier side of
   issuer and device authentication with ISO-spec session transcript fallback.
 - **Issuer trust.** Self-trust for credentials issued by the same realm, X.509 trust anchors (`x5c`),
   and EUDI PID trust lists (ETSI TS 119 602 LoTE).
-- **Revocation.** Token Status List checks with configurable trust in the Status List signer.
+- **Revocation.** Optional Token Status List revocation checks (disabled by default), with
+  configurable trust in the Status List signer.
 - **Verifier policy.** JSON authentication profiles with primary and supporting credentials,
   credential groups, per-profile registration certificates, client filters, and claim-binding rules.
 - **Login integration.** OIDC login through the plugin's login themes, and API-driven flows with
   status polling and PKCE S256 code exchange.
 - **Presentation during issuance.** [OpenID4VCI](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html)
-  issuance gated on a verified presentation, through the [Interactive Authorization Endpoint](https://openid.github.io/OpenID4VCI/openid-4-verifiable-credential-issuance-1_1-wg-draft.html#name-interactive-authorization)
-  of OpenID4VCI 1.1 or through a [nested OpenID4VP flow](https://bmi.usercontent.opencode.de/eudi-wallet/wallet-development-documentation-public/latest/architecture-concept/03-data-flows/31-eaa-issuance.html#presentation-during-issuance)
+  issuance gated on a verified presentation, through the
+  [Interactive Authorization Endpoint](https://openid.github.io/OpenID4VCI/openid-4-verifiable-credential-issuance-1_1-wg-draft.html#name-interactive-authorization)
+  of the OpenID4VCI 1.1 working-group draft or through a [nested OpenID4VP flow](https://bmi.usercontent.opencode.de/eudi-wallet/wallet-development-documentation-public/latest/architecture-concept/03-data-flows/31-eaa-issuance.html#presentation-during-issuance)
   in the OpenID4VCI 1.0 authorization code flow.
 
 Conversely, the following features are notably **not** supported:
