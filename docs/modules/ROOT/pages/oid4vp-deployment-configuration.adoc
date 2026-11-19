@@ -65,7 +65,7 @@ For mDoc credentials, claims must be specified using the `namespace/elementIdent
 |`(JSON array)`
 |JSON array of authentication profiles that define which credentials are requested and how they are verified.
 When empty, a legacy single-credential profile is generated from `credentialTypes`.
-See <<_authentication_profiles>> below for the full format.
+See <<authentication_profiles>> below for the full format.
 
 |`credentialTypes`
 |`https://credentials.example.com/identity_credential`
@@ -74,6 +74,7 @@ Only applies when no authentication profile is configured.
 Interpreted per credential format (for example `vct` for SD-JWT VC, `docType` for mDoc).
 |===
 
+[#authentication_profiles]
 == Authentication profiles
 
 Authentication profiles define which credentials are requested during the OpenID4VP flow and how they are verified.
@@ -174,14 +175,16 @@ Each credential requirement object defines a single credential to be requested:
 
 |`binding`
 |`[]`
-|Binding rules for supporting credentials.
+|Binding rules that tie the presented credential to the primary credential or the authenticated user.
+Can be set on supporting credentials and on primary credentials; mandatory on the primary credential when `identitySource` is `session`. See <<binding-rules>>.
 
 |===
 
 [NOTE]
 ====
 A profile must have exactly one primary credential, except when `credentialGroups` are used to select between alternative primary credentials.
-The primary credential must request the configured `subjectClaim`—`sub` by default (unless `identitySource` is `session`).
+A primary credential with `identitySource` `credential` must request the configured `subjectClaim`—`sub` by default.
+A primary credential with `identitySource` `session` instead requires at least one binding rule.
 ====
 
 === Trust policies
@@ -223,12 +226,18 @@ Validates the credential issuer against a EUDI trust list. The `trustListSigning
 
 ETSI TS 119 602 V1.1.1 Annex D, Table D.3 prohibits `ServiceStatus` in the PID Providers LoTE profile. Current approval is represented by membership in the list; a provider that loses its mandate must be removed. Generic `granted`/`withdrawn` service-status filtering therefore does not apply to this profile. Cached snapshots can delay observation of removal until refresh (at most 15 minutes, capped by `NextUpdate`).
 
+[[binding-rules]]
 === Binding rules
 
-Binding rules ensure that supporting credentials are bound to the primary credential or the authenticated user.
-They are configured on supporting credentials only.
+Binding rules ensure that a presented credential is bound to the primary credential or to the authenticated Keycloak user.
+They can be configured on supporting credentials and on primary credentials:
 
-.Claim equals primary claim
+* *Supporting credentials*: the rule ties an additional credential (for example an mDL or an email VC) to the primary credential that established the identity.
+* *Primary credentials*: the rule ties the primary credential itself to the recovered Keycloak user.
+This is mandatory for session-identity primary credentials (`identitySource` set to `session`), where the user comes from the issuance session rather than from identity claims in the credential; without a binding rule the presentation would not be checked against the user at all.
+For credential-identity primary credentials the user is already recovered from the `subjectClaim`, so binding rules are optional there and add an extra consistency check.
+
+.Claim equals primary claim (supporting credentials only)
 [source,json]
 ----
 {
@@ -239,6 +248,7 @@ They are configured on supporting credentials only.
 ----
 
 Verifies that a claim in the supporting credential matches a claim in the primary credential.
+This rule type is rejected at profile load time when configured on the primary credential.
 
 .Claim equals user attribute
 [source,json]
@@ -250,7 +260,8 @@ Verifies that a claim in the supporting credential matches a claim in the primar
 }
 ----
 
-Verifies that a claim in the supporting credential matches a Keycloak user attribute. Built-in attribute mappings: `given_name`/`firstName`, `family_name`/`lastName`, `username`/`preferred_username`. Any other value is looked up as a custom user attribute.
+Verifies that a claim in the credential being checked matches an attribute of the authenticated Keycloak user.
+Built-in attribute mappings: `given_name`/`firstName`, `family_name`/`lastName`, `username`/`preferred_username`. Any other value is looked up as a custom user attribute.
 
 === Credential groups
 
@@ -293,7 +304,7 @@ Presentation during issuance allows Keycloak to request a credential presentatio
 In this mode, the user identity comes from the issuance session rather than from claims in the presented credential.
 
 To configure a presentation-during-issuance profile, set `identitySource` to `session` on the primary credential.
-Binding rules are mandatory for session-identity credentials so that the presented credential is verified against the authenticated user.
+Binding rules are mandatory for session-identity credentials so that the presented credential is verified against the authenticated user (see <<binding-rules>>).
 
 [source,json]
 ----
@@ -359,6 +370,7 @@ Used as a replay protection measure.
 Currently only applies to SD-JWT VC; mDoc does not specify a device-signed timestamp that would allow a holder-binding age check.
 |===
 
+[[verification-policy-settings]]
 == Verification policy settings
 
 [cols="1,1,2"]
@@ -391,10 +403,23 @@ Currently only applies to SD-JWT VC; mDoc does not specify a device-signed times
 
 |`statusListTrustMaterialIdps`
 |_(empty)_
-|Comma-separated aliases of Keycloak trust-material identity providers used to validate the `x5c` chain of fetched Status List JWTs. When aliases are configured, only those providers establish trust and validation fails if none accepts the chain. When empty, the global Keycloak `TruststoreProvider` is used for backward compatibility.
+|Comma-separated aliases of Keycloak trust-material identity providers used to validate the `x5c` chain of fetched Status List JWTs. When aliases are configured, only those providers establish trust and validation fails if none accepts the chain. When empty, the global Keycloak truststore is used for backward compatibility; see <<global-truststore>>.
 |===
 
-=== Status List signer trust
+[[global-truststore]]
+=== Status List signer trust via the global truststore (legacy)
+
+When `statusListTrustMaterialIdps` is empty, the plugin validates Status List JWT `x5c` chains against Keycloak's global truststore, which Keycloak also uses for outgoing TLS connections.
+Add the required certificates either to Keycloak's default truststore folder (`conf/truststores`) with no further configuration, or with the `--truststore-paths` option (`KC_TRUSTSTORE_PATHS`), which accepts PEM or unencrypted PKCS12 files or a directory of them:
+
+[source,bash]
+----
+bin/kc.sh start --truststore-paths=/opt/truststore/my-cert.pem,/opt/other-truststore
+----
+
+Refer to the https://www.keycloak.org/server/keycloak-truststore[Keycloak documentation on trusted certificates] for more details.
+
+=== Status List signer trust via trust-material identity providers
 
 For static X.509 CA roots, configure Keycloak's built-in *Default Trust* identity provider with X.509 trust enabled and reference its alias from `statusListTrustMaterialIdps`.
 The provider validates the complete Status List JWT `x5c` chain; the certificate carried in the JWT is not trusted merely because it is present.
@@ -425,7 +450,7 @@ Its settings are:
 
 [IMPORTANT]
 ====
-Configured trust-material providers are authoritative. The global truststore is not used as a fallback when `statusListTrustMaterialIdps` is non-empty. Remove the setting to explicitly restore legacy global-truststore validation.
+Configured trust-material providers are authoritative. The global truststore is not used as a fallback when `statusListTrustMaterialIdps` is non-empty. Remove the setting to fall back to the global truststore described in <<global-truststore>>.
 ====
 
 == Generic example (realm JSON import format)
