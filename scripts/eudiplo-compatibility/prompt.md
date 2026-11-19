@@ -20,7 +20,7 @@ Use GitHub access or Git to retrieve the baseline and candidate revisions. Recor
 3. Trace only the corresponding plugin implementation, callers, configuration, and tests needed to evaluate that behavior. Check the Keycloak version pinned by the plugin and inspect its relevant integration where available. Do not infer equivalence from similar names alone.
 4. Assess whether the change could improve, reduce, or leave unchanged the plugin's interoperability with the affected wallet flow. Consider protocol inputs/outputs, trust and certificate validation, credential issuance/presentation, status checks, and error behavior only where the upstream diff touches them.
 5. Support each conclusion with source references: repository, commit, file and line (or symbol if line numbers are unavailable). Separate confirmed behavior differences from conditional risks and unknowns. Do not report a concern without a concrete scenario and evidence.
-6. Suggest focused plugin tests or manual checks for material findings. Do not change code, create commits, update the baseline, or set up CI/notifications.
+6. Suggest focused plugin tests or manual checks for material findings. Do not change code, create commits, or update the baseline.
 
 ## Impact Score
 
@@ -49,4 +49,4 @@ Avoid repeating every changed path in the narrative; link the full compare and c
 
 ## Cadence
 
-Run this review weekly against the latest EUDIPLO `main`. Keep the baseline unchanged until the team has reviewed and recorded the report. Once the range has been reviewed, update `baseline.sha` to the reviewed candidate SHA in a separate change so the next review starts there. CI scheduling and Discord notifications are out of scope for this initial local workflow.
+Run this review weekly against the latest EUDIPLO `main`. Keep the baseline unchanged until the team has reviewed and recorded the report. Once the range has been reviewed, update `baseline.sha` to the reviewed candidate SHA in a separate change so the next review starts there.
