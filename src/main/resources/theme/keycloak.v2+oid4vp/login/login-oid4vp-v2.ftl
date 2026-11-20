@@ -13,9 +13,9 @@
         <#if section = "header">
             ${msg('oid4vpScanPageTitle')}
         <#elseif section = "form">
-            <div class="pf-v5-u-p-md pf-v5-u-text-align-center">
+            <div class="pf-v5-u-p-lg pf-v5-u-text-align-center">
                 <img src="${oid4vp.authContext.authReqQrCode}"
-                     style="max-width: 300px;"
+                     style="width: 250px;"
                      id="kc-oid4vp-qrcode"
                      alt="QR Code" />
             </div>
