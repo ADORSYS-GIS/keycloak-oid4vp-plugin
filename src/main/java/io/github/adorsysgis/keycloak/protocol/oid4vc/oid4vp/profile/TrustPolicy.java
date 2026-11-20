@@ -17,6 +17,32 @@ public class TrustPolicy {
     public static final String X5C = "x5c";
     public static final String EUDI_PID_TRUST_LIST = "eudi_pid_trust_list";
 
+    /** Origin implied by the primary credential's configured trust policies. */
+    public enum Origin {
+        CURRENT_REALM,
+        EXTERNAL
+    }
+
+    public static Origin resolvePrimaryOrigin(CredentialRequirement credential) {
+        if (!credential.isPrimary() || credential.isSessionIdentity()) {
+            throw new IllegalArgumentException("Credential must be a non-session primary credential");
+        }
+
+        List<TrustPolicy> trust = credential.getTrust();
+        if (trust == null || trust.isEmpty()) {
+            return Origin.CURRENT_REALM;
+        }
+
+        boolean usesSelfTrust = trust.stream().anyMatch(policy -> SELF.equals(policy.getType()));
+        boolean usesExternalTrust = trust.stream().anyMatch(policy -> !SELF.equals(policy.getType()));
+        if (usesSelfTrust && usesExternalTrust) {
+            throw new IllegalStateException(
+                    "Primary credential must not combine self trust with external trust policies: "
+                            + credential.getId());
+        }
+        return usesSelfTrust ? Origin.CURRENT_REALM : Origin.EXTERNAL;
+    }
+
     @JsonProperty("type")
     private String type = SELF;
 
@@ -126,6 +152,11 @@ public class TrustPolicy {
 
     public String getIssuer() {
         return issuer;
+    }
+
+    /** Returns the configured issuer namespace, or {@code null} when it is blank. */
+    public String issuerNamespace() {
+        return StringUtil.isBlank(issuer) ? null : issuer;
     }
 
     public TrustPolicy setIssuer(String issuer) {

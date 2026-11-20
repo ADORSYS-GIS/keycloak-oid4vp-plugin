@@ -1,35 +1,24 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
-import java.util.Map;
-import org.keycloak.models.AuthenticatorConfigModel;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 
 /**
- * Typed access to the user-import authenticator settings.
- *
- * <p>Read full descriptions of the settings in {@link OID4VPAuthenticatorFactory}.
+ * Typed access to the user-import settings of one authentication profile.
  */
 public class OID4VPImportConfig {
 
     private final boolean importUnknownUsers;
     private final String importIdentityProviderAlias;
 
-    public OID4VPImportConfig(AuthenticatorConfigModel authConfig) {
-        Map<String, String> config = OID4VPAuthenticatorFactory.normalizeTextConfigValues(authConfig);
-
-        this.importUnknownUsers = Boolean.parseBoolean(config.getOrDefault(
-                OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG,
-                String.valueOf(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG_DEFAULT)));
-
-        String alias = config.getOrDefault(
-                OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG,
-                OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT);
-        this.importIdentityProviderAlias =
-                alias != null && !alias.isBlank() ? alias : OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT;
+    public OID4VPImportConfig(AuthenticationProfile profile) {
+        this.importUnknownUsers = profile != null && profile.shouldImportUnknownUsers();
+        this.importIdentityProviderAlias = profile == null
+                ? AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS
+                : profile.getImportIdentityProviderAlias();
     }
 
     public boolean shouldImportUnknownUsers() {

@@ -10,6 +10,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -118,6 +119,40 @@ public class OID4VPProfileConfigTest {
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
+    }
+
+    @Test
+    void shouldKeepImportSettingsScopedToEachProfile() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "import-enabled",
+                    "importUnknownUsers": true,
+                    "importIdentityProviderAlias": "pid-import",
+                    "credentials": [
+                      { "id": "identity", "role": "primary", "credentialTypes": ["pid"], "claims": ["sub"] }
+                    ]
+                  },
+                  {
+                    "id": "sensitive",
+                    "credentials": [
+                      { "id": "identity", "role": "primary", "credentialTypes": ["sensitive"], "claims": ["sub"] }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
+        AuthenticationProfile importProfile = profileConfig.getProfile("import-enabled");
+        AuthenticationProfile sensitiveProfile = profileConfig.getProfile("sensitive");
+
+        assertTrue(importProfile.shouldImportUnknownUsers());
+        assertEquals("pid-import", importProfile.getImportIdentityProviderAlias());
+        assertFalse(sensitiveProfile.shouldImportUnknownUsers());
+        assertEquals(
+                AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS,
+                sensitiveProfile.getImportIdentityProviderAlias());
     }
 
     @Test
@@ -755,7 +790,7 @@ public class OID4VPProfileConfigTest {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
                         { "type": "claim_equals_primary_claim", "credentialClaim": "email", "primaryCredentialClaim": "username" }
                         """));
-        assertTrue(e.getMessage().contains("must be among the supporting credential's requested claims"));
+        assertTrue(e.getMessage().contains("must be among the credential's requested claims"));
     }
 
     @Test

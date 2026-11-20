@@ -6,10 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy.Origin;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -82,8 +82,8 @@ class CredentialIdentityTest {
         CredentialRequirement externallyTrusted =
                 primaryLoginCredential().setTrust(List.of(new TrustPolicy().setType(TrustPolicy.EUDI_PID_TRUST_LIST)));
 
-        assertEquals(Origin.CURRENT_REALM, Origin.fromPrimaryTrust(selfTrusted));
-        assertEquals(Origin.EXTERNAL, Origin.fromPrimaryTrust(externallyTrusted));
+        assertEquals(Origin.CURRENT_REALM, TrustPolicy.resolvePrimaryOrigin(selfTrusted));
+        assertEquals(Origin.EXTERNAL, TrustPolicy.resolvePrimaryOrigin(externallyTrusted));
     }
 
     @Test
@@ -93,7 +93,7 @@ class CredentialIdentityTest {
                         new TrustPolicy().setType(TrustPolicy.SELF),
                         new TrustPolicy().setType(TrustPolicy.EUDI_PID_TRUST_LIST)));
 
-        assertThrows(IllegalStateException.class, () -> Origin.fromPrimaryTrust(mixed));
+        assertThrows(IllegalStateException.class, () -> TrustPolicy.resolvePrimaryOrigin(mixed));
     }
 
     @Test

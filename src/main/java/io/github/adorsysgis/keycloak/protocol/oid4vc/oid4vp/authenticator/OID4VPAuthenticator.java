@@ -2,7 +2,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.BindingValueComparator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.binding.ExactBindingValueComparatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.AuthRequirements;
@@ -15,6 +14,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.Authenticati
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.BindingRule;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.OID4VPProfileConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.provision.OID4VPUserProvisioner;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.provision.UserProvisioningException;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthenticationSessionStore;
@@ -232,14 +232,6 @@ public class OID4VPAuthenticator implements Authenticator {
         }
     }
 
-    void applyBindingRules(
-            Context ctx, AuthenticatingUser authUser, CredentialRequirement credentialReq, JsonNode claims)
-            throws VerificationException {
-        applyPrimaryClaimBindings(ctx, authUser.primaryClaims(), credentialReq, claims);
-        applyUserAttributeBindings(
-                ctx, credentialReq, claims, attribute -> readUserAttribute(authUser.userModel(), attribute));
-    }
-
     /**
      * Evaluates the claim-to-primary-claim bindings of one credential. Needs only verified claims,
      * so it runs during presentation verification, before any user is resolved.
@@ -251,9 +243,6 @@ public class OID4VPAuthenticator implements Authenticator {
 
         for (BindingRule rule : credentialReq.getBinding()) {
             if (!BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM.equals(rule.getType())) {
-                if (!BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE.equals(rule.getType())) {
-                    throw new IllegalStateException(String.format("Unsupported binding rule type: %s", rule.getType()));
-                }
                 continue;
             }
             if (credentialReq.isPrimary()) {
@@ -295,9 +284,6 @@ public class OID4VPAuthenticator implements Authenticator {
 
         for (BindingRule rule : credentialReq.getBinding()) {
             if (!BindingRule.CLAIM_EQUALS_USER_ATTRIBUTE.equals(rule.getType())) {
-                if (!BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM.equals(rule.getType())) {
-                    throw new IllegalStateException(String.format("Unsupported binding rule type: %s", rule.getType()));
-                }
                 continue;
             }
             compareBindingValues(
@@ -366,14 +352,10 @@ public class OID4VPAuthenticator implements Authenticator {
         CredentialIdentity identity = primaryCredential.identity();
 
         if (identity != null) {
-            String realmIssuer = Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName());
             if (identity.origin() == Origin.CURRENT_REALM) {
-                if (!realmIssuer.equals(identity.issuer())) {
-                    failRejectingPresentedCredential(ctx, "Current-realm credential issuer does not match this realm");
-                    return null;
-                }
                 return withoutDeferredMutation(recoverLocalUser(ctx, primaryCredentialReq, primaryCredential));
             }
+            String realmIssuer = Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName());
             if (realmIssuer.equals(identity.issuer())) {
                 failRejectingPresentedCredential(ctx, "External credential must not claim the current realm issuer");
                 return null;
@@ -397,7 +379,6 @@ public class OID4VPAuthenticator implements Authenticator {
         }
 
         if (user == null) {
-            // A deleted local user must never be recreated from an old credential.
             logger.debugf("Authentication passed but authenticating user is unknown");
             failDenyingAuthenticatingUser(ctx);
             return null;
@@ -423,8 +404,7 @@ public class OID4VPAuthenticator implements Authenticator {
             return null;
         }
 
-        OID4VPImportConfig importConfig =
-                new OID4VPImportConfig(ctx.authenticationFlowContext().getAuthenticatorConfig());
+        OID4VPImportConfig importConfig = new OID4VPImportConfig(ctx.authenticationProfile());
         String alias = importConfig.getImportIdentityProviderAlias();
         String externalId = CredentialIdentity.externalId(identity.issuer(), identity.subject());
         OID4VPUserProvisioner provisioner = new OID4VPUserProvisioner();

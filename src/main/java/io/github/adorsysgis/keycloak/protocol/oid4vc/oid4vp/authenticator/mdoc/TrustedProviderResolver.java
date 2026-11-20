@@ -54,11 +54,29 @@ public final class TrustedProviderResolver {
                 trustAnchors.addAll(resolveStaticAnchors(session, trust, credential.getId()));
             }
         }
-        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors), null);
+        return new ResolvedMdocTrust(
+                new StaticTruststoreProvider(trustAnchors), commonPinnedIssuerNamespace(credential.getTrust()));
     }
 
     private static boolean requiresIssuerEnforcement(CredentialRequirement credential) {
         return credential.isPrimary() && !credential.isSessionIdentity();
+    }
+
+    private static String commonPinnedIssuerNamespace(List<TrustPolicy> trustPolicies) {
+        String issuerNamespace = null;
+        for (TrustPolicy trust : trustPolicies) {
+            if (!TrustPolicy.X5C.equals(trust.getType())) {
+                return null;
+            }
+
+            String configuredNamespace = trust.issuerNamespace();
+            if (configuredNamespace == null
+                    || (issuerNamespace != null && !issuerNamespace.equals(configuredNamespace))) {
+                return null;
+            }
+            issuerNamespace = configuredNamespace;
+        }
+        return issuerNamespace;
     }
 
     private static ResolvedMdocTrust resolvePrimaryIssuer(KeycloakSession session, CredentialRequirement credential)
@@ -69,16 +87,24 @@ public final class TrustedProviderResolver {
         }
 
         TrustPolicy trust = credential.getTrust().getFirst();
-        if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
-            if (TrustPolicy.X5C.equals(trust.getType())) {
-                return new ResolvedMdocTrust(
+        return switch (trust.getType()) {
+            case TrustPolicy.SELF ->
+                new ResolvedMdocTrust(
+                        new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())), null);
+            case TrustPolicy.X5C ->
+                new ResolvedMdocTrust(
                         new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())),
-                        pinnedIssuerNamespace(trust));
-            }
-            List<X509Certificate> anchors = resolveStaticAnchors(session, trust, credential.getId());
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(anchors), null);
-        }
+                        trust.issuerNamespace());
+            case TrustPolicy.EUDI_PID_TRUST_LIST -> resolvePrimaryEudiPidTrust(session, trust, credential.getId());
+            default ->
+                throw new IllegalStateException(String.format(
+                        "Primary mDoc credential '%s' uses an unsupported trust policy: %s",
+                        credential.getId(), trust.getType()));
+        };
+    }
 
+    private static ResolvedMdocTrust resolvePrimaryEudiPidTrust(
+            KeycloakSession session, TrustPolicy trust, String credentialId) throws VerificationException {
         try {
             EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider(session).resolve(trust);
             TrustedPidProvider provider = snapshot.resolveIssuer(trust.getIssuer());
@@ -86,24 +112,8 @@ public final class TrustedProviderResolver {
                     new StaticTruststoreProvider(provider.trustedCertificates()), trust.getIssuer());
         } catch (EudiPidTrustException e) {
             throw new VerificationException(
-                    String.format("Credential '%s' could not resolve its configured PID Provider", credential.getId()),
-                    e);
+                    String.format("Credential '%s' could not resolve its configured PID Provider", credentialId), e);
         }
-    }
-
-    /**
-     * Returns the stable issuer namespace for pinned X.509 trust: the explicitly configured
-     * {@code trust.issuer}, or {@code null} when none is configured. A certificate thumbprint alone
-     * is not a stable long-term identity (leaf certificates rotate and a shared root can serve
-     * several issuers). Without a configured namespace, cryptographic verification can still
-     * succeed, but the credential cannot be resolved to an external Keycloak identity and login
-     * fails closed.
-     */
-    private static String pinnedIssuerNamespace(TrustPolicy trust) {
-        if (trust.getIssuer() == null || trust.getIssuer().isBlank()) {
-            return null;
-        }
-        return trust.getIssuer();
     }
 
     private static List<X509Certificate> resolveStaticAnchors(
@@ -161,11 +171,6 @@ public final class TrustedProviderResolver {
         }
     }
 
-    /**
-     * Resolved trust anchors plus, for primary login credentials, the stable issuer namespace that
-     * identified them. The namespace is {@code null} for supporting credentials, session-bound
-     * presentations, and pinned-X.509 primary credentials without an explicit issuer; those paths
-     * expose no external identity.
-     */
+    /** Resolved trust anchors and the stable issuer namespace, when the configured trust identifies one. */
     public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors, String issuerNamespace) {}
 }

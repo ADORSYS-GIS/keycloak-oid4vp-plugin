@@ -17,7 +17,6 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContex
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -26,6 +25,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
@@ -129,12 +130,10 @@ public class MdocCredentialVerifier implements CredentialVerifier {
         String subject = readClaim(namespaces, credentialReq.getSubjectClaim());
         CredentialIdentity identity = null;
         if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
-            Origin origin = Origin.fromPrimaryTrust(credentialReq);
+            Origin origin = TrustPolicy.resolvePrimaryOrigin(credentialReq);
             String issuer = trust.issuerNamespace();
             if (origin == Origin.CURRENT_REALM) {
                 issuer = realmIssuer(session);
-            } else if (issuer != null && realmIssuer(session).equals(issuer)) {
-                throw new VerificationException("External credential must not claim the current realm issuer");
             }
             identity = CredentialIdentity.forCredential(credentialReq, origin, issuer, subject);
         }

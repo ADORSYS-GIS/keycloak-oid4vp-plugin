@@ -4,13 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
@@ -24,7 +25,6 @@ import org.keycloak.sdjwt.consumer.SdJwtPresentationConsumer;
 import org.keycloak.sdjwt.vp.KeyBindingJWT;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.sdjwt.vp.SdJwtVpVerificationResult;
-import org.keycloak.services.Urls;
 import org.keycloak.utils.StringUtil;
 
 /**
@@ -103,16 +103,7 @@ public class SdJwtCredentialVerifier implements CredentialVerifier {
                     .map(JsonNode::asText)
                     .orElse(null);
             String subject = readClaim(verifiedClaims, credentialReq.getSubjectClaim());
-            String realmIssuer = Urls.realmIssuer(
-                    session.getContext().getUri().getBaseUri(),
-                    session.getContext().getRealm().getName());
-            Origin origin = Origin.fromPrimaryTrust(credentialReq);
-            if (origin == Origin.CURRENT_REALM && !realmIssuer.equals(issuer)) {
-                throw new VerificationException("Credential signed by this realm has an unexpected issuer");
-            }
-            if (origin == Origin.EXTERNAL && realmIssuer.equals(issuer)) {
-                throw new VerificationException("External credential must not claim the current realm issuer");
-            }
+            Origin origin = TrustPolicy.resolvePrimaryOrigin(credentialReq);
             identity = CredentialIdentity.forCredential(credentialReq, origin, issuer, subject);
         }
         return new VerifiedCredential(identity, verifiedClaims);

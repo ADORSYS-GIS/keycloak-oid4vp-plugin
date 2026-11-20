@@ -1119,7 +1119,20 @@ public class OID4VPUserImportTest extends OID4VPBaseUserAuthEndpointTest {
         AuthenticatorConfigRepresentation originalConfig = getAuthenticatorConfig();
         try {
             AuthenticatorConfigRepresentation updatedConfig = getAuthenticatorConfig();
-            updatedConfig.getConfig().put(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true");
+            updatedConfig.getConfig().put(OID4VPAuthenticatorFactory.PROFILES_CONFIG, """
+                    [{
+                      "id": "default",
+                      "importUnknownUsers": true,
+                      "credentials": [{
+                        "id": "identity",
+                        "role": "primary",
+                        "credentialTypes": ["%s"],
+                        "claims": ["sub"],
+                        "trust": [{"type": "self"}]
+                      }]
+                    }]
+                    """.formatted(
+                            OID4VPAuthenticatorFactory.CREDENTIAL_TYPES_CONFIG_DEFAULT));
             updateAuthenticatorConfig(updatedConfig);
             test.run();
         } finally {

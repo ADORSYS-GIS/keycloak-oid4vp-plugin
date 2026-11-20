@@ -7,12 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
-import java.util.HashMap;
-import java.util.Map;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import org.junit.jupiter.api.Test;
-import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.KeycloakSession;
@@ -26,27 +23,18 @@ class OID4VPImportConfigTest {
 
     @Test
     void defaultsKeepImportDisabled() {
-        OID4VPImportConfig config = new OID4VPImportConfig(null);
+        OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile());
 
         assertFalse(config.shouldImportUnknownUsers());
         assertEquals(
-                OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, config.getImportIdentityProviderAlias());
-    }
-
-    @Test
-    void emptyConfigKeepsImportDisabled() {
-        OID4VPImportConfig config = new OID4VPImportConfig(authConfig(Map.of()));
-
-        assertFalse(config.shouldImportUnknownUsers());
-        assertEquals(
-                OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, config.getImportIdentityProviderAlias());
+                AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS, config.getImportIdentityProviderAlias());
     }
 
     @Test
     void overridesAreRespected() {
-        OID4VPImportConfig config = new OID4VPImportConfig(authConfig(Map.of(
-                OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true",
-                OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG, "custom-import")));
+        OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile()
+                .setImportUnknownUsers(true)
+                .setImportIdentityProviderAlias("custom-import"));
 
         assertTrue(config.shouldImportUnknownUsers());
         assertEquals("custom-import", config.getImportIdentityProviderAlias());
@@ -55,24 +43,24 @@ class OID4VPImportConfigTest {
     @Test
     void blankAliasFallsBackToDefault() {
         OID4VPImportConfig config =
-                new OID4VPImportConfig(authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG, "  ")));
+                new OID4VPImportConfig(new AuthenticationProfile().setImportIdentityProviderAlias("  "));
 
         assertEquals(
-                OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, config.getImportIdentityProviderAlias());
+                AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS, config.getImportIdentityProviderAlias());
     }
 
     @Test
     void aliasWithSurroundingWhitespaceIsTrimmed() {
-        OID4VPImportConfig config = new OID4VPImportConfig(
-                authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG, "  custom-import  ")));
+        OID4VPImportConfig config =
+                new OID4VPImportConfig(new AuthenticationProfile().setImportIdentityProviderAlias("  custom-import  "));
 
         assertEquals("custom-import", config.getImportIdentityProviderAlias());
     }
 
     @Test
     void resolvesProviderUsingConfiguredAlias() {
-        OID4VPImportConfig config = new OID4VPImportConfig(
-                authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG, "custom-import")));
+        OID4VPImportConfig config =
+                new OID4VPImportConfig(new AuthenticationProfile().setImportIdentityProviderAlias("custom-import"));
         IdentityProviderModel provider = idpModel(true, true);
         provider.setAlias("custom-import");
 
@@ -84,18 +72,17 @@ class OID4VPImportConfigTest {
 
     @Test
     void resolvesEnabledImportProvider() {
-        OID4VPImportConfig config = new OID4VPImportConfig(
-                authConfig(Map.of(OID4VPAuthenticatorFactory.IMPORT_UNKNOWN_USERS_CONFIG, "true")));
+        OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile().setImportUnknownUsers(true));
 
         IdentityProviderModel resolved =
                 config.resolveImportIdentityProvider(sessionWith(idpModel(true, true)), realm());
 
-        assertEquals(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, resolved.getAlias());
+        assertEquals(AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS, resolved.getAlias());
     }
 
     @Test
     void missingProviderFailsClearly() {
-        OID4VPImportConfig config = new OID4VPImportConfig(null);
+        OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile());
         IllegalStateException e = assertThrows(
                 IllegalStateException.class, () -> config.resolveImportIdentityProvider(sessionWith(null), realm()));
         assertTrue(e.getMessage().contains("no identity provider"));
@@ -103,7 +90,7 @@ class OID4VPImportConfigTest {
 
     @Test
     void disabledProviderFailsClearly() {
-        OID4VPImportConfig config = new OID4VPImportConfig(null);
+        OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile());
 
         IllegalStateException e = assertThrows(
                 IllegalStateException.class,
@@ -113,7 +100,7 @@ class OID4VPImportConfigTest {
 
     @Test
     void wrongProviderIdFailsClearly() {
-        OID4VPImportConfig config = new OID4VPImportConfig(null);
+        OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile());
         IdentityProviderModel model = idpModel(true, true);
         model.setProviderId("oidc");
 
@@ -122,22 +109,16 @@ class OID4VPImportConfigTest {
         assertTrue(e.getMessage().contains(OID4VPImportIdentityProviderFactory.PROVIDER_ID));
     }
 
-    private static AuthenticatorConfigModel authConfig(Map<String, String> values) {
-        AuthenticatorConfigModel model = new AuthenticatorConfigModel();
-        model.setConfig(new HashMap<>(values));
-        return model;
-    }
-
     private static IdentityProviderModel idpModel(boolean correctProviderId, boolean enabled) {
         IdentityProviderModel model = new IdentityProviderModel();
-        model.setAlias(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT);
+        model.setAlias(AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS);
         model.setProviderId(correctProviderId ? OID4VPImportIdentityProviderFactory.PROVIDER_ID : "oid4vp");
         model.setEnabled(enabled);
         return model;
     }
 
     private static KeycloakSession sessionWith(IdentityProviderModel idp) {
-        return sessionWith(OID4VPAuthenticatorFactory.IMPORT_IDP_ALIAS_CONFIG_DEFAULT, idp);
+        return sessionWith(AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS, idp);
     }
 
     private static KeycloakSession sessionWith(String alias, IdentityProviderModel idp) {

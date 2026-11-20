@@ -22,6 +22,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VP
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.OID4VPImportIdentityProviderFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker.mappers.OID4VPUserAttributeMapper;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.config.OID4VPImportConfig;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.AuthenticationProfile;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRole;
 import java.util.HashMap;
@@ -37,7 +38,6 @@ import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityProvider;
 import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.common.VerificationException;
-import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderMapperSyncMode;
@@ -544,15 +544,14 @@ class OID4VPUserProvisionerTest {
         when(flowContext.getSession()).thenReturn(session);
         OID4VPAuthenticator.Context context = new OID4VPAuthenticator.Context(
                 "id", flowContext, null, null, null, null, null, Map.of(), Map.of("pid", verifier));
-        AuthenticatorConfigModel authConfig = new AuthenticatorConfigModel();
-        authConfig.setConfig(Map.of("importUnknownUsers", "true"));
+        AuthenticationProfile authenticationProfile = new AuthenticationProfile().setImportUnknownUsers(true);
 
         return new OID4VPUserProvisioner.Request(
                 session,
                 realm,
                 authenticator,
                 context,
-                new OID4VPImportConfig(authConfig),
+                new OID4VPImportConfig(authenticationProfile),
                 primary,
                 primaryClaims,
                 Map.of(),

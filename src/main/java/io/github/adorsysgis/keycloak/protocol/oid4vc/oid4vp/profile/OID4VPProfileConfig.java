@@ -357,11 +357,7 @@ public class OID4VPProfileConfig {
         List<CredentialRequirement> primaryCredentials = profile.getPrimaryCredentials();
 
         for (CredentialRequirement credential : profile.getCredentials()) {
-            if (credential.isPrimary()) {
-                continue;
-            }
-
-            Set<String> supportingClaimNames = Set.copyOf(credential.getClaims());
+            Set<String> requestedClaimNames = Set.copyOf(credential.getClaims());
 
             for (BindingRule rule : credential.getBinding()) {
                 if (StringUtil.isBlank(rule.getType())) {
@@ -382,14 +378,19 @@ public class OID4VPProfileConfig {
                             profileId, credential.getId()));
                 }
 
-                if (!supportingClaimNames.contains(rule.getCredentialClaim())) {
+                if (!requestedClaimNames.contains(rule.getCredentialClaim())) {
                     throw new IllegalStateException(String.format(
-                            "OpenID4VP binding rule credentialClaim '%s' must be among the supporting"
-                                    + " credential's requested claims: %s/%s",
+                            "OpenID4VP binding rule credentialClaim '%s' must be among the credential's"
+                                    + " requested claims: %s/%s",
                             rule.getCredentialClaim(), profileId, credential.getId()));
                 }
 
                 if (BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM.equals(rule.getType())) {
+                    if (credential.isPrimary()) {
+                        throw new IllegalStateException(String.format(
+                                "Binding rule '%s' is not applicable to the primary credential '%s/%s'",
+                                rule.getType(), profileId, credential.getId()));
+                    }
                     if (StringUtil.isBlank(rule.getPrimaryCredentialClaim())) {
                         throw new IllegalStateException(String.format(
                                 "OpenID4VP binding rule primaryCredentialClaim must not be blank for"
