@@ -10,6 +10,7 @@ import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.VERIFIER_INFO_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -118,6 +119,40 @@ public class OID4VPProfileConfigTest {
         assertEquals(2, profile.getCredentials().size());
         assertEquals(
                 "main-vct", profile.getPrimaryCredential().getCredentialTypes().getFirst());
+    }
+
+    @Test
+    void shouldKeepImportSettingsScopedToEachProfile() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "import-enabled",
+                    "importUnknownUsers": true,
+                    "importIdentityProviderAlias": "pid-import",
+                    "credentials": [
+                      { "id": "identity", "role": "primary", "credentialTypes": ["pid"], "claims": ["sub"] }
+                    ]
+                  },
+                  {
+                    "id": "sensitive",
+                    "credentials": [
+                      { "id": "identity", "role": "primary", "credentialTypes": ["sensitive"], "claims": ["sub"] }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig profileConfig = new OID4VPProfileConfig(config);
+        AuthenticationProfile importProfile = profileConfig.getProfile("import-enabled");
+        AuthenticationProfile sensitiveProfile = profileConfig.getProfile("sensitive");
+
+        assertTrue(importProfile.shouldImportUnknownUsers());
+        assertEquals("pid-import", importProfile.getImportIdentityProviderAlias());
+        assertFalse(sensitiveProfile.shouldImportUnknownUsers());
+        assertEquals(
+                AuthenticationProfile.DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS,
+                sensitiveProfile.getImportIdentityProviderAlias());
     }
 
     @Test
@@ -324,6 +359,54 @@ public class OID4VPProfileConfigTest {
     }
 
     @Test
+    void shouldRejectDuplicateProfileIds() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "duplicate",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct"], "claims": ["sub"] }
+                    ]
+                  },
+                  {
+                    "id": "duplicate",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct"], "claims": ["sub"] }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertEquals("OpenID4VP profile ids must be unique: duplicate", error.getMessage());
+    }
+
+    @Test
+    void shouldRejectUnsupportedCredentialFormat() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "broken",
+                    "credentials": [
+                      {
+                        "id": "pid",
+                        "role": "primary",
+                        "format": "unsupported-format",
+                        "credentialTypes": ["vct"],
+                        "claims": ["sub"]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertEquals("Unsupported credential format 'unsupported-format': broken/pid", error.getMessage());
+    }
+
+    @Test
     void shouldAcceptTransactionDataWithMdocPrimaryCredential() {
         Map<String, String> configMap = new HashMap<>();
         configMap.put(PROFILES_CONFIG, """
@@ -448,6 +531,38 @@ public class OID4VPProfileConfigTest {
                 """.formatted(MdocBaseTest.getIssuerCertBase64())));
 
         assertDoesNotThrow(() -> new OID4VPProfileConfig(config));
+    }
+
+    @Test
+    void shouldRejectPrimarySdJwtThatMixesSelfAndExternalTrust() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "login",
+                    "credentials": [
+                      {
+                        "id": "primary",
+                        "role": "primary",
+                        "credentialTypes": ["main-vct"],
+                        "claims": ["sub"],
+                        "trust": [
+                          { "type": "self" },
+                          {
+                            "type": "eudi_pid_trust_list",
+                            "trustListUrl": "https://example.eu/pid-providers.lote",
+                            "trustListSigningCertificate": "base64-der-signing-certificate",
+                            "issuer": "external-issuer"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> new OID4VPProfileConfig(config));
+        assertTrue(error.getMessage().contains("must not combine self-trust with external trust policies"));
     }
 
     @Test
@@ -675,7 +790,7 @@ public class OID4VPProfileConfigTest {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> parseProfileWithBinding("""
                         { "type": "claim_equals_primary_claim", "credentialClaim": "email", "primaryCredentialClaim": "username" }
                         """));
-        assertTrue(e.getMessage().contains("must be among the supporting credential's requested claims"));
+        assertTrue(e.getMessage().contains("must be among the credential's requested claims"));
     }
 
     @Test
@@ -876,6 +991,26 @@ public class OID4VPProfileConfigTest {
     }
 
     // ---- Caching -----------------------------------------------------------
+
+    @Test
+    void resolveShouldKeepSameConfigSeparateAcrossRealms() {
+        AuthenticatorConfigModel config = new AuthenticatorConfigModel();
+        config.setConfig(Map.of(PROFILES_CONFIG, """
+                [
+                  {
+                    "id": "realm-isolation",
+                    "credentials": [
+                      { "id": "pid", "role": "primary", "credentialTypes": ["vct"], "claims": ["sub", "username"] }
+                    ]
+                  }
+                ]
+                """));
+
+        OID4VPProfileConfig realmOne = OID4VPProfileConfig.resolve("realm-one", config);
+        OID4VPProfileConfig realmTwo = OID4VPProfileConfig.resolve("realm-two", config);
+
+        assertNotSame(realmOne, realmTwo);
+    }
 
     @Test
     void resolveShouldReturnSameInstanceForSameConfig() {
