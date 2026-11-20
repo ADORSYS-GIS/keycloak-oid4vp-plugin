@@ -34,27 +34,27 @@ public class OID4VPImportConfig {
      *
      * @return the provider configuration backing user import
      * @throws IllegalStateException when the provider is missing, disabled, or has an unexpected
-     *     provider id. Import must be refused in all three cases; the message tells the realm
-     *     administrator exactly what to fix.
+     *     provider id. The caller decides whether this prevents user creation or skips
+     *     synchronization.
      */
     public IdentityProviderModel resolveImportIdentityProvider(KeycloakSession session, RealmModel realm) {
         IdentityProviderModel model = session.identityProviders().getByAlias(importIdentityProviderAlias);
         if (model == null) {
             throw new IllegalStateException(String.format(
-                    "User import is enabled but no identity provider with alias '%s' exists in realm '%s'."
-                            + " Create the hidden OpenID4VP Plugin Import provider first.",
+                    "No identity provider with alias '%s' exists in realm '%s'."
+                            + " Create an OpenID4VP Plugin Import provider with this alias.",
                     importIdentityProviderAlias, realm.getName()));
         }
         if (!model.isEnabled()) {
             throw new IllegalStateException(String.format(
-                    "User import is enabled but the identity provider '%s' in realm '%s' is disabled."
-                            + " Enable the provider or disable user import.",
+                    "Identity provider '%s' in realm '%s' is disabled."
+                            + " Enable it to use OpenID4VP user import or synchronization.",
                     importIdentityProviderAlias, realm.getName()));
         }
         if (!OID4VPImportIdentityProviderFactory.PROVIDER_ID.equals(model.getProviderId())) {
             throw new IllegalStateException(String.format(
-                    "User import is enabled but the identity provider '%s' in realm '%s' uses provider id '%s'"
-                            + " instead of '%s'. Imported users must link against the OpenID4VP Plugin Import provider.",
+                    "Identity provider '%s' in realm '%s' uses provider id '%s' instead of '%s'."
+                            + " Configure this alias to use the OpenID4VP Plugin Import provider.",
                     importIdentityProviderAlias,
                     realm.getName(),
                     model.getProviderId(),

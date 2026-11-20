@@ -2,6 +2,7 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.broker;
 
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
+import org.keycloak.broker.oid4vp.OID4VPIdentityProvider;
 import org.keycloak.broker.provider.AbstractIdentityProvider;
 import org.keycloak.broker.provider.AuthenticationRequest;
 import org.keycloak.broker.provider.IdentityBrokerException;
@@ -30,7 +31,7 @@ public class OID4VPImportIdentityProvider extends AbstractIdentityProvider<Ident
      * same wire value as upstream Keycloak's {@code OID4VPIdentityProvider.CREDENTIAL_CLAIMS} so
      * ported mappers read claims without adaptation.
      */
-    public static final String CREDENTIAL_CLAIMS = org.keycloak.broker.oid4vp.OID4VPIdentityProvider.CREDENTIAL_CLAIMS;
+    public static final String CREDENTIAL_CLAIMS = OID4VPIdentityProvider.CREDENTIAL_CLAIMS;
 
     public OID4VPImportIdentityProvider(KeycloakSession session, IdentityProviderModel config) {
         super(session, config);

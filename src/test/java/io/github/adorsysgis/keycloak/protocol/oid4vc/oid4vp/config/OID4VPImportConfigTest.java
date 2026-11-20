@@ -85,7 +85,7 @@ class OID4VPImportConfigTest {
         OID4VPImportConfig config = new OID4VPImportConfig(new AuthenticationProfile());
         IllegalStateException e = assertThrows(
                 IllegalStateException.class, () -> config.resolveImportIdentityProvider(sessionWith(null), realm()));
-        assertTrue(e.getMessage().contains("no identity provider"));
+        assertTrue(e.getMessage().contains("No identity provider with alias"));
     }
 
     @Test

@@ -25,6 +25,10 @@ public class OID4VPUserAttributeMapper extends OID4VPSdJwtUserAttributeMapper
         return new String[] {OID4VPImportIdentityProviderFactory.PROVIDER_ID};
     }
 
+    /**
+     * Overrides Keycloak's upstream feature-gated implementation; the plugin mapper is available
+     * independently of the upstream OID4VC VP feature flag.
+     */
     @Override
     public boolean isSupported(Config.Scope config) {
         return OID4VPEnvironmentProviderFactory.super.isSupported(config);
