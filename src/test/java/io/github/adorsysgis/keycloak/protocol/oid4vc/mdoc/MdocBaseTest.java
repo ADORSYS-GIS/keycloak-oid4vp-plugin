@@ -559,17 +559,7 @@ public class MdocBaseTest {
      * x5c trust anchor in authenticator profile configuration.
      */
     public static String getIssuerCertBase64() {
-        return str("""
-                MIIBlzCCAT2gAwIBAgIUNPf1jk/kxePsVn/ntNMpN3IHqGMwCgYIKoZIzj0EAwIw
-                IDEeMBwGA1UEAwwVQ09TRSBJc3N1ZXIgMTAwIFllYXJzMCAXDTI2MDYyOTEwMjcz
-                MFoYDzIxMjYwNjA1MTAyNzMwWjAgMR4wHAYDVQQDDBVDT1NFIElzc3VlciAxMDAg
-                WWVhcnMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASqJzAzB+33cMUJ0nHA8UEu
-                2CFXK6xPmoeWdLJZpGWcLYSwdzYB4dGwyWX/4HS4JZGR+eulSAcgRgeXl43vK8Zo
-                o1MwUTAdBgNVHQ4EFgQUl8hm4O6VpuB0A5yhQe/zJxAJr54wHwYDVR0jBBgwFoAU
-                l8hm4O6VpuB0A5yhQe/zJxAJr54wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
-                AgNIADBFAiA0LGtfjdKY+1wxDzozcOTP+xB5Zcqf0GhCONvabiMRiAIhANR38jES
-                b7jxK0rLtDSKKWvzHBx3ChgwKq7o+N+fqp4t
-                """);
+        return toBase64(readResource("/mdoc/cose-issuer-test.pem"));
     }
 
     public static X509Certificate getIssuerCertRef1() {
@@ -589,38 +579,14 @@ public class MdocBaseTest {
 
     /** Certificate corresponding to {@link #getIssuerKeyRef2()}. */
     public static X509Certificate getIssuerCertRef2() {
-        return toCert(str("""
-                MIIBoDCCAUegAwIBAgIUPz/iUqi+6vgCE+YCk1yFCOa5QRwwCgYIKoZIzj0EAwIw
-                JTEjMCEGA1UEAwwaUElEIFByb3ZpZGVyIEIgVGVzdCBJc3N1ZXIwIBcNMjYwOTAy
-                MTUzMzQ1WhgPMjEyNjA4MDkxNTMzNDVaMCUxIzAhBgNVBAMMGlBJRCBQcm92aWRl
-                ciBCIFRlc3QgSXNzdWVyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoIFzT0YF
-                6zfxCQoJx7WoTN6irn0YYB3afocbtBorlXeWMERxgaCLUCLRBpYatfcKGxH68gKU
-                wNeu+1SCeZ16IaNTMFEwHQYDVR0OBBYEFAR2raUFPCn9vhk9HG1fuZir0Dj+MB8G
-                A1UdIwQYMBaAFAR2raUFPCn9vhk9HG1fuZir0Dj+MA8GA1UdEwEB/wQFMAMBAf8w
-                CgYIKoZIzj0EAwIDRwAwRAIgKlIeoYkff8PP0r+YYe+2WH9KAR2sGgJHwbln2O9s
-                nYECIDI3PT4VjWdaHl9Zo1cIwln/NbForQPPwlxJTRBrF00E
-                """));
+        return toCert(toBase64(readResource("/mdoc/pid-provider-b-test.pem")));
     }
 
     /**
      * X.509 certificate from the ISO 18013-5 spec sample
      */
     public static String getSpecSampleCert() {
-        return str("""
-            MIICXDCCAgGgAwIBAgIKR1IJyTwoAKFf/zAKBggqhkjOPQQDAjBFMQswCQYDVQQG
-            EwJVUzEpMCcGA1UEAwwgSVNPMTgwMTMtNSBUZXN0IENlcnRpZmljYXRlIElBQ0Ex
-            CzAJBgNVBAgMAk5ZMB4XDTI0MDQyODIxMDIyM1oXDTI1MDcyOTIxMDIyM1owRDEL
-            MAkGA1UEBhMCVVMxKDAmBgNVBAMMH0lTTzE4MDEzLTUgVGVzdCBDZXJ0aWZpY2F0
-            ZSBEU0MxCzAJBgNVBAgMAk5ZMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN04V
-            oqv1bGCkVaXMXxWZ9yEG9PALWgfUxo/rzmwcoaat5A9WyptKUcAEZNY+tyduGU9t
-            AusOxkfTeCCd1+PDvKOB2TCB1jAdBgNVHQ4EFgQUZSkNyyy+We9Wu99FbU/4pFp9
-            7lowHwYDVR0jBBgwFoAUTP+VJeBlm1DsHEMKWnKNxBtNOs8wDgYDVR0PAQH/BAQD
-            AgeAMB0GA1UdEQQWMBSBEmV4YW1wbGVAaXNvbWRsLmNvbTAdBgNVHRIEFjAUgRJl
-            eGFtcGxlQGlzb21kbC5jb20wLwYDVR0fBCgwJjAkoCKgIIYeaHR0cHM6Ly9leGFt
-            cGxlLmNvbS9JU09tREwuY3JsMBUGA1UdJQEB/wQLMAkGByiBjF0FAQIwCgYIKoZI
-            zj0EAwIDSQAwRgIhAK/DzBi2gOVCUHOoxgXpTQpcrV8ULl/Q0ROYqS3Gr6NZAiEA
-            o4i3TOyNcI7ZMm+0JrzUdAM6gM4K9zhOnmPOnitbtUM=
-            """);
+        return toBase64(readResource("/mdoc/iso-spec-sample.pem"));
     }
 
     public static COSEEC2Key getDeviceKeyRef1() {
@@ -674,5 +640,14 @@ public class MdocBaseTest {
 
     public static String str(String input) {
         return input.replaceAll("\\s+", "");
+    }
+
+    /**
+     * Strips the PEM armor and all whitespace from an X.509 certificate
+     */
+    public static String toBase64(String pem) {
+        return pem.replace("-----BEGIN CERTIFICATE-----", "")
+                .replace("-----END CERTIFICATE-----", "")
+                .replaceAll("\\s+", "");
     }
 }
