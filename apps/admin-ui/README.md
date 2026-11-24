@@ -4,9 +4,10 @@ A custom Keycloak admin console, built the official way by extending
 [`@keycloak/keycloak-admin-ui`](https://www.npmjs.com/package/@keycloak/keycloak-admin-ui).
 It keeps the complete stock console and adds an **EUDI Hub** entry under the
 stock **Configure** navigation group. The entry is only shown for realms that
-have the `oid4vp auth` authentication flow. The page currently exposes the
-**Access certificates** tab and the form fields the EUDI Hub request needs; the
-backend request is not wired yet.
+have the `oid4vp auth` authentication flow. The page exposes the **Access
+certificate** tab. Pasting a portal access token loads the user's EUDI Hub
+organizations through a Keycloak Admin API extension and fills the organization
+dropdown; the certificate request itself is not wired yet.
 
 The project follows the layout produced by
 `pnpm create-keycloak-theme <name> admin`:
@@ -22,7 +23,18 @@ The project follows the layout produced by
 - `src/routes.tsx` keeps every stock route and inserts the EUDI Hub route
   before the catch-all.
 - `src/EudiHubPage.tsx` is the page itself. Its header uses the stock
-  `ViewHeader` and appends the “Learn more” link through `helpUrl`.
+  `ViewHeader` and appends the “Learn more” link through `helpUrl`. The portal
+  token is a `TextArea`; a JWT (with or without a `Bearer ` prefix) triggers the
+  organization fetch. The organization field is a `FormSelect` with a refresh
+  button, and failures use the stock alert toast on the right. The environment
+  (sandbox or live) comes from the organization details, so it is not a form
+  field. The certificate name is pre-filled with `Access Certificate` plus a
+  random suffix.
+- `src/api.ts` calls the plugin's Keycloak Admin API extension at
+  `/admin/realms/{realm}/eudi-hub/organizations`. The extension proxies the
+  EUDI Hub server-side, so the browser never calls the EUDI Hub directly and the
+  portal token is used only for that request. The EUDI Hub only allows its own
+  portal origin through CORS, which is why the proxy is required.
 - `src/utils/` holds the helpers copied from the stock console
   (`AuthWall`, `Banners`, `HelpLabel`, `useIsFeatureEnabled`, `joinPath`).
   `HelpLabel` renders the stock info icon and popover with PatternFly directly,
@@ -44,6 +56,29 @@ Other build details:
 
 The `@keycloak/keycloak-admin-ui` version must match the server version
 (`keycloak.version` in `pom.xml`).
+
+## EUDI Hub API proxy
+
+The admin console cannot call the EUDI Hub directly: the EUDI Hub only allows
+its own portal origin through CORS. The plugin registers an admin REST
+extension at `/admin/realms/{realm}/eudi-hub` through
+`EudiHubAdminResourceProviderFactory`. `EudiHubService` calls `GET /v1/me` to
+list the organizations of the portal token's user and
+`GET /v1/organizations/{id}` to load each organization's environment and
+support URIs. Tokens
+may include the `Bearer ` prefix; it is stripped before the upstream call. The
+token is never stored or logged.
+
+The upstream URL defaults to `https://api.eudi-hub.gov.de/org-management`. It
+must use HTTPS. Override it for another deployment with:
+
+```bash
+bin/kc.sh start \
+  --spi-admin-realm-restapi-extension-eudi-hub-api-url=https://example.test/org-management
+```
+
+The extension requires `view-realm` on the target realm, so it is only available
+to realm administrators.
 
 ## Development
 
