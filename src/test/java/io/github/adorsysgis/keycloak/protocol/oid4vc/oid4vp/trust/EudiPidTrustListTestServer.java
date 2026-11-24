@@ -26,8 +26,9 @@ import org.testcontainers.Testcontainers;
  * Process-local HTTPS fixture serving a cryptographically signed two-provider PID LoTE.
  *
  * <p>The Keycloak integration-test container reaches this server through Testcontainers' host-port
- * forwarding. Its TLS certificate is the test issuer certificate ({@code MdocBaseTest.getIssuerCertRef1()}),
- * which is mounted in Keycloak's default truststore folder, so tests proceed without disabling TLS validation.
+ * forwarding. Its TLS certificate is the test issuer certificate
+ * ({@code MdocBaseTest.getIssuerCertRef1()}), which is mounted in Keycloak's default truststore
+ * folder, so tests proceed without disabling TLS certificate-chain validation.
  */
 public final class EudiPidTrustListTestServer {
 
