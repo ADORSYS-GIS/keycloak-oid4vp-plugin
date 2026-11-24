@@ -13,11 +13,16 @@
         <#if section = "header">
             ${msg('oid4vpScanPageTitle')}
         <#elseif section = "form">
+            <#-- The QR image has no padding of its own, so a white quiet zone should be drawn,
+                 especially for dark-mode renderings. -->
             <div class="pf-v5-u-p-lg pf-v5-u-text-align-center">
-                <img src="${oid4vp.authContext.authReqQrCode}"
-                     style="width: 250px;"
-                     id="kc-oid4vp-qrcode"
-                     alt="QR Code" />
+                <div class="pf-v5-u-display-inline-block" style="background: white; border-radius: 16px;">
+                    <img src="${oid4vp.authContext.authReqQrCode}"
+                         class="pf-v5-u-display-block pf-v5-u-p-md"
+                         style="width: 250px;"
+                         id="kc-oid4vp-qrcode"
+                         alt="QR Code" />
+                </div>
             </div>
 
             <div class="pf-v5-u-text-align-center">
