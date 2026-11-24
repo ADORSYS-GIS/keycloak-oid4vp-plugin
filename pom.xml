@@ -42,6 +42,9 @@
     <properties>
         <revision>999.0.0-SNAPSHOT</revision>
         <keycloak.version>26.8.2</keycloak.version>
+        <node.version>v24.20.0</node.version>
+        <pnpm.version>12.21.0</pnpm.version>
+        <skip.pnpm>false</skip.pnpm>
         <test.keycloak.image>quay.io/keycloak/keycloak:${keycloak.version}</test.keycloak.image>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -189,7 +192,57 @@
     </dependencyManagement>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+        </resources>
         <plugins>
+            <!-- Builds apps/admin-ui, the admin console bundled as the
+                 `keycloak.v2+oid4vp` admin theme. The Vite output goes directly
+                 to target/classes before the fat JAR is assembled at
+                 process-classes. Skip with -Dskip.pnpm for Java-only builds. -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>2.0.2</version>
+                <configuration>
+                    <skip>${skip.pnpm}</skip>
+                    <nodeVersion>${node.version}</nodeVersion>
+                    <pnpmVersion>${pnpm.version}</pnpmVersion>
+                    <installDirectory>${project.basedir}</installDirectory>
+                    <workingDirectory>${project.basedir}/apps/admin-ui</workingDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-pnpm</id>
+                        <goals>
+                            <goal>install-node-and-pnpm</goal>
+                        </goals>
+                        <phase>initialize</phase>
+                    </execution>
+                    <execution>
+                        <id>pnpm-install</id>
+                        <goals>
+                            <goal>pnpm</goal>
+                        </goals>
+                        <phase>initialize</phase>
+                        <configuration>
+                            <arguments>install --frozen-lockfile --prefer-offline</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>pnpm-build</id>
+                        <goals>
+                            <goal>pnpm</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <arguments>build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

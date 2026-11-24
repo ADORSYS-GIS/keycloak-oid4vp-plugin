@@ -23,3 +23,8 @@ e2e/node_modules/
 e2e/pnpm-store/
 e2e/playwright-report/
 e2e/test-results/
+
+# admin UI frontend build (apps/admin-ui, the keycloak.v2+oid4vp admin theme)
+/node/
+apps/admin-ui/node_modules/
+apps/admin-ui/dist/
