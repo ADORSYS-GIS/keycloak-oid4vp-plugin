@@ -70,11 +70,19 @@ public class VerifierDiscoveryService {
      * </p>
      */
     public KeyWrapper getSigningKey(boolean requireSelfSignedCert) {
+        return getSigningKey(session, requireSelfSignedCert);
+    }
+
+    /**
+     * Returns the signing key OpenID4VP uses to sign authorization requests.
+     *
+     * <p>EC cryptography is widely preferred in the OpenID4VC ecosystem. Favor ES256 keys but fall
+     * back to any active signing key if no such key is available.
+     */
+    public static KeyWrapper getSigningKey(KeycloakSession session, boolean requireSelfSignedCert) {
         logger.debug("Retrieving active key for signing OpenID4VP authorization requests");
         RealmModel realm = session.getContext().getRealm();
 
-        // EC cryptography is widely preferred in the OpenID4VC ecosystem.
-        // Favor ES256 keys but fall back to any active signing key if no such key is available.
         return session.keys()
                 .getKeysStream(realm)
                 .filter(k -> k.getStatus().isActive()

@@ -7,7 +7,9 @@ stock **Configure** navigation group. The entry is only shown for realms that
 have the `oid4vp auth` authentication flow. The page exposes the **Access
 certificate** tab. Pasting a portal access token loads the user's EUDI Hub
 organizations through a Keycloak Admin API extension and fills the organization
-dropdown; the certificate request itself is not wired yet.
+dropdown. **Request certificate** creates a CSR for the realm's OpenID4VP
+signing key, asks the EUDI Hub for an access certificate, stores it in the
+OpenID4VP authenticator and shows it read-only until **Reset**.
 
 The project follows the layout produced by
 `pnpm create-keycloak-theme <name> admin`:
@@ -29,7 +31,10 @@ The project follows the layout produced by
   button, and failures use the stock alert toast on the right. The environment
   (sandbox or live) comes from the organization details, so it is not a form
   field. The certificate name is pre-filled with `Access Certificate` plus a
-  random suffix.
+  random suffix. Requesting the certificate disables the form and shows the
+  issued certificate in a read-only field; a success toast confirms the stored
+  certificate. **Reset** only clears the form, it does not undo the authenticator
+  configuration.
 - `src/api.ts` calls the plugin's Keycloak Admin API extension at
   `/admin/realms/{realm}/eudi-hub/organizations`. The extension proxies the
   EUDI Hub server-side, so the browser never calls the EUDI Hub directly and the
@@ -65,9 +70,19 @@ extension at `/admin/realms/{realm}/eudi-hub` through
 `EudiHubAdminResourceProviderFactory`. `EudiHubService` calls `GET /v1/me` to
 list the organizations of the portal token's user and
 `GET /v1/organizations/{id}` to load each organization's environment and
-support URIs. Tokens
-may include the `Bearer ` prefix; it is stripped before the upstream call. The
-token is never stored or logged.
+support URIs. Tokens may include the `Bearer ` prefix; it is stripped before the
+upstream call. The token is never stored or logged.
+
+Requesting a certificate calls
+`POST /v1/organizations/{id}/access-certificates` with the certificate name, the
+organization's first support URI, the environment and a PKCS#10 CSR for the
+realm's OpenID4VP signing key. `EudiHubCsr` signs the CSR with that key, so the
+private key never leaves Keycloak. The issued certificate is downloaded from
+`GET /v1/organizations/{id}/access-certificates/{certificateId}/download` (DER),
+base64-encoded and written to the `accessCertificate` field of the existing
+OpenID4VP authenticator configuration. A realm whose authenticator has no
+configuration is reported as a conflict instead of being changed. Requesting a
+certificate needs `manage-realm`; listing organizations needs `view-realm`.
 
 The upstream URL defaults to `https://api.eudi-hub.gov.de/org-management`. It
 must use HTTPS. Override it for another deployment with:

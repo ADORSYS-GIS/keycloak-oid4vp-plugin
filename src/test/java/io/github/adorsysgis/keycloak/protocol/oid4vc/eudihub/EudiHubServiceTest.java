@@ -6,19 +6,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PublicKey;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
+import java.util.Base64;
 import java.util.List;
+import java.util.stream.Stream;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.keycloak.common.crypto.CryptoIntegration;
+import org.keycloak.common.util.CertificateUtils;
 import org.keycloak.connections.httpclient.HttpClientProvider;
+import org.keycloak.crypto.KeyStatus;
+import org.keycloak.crypto.KeyUse;
+import org.keycloak.crypto.KeyWrapper;
+import org.keycloak.models.KeyManager;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 import org.keycloak.util.JsonSerialization;
 
 class EudiHubServiceTest {
@@ -26,33 +47,59 @@ class EudiHubServiceTest {
     private HttpServer server;
     private CloseableHttpClient httpClient;
     private EudiHubService service;
+    private KeyPair signingKeyPair;
+    private X509Certificate issuedCertificate;
+    private byte[] issuedCertificateDer;
+    private JsonNode receivedAccessCertificateRequest;
 
     @BeforeEach
-    void setUp() throws IOException {
+    void setUp() throws Exception {
+        CryptoIntegration.init(EudiHubServiceTest.class.getClassLoader());
+
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+        generator.initialize(new ECGenParameterSpec("secp256r1"));
+        signingKeyPair = generator.generateKeyPair();
+        issuedCertificate =
+                CertificateUtils.generateV1SelfSignedCertificate(signingKeyPair, "Issued Access Certificate");
+        issuedCertificateDer = issuedCertificate.getEncoded();
+
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/org-management/v1/me", exchange -> {
             if (!"Bearer portal-token".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
-                respond(exchange, 401, "{\"detail\":\"Unauthorized\"}");
+                respondJson(exchange, 401, "{\"detail\":\"Unauthorized\"}");
                 return;
             }
-            respond(exchange, 200, """
+            respondJson(exchange, 200, """
                     {
                       "organizations": [
                         {"id": "11111111-1111-1111-1111-111111111111", "name": "First"},
                         {"id": "22222222-2222-2222-2222-222222222222", "name": "Second"},
-                        {"id": "33333333-3333-3333-3333-333333333333", "name": "Third"}
+                        {"id": "33333333-3333-3333-3333-333333333333", "name": "Third"},
+                        {"id": "44444444-4444-4444-4444-444444444444", "name": "Fourth"}
                       ]
                     }
                     """);
         });
         server.createContext("/org-management/v1/organizations/", exchange -> {
             String path = exchange.getRequestURI().getPath();
+            if (path.endsWith("/access-certificates") && "POST".equals(exchange.getRequestMethod())) {
+                receivedAccessCertificateRequest = JsonSerialization.mapper.readTree(
+                        exchange.getRequestBody().readAllBytes());
+                respondJson(exchange, 201, """
+                        {"id": "cert-1", "name": "Access Certificate TEST", "status": "valid", "environment": "sandbox"}
+                        """);
+                return;
+            }
+            if (path.endsWith("/access-certificates/cert-1/download")) {
+                respondBytes(exchange, 200, issuedCertificateDer);
+                return;
+            }
             if (path.endsWith("22222222-2222-2222-2222-222222222222")) {
-                respond(exchange, 500, "{\"detail\":\"Organization unavailable\"}");
+                respondJson(exchange, 500, "{\"detail\":\"Organization unavailable\"}");
                 return;
             }
             if (path.endsWith("33333333-3333-3333-3333-333333333333")) {
-                respond(exchange, 200, """
+                respondJson(exchange, 200, """
                         {
                           "contactInformation": {"supportUris": ["https://example.com/live-support"]},
                           "environments": ["sandbox", "live"]
@@ -60,7 +107,11 @@ class EudiHubServiceTest {
                         """);
                 return;
             }
-            respond(exchange, 200, """
+            if (path.endsWith("44444444-4444-4444-4444-444444444444")) {
+                respondJson(exchange, 200, "{\"contactInformation\": {\"supportUris\": []}}");
+                return;
+            }
+            respondJson(exchange, 200, """
                     {"contactInformation": {"supportUris": ["https://example.com/support"]}}
                     """);
         });
@@ -73,6 +124,21 @@ class EudiHubServiceTest {
         when(httpClientProvider.getHttpClient()).thenReturn(httpClient);
         when(httpClientProvider.getMaxConsumedResponseSize())
                 .thenReturn(HttpClientProvider.DEFAULT_MAX_CONSUMED_RESPONSE_SIZE);
+
+        RealmModel realm = mock(RealmModel.class);
+        KeycloakContext context = mock(KeycloakContext.class);
+        when(session.getContext()).thenReturn(context);
+        when(context.getRealm()).thenReturn(realm);
+
+        KeyWrapper signingKey = new KeyWrapper();
+        signingKey.setPrivateKey(signingKeyPair.getPrivate());
+        signingKey.setPublicKey(signingKeyPair.getPublic());
+        signingKey.setAlgorithm("ES256");
+        signingKey.setUse(KeyUse.SIG);
+        signingKey.setStatus(KeyStatus.ACTIVE);
+        KeyManager keyManager = mock(KeyManager.class);
+        when(session.keys()).thenReturn(keyManager);
+        when(keyManager.getKeysStream(realm)).thenAnswer(invocation -> Stream.of(signingKey));
 
         service = new EudiHubService(
                 session, "http://127.0.0.1:" + server.getAddress().getPort() + "/org-management", false);
@@ -96,7 +162,7 @@ class EudiHubServiceTest {
     void loadsOrganizationsWithSupportUris() throws Exception {
         List<EudiHubService.Organization> organizations = service.listOrganizations("Bearer portal-token");
 
-        assertEquals(3, organizations.size());
+        assertEquals(4, organizations.size());
         EudiHubService.Organization first = organizations.get(0);
         assertEquals("11111111-1111-1111-1111-111111111111", first.id());
         assertEquals("First", first.name());
@@ -114,6 +180,9 @@ class EudiHubServiceTest {
         assertEquals("Third", third.name());
         assertEquals(EudiHubService.Environment.LIVE, third.environment());
         assertEquals(List.of("https://example.com/live-support"), third.supportUris());
+
+        EudiHubService.Organization fourth = organizations.get(3);
+        assertTrue(fourth.supportUris().isEmpty());
     }
 
     @Test
@@ -125,6 +194,49 @@ class EudiHubServiceTest {
         String sandbox = JsonSerialization.mapper.writeValueAsString(
                 new EudiHubService.Organization("id", "name", EudiHubService.Environment.SANDBOX, List.of()));
         assertTrue(sandbox.contains("\"environment\":\"sandbox\""), sandbox);
+    }
+
+    @Test
+    void requestsAccessCertificateForTheOpenId4vpSigningKey() throws Exception {
+        String certificate = service.requestAccessCertificate(
+                "portal-token", "11111111-1111-1111-1111-111111111111", "sandbox", "Access Certificate TEST");
+
+        byte[] der = Base64.getDecoder().decode(certificate);
+        X509Certificate parsed = (X509Certificate)
+                CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(der));
+        assertEquals(issuedCertificate, parsed);
+
+        assertEquals(
+                "Access Certificate TEST",
+                receivedAccessCertificateRequest.get("name").asText());
+        assertEquals(
+                "sandbox", receivedAccessCertificateRequest.get("environment").asText());
+        assertEquals(
+                "https://example.com/support",
+                receivedAccessCertificateRequest.get("supportUri").asText());
+
+        String csr = receivedAccessCertificateRequest.get("csr").asText();
+        assertTrue(csr.startsWith("-----BEGIN CERTIFICATE REQUEST-----"), csr);
+        assertCsrMatches(csr, signingKeyPair.getPublic());
+    }
+
+    @Test
+    void rejectsOrganizationWithoutSupportUri() {
+        EudiHubService.EudiHubException failure = assertThrows(
+                EudiHubService.EudiHubException.class,
+                () -> service.requestAccessCertificate(
+                        "portal-token", "44444444-4444-4444-4444-444444444444", "sandbox", "Access Certificate"));
+
+        assertEquals(400, failure.getStatus());
+        assertTrue(failure.getMessage().contains("support URI"), failure.getMessage());
+    }
+
+    @Test
+    void normalizesEnvironment() {
+        assertEquals("sandbox", EudiHubService.normalizeEnvironment(" Sandbox "));
+        assertEquals("live", EudiHubService.normalizeEnvironment("LIVE"));
+        assertThrows(IllegalArgumentException.class, () -> EudiHubService.normalizeEnvironment("production"));
+        assertThrows(IllegalArgumentException.class, () -> EudiHubService.normalizeEnvironment(null));
     }
 
     @Test
@@ -143,8 +255,22 @@ class EudiHubServiceTest {
                 () -> new EudiHubService(mock(KeycloakSession.class), "http://example.com/org-management"));
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+    private static void assertCsrMatches(String pem, PublicKey publicKey) throws Exception {
+        String base64 = pem.replace("-----BEGIN CERTIFICATE REQUEST-----", "")
+                .replace("-----END CERTIFICATE REQUEST-----", "")
+                .replaceAll("\\s", "");
+        PKCS10CertificationRequest request =
+                new PKCS10CertificationRequest(Base64.getDecoder().decode(base64));
+
+        assertEquals(SubjectPublicKeyInfo.getInstance(publicKey.getEncoded()), request.getSubjectPublicKeyInfo());
+        assertTrue(request.isSignatureValid(new JcaContentVerifierProviderBuilder().build(publicKey)));
+    }
+
+    private static void respondJson(HttpExchange exchange, int status, String body) throws IOException {
+        respondBytes(exchange, status, body.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void respondBytes(HttpExchange exchange, int status, byte[] payload) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(status, payload.length);
         exchange.getResponseBody().write(payload);

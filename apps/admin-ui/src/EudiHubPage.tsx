@@ -9,6 +9,7 @@ import {
 } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
+  AlertVariant,
   Button,
   Form,
   FormGroup,
@@ -37,7 +38,11 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { fetchOrganizations, type EudiHubOrganization } from "./api";
+import {
+  fetchOrganizations,
+  requestAccessCertificate,
+  type EudiHubOrganization,
+} from "./api";
 import { HelpLabel } from "./utils/HelpLabel";
 
 type AccessCertificateForm = {
@@ -90,10 +95,14 @@ const EudiHubPageContent = () => {
   const { t } = useTranslation();
   const { keycloak } = useEnvironment();
   const { realm } = useRealm();
-  const { addError } = useAlerts();
+  const { addAlert, addError } = useAlerts();
   const [form, setForm] = useState<AccessCertificateForm>(createDefaultForm);
   const [organizations, setOrganizations] = useState<EudiHubOrganization[]>([]);
   const [organizationsLoading, setOrganizationsLoading] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [accessCertificate, setAccessCertificate] = useState<string | null>(
+    null,
+  );
   // Only the latest request may update the form; a token change invalidates
   // any response that is still in flight.
   const requestSequence = useRef(0);
@@ -180,14 +189,17 @@ const EudiHubPageContent = () => {
     return () => window.clearTimeout(timer);
   }, [form.token, loadOrganizations]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    // The certificate request is not implemented yet. The selected
-    // organization already carries the support URIs loaded from the EUDI Hub,
-    // so the request will not need a support URI field.
-  };
-
   const tokenIsJwt = isJwt(form.token);
+  const selectedOrganization = organizations.find(
+    (organization) => organization.id === form.organizationId,
+  );
+  const certificateRequested = accessCertificate !== null;
+  const canRequest =
+    tokenIsJwt &&
+    !!form.organizationId &&
+    !organizationsLoading &&
+    !requesting &&
+    !certificateRequested;
   const organizationHint = !tokenIsJwt
     ? t("eudiHubOrganizationsHint")
     : organizationsLoading
@@ -195,6 +207,35 @@ const EudiHubPageContent = () => {
       : organizations.length === 0
         ? t("eudiHubOrganizationsEmpty")
         : t("eudiHubOrganizationHelp");
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canRequest) {
+      return;
+    }
+
+    setRequesting(true);
+    try {
+      await keycloak.updateToken(30);
+      const adminToken = keycloak.token;
+      if (!adminToken) {
+        throw new Error("The admin console session has no access token.");
+      }
+
+      const certificate = await requestAccessCertificate(realm, adminToken, {
+        token: normalizeToken(form.token),
+        organizationId: form.organizationId,
+        environment: selectedOrganization?.environment ?? "sandbox",
+        name: form.name.trim(),
+      });
+      setAccessCertificate(certificate);
+      addAlert(t("eudiHubCertificateRequestSuccess"), AlertVariant.success);
+    } catch (error) {
+      addError("eudiHubCertificateRequestError", error);
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   return (
     <>
@@ -246,6 +287,7 @@ const EudiHubPageContent = () => {
                     autoComplete="off"
                     spellCheck={false}
                     resizeOrientation="vertical"
+                    isDisabled={certificateRequested}
                     isRequired
                   />
                 </FormGroup>
@@ -271,7 +313,11 @@ const EudiHubPageContent = () => {
                           set("organizationId", value)
                         }
                         isRequired
-                        isDisabled={!tokenIsJwt || organizationsLoading}
+                        isDisabled={
+                          certificateRequested ||
+                          !tokenIsJwt ||
+                          organizationsLoading
+                        }
                       >
                         <FormSelectOption
                           value=""
@@ -293,7 +339,11 @@ const EudiHubPageContent = () => {
                         aria-label={t("eudiHubRefreshOrganizations")}
                         data-testid="eudiHubOrganizationsRefresh"
                         onClick={() => void loadOrganizations(form.token)}
-                        isDisabled={!tokenIsJwt || organizationsLoading}
+                        isDisabled={
+                          certificateRequested ||
+                          !tokenIsJwt ||
+                          organizationsLoading
+                        }
                       >
                         {organizationsLoading ? (
                           <Spinner size="md" />
@@ -325,23 +375,51 @@ const EudiHubPageContent = () => {
                     data-testid="eudiHubName"
                     value={form.name}
                     onChange={(_event, value) => set("name", value)}
+                    isDisabled={certificateRequested}
                   />
                 </FormGroup>
+
+                {accessCertificate !== null && (
+                  <FormGroup
+                    label={t("eudiHubAccessCertificate")}
+                    fieldId="eudiHubAccessCertificate"
+                    labelIcon={
+                      <HelpLabel
+                        helpText={t("eudiHubAccessCertificateHelp")}
+                        fieldLabelId="eudiHubAccessCertificate"
+                      />
+                    }
+                  >
+                    <TextArea
+                      id="eudiHubAccessCertificate"
+                      data-testid="eudiHubAccessCertificate"
+                      value={accessCertificate}
+                      readOnlyVariant="default"
+                      rows={6}
+                      resizeOrientation="vertical"
+                    />
+                  </FormGroup>
+                )}
 
                 <ActionGroup>
                   <Button
                     variant="primary"
                     type="submit"
                     data-testid="eudiHubAccessCertificate-save"
+                    isDisabled={!canRequest}
+                    isLoading={requesting}
                   >
                     {t("eudiHubRequestCertificate")}
                   </Button>
                   <Button
                     variant="link"
-                    data-testid="eudiHubAccessCertificate-revert"
-                    onClick={() => setForm(createDefaultForm())}
+                    data-testid="eudiHubAccessCertificate-reset"
+                    onClick={() => {
+                      setForm(createDefaultForm());
+                      setAccessCertificate(null);
+                    }}
                   >
-                    {t("revert")}
+                    {t("eudiHubReset")}
                   </Button>
                 </ActionGroup>
               </Form>

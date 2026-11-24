@@ -2,12 +2,24 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.eudihub;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.util.EntityUtils;
 import org.jboss.logging.Logger;
+import org.keycloak.connections.httpclient.HttpClientProvider;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.http.simple.SimpleHttp;
 import org.keycloak.http.simple.SimpleHttpResponse;
 import org.keycloak.models.KeycloakSession;
@@ -81,6 +93,56 @@ public class EudiHubService {
         return result;
     }
 
+    /**
+     * Requests an access certificate from the EUDI Hub for the realm's OpenID4VP signing key.
+     *
+     * <p>The CSR is created for the public key of the signing key and signed by its private key, so
+     * the private key never leaves Keycloak. The issued certificate is returned as base64 DER, the
+     * form the OpenID4VP authenticator expects.
+     */
+    public String requestAccessCertificate(String token, String organizationId, String environment, String name)
+            throws EudiHubException {
+        String normalizedToken = normalizeToken(token);
+        String safeId = normalizeOrganizationId(organizationId);
+        String normalizedEnvironment = normalizeEnvironment(environment);
+
+        OrganizationDetails details = getDetails(normalizedToken, safeId);
+        List<String> supportUris = supportUris(details);
+        if (supportUris.isEmpty()) {
+            throw new EudiHubException(
+                    400, "The EUDI Hub organization has no support URI to request a certificate for.");
+        }
+
+        String certificateName = name == null || name.isBlank() ? "Access Certificate" : name.trim();
+        String csr = createCertificateSigningRequest(certificateName);
+
+        AccessCertificate created = postJson(
+                normalizedToken,
+                "/v1/organizations/" + safeId + "/access-certificates",
+                new AccessCertificateRequest(certificateName, csr, normalizedEnvironment, supportUris.get(0)),
+                AccessCertificate.class);
+        if (created == null || created.id() == null || created.id().isBlank()) {
+            throw new EudiHubException(502, "The EUDI Hub answered without an access certificate ID.");
+        }
+
+        byte[] certificate = download(
+                normalizedToken,
+                "/v1/organizations/" + safeId + "/access-certificates/" + encodePathSegment(created.id())
+                        + "/download");
+        return Base64.getEncoder().encodeToString(certificate);
+    }
+
+    private String createCertificateSigningRequest(String name) throws EudiHubException {
+        try {
+            KeyWrapper signingKey = VerifierDiscoveryService.getSigningKey(session, false);
+            return EudiHubCsr.create(signingKey, name);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new EudiHubException(409, e.getMessage());
+        } catch (Exception e) {
+            throw new EudiHubException(500, "Could not create the certificate signing request.");
+        }
+    }
+
     private OrganizationDetails getDetails(String token, String organizationId) throws EudiHubException {
         String safeId = normalizeOrganizationId(organizationId);
         return getJson(token, "/v1/organizations/" + safeId, OrganizationDetails.class);
@@ -102,22 +164,73 @@ public class EudiHubService {
                 .header("Accept", "application/json")
                 .auth(token)
                 .asResponse()) {
-            int status = response.getStatus();
-            String payload = response.asString();
-            if (status < 200 || status >= 300) {
-                int mappedStatus = status == 401 || status == 403 ? status : 502;
-                throw new EudiHubException(mappedStatus, problemDetail(payload));
-            }
-            if (payload == null || payload.isBlank()) {
-                throw new EudiHubException(502, "The EUDI Hub answered with an empty body.");
-            }
-
-            return JsonSerialization.mapper.readValue(payload, type);
+            return readJson(response, type);
         } catch (EudiHubException e) {
             throw e;
         } catch (IOException e) {
             throw new EudiHubException(502, "The EUDI Hub could not be reached or answered with invalid JSON.");
         }
+    }
+
+    private <T> T postJson(String token, String path, Object body, Class<T> type) throws EudiHubException {
+        try (SimpleHttpResponse response = SimpleHttp.create(session)
+                .doPost(baseUrl + path)
+                .header("Accept", "application/json")
+                .auth(token)
+                .json(body)
+                .asResponse()) {
+            return readJson(response, type);
+        } catch (EudiHubException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new EudiHubException(502, "The EUDI Hub could not be reached or answered with invalid JSON.");
+        }
+    }
+
+    private static <T> T readJson(SimpleHttpResponse response, Class<T> type) throws IOException, EudiHubException {
+        int status = response.getStatus();
+        String payload = response.asString();
+        if (status < 200 || status >= 300) {
+            int mappedStatus = status == 401 || status == 403 ? status : 502;
+            throw new EudiHubException(mappedStatus, problemDetail(payload));
+        }
+        if (payload == null || payload.isBlank()) {
+            throw new EudiHubException(502, "The EUDI Hub answered with an empty body.");
+        }
+
+        return JsonSerialization.mapper.readValue(payload, type);
+    }
+
+    /** Downloads the issued certificate. The EUDI Hub answers with the DER bytes. */
+    private byte[] download(String token, String path) throws EudiHubException {
+        CloseableHttpClient client =
+                session.getProvider(HttpClientProvider.class).getHttpClient();
+        HttpGet request = new HttpGet(baseUrl + path);
+        request.setHeader("Accept", "application/pkix-cert, application/octet-stream");
+        request.setHeader("Authorization", "Bearer " + token);
+
+        try (CloseableHttpResponse response = client.execute(request)) {
+            int status = response.getStatusLine().getStatusCode();
+            HttpEntity entity = response.getEntity();
+            byte[] payload = entity == null ? new byte[0] : EntityUtils.toByteArray(entity);
+            if (status < 200 || status >= 300) {
+                int mappedStatus = status == 401 || status == 403 ? status : 502;
+                throw new EudiHubException(mappedStatus, problemDetail(new String(payload, StandardCharsets.UTF_8)));
+            }
+            if (payload.length == 0) {
+                throw new EudiHubException(502, "The EUDI Hub answered with an empty certificate.");
+            }
+            return payload;
+        } catch (EudiHubException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new EudiHubException(
+                    502, "The EUDI Hub could not be reached or answered with an invalid certificate.");
+        }
+    }
+
+    private static String encodePathSegment(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     /**
@@ -166,6 +279,19 @@ public class EudiHubService {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("The organization ID is not a UUID.");
         }
+    }
+
+    static String normalizeEnvironment(String environment) {
+        if (environment == null) {
+            throw new IllegalArgumentException("The EUDI Hub environment is required.");
+        }
+
+        String normalized = environment.trim().toLowerCase(Locale.ROOT);
+        if (!Environment.SANDBOX.value().equals(normalized)
+                && !Environment.LIVE.value().equals(normalized)) {
+            throw new IllegalArgumentException("The EUDI Hub environment must be 'sandbox' or 'live'.");
+        }
+        return normalized;
     }
 
     static String normalizeBaseUrl(String baseUrl) {
@@ -231,6 +357,13 @@ public class EudiHubService {
     /** Contact information of an organization. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ContactInformation(List<String> supportUris) {}
+
+    /** Request body of {@code POST /v1/organizations/{id}/access-certificates}. */
+    private record AccessCertificateRequest(String name, String csr, String environment, String supportUri) {}
+
+    /** Response of {@code POST /v1/organizations/{id}/access-certificates}. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record AccessCertificate(String id, String name, String status, String environment) {}
 
     /** RFC 9457 problem detail returned by the EUDI Hub. */
     @JsonIgnoreProperties(ignoreUnknown = true)

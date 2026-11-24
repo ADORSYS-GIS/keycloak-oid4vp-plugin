@@ -18,7 +18,7 @@ public class EudiHubAdminResourceProvider implements AdminRealmResourceProvider 
     @Override
     public Object getResource(
             KeycloakSession session, RealmModel realm, AdminPermissionEvaluator auth, AdminEventBuilder adminEvent) {
-        return new EudiHubAdminResource(auth, new EudiHubService(session, baseUrl));
+        return new EudiHubAdminResource(realm, auth, new EudiHubService(session, baseUrl));
     }
 
     @Override

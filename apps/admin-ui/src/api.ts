@@ -18,13 +18,24 @@ type ErrorResponse = {
   detail?: string;
 };
 
+type AccessCertificateResponse = {
+  accessCertificate?: string;
+};
+
+export type EudiHubAccessCertificateRequest = {
+  token: string;
+  organizationId: string;
+  environment: EudiHubEnvironment;
+  name: string;
+};
+
 // The EUDI Hub only allows its own portal origin through CORS, so the browser
 // cannot call it directly. The plugin exposes a Keycloak Admin API extension
 // that proxies the request server-side with the pasted portal token.
-const endpoint = (realm: string) =>
+const endpoint = (realm: string, path: string) =>
   `${environment.serverBaseUrl}/admin/realms/${encodeURIComponent(
     realm,
-  )}/eudi-hub/organizations`;
+  )}/eudi-hub/${path}`;
 
 const errorDetail = async (response: Response) => {
   try {
@@ -40,7 +51,7 @@ export async function fetchOrganizations(
   keycloakToken: string,
   portalToken: string,
 ): Promise<EudiHubOrganization[]> {
-  const response = await fetch(endpoint(realm), {
+  const response = await fetch(endpoint(realm, "organizations"), {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -75,4 +86,30 @@ export async function fetchOrganizations(
           )
         : [],
     }));
+}
+
+export async function requestAccessCertificate(
+  realm: string,
+  keycloakToken: string,
+  request: EudiHubAccessCertificateRequest,
+): Promise<string> {
+  const response = await fetch(endpoint(realm, "access-certificate"), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${keycloakToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(await errorDetail(response));
+  }
+
+  const body = (await response.json()) as AccessCertificateResponse;
+  if (typeof body.accessCertificate !== "string" || !body.accessCertificate) {
+    throw new Error("The server answered without an access certificate.");
+  }
+  return body.accessCertificate;
 }
