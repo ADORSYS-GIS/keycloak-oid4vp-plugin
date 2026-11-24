@@ -1,0 +1,67 @@
+name: EUDIPLO Compatibility Watch
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eudiplo-compatibility-watch
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    name: Check EUDIPLO backend updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Checkout EUDIPLO history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: EUDIPLO/eudiplo
+          ref: main
+          path: eudiplo
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Build backend update inventory
+        id: inventory
+        run: >-
+          bash scripts/eudiplo-compatibility/collect-updates.sh
+          eudiplo
+          scripts/eudiplo-compatibility/baseline.sha
+          eudiplo-impact-report.md
+
+      - name: Add report to workflow summary
+        if: always() && hashFiles('eudiplo-impact-report.md') != ''
+        run: cat eudiplo-impact-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eudiplo-backend-update-inventory
+          path: eudiplo-impact-report.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Notify Discord about EUDIPLO backend updates
+        if: success() && steps.inventory.outputs.has-updates == 'true'
+        uses: ./.github/actions/discord-notification
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: EUDIPLO backend updates detected
+
+      - name: Notify Discord on workflow failure
+        if: failure()
+        uses: ./.github/actions/discord-notification
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: EUDIPLO compatibility check failed
