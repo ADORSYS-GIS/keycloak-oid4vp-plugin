@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  OPENCODE_MODEL: camer-digital/adorsys-reviewer
+  OPENCODE_MODEL: camer-digital/adorsys-reviewer-pro
   OPENCODE_PROVIDER: camer-digital
   OPENCODE_GATEWAY_BASE_URL: https://api.ai.camer.digital/v1
 
@@ -107,7 +107,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: ${{ env.OPENCODE_MODEL }}
-          agent: plan
+          agent: auto-review
           prompt: ${{ steps.prompt.outputs.value }}
           share: false
           use_github_token: true
