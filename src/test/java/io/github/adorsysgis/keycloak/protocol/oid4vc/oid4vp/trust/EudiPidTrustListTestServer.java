@@ -6,14 +6,10 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocBaseTest;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.Executors;
 import javax.net.ssl.KeyManagerFactory;
@@ -30,9 +26,9 @@ import org.testcontainers.Testcontainers;
  * Process-local HTTPS fixture serving a cryptographically signed two-provider PID LoTE.
  *
  * <p>The Keycloak integration-test container reaches this server through Testcontainers' host-port
- * forwarding. Its TLS certificate is added to a temporary copy of the normal test truststore, so
- * the production {@link org.keycloak.broker.provider.util.SimpleHttp} path is exercised without
- * disabling TLS validation.
+ * forwarding. Its TLS certificate is the test issuer certificate
+ * ({@code MdocBaseTest.getIssuerCertRef1()}), which is mounted in Keycloak's default truststore
+ * folder, so tests proceed without disabling TLS certificate-chain validation.
  */
 public final class EudiPidTrustListTestServer {
 
@@ -42,22 +38,20 @@ public final class EudiPidTrustListTestServer {
     private static final String PATH = "/pid-provider.jwt";
 
     private final HttpsServer server;
-    private final Path keycloakTruststore;
     private volatile String trustListJwt;
 
-    private EudiPidTrustListTestServer(HttpsServer server, Path keycloakTruststore) {
+    private EudiPidTrustListTestServer(HttpsServer server) {
         this.server = server;
-        this.keycloakTruststore = keycloakTruststore;
     }
 
-    public static EudiPidTrustListTestServer start(Path sourceTruststore) {
+    public static EudiPidTrustListTestServer start() {
         try {
             X509Certificate tlsCertificate = MdocBaseTest.getIssuerCertRef1();
             SSLContext sslContext = serverSslContext(tlsCertificate);
 
             HttpsServer server = HttpsServer.create(new InetSocketAddress(0), 0);
-            EudiPidTrustListTestServer fixture =
-                    new EudiPidTrustListTestServer(server, augmentedTruststore(sourceTruststore, tlsCertificate));
+            EudiPidTrustListTestServer fixture = new EudiPidTrustListTestServer(server);
+
             server.setHttpsConfigurator(new HttpsConfigurator(sslContext));
             server.setExecutor(Executors.newCachedThreadPool(runnable -> {
                 Thread thread = new Thread(runnable, "eudi-pid-trust-list-test-server");
@@ -89,10 +83,6 @@ public final class EudiPidTrustListTestServer {
 
     public String urlFromKeycloakContainer() {
         return "https://host.testcontainers.internal:" + server.getAddress().getPort() + PATH;
-    }
-
-    public Path keycloakTruststore() {
-        return keycloakTruststore;
     }
 
     /** Installs a fresh, valid LoTE containing two distinct provider/certificate associations. */
@@ -175,27 +165,5 @@ public final class EudiPidTrustListTestServer {
         SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(keyManagers.getKeyManagers(), null, new SecureRandom());
         return sslContext;
-    }
-
-    private static Path augmentedTruststore(Path sourceTruststore, X509Certificate serverCertificate) throws Exception {
-        KeyStore truststore = KeyStore.getInstance("JKS");
-        try (var input = Files.newInputStream(sourceTruststore)) {
-            truststore.load(input, STORE_PASSWORD);
-        }
-        truststore.setCertificateEntry("eudi-pid-trust-list-test-server", serverCertificate);
-
-        Path target = Files.createTempFile("keycloak-test-truststore-", ".jks");
-        target.toFile().deleteOnExit();
-        try (var output = Files.newOutputStream(target)) {
-            truststore.store(output, STORE_PASSWORD);
-        }
-        Files.setPosixFilePermissions(
-                target,
-                EnumSet.of(
-                        PosixFilePermission.OWNER_READ,
-                        PosixFilePermission.OWNER_WRITE,
-                        PosixFilePermission.GROUP_READ,
-                        PosixFilePermission.OTHERS_READ));
-        return target;
     }
 }

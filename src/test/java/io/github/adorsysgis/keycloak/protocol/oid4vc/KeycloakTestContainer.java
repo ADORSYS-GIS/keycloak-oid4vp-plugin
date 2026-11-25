@@ -3,7 +3,6 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.trust.EudiPidTrustListTestServer;
 import java.io.File;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 import org.jboss.logging.Logger;
@@ -20,8 +19,10 @@ public final class KeycloakTestContainer {
     public static final String TEST_KEYCLOAK_IMAGE = System.getProperty(
             "test.keycloak.image", "quay.io/keycloak/keycloak:" + System.getProperty("keycloak.version", "26.8.2"));
     public static final String TEST_SHADED_PLUGIN_JAR = "target/keycloak-oid4vp-plugin-999.0.0-SNAPSHOT.jar";
-    private static final EudiPidTrustListTestServer EUDI_PID_TRUST_LIST_SERVER =
-            EudiPidTrustListTestServer.start(Path.of("src/test/resources/truststore.jks"));
+
+    private static final String TRUSTSTORE_PATH = "src/test/resources/truststore";
+    private static final String TRUSTSTORE_CONTAINER_PATH = "/opt/keycloak/conf/truststores";
+    private static final EudiPidTrustListTestServer EUDI_PID_TRUST_LIST_SERVER = EudiPidTrustListTestServer.start();
 
     private static final String KEYSTORE_FILE_NAME = "keystore-rsa.p12";
     private static final String KEYSTORE_CONTAINER_PATH = "/opt/keycloak/data/test/" + KEYSTORE_FILE_NAME;
@@ -64,11 +65,10 @@ public final class KeycloakTestContainer {
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_MANAGED_REALMS", "test-v2")
                 .withEnv("KC_SPI_REALM_RESTAPI_EXTENSION_OID4VP_AUTH_VERBOSE_ERRORS", "true")
                 .withEnv("KC_LOG_LEVEL", "INFO,io.github.adorsysgis:DEBUG")
+                .withCopyToContainer(MountableFile.forHostPath(TRUSTSTORE_PATH), TRUSTSTORE_CONTAINER_PATH)
                 .withCopyToContainer(
-                        MountableFile.forHostPath(EUDI_PID_TRUST_LIST_SERVER.keycloakTruststore()),
-                        "/opt/keycloak/conf/truststore.jks")
-                .withEnv("KC_SPI_TRUSTSTORE_FILE_FILE", "/opt/keycloak/conf/truststore.jks")
-                .withEnv("KC_SPI_TRUSTSTORE_FILE_PASSWORD", "password")
+                        MountableFile.forClasspathResource("/mdoc/cose-issuer-test.pem"),
+                        TRUSTSTORE_CONTAINER_PATH + "/cose-issuer-test.pem")
                 .withEnv("KC_TLS_HOSTNAME_VERIFIER", "ANY")
                 .withLogConsumer(frame -> logConsumer.accept(frame.getUtf8String()));
     }
