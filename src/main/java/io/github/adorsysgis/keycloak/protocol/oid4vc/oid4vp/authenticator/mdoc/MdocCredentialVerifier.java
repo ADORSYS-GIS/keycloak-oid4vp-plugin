@@ -16,6 +16,7 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocConstants;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.mdoc.MdocVerificationOpts;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialFormat;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialIdentity;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.CredentialVerifier;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.VerifiedCredential;
@@ -24,6 +25,8 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.RequestObject;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.CredentialRequirement.ClaimReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.profile.TrustPolicy.Origin;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.TransactionDataValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.tokenstatus.ReferencedTokenValidator.ReferencedTokenValidationException;
@@ -39,6 +42,7 @@ import org.keycloak.common.util.Base64Url;
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.sdjwt.consumer.PresentationRequirements;
+import org.keycloak.services.Urls;
 import org.keycloak.util.JWKSUtils;
 import org.keycloak.util.JsonSerialization;
 
@@ -122,7 +126,24 @@ public class MdocCredentialVerifier implements CredentialVerifier {
             }
         }
 
-        return new VerifiedCredential(payloadRef.get().get(L_NAME_SPACES));
+        JsonNode namespaces = payloadRef.get().get(L_NAME_SPACES);
+        String subject = readClaim(namespaces, credentialReq.getSubjectClaim());
+        CredentialIdentity identity = null;
+        if (credentialReq.isPrimary() && !credentialReq.isSessionIdentity()) {
+            Origin origin = TrustPolicy.resolvePrimaryOrigin(credentialReq);
+            String issuer = trust.issuerNamespace();
+            if (origin == Origin.CURRENT_REALM) {
+                issuer = realmIssuer(session);
+            }
+            identity = CredentialIdentity.forCredential(credentialReq, origin, issuer, subject);
+        }
+        return new VerifiedCredential(identity, namespaces);
+    }
+
+    private static String realmIssuer(KeycloakSession session) {
+        return Urls.realmIssuer(
+                session.getContext().getUri().getBaseUri(),
+                session.getContext().getRealm().getName());
     }
 
     @Override

@@ -118,10 +118,14 @@ public class OID4VPProfileConfig {
             throw new IllegalStateException("At least one OpenID4VP profile must be configured");
         }
 
+        Set<String> profileIds = new HashSet<>();
         for (AuthenticationProfile profile : profiles) {
             String profileId = profile.getId();
             if (StringUtil.isBlank(profileId)) {
                 throw new IllegalStateException("OpenID4VP profile id must not be blank");
+            }
+            if (!profileIds.add(profileId)) {
+                throw new IllegalStateException("OpenID4VP profile ids must be unique: " + profileId);
             }
 
             if (profile.getCredentials() == null || profile.getCredentials().isEmpty()) {
@@ -147,6 +151,17 @@ public class OID4VPProfileConfig {
                             String.format("OpenID4VP credential id must not be blank in profile: %s", profileId));
                 }
 
+                CredentialFormat format;
+                try {
+                    format = CredentialFormat.fromValue(credential.getFormat());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalStateException(
+                            String.format(
+                                    "Unsupported credential format '%s': %s/%s",
+                                    credential.getFormat(), profileId, credentialId),
+                            e);
+                }
+
                 if (credential.getCredentialTypes() == null
                         || credential.getCredentialTypes().isEmpty()) {
                     throw new IllegalStateException(String.format(
@@ -158,7 +173,7 @@ public class OID4VPProfileConfig {
                             "OpenID4VP credential must request at least one claim: %s/%s", profileId, credentialId));
                 }
 
-                if (CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat())) {
+                if (format == CredentialFormat.MSO_MDOC) {
                     if (credential.getCredentialTypes().size() != 1) {
                         throw new IllegalStateException(String.format(
                                 "mDoc credential must define exactly one credentialType (the docType): %s/%s",
@@ -177,7 +192,7 @@ public class OID4VPProfileConfig {
                 validateTrustPolicy(credential, profileId);
 
                 if (credential.isPrimary()) {
-                    validatePrimaryCredential(profile, credential);
+                    validatePrimaryCredential(profile, credential, format);
                 }
             }
 
@@ -342,11 +357,7 @@ public class OID4VPProfileConfig {
         List<CredentialRequirement> primaryCredentials = profile.getPrimaryCredentials();
 
         for (CredentialRequirement credential : profile.getCredentials()) {
-            if (credential.isPrimary()) {
-                continue;
-            }
-
-            Set<String> supportingClaimNames = Set.copyOf(credential.getClaims());
+            Set<String> requestedClaimNames = Set.copyOf(credential.getClaims());
 
             for (BindingRule rule : credential.getBinding()) {
                 if (StringUtil.isBlank(rule.getType())) {
@@ -367,14 +378,19 @@ public class OID4VPProfileConfig {
                             profileId, credential.getId()));
                 }
 
-                if (!supportingClaimNames.contains(rule.getCredentialClaim())) {
+                if (!requestedClaimNames.contains(rule.getCredentialClaim())) {
                     throw new IllegalStateException(String.format(
-                            "OpenID4VP binding rule credentialClaim '%s' must be among the supporting"
-                                    + " credential's requested claims: %s/%s",
+                            "OpenID4VP binding rule credentialClaim '%s' must be among the credential's"
+                                    + " requested claims: %s/%s",
                             rule.getCredentialClaim(), profileId, credential.getId()));
                 }
 
                 if (BindingRule.CLAIM_EQUALS_PRIMARY_CLAIM.equals(rule.getType())) {
+                    if (credential.isPrimary()) {
+                        throw new IllegalStateException(String.format(
+                                "Binding rule '%s' is not applicable to the primary credential '%s/%s'",
+                                rule.getType(), profileId, credential.getId()));
+                    }
                     if (StringUtil.isBlank(rule.getPrimaryCredentialClaim())) {
                         throw new IllegalStateException(String.format(
                                 "OpenID4VP binding rule primaryCredentialClaim must not be blank for"
@@ -423,7 +439,8 @@ public class OID4VPProfileConfig {
      *       requirement would be security-wise meaningless).
      * </ul>
      */
-    private static void validatePrimaryCredential(AuthenticationProfile profile, CredentialRequirement credential) {
+    private static void validatePrimaryCredential(
+            AuthenticationProfile profile, CredentialRequirement credential, CredentialFormat format) {
         if (credential.isSessionIdentity()) {
             if (credential.getBinding() == null || credential.getBinding().isEmpty()) {
                 throw new IllegalStateException(
@@ -437,10 +454,12 @@ public class OID4VPProfileConfig {
                     + profile.getId() + "/" + credential.getId());
         }
 
-        boolean isMdoc = CredentialFormat.MSO_MDOC.getValue().equals(credential.getFormat());
+        boolean isMdoc = format == CredentialFormat.MSO_MDOC;
 
         if (isMdoc) {
             validatePrimaryMdocIssuerPolicy(profile, credential);
+        } else {
+            validatePrimarySdJwtIssuerPolicy(profile, credential);
         }
 
         ClaimReference subjectRef = ClaimReference.parse(credential.getSubjectClaim());
@@ -456,6 +475,18 @@ public class OID4VPProfileConfig {
             String required = "subjectClaim='" + subjectRef + "'";
             throw new IllegalStateException("OpenID4VP primary credential must request identity claims " + required
                     + ": " + profile.getId() + "/" + credential.getId());
+        }
+    }
+
+    private static void validatePrimarySdJwtIssuerPolicy(
+            AuthenticationProfile profile, CredentialRequirement credential) {
+        List<TrustPolicy> trustPolicies = credential.getTrust();
+        long selfTrustPolicies = trustPolicies.stream()
+                .filter(policy -> TrustPolicy.SELF.equals(policy.getType()))
+                .count();
+        if (selfTrustPolicies > 0 && trustPolicies.size() != 1) {
+            throw new IllegalStateException("Primary SD-JWT must not combine self-trust with external trust policies: "
+                    + profile.getId() + "/" + credential.getId());
         }
     }
 

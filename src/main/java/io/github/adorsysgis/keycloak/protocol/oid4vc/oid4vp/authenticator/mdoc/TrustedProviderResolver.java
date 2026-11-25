@@ -38,7 +38,8 @@ public final class TrustedProviderResolver {
     public static ResolvedMdocTrust resolve(KeycloakSession session, CredentialRequirement credential)
             throws VerificationException {
         if (credential.getTrust() == null || credential.getTrust().isEmpty()) {
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())));
+            return new ResolvedMdocTrust(
+                    new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())), null);
         }
 
         if (requiresIssuerEnforcement(credential)) {
@@ -53,11 +54,29 @@ public final class TrustedProviderResolver {
                 trustAnchors.addAll(resolveStaticAnchors(session, trust, credential.getId()));
             }
         }
-        return new ResolvedMdocTrust(new StaticTruststoreProvider(trustAnchors));
+        return new ResolvedMdocTrust(
+                new StaticTruststoreProvider(trustAnchors), commonPinnedIssuerNamespace(credential.getTrust()));
     }
 
     private static boolean requiresIssuerEnforcement(CredentialRequirement credential) {
         return credential.isPrimary() && !credential.isSessionIdentity();
+    }
+
+    private static String commonPinnedIssuerNamespace(List<TrustPolicy> trustPolicies) {
+        String issuerNamespace = null;
+        for (TrustPolicy trust : trustPolicies) {
+            if (!TrustPolicy.X5C.equals(trust.getType())) {
+                return null;
+            }
+
+            String configuredNamespace = trust.issuerNamespace();
+            if (configuredNamespace == null
+                    || (issuerNamespace != null && !issuerNamespace.equals(configuredNamespace))) {
+                return null;
+            }
+            issuerNamespace = configuredNamespace;
+        }
+        return issuerNamespace;
     }
 
     private static ResolvedMdocTrust resolvePrimaryIssuer(KeycloakSession session, CredentialRequirement credential)
@@ -68,19 +87,32 @@ public final class TrustedProviderResolver {
         }
 
         TrustPolicy trust = credential.getTrust().getFirst();
-        if (!TrustPolicy.EUDI_PID_TRUST_LIST.equals(trust.getType())) {
-            List<X509Certificate> anchors = resolveStaticAnchors(session, trust, credential.getId());
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(anchors));
-        }
+        return switch (trust.getType()) {
+            case TrustPolicy.SELF ->
+                new ResolvedMdocTrust(
+                        new StaticTruststoreProvider(resolveSelfAnchors(session, credential.getId())), null);
+            case TrustPolicy.X5C ->
+                new ResolvedMdocTrust(
+                        new StaticTruststoreProvider(resolveX5cAnchors(trust, credential.getId())),
+                        trust.issuerNamespace());
+            case TrustPolicy.EUDI_PID_TRUST_LIST -> resolvePrimaryEudiPidTrust(session, trust, credential.getId());
+            default ->
+                throw new IllegalStateException(String.format(
+                        "Primary mDoc credential '%s' uses an unsupported trust policy: %s",
+                        credential.getId(), trust.getType()));
+        };
+    }
 
+    private static ResolvedMdocTrust resolvePrimaryEudiPidTrust(
+            KeycloakSession session, TrustPolicy trust, String credentialId) throws VerificationException {
         try {
             EudiPidTrustListProvider.TrustListSnapshot snapshot = new EudiPidTrustListProvider(session).resolve(trust);
             TrustedPidProvider provider = snapshot.resolveIssuer(trust.getIssuer());
-            return new ResolvedMdocTrust(new StaticTruststoreProvider(provider.trustedCertificates()));
+            return new ResolvedMdocTrust(
+                    new StaticTruststoreProvider(provider.trustedCertificates()), trust.getIssuer());
         } catch (EudiPidTrustException e) {
             throw new VerificationException(
-                    String.format("Credential '%s' could not resolve its configured PID Provider", credential.getId()),
-                    e);
+                    String.format("Credential '%s' could not resolve its configured PID Provider", credentialId), e);
         }
     }
 
@@ -139,5 +171,6 @@ public final class TrustedProviderResolver {
         }
     }
 
-    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors) {}
+    /** Resolved trust anchors and the stable issuer namespace, when the configured trust identifies one. */
+    public record ResolvedMdocTrust(TrustAnchorProvider trustAnchors, String issuerNamespace) {}
 }

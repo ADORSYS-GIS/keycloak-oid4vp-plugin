@@ -34,6 +34,11 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
 
     public static final String PROFILES_CONFIG = "profiles";
 
+    /** Names retained for configuration fixtures; both properties belong inside profiles JSON. */
+    public static final String IMPORT_UNKNOWN_USERS_CONFIG = "importUnknownUsers";
+
+    public static final String IMPORT_IDP_ALIAS_CONFIG = "importIdentityProviderAlias";
+
     public static final String CREDENTIAL_TYPES_CONFIG = "credentialTypes";
     public static final String CREDENTIAL_TYPES_CONFIG_DEFAULT = "https://credentials.example.com/identity_credential";
 
@@ -295,9 +300,8 @@ public class OID4VPAuthenticatorFactory implements AuthenticatorFactory, OID4VPE
     }
 
     /**
-     * Returns the set of {@link CredentialVerifier} instances the authenticator should
-     * dispatch verification to. Subclasses can override this method to register additional
-     * handlers (e.g. for {@code mso_mdoc}) alongside the default SD-JWT handler.
+     * Returns the format-to-verifier map used by the authenticator. Subclasses can override this
+     * method to customize the supported credential formats.
      */
     protected Map<String, CredentialVerifier> defaultHandlers(KeycloakSession session) {
         StatusListJwtFetcher httpFetcher = new TrustedStatusListJwtFetcher(session);

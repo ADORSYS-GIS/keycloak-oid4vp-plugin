@@ -11,6 +11,9 @@ public class AuthenticationProfile {
 
     public static final String DEFAULT_PROFILE_ID = "default";
     public static final String DEFAULT_CTA = "Identity Wallet";
+    public static final String IMPORT_UNKNOWN_USERS_PROPERTY = "importUnknownUsers";
+    public static final String IMPORT_IDP_ALIAS_PROPERTY = "importIdentityProviderAlias";
+    public static final String DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS = "oid4vp-import";
 
     @JsonProperty("id")
     private String id;
@@ -26,6 +29,12 @@ public class AuthenticationProfile {
 
     @JsonProperty("registrationCertificate")
     private String registrationCertificate;
+
+    @JsonProperty(IMPORT_UNKNOWN_USERS_PROPERTY)
+    private boolean importUnknownUsers;
+
+    @JsonProperty(IMPORT_IDP_ALIAS_PROPERTY)
+    private String importIdentityProviderAlias;
 
     @JsonProperty("credentials")
     private List<CredentialRequirement> credentials;
@@ -75,6 +84,26 @@ public class AuthenticationProfile {
 
     public AuthenticationProfile setRegistrationCertificate(String registrationCertificate) {
         this.registrationCertificate = registrationCertificate;
+        return this;
+    }
+
+    public boolean shouldImportUnknownUsers() {
+        return importUnknownUsers;
+    }
+
+    public AuthenticationProfile setImportUnknownUsers(boolean importUnknownUsers) {
+        this.importUnknownUsers = importUnknownUsers;
+        return this;
+    }
+
+    public String getImportIdentityProviderAlias() {
+        return StringUtil.isBlank(importIdentityProviderAlias)
+                ? DEFAULT_IMPORT_IDENTITY_PROVIDER_ALIAS
+                : importIdentityProviderAlias.trim();
+    }
+
+    public AuthenticationProfile setImportIdentityProviderAlias(String importIdentityProviderAlias) {
+        this.importIdentityProviderAlias = importIdentityProviderAlias;
         return this;
     }
 

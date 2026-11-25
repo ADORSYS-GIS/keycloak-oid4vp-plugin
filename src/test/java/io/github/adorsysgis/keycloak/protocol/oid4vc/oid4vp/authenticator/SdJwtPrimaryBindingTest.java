@@ -92,9 +92,8 @@ class SdJwtPrimaryBindingTest {
                 .credentialVerifier(primary.getId(), verifier)
                 .build();
 
-        OID4VPAuthenticator.AuthenticatingUser authenticatingUser =
-                new OID4VPAuthenticator.AuthenticatingUser(user, claims);
-        authenticator.applyBindingRules(ctx, authenticatingUser, primary, claims);
+        authenticator.applyPrimaryClaimBindings(ctx, claims, primary, claims);
+        authenticator.applyUserAttributeBindings(ctx, primary, claims, user);
     }
 
     @Test
