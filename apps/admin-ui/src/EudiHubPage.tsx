@@ -37,7 +37,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import {
   fetchOrganizations,
   requestAccessCertificate,
@@ -222,13 +222,17 @@ const EudiHubPageContent = () => {
         throw new Error("The admin console session has no access token.");
       }
 
-      const certificate = await requestAccessCertificate(realm, adminToken, {
+      const result = await requestAccessCertificate(realm, adminToken, {
         token: normalizeToken(form.token),
         organizationId: form.organizationId,
         environment: selectedOrganization?.environment ?? "sandbox",
         name: form.name.trim(),
       });
-      setAccessCertificate(certificate);
+      setAccessCertificate(result.accessCertificate);
+      const certificateName = result.name;
+      if (certificateName && certificateName !== form.name) {
+        setForm((current) => ({ ...current, name: certificateName }));
+      }
       addAlert(t("eudiHubCertificateRequestSuccess"), AlertVariant.success);
     } catch (error) {
       addError("eudiHubCertificateRequestError", error);
@@ -290,6 +294,26 @@ const EudiHubPageContent = () => {
                     isDisabled={certificateRequested}
                     isRequired
                   />
+                  <FormHelperText>
+                    <HelperText>
+                      <HelperTextItem>
+                        <Trans
+                          i18nKey="eudiHubTokenGuidance"
+                          components={{
+                            portalLink: (
+                              <a
+                                href="https://portal.eudi-hub.gov.de/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              />
+                            ),
+                            apiCode: <code />,
+                            headerCode: <code />,
+                          }}
+                        />
+                      </HelperTextItem>
+                    </HelperText>
+                  </FormHelperText>
                 </FormGroup>
 
                 <FormGroup

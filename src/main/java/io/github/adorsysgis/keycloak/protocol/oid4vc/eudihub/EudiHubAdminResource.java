@@ -77,10 +77,15 @@ public class EudiHubAdminResource {
         }
 
         try {
-            String certificate = service.requestAccessCertificate(
+            EudiHubService.AccessCertificateResult result = service.requestAccessCertificate(
                     request.token(), request.organizationId(), request.environment(), request.name());
-            configureAccessCertificate(certificate);
-            return Response.ok(Map.of("accessCertificate", certificate)).build();
+            configureAccessCertificate(result.certificate());
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("accessCertificate", result.certificate());
+            if (result.name() != null && !result.name().isBlank()) {
+                body.put("name", result.name());
+            }
+            return Response.ok(body).build();
         } catch (EudiHubService.EudiHubException e) {
             logger.warnf("EUDI Hub access certificate request failed: %s", e.getMessage());
             Response.Status status = Response.Status.fromStatusCode(e.getStatus());

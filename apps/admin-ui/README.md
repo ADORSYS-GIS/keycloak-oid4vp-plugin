@@ -84,6 +84,15 @@ OpenID4VP authenticator configuration. A realm whose authenticator has no
 configuration is reported as a conflict instead of being changed. Requesting a
 certificate needs `manage-realm`; listing organizations needs `view-realm`.
 
+The EUDI Hub issues one access certificate per public key. If the signing key
+already holds a certificate, the Hub rejects the request; the service then lists
+the organization's certificates in that environment, downloads them and reuses
+the newest valid one whose public key matches the signing key. The response
+contains the Hub's name for that certificate, and the form adopts it. When the
+matching certificate is revoked or expired, the request fails with a message
+that asks the administrator to rotate the signing key, because a new
+certificate cannot be issued for the same key.
+
 The upstream URL defaults to `https://api.eudi-hub.gov.de/org-management`. It
 must use HTTPS. Override it for another deployment with:
 

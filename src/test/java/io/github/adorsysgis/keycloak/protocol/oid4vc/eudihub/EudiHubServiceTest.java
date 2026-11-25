@@ -82,15 +82,61 @@ class EudiHubServiceTest {
         });
         server.createContext("/org-management/v1/organizations/", exchange -> {
             String path = exchange.getRequestURI().getPath();
-            if (path.endsWith("/access-certificates") && "POST".equals(exchange.getRequestMethod())) {
+            String method = exchange.getRequestMethod();
+            if (path.endsWith("/access-certificates") && "POST".equals(method)) {
                 receivedAccessCertificateRequest = JsonSerialization.mapper.readTree(
                         exchange.getRequestBody().readAllBytes());
+                if (path.contains("55555555") || path.contains("66666666") || path.contains("77777777")) {
+                    respondJson(
+                            exchange,
+                            409,
+                            "{\"detail\":\"Access certificate provider already has a certificate for this request\"}");
+                    return;
+                }
                 respondJson(exchange, 201, """
                         {"id": "cert-1", "name": "Access Certificate TEST", "status": "valid", "environment": "sandbox"}
                         """);
                 return;
             }
-            if (path.endsWith("/access-certificates/cert-1/download")) {
+            if (path.endsWith("/access-certificates") && "GET".equals(method)) {
+                if (path.contains("55555555")) {
+                    respondJson(exchange, 200, """
+                            {
+                              "items": [
+                                {
+                                  "id": "existing-1",
+                                  "name": "Existing Access Certificate",
+                                  "status": "valid",
+                                  "environment": "sandbox",
+                                  "expirationDate": "2027-01-01T00:00:00Z"
+                                }
+                              ]
+                            }
+                            """);
+                    return;
+                }
+                if (path.contains("77777777")) {
+                    respondJson(exchange, 200, """
+                            {
+                              "items": [
+                                {
+                                  "id": "revoked-1",
+                                  "name": "Revoked Access Certificate",
+                                  "status": "revoked",
+                                  "environment": "sandbox",
+                                  "expirationDate": "2027-01-01T00:00:00Z"
+                                }
+                              ]
+                            }
+                            """);
+                    return;
+                }
+                respondJson(exchange, 200, "{\"items\": []}");
+                return;
+            }
+            if (path.endsWith("/access-certificates/cert-1/download")
+                    || path.endsWith("/access-certificates/existing-1/download")
+                    || path.endsWith("/access-certificates/revoked-1/download")) {
                 respondBytes(exchange, 200, issuedCertificateDer);
                 return;
             }
@@ -198,13 +244,14 @@ class EudiHubServiceTest {
 
     @Test
     void requestsAccessCertificateForTheOpenId4vpSigningKey() throws Exception {
-        String certificate = service.requestAccessCertificate(
+        EudiHubService.AccessCertificateResult result = service.requestAccessCertificate(
                 "portal-token", "11111111-1111-1111-1111-111111111111", "sandbox", "Access Certificate TEST");
 
-        byte[] der = Base64.getDecoder().decode(certificate);
+        byte[] der = Base64.getDecoder().decode(result.certificate());
         X509Certificate parsed = (X509Certificate)
                 CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(der));
         assertEquals(issuedCertificate, parsed);
+        assertEquals("Access Certificate TEST", result.name());
 
         assertEquals(
                 "Access Certificate TEST",
@@ -218,6 +265,41 @@ class EudiHubServiceTest {
         String csr = receivedAccessCertificateRequest.get("csr").asText();
         assertTrue(csr.startsWith("-----BEGIN CERTIFICATE REQUEST-----"), csr);
         assertCsrMatches(csr, signingKeyPair.getPublic());
+    }
+
+    @Test
+    void reusesTheCertificateAlreadyIssuedForTheSigningKey() throws Exception {
+        // The EUDI Hub refuses a second certificate for a key it already holds
+        // one for; the service must retrieve that certificate instead.
+        EudiHubService.AccessCertificateResult result = service.requestAccessCertificate(
+                "portal-token", "55555555-5555-5555-5555-555555555555", "sandbox", "Access Certificate TEST");
+
+        assertEquals(Base64.getEncoder().encodeToString(issuedCertificateDer), result.certificate());
+        // The form must show the name the Hub knows the reused certificate by.
+        assertEquals("Existing Access Certificate", result.name());
+    }
+
+    @Test
+    void reportsTheDuplicateErrorWhenNoCertificateHoldsTheSigningKey() {
+        EudiHubService.EudiHubException failure = assertThrows(
+                EudiHubService.EudiHubException.class,
+                () -> service.requestAccessCertificate(
+                        "portal-token", "66666666-6666-6666-6666-666666666666", "sandbox", "Access Certificate TEST"));
+
+        assertEquals(502, failure.getStatus());
+        assertTrue(failure.getMessage().contains("already has a certificate"), failure.getMessage());
+    }
+
+    @Test
+    void explainsThatTheRevokedCertificateBlocksANewRequest() {
+        EudiHubService.EudiHubException failure = assertThrows(
+                EudiHubService.EudiHubException.class,
+                () -> service.requestAccessCertificate(
+                        "portal-token", "77777777-7777-7777-7777-777777777777", "sandbox", "Access Certificate TEST"));
+
+        assertEquals(409, failure.getStatus());
+        assertTrue(failure.getMessage().contains("revoked"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("rotate the signing key"), failure.getMessage());
     }
 
     @Test

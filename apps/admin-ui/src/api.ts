@@ -20,6 +20,12 @@ type ErrorResponse = {
 
 type AccessCertificateResponse = {
   accessCertificate?: string;
+  name?: string;
+};
+
+export type EudiHubAccessCertificateResult = {
+  accessCertificate: string;
+  name?: string;
 };
 
 export type EudiHubAccessCertificateRequest = {
@@ -92,7 +98,7 @@ export async function requestAccessCertificate(
   realm: string,
   keycloakToken: string,
   request: EudiHubAccessCertificateRequest,
-): Promise<string> {
+): Promise<EudiHubAccessCertificateResult> {
   const response = await fetch(endpoint(realm, "access-certificate"), {
     method: "POST",
     headers: {
@@ -111,5 +117,8 @@ export async function requestAccessCertificate(
   if (typeof body.accessCertificate !== "string" || !body.accessCertificate) {
     throw new Error("The server answered without an access certificate.");
   }
-  return body.accessCertificate;
+  return {
+    accessCertificate: body.accessCertificate,
+    name: typeof body.name === "string" && body.name ? body.name : undefined,
+  };
 }

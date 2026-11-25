@@ -3,11 +3,15 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.eudihub;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonValue;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
@@ -40,6 +44,9 @@ public class EudiHubService {
 
     private static final String BEARER_PREFIX = "bearer ";
     private static final int MAX_DETAIL_LENGTH = 300;
+
+    /** Upper bound on the certificates downloaded while looking for the one of the signing key. */
+    private static final int MAX_RECOVERY_DOWNLOADS = 10;
 
     private final KeycloakSession session;
     private final String baseUrl;
@@ -100,8 +107,8 @@ public class EudiHubService {
      * the private key never leaves Keycloak. The issued certificate is returned as base64 DER, the
      * form the OpenID4VP authenticator expects.
      */
-    public String requestAccessCertificate(String token, String organizationId, String environment, String name)
-            throws EudiHubException {
+    public AccessCertificateResult requestAccessCertificate(
+            String token, String organizationId, String environment, String name) throws EudiHubException {
         String normalizedToken = normalizeToken(token);
         String safeId = normalizeOrganizationId(organizationId);
         String normalizedEnvironment = normalizeEnvironment(environment);
@@ -114,13 +121,41 @@ public class EudiHubService {
         }
 
         String certificateName = name == null || name.isBlank() ? "Access Certificate" : name.trim();
-        String csr = createCertificateSigningRequest(certificateName);
+        KeyWrapper signingKey = getSigningKey();
+        String csr = createCertificateSigningRequest(signingKey, certificateName);
 
-        AccessCertificate created = postJson(
-                normalizedToken,
-                "/v1/organizations/" + safeId + "/access-certificates",
-                new AccessCertificateRequest(certificateName, csr, normalizedEnvironment, supportUris.get(0)),
-                AccessCertificate.class);
+        AccessCertificate created;
+        try {
+            created = postJson(
+                    normalizedToken,
+                    "/v1/organizations/" + safeId + "/access-certificates",
+                    new AccessCertificateRequest(certificateName, csr, normalizedEnvironment, supportUris.get(0)),
+                    AccessCertificate.class);
+        } catch (EudiHubException e) {
+            if (e.getStatus() == 401 || e.getStatus() == 403) {
+                throw e;
+            }
+            // The EUDI Hub issues one certificate per key. When the current
+            // OpenID4VP signing key already has one, retrieve that certificate
+            // instead of failing the request.
+            ExistingCertificate existing =
+                    findCertificateForSigningKey(normalizedToken, safeId, normalizedEnvironment, signingKey);
+            if (existing != null) {
+                if (existing.der() == null) {
+                    throw new EudiHubException(
+                            409,
+                            notValidCertificateMessage(existing.certificate().status()));
+                }
+                logger.infof(
+                        "Reusing the access certificate the EUDI Hub already issued for the OpenID4VP signing key (%s)",
+                        signingKey.getKid());
+                return new AccessCertificateResult(
+                        Base64.getEncoder().encodeToString(existing.der()),
+                        existing.certificate().name());
+            }
+            throw e;
+        }
+
         if (created == null || created.id() == null || created.id().isBlank()) {
             throw new EudiHubException(502, "The EUDI Hub answered without an access certificate ID.");
         }
@@ -129,14 +164,137 @@ public class EudiHubService {
                 normalizedToken,
                 "/v1/organizations/" + safeId + "/access-certificates/" + encodePathSegment(created.id())
                         + "/download");
-        return Base64.getEncoder().encodeToString(certificate);
+        return new AccessCertificateResult(
+                Base64.getEncoder().encodeToString(certificate),
+                created.name() == null || created.name().isBlank() ? certificateName : created.name());
     }
 
-    private String createCertificateSigningRequest(String name) throws EudiHubException {
+    private static String notValidCertificateMessage(String status) {
+        String normalized = status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "revoked" ->
+                "The EUDI Hub already has a revoked certificate for the current OpenID4VP signing key; "
+                        + "rotate the signing key and request again.";
+            case "expired" ->
+                "The EUDI Hub already has an expired certificate for the current OpenID4VP signing key; "
+                        + "rotate the signing key and request again.";
+            default ->
+                "The EUDI Hub already has a certificate for the current OpenID4VP signing key that is not valid"
+                        + (normalized.isEmpty() ? "" : " (status: " + normalized + ")")
+                        + "; rotate the signing key and request again.";
+        };
+    }
+
+    /**
+     * Finds the certificate the EUDI Hub already issued for the given signing key. This is a
+     * best-effort lookup used when the Hub refuses a second certificate for the same key: it
+     * returns {@code null} when no listed certificate holds the key's public key. A certificate
+     * that holds the key but is revoked or expired is returned without DER bytes so the caller can
+     * explain why a new one cannot be issued.
+     */
+    private ExistingCertificate findCertificateForSigningKey(
+            String token, String organizationId, String environment, KeyWrapper signingKey) {
+        if (signingKey == null || signingKey.getPublicKey() == null) {
+            return null;
+        }
+        byte[] signingPublicKey = signingKey.getPublicKey().getEncoded();
+
+        List<AccessCertificate> certificates;
         try {
-            KeyWrapper signingKey = VerifierDiscoveryService.getSigningKey(session, false);
-            return EudiHubCsr.create(signingKey, name);
+            certificates = listAccessCertificates(token, organizationId, environment);
+        } catch (EudiHubException e) {
+            logger.warnf(
+                    "Could not list the access certificates of EUDI Hub organization %s: %s",
+                    organizationId, e.getMessage());
+            return null;
+        }
+
+        AccessCertificate bestValid = null;
+        byte[] bestValidDer = null;
+        AccessCertificate bestInvalid = null;
+        int downloads = 0;
+        for (AccessCertificate candidate : certificates) {
+            if (candidate == null || candidate.id() == null || candidate.id().isBlank()) {
+                continue;
+            }
+            if (downloads++ >= MAX_RECOVERY_DOWNLOADS) {
+                break;
+            }
+
+            byte[] der;
+            try {
+                der = download(
+                        token,
+                        "/v1/organizations/" + organizationId + "/access-certificates/"
+                                + encodePathSegment(candidate.id()) + "/download");
+            } catch (EudiHubException e) {
+                logger.warnf(
+                        "Could not download EUDI Hub access certificate %s while looking for the signing key's certificate: %s",
+                        candidate.id(), e.getMessage());
+                continue;
+            }
+            if (!holdsPublicKey(der, signingPublicKey)) {
+                continue;
+            }
+
+            boolean valid = candidate.status() == null || "valid".equalsIgnoreCase(candidate.status());
+            if (valid) {
+                if (bestValid == null || isNewer(candidate, bestValid)) {
+                    bestValid = candidate;
+                    bestValidDer = der;
+                }
+            } else if (bestInvalid == null || isNewer(candidate, bestInvalid)) {
+                bestInvalid = candidate;
+            }
+        }
+
+        if (bestValid != null) {
+            return new ExistingCertificate(bestValid, bestValidDer);
+        }
+        return bestInvalid == null ? null : new ExistingCertificate(bestInvalid, null);
+    }
+
+    private List<AccessCertificate> listAccessCertificates(String token, String organizationId, String environment)
+            throws EudiHubException {
+        AccessCertificatePage page = getJson(
+                token,
+                "/v1/organizations/" + organizationId + "/access-certificates?environment="
+                        + encodePathSegment(environment) + "&limit=100",
+                AccessCertificatePage.class);
+        return page.items() == null ? List.of() : page.items();
+    }
+
+    private static boolean holdsPublicKey(byte[] der, byte[] publicKey) {
+        try {
+            X509Certificate certificate = (X509Certificate)
+                    CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(der));
+            return Arrays.equals(certificate.getPublicKey().getEncoded(), publicKey);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean isNewer(AccessCertificate candidate, AccessCertificate current) {
+        String candidateExpiry = candidate.expirationDate();
+        String currentExpiry = current.expirationDate();
+        if (candidateExpiry == null) {
+            return false;
+        }
+        return currentExpiry == null || candidateExpiry.compareTo(currentExpiry) > 0;
+    }
+
+    private KeyWrapper getSigningKey() throws EudiHubException {
+        try {
+            return VerifierDiscoveryService.getSigningKey(session, false);
         } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new EudiHubException(409, e.getMessage());
+        }
+    }
+
+    private static String createCertificateSigningRequest(KeyWrapper signingKey, String name) throws EudiHubException {
+        try {
+            return EudiHubCsr.create(signingKey, name);
+        } catch (IllegalArgumentException e) {
             throw new EudiHubException(409, e.getMessage());
         } catch (Exception e) {
             throw new EudiHubException(500, "Could not create the certificate signing request.");
@@ -342,6 +500,12 @@ public class EudiHubService {
         }
     }
 
+    /** The certificate returned to the admin UI and the name the EUDI Hub knows it by. */
+    public record AccessCertificateResult(String certificate, String name) {}
+
+    /** A listed certificate that holds the signing key, with its DER bytes only when it is valid. */
+    private record ExistingCertificate(AccessCertificate certificate, byte[] der) {}
+
     /** Response of {@code GET /v1/me}. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MeResponse(List<OrganizationSummary> organizations) {}
@@ -363,7 +527,12 @@ public class EudiHubService {
 
     /** Response of {@code POST /v1/organizations/{id}/access-certificates}. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record AccessCertificate(String id, String name, String status, String environment) {}
+    private record AccessCertificate(
+            String id, String name, String status, String environment, String expirationDate) {}
+
+    /** First page of {@code GET /v1/organizations/{id}/access-certificates}. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record AccessCertificatePage(List<AccessCertificate> items) {}
 
     /** RFC 9457 problem detail returned by the EUDI Hub. */
     @JsonIgnoreProperties(ignoreUnknown = true)

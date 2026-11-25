@@ -29,7 +29,7 @@ class EudiHubAdminResourceTest {
     @Test
     void failsWhenTheOid4vpAuthFlowIsMissing() throws Exception {
         when(service.requestAccessCertificate(anyString(), anyString(), anyString(), anyString()))
-                .thenReturn("certificate");
+                .thenReturn(new EudiHubService.AccessCertificateResult("certificate", null));
 
         Response response = request();
 
@@ -45,7 +45,7 @@ class EudiHubAdminResourceTest {
         when(realm.getFlowByAlias("oid4vp auth")).thenReturn(flow);
         when(realm.getAuthenticationExecutionsStream("flow")).thenReturn(Stream.empty());
         when(service.requestAccessCertificate(anyString(), anyString(), anyString(), anyString()))
-                .thenReturn("certificate");
+                .thenReturn(new EudiHubService.AccessCertificateResult("certificate", null));
 
         Response response = request();
 
@@ -63,7 +63,7 @@ class EudiHubAdminResourceTest {
         execution.setAuthenticator("oid4vp-authenticator");
         when(realm.getAuthenticationExecutionsStream("flow")).thenReturn(Stream.of(execution));
         when(service.requestAccessCertificate(anyString(), anyString(), anyString(), anyString()))
-                .thenReturn("certificate");
+                .thenReturn(new EudiHubService.AccessCertificateResult("certificate", null));
 
         Response response = request();
 
@@ -91,12 +91,12 @@ class EudiHubAdminResourceTest {
         config.setConfig(values);
         when(realm.getAuthenticatorConfigById("config")).thenReturn(config);
         when(service.requestAccessCertificate(anyString(), anyString(), anyString(), anyString()))
-                .thenReturn("new");
+                .thenReturn(new EudiHubService.AccessCertificateResult("new", "Access Certificate TEST"));
 
         Response response = request();
 
         assertEquals(200, response.getStatus());
-        assertEquals(Map.of("accessCertificate", "new"), response.getEntity());
+        assertEquals(Map.of("accessCertificate", "new", "name", "Access Certificate TEST"), response.getEntity());
         assertEquals("new", config.getConfig().get("accessCertificate"));
         assertEquals("IdentityCredential", config.getConfig().get("credentialTypes"));
         verify(realm).updateAuthenticatorConfig(config);
