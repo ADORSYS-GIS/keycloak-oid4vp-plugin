@@ -200,13 +200,13 @@ const EudiHubPageContent = () => {
     !organizationsLoading &&
     !requesting &&
     !certificateRequested;
-  const organizationHint = !tokenIsJwt
-    ? t("eudiHubOrganizationsHint")
+  const organizationStatus = !tokenIsJwt
+    ? null
     : organizationsLoading
       ? t("eudiHubOrganizationsLoading")
       : organizations.length === 0
         ? t("eudiHubOrganizationsEmpty")
-        : t("eudiHubOrganizationHelp");
+        : null;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -379,7 +379,12 @@ const EudiHubPageContent = () => {
                   </InputGroup>
                   <FormHelperText>
                     <HelperText>
-                      <HelperTextItem>{organizationHint}</HelperTextItem>
+                      <HelperTextItem>
+                        {t("eudiHubOrganizationGuidance")}
+                      </HelperTextItem>
+                      {organizationStatus && (
+                        <HelperTextItem>{organizationStatus}</HelperTextItem>
+                      )}
                     </HelperText>
                   </FormHelperText>
                 </FormGroup>
