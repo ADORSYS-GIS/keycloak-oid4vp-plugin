@@ -1,11 +1,5 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.freemarker;
 
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.EncodeHintType;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
-import com.google.zxing.common.BitMatrix;
-import com.google.zxing.qrcode.QRCodeWriter;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpoint;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointFactory;
@@ -13,17 +7,14 @@ import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDu
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.PresentationDuringIssuanceSession;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.AuthorizationRequestService.CodeChallengeDetails;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.QrCodeDataUrl;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsService;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.OID4VPLoginActionsServiceFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oidc.PresentationDuringIssuanceService;
 import jakarta.ws.rs.core.UriBuilder;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.net.URI;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.jboss.logging.Logger;
@@ -42,9 +33,6 @@ public class OID4VPUserAuthBean {
 
     public static final String PARAM_LOGIN_METHOD = "login_method";
     public static final String LOGIN_METHOD_OID4VP = "oid4vp";
-
-    public static final String QR_CODE_IMAGE_FORMAT = "png";
-    public static final int QR_CODE_IMAGE_SIZE = 300;
 
     private final KeycloakSession session;
     private final AuthenticationSessionModel authSession;
@@ -165,7 +153,7 @@ public class OID4VPUserAuthBean {
                 clientId, profileId, new OIDCAuthSession(authSessionId(), getLoginActionUrl(), true), null, null);
 
         // Convert authorization request to QR code (cross-device)
-        String authReqQrCode = turnToQrCodeImageData(authContext.getAuthorizationRequest());
+        String authReqQrCode = QrCodeDataUrl.render(authContext.getAuthorizationRequest());
 
         // Build URLs for polling status and PKCE-protected code redemption
         String authStatusUrl = buildAuthStatusUrl(authContext.getTransactionId());
@@ -231,29 +219,6 @@ public class OID4VPUserAuthBean {
                 .path(OID4VPUserAuthEndpoint.AUTH_STATUS_PATH)
                 .build(authSession.getRealm().getName(), transactionId)
                 .toString();
-    }
-
-    private String turnToQrCodeImageData(String data) {
-        try {
-            QRCodeWriter qrCodeWriter = new QRCodeWriter();
-            BitMatrix bitMatrix = qrCodeWriter.encode(
-                    data,
-                    BarcodeFormat.QR_CODE,
-                    QR_CODE_IMAGE_SIZE,
-                    QR_CODE_IMAGE_SIZE,
-                    // Set margin to 0 to remove default padding
-                    Map.of(EncodeHintType.MARGIN, 0));
-
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            MatrixToImageWriter.writeToStream(bitMatrix, QR_CODE_IMAGE_FORMAT, bos);
-
-            byte[] pngBytes = bos.toByteArray();
-            String base64 = Base64.getEncoder().encodeToString(pngBytes);
-
-            return String.format("data:image/%s;base64,%s", QR_CODE_IMAGE_FORMAT, base64);
-        } catch (WriterException | IOException e) {
-            throw new RuntimeException("QR code creating failed", e);
-        }
     }
 
     /**
