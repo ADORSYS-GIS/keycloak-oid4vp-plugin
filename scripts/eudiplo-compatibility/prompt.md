@@ -34,7 +34,9 @@ Score the supported-flow impact, not code size or perceived importance. State co
 
 ## Report Format
 
-Return a concise Markdown report with:
+Return a concise Markdown report. Its first non-empty line must be exactly `# EUDIPLO Compatibility Review`; do not add a preamble before this heading. Apply this rule even when reporting a limitation or incomplete analysis.
+
+After the heading, include:
 
 1. **Range:** EUDIPLO repository/branch, baseline SHA, candidate SHA, number of commits and changed `apps/backend` paths, and a link to the upstream compare view.
 2. **Summary:** the most relevant behavioral changes and an overall compatibility direction/score, or `No demonstrated impact` when appropriate.
