@@ -317,6 +317,7 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
             String errorDescription,
             String vpToken,
             String state) {
+        ensureAuthorizationContextIsPending(authorizationContext);
 
         OAuth2ErrorRepresentation walletError = toWalletErrorResponse(error, errorDescription);
         if (walletError != null) {
@@ -385,6 +386,15 @@ public class OID4VPUserAuthEndpoint extends OID4VPUserAuthEndpointBase implement
         authorizationResponseService.processAuthorizationResponse(
                 responseObject, authorizationContext, authSession, authProcessor, profile);
         return null;
+    }
+
+    private void ensureAuthorizationContextIsPending(AuthorizationContext authorizationContext) {
+        if (!AuthorizationContextStatus.PENDING.equals(authorizationContext.getStatus())) {
+            throw new BadRequestException(errorResponse(
+                    Response.Status.BAD_REQUEST,
+                    ProcessingError.AUTH_CONTEXT_CLOSED.getErrorString(),
+                    "Authorization context is already closed. Cannot process further responses"));
+        }
     }
 
     private OAuth2ErrorRepresentation toWalletErrorResponse(String error, String errorDescription) {

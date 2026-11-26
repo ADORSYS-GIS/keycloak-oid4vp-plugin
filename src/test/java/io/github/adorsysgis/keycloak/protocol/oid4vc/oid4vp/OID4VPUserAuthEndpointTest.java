@@ -653,6 +653,54 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
     }
 
     @Test
+    public void shouldFailAuthentication_IfResponseFollowsWalletError() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationErrorResponse(
+                requestObject, OAuthErrorException.ACCESS_DENIED, "End-User denied consent", requestObject.getState());
+        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+        response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(ProcessingError.AUTH_CONTEXT_CLOSED.getErrorString(), errorRep.getError());
+        assertEquals(
+                "Authorization context is already closed. Cannot process further responses",
+                errorRep.getErrorDescription());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext status = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
+        assertEquals(ProcessingError.WALLET_ERROR, status.getError());
+        assertNull(status.getAuthorizationCode());
+    }
+
+    @Test
+    public void shouldFailAuthentication_IfResponseFollowsFailedPresentation() throws Exception {
+        String sdJwt = sdJwtVPTestUtils.requestSdJwtCredential(CREDENTIAL_TYPES_CONFIG_DEFAULT, TEST_USER);
+        AuthorizationContext authContext = requestAuthorizationRequest();
+        RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
+
+        HttpResponse response = sendAuthorizationResponseWithVPToken("", requestObject, new TestOpts());
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
+        assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatusLine().getStatusCode());
+
+        OAuth2ErrorRepresentation errorRep = parseErrorResponse(response);
+        assertEquals(ProcessingError.AUTH_CONTEXT_CLOSED.getErrorString(), errorRep.getError());
+
+        HttpResponse statusResponse = fetchAuthenticationStatus(authContext.getTransactionId());
+        AuthorizationContext status = parseAuthorizationContext(statusResponse);
+        assertEquals(AuthorizationContextStatus.ERROR, status.getStatus());
+        assertEquals(ProcessingError.INVALID_VP_TOKEN, status.getError());
+        assertNull(status.getAuthorizationCode());
+    }
+
+    @Test
     public void shouldFailAuthentication_IfUnknownSessionAssociated() throws Exception {
         // Retrieve an authorization request
         AuthorizationContext authContext = requestAuthorizationRequest();
