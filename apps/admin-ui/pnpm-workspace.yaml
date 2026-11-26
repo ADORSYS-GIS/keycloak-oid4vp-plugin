@@ -1,0 +1,5 @@
+# pnpm blocks dependency build scripts by default. Both are only used to fetch
+# their prebuilt platform binary; allow them like Keycloak's js/ workspace does.
+allowBuilds:
+  "@swc/core": true
+  esbuild: true

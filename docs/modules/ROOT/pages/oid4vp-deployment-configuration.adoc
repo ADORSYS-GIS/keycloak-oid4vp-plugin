@@ -540,20 +540,22 @@ In that profile, it is typical to use:
 - request-object signature and certificate material (`accessCertificate`, `registrationCertificate`)
 - a custom wallet invocation URL scheme (`openid4vp://`)
 
-=== Access certificate guidance for sandbox onboarding
+== Configure an EUDI Hub access certificate from the admin console
 
-To register a verifier in the SPRIN-D sandbox, it is recommended to bind `accessCertificate`
-to an ES256 signing key in the realm and to a DNS name representing your deployment.
+For access certificates, the German EUDI Hub supports EC keys only. Use an ES256 (P-256) realm
+signing key for OpenID4VP before requesting the certificate.
 
-- *Key algorithm*: use an EC P-256 (ES256) realm key for request-object signatures.
-- *DNS value*: use the public hostname of your deployment (for example
-  `keycloak-demo.solutions.adorsys.com`), and ensure it is the DNS value represented in the certificate.
-- *Public key sharing*: when sandbox onboarding asks for a public key, provide the PEM-encoded
-  public key corresponding to the same ES256 key/certificate pair.
+The EUDI Hub page in the admin console can request the certificate and configure it on the
+OpenID4VP authenticator automatically:
 
-A typical workflow is:
+. Set the admin theme to `keycloak.v2+oid4vp` on the realm used by the admin user, usually `master`.
+  This may differ from the realm you want to configure.
+. Switch to the realm configured for OpenID4VP and select *Configure* > *EUDI Hub*.
+. Follow the instructions on the page to obtain an EUDI Hub portal access token, then request the
+  certificate. The page configures it automatically, creating an authenticator configuration if
+  needed.
 
-. Select or generate an ES256 key provider in the realm.
-. Issue/provide an X.509 certificate for that key, with SAN DNS matching your deployment hostname.
-. Set `accessCertificate` to that certificate content (base64 DER, or PEM body without delimiters).
-. If required by the sandbox portal, extract and submit the corresponding public key in PEM form.
+You would want this access certificate to be also used for signed Credential Issuer Metadata:
+set the target realm attribute `oid4vci.patch_metadata_x5c_to_oid4vp_access_certificate` to `true`.
+If the certificate is invalid or does not match the metadata signing key, the certificate or certificate
+chain in the key provider continues to be used.
