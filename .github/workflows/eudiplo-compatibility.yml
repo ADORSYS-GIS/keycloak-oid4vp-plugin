@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  OPENCODE_MODEL: camer-digital/adorsys-reviewer
+  OPENCODE_MODEL: camer-digital/deepseek-v4.1-flash
   OPENCODE_PROVIDER: camer-digital
   OPENCODE_GATEWAY_BASE_URL: https://api.ai.camer.digital/v1
 
