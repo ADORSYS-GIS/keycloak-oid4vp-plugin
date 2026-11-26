@@ -81,8 +81,9 @@ public class AuthorizationResponseService {
         logger.debug("Processing authorization response for user authentication...");
         AuthenticationSessionStore store = new AuthenticationSessionStore(authSession);
 
-        // Validate that authorization context is not yet closed
-        if (authContext.getStatus().equals(AuthorizationContextStatus.SUCCESS)) {
+        // A response may be processed only while the authorization context is pending.
+        // SUCCESS and ERROR are both terminal states.
+        if (!AuthorizationContextStatus.PENDING.equals(authContext.getStatus())) {
             throw failWithHttpException(
                     ProcessingError.AUTH_CONTEXT_CLOSED,
                     "Authorization context is already closed. Cannot process further responses",
