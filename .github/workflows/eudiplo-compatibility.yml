@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  OPENCODE_MODEL: camer-digital/adorsys-reviewer-pro
+  OPENCODE_MODEL: camer-digital/adorsys-reviewer
   OPENCODE_PROVIDER: camer-digital
   OPENCODE_GATEWAY_BASE_URL: https://api.ai.camer.digital/v1
 
@@ -81,6 +81,17 @@ jobs:
                 },
                 "models": { "$model_id": {} }
               }
+            },
+            "agent": {
+              "eudiplo-review": {
+                "description": "Read-only EUDIPLO compatibility review",
+                "mode": "primary",
+                "steps": 8,
+                "permission": {
+                  "edit": "deny",
+                  "question": "deny"
+                }
+              }
             }
           }
           JSON
@@ -107,7 +118,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: ${{ env.OPENCODE_MODEL }}
-          agent: auto-review
+          agent: eudiplo-review
           prompt: ${{ steps.prompt.outputs.value }}
           share: false
           use_github_token: true
