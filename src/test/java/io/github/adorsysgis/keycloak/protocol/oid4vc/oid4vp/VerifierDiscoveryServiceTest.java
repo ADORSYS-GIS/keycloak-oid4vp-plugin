@@ -2,10 +2,12 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.dcql.DcqlCredentialCapabilities;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.ClientMetadata;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.model.dto.AuthorizationContext;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.service.VerifierDiscoveryService;
 import org.junit.jupiter.api.Nested;
@@ -30,6 +32,19 @@ public class VerifierDiscoveryServiceTest {
         assertTrue(vpFormats.has("dc+sd-jwt"));
         assertTrue(vpFormats.has("mso_mdoc"));
         assertFalse(vpFormats.has("jwt_vc_json"));
+    }
+
+    @Test
+    void shouldTolerateNullCapabilities() {
+        // The service is also used where only the signing key is needed and no
+        // DCQL capabilities are available.
+        VerifierDiscoveryService discoveryService = new VerifierDiscoveryService(null, null);
+
+        ClientMetadata metadata = discoveryService.getClientMetadata(null);
+        ClientMetadata.VpFormat vpFormat = metadata.getVpFormat();
+        assertNull(vpFormat.getDcSdJwt());
+        assertNull(vpFormat.getMsoMdoc());
+        assertNull(vpFormat.getJwtVcJson());
     }
 
     @Nested

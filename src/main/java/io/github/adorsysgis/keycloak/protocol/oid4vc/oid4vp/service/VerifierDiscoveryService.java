@@ -46,10 +46,12 @@ public class VerifierDiscoveryService {
         ClientMetadata metadata = new ClientMetadata();
 
         ClientMetadata.VpFormat vpFormat = new ClientMetadata.VpFormat();
-        var signatureAlgorithms = getSupportedSignatureAlgorithms();
-        dcqlCapabilities
-                .all()
-                .forEach(capability -> capability.contributeVpFormatsSupported(vpFormat, signatureAlgorithms));
+        if (dcqlCapabilities != null) {
+            var signatureAlgorithms = getSupportedSignatureAlgorithms();
+            dcqlCapabilities
+                    .all()
+                    .forEach(capability -> capability.contributeVpFormatsSupported(vpFormat, signatureAlgorithms));
+        }
         metadata.setVpFormat(vpFormat);
 
         // Advertise ephemeral key if any

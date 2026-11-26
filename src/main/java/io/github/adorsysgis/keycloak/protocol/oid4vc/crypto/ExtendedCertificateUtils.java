@@ -89,6 +89,13 @@ public class ExtendedCertificateUtils extends CertificateUtils {
     }
 
     /**
+     * Creates a PEM-encoded PKCS#10 certificate signing request.
+     **/
+    public static String generateCsr(PrivateKey privateKey, PublicKey publicKey, String algorithm, String commonName) {
+        return getExtendedCertificateUtilsProvider().generateCsr(privateKey, publicKey, algorithm, commonName);
+    }
+
+    /**
      * Generates or retrieves a cached X509v3 certificate.
      * <p>
      * This method uses a Caffeine-backed LRU cache to avoid expensive BouncyCastle generation

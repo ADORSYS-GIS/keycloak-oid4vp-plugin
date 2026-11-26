@@ -3,17 +3,29 @@ package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPUserAuthEndpointBase;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.security.PublicKey;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.jboss.logging.Logger;
+import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.jose.jws.JWSBuilder;
+import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticationFlowModel;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider;
@@ -33,6 +45,8 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     public static final String ATTR_PRESENTATION_DURING_ISSUANCE = "oid4vci.presentation_during_issuance";
     public static final String ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY =
             "oid4vci.patch_metadata_x5c_to_leaf_cert_only";
+    public static final String ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE =
+            "oid4vci.patch_metadata_x5c_to_oid4vp_access_certificate";
 
     private final RealmModel realm;
 
@@ -81,29 +95,93 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
     }
 
     /**
-     * The German EUDI Wallet (Android) only tolerates the leaf certificate in the {@code x5c} header of
-     * the signed Credential Issuer Metadata. Upstream Keycloak advertises the whole certificate chain
-     * (minus the trailing self-signed trust anchor), which the wallet rejects. When the realm
-     * attribute {@value ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY} is enabled, only the leaf certificate
-     * is advertised; otherwise the upstream behavior is preserved.
+     * Builds the signed-metadata certificate header. The OpenID4VP access-certificate attribute, when
+     * enabled, takes precedence and uses that certificate only if it matches the metadata signing key.
+     * Otherwise, the leaf-only attribute can limit {@code x5c} to the signing key's leaf certificate;
+     * when both attributes are disabled, upstream Keycloak's certificate-chain behavior is preserved.
      */
     @Override
     public Optional<String> generateSignedMetadata(CredentialIssuer metadata, KeycloakSession session) {
-        if (!isPatchMetadataX5cToLeafCertOnlyEnabled()) {
-            return super.generateSignedMetadata(metadata, session);
+        if (isPatchMetadataX5cFromOid4vpAccessCertificateEnabled()) {
+            Optional<X509Certificate> accessCertificate = configuredOid4vpAccessCertificate();
+            if (accessCertificate.isPresent()) {
+                X509Certificate certificate = accessCertificate.get();
+                if (matchesIssuerMetadataSigningKey(certificate, session)) {
+                    return OID4VCIssuerWellKnownProviderCopy.generateSignedMetadata(
+                            metadata, session, (builder, keyWrapper) -> builder.x5c(List.of(certificate)));
+                }
+
+                logger.warnf(
+                        "The configured OpenID4VP access certificate does not match the signed metadata key in realm '%s'; falling back to the next x5c setting",
+                        realm.getName());
+            } else {
+                logger.warnf(
+                        "Realm attribute %s is enabled but no valid OpenID4VP access certificate is configured in realm '%s'; falling back to the next x5c setting",
+                        ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE, realm.getName());
+            }
         }
 
-        return OID4VCIssuerWellKnownProviderCopy.generateSignedMetadata(
-                metadata, session, this::addLeafCertificateHeader);
+        if (isPatchMetadataX5cToLeafCertOnlyEnabled()) {
+            return OID4VCIssuerWellKnownProviderCopy.generateSignedMetadata(
+                    metadata, session, this::addLeafCertificateHeader);
+        }
+
+        return super.generateSignedMetadata(metadata, session);
     }
 
     private void addLeafCertificateHeader(JWSBuilder jwsBuilder, KeyWrapper keyWrapper) {
         List<X509Certificate> chain = keyWrapper.getCertificateChain();
-        X509Certificate leaf = (chain != null && !chain.isEmpty()) ? chain.get(0) : keyWrapper.getCertificate();
+        X509Certificate leaf = (chain != null && !chain.isEmpty()) ? chain.getFirst() : keyWrapper.getCertificate();
         if (leaf != null) {
             jwsBuilder.x5c(List.of(leaf));
         } else {
             logger.debugf("No leaf certificate available for x5c header in realm: %s", realm.getName());
+        }
+    }
+
+    private Optional<X509Certificate> configuredOid4vpAccessCertificate() {
+        AuthenticationFlowModel flow = realm.getFlowByAlias(OID4VPUserAuthEndpointBase.OID4VP_AUTH_FLOW);
+        if (flow == null) {
+            return Optional.empty();
+        }
+
+        String encodedCertificate = realm.getAuthenticationExecutionsStream(flow.getId())
+                .filter(execution -> OID4VPAuthenticatorFactory.PROVIDER_ID.equals(execution.getAuthenticator()))
+                .map(AuthenticationExecutionModel::getAuthenticatorConfig)
+                .filter(StringUtil::isNotBlank)
+                .map(realm::getAuthenticatorConfigById)
+                .filter(Objects::nonNull)
+                .map(AuthenticatorConfigModel::getConfig)
+                .filter(Objects::nonNull)
+                .map(config -> config.get(OID4VPAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG))
+                .filter(StringUtil::isNotBlank)
+                .findFirst()
+                .orElse(null);
+        if (StringUtil.isBlank(encodedCertificate)) {
+            return Optional.empty();
+        }
+
+        try {
+            byte[] der = Base64.getDecoder().decode(encodedCertificate);
+            X509Certificate certificate = (X509Certificate)
+                    CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(der));
+            return Optional.of(certificate);
+        } catch (IllegalArgumentException | CertificateException e) {
+            logger.warnf(e, "Invalid OpenID4VP access certificate configured in realm '%s'", realm.getName());
+            return Optional.empty();
+        }
+    }
+
+    private boolean matchesIssuerMetadataSigningKey(X509Certificate certificate, KeycloakSession session) {
+        try {
+            String algorithm = OID4VCIssuerWellKnownProviderCopy.getSigningAlgorithm(realm, session);
+            KeyWrapper signingKey = session.keys().getActiveKey(realm, KeyUse.SIG, algorithm);
+            return signingKey != null
+                    && signingKey.getPublicKey() instanceof PublicKey publicKey
+                    && Arrays.equals(certificate.getPublicKey().getEncoded(), publicKey.getEncoded());
+        } catch (IllegalStateException e) {
+            logger.warnf(e, "Could not determine the signed metadata key for realm '%s'", realm.getName());
+            return false;
         }
     }
 
@@ -117,6 +195,10 @@ public class OID4VCIssuerMetadataProvider extends OID4VCIssuerWellKnownProvider 
 
     private boolean isPatchMetadataX5cToLeafCertOnlyEnabled() {
         return Boolean.parseBoolean(realm.getAttribute(ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY));
+    }
+
+    private boolean isPatchMetadataX5cFromOid4vpAccessCertificateEnabled() {
+        return Boolean.parseBoolean(realm.getAttribute(ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE));
     }
 
     private String authorizationChallengeEndpoint() {
