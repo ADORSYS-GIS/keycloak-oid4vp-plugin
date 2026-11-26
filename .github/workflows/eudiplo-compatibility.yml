@@ -1,0 +1,138 @@
+name: EUDIPLO Compatibility Watch
+
+on:
+  schedule:
+    # Every Monday at 07:00 UTC (08:00 WAT).
+    - cron: "0 7 * * 1"
+  pull_request:
+    paths:
+      - ".github/workflows/eudiplo-compatibility.yml"
+      - "scripts/eudiplo-compatibility/baseline.sha"
+      - "scripts/eudiplo-compatibility/prompt.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: eudiplo-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OPENCODE_MODEL: camer-digital/deepseek-v4.1-flash
+  OPENCODE_PROVIDER: camer-digital
+  OPENCODE_GATEWAY_BASE_URL: https://api.ai.camer.digital/v1
+
+jobs:
+  review:
+    name: Review EUDIPLO backend updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Checkout EUDIPLO history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: EUDIPLO/eudiplo
+          ref: main
+          path: eudiplo
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Exclude EUDIPLO checkout from plugin worktree
+        run: echo "/eudiplo/" >> .git/info/exclude
+
+      - name: Verify AI gateway configuration
+        env:
+          AUDIENCE: ${{ vars.OPENCODE_GATEWAY_AUDIENCE }}
+        run: test -n "$AUDIENCE"
+
+      - name: Mint AI gateway token
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          AUDIENCE: ${{ vars.OPENCODE_GATEWAY_AUDIENCE }}
+        with:
+          script: |
+            const token = await core.getIDToken(process.env.AUDIENCE);
+            core.setSecret(token);
+            core.exportVariable('CAMER_DIGITAL_API_KEY', token);
+
+      - name: Configure OpenCode
+        shell: bash
+        run: |
+          model_id=${OPENCODE_MODEL#*/}
+          config=$(cat <<JSON
+          {
+            "\$schema": "https://opencode.ai/config.json",
+            "provider": {
+              "$OPENCODE_PROVIDER": {
+                "npm": "@ai-sdk/openai-compatible",
+                "options": {
+                  "baseURL": "$OPENCODE_GATEWAY_BASE_URL",
+                  "apiKey": "{env:CAMER_DIGITAL_API_KEY}"
+                },
+                "models": { "$model_id": {} }
+              }
+            },
+            "agent": {
+              "eudiplo-review": {
+                "description": "Read-only EUDIPLO compatibility review",
+                "mode": "primary",
+                "steps": 8,
+                "permission": {
+                  "edit": "deny",
+                  "question": "deny"
+                }
+              }
+            },
+            "default_agent": "eudiplo-review"
+          }
+          JSON
+          )
+          {
+            echo "OPENCODE_CONFIG_CONTENT<<OPENCODE_CONFIG_EOF"
+            echo "$config"
+            echo "OPENCODE_CONFIG_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Load compatibility review prompt
+        id: prompt
+        shell: bash
+        run: |
+          {
+            echo "value<<EUDIPLO_PROMPT_EOF"
+            cat scripts/eudiplo-compatibility/prompt.md
+            echo "EUDIPLO_PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run EUDIPLO compatibility review
+        uses: anomalyco/opencode/github@76c631d198f9ff620e15468e45f3457d50481b57 # v1.16.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: ${{ env.OPENCODE_MODEL }}
+          prompt: ${{ steps.prompt.outputs.value }}
+          share: false
+          use_github_token: true
+
+      - name: Notify Discord when report is ready
+        if: success()
+        uses: ./.github/actions/discord-notification
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: EUDIPLO compatibility report is ready
+
+      - name: Notify Discord on workflow failure
+        if: failure()
+        uses: ./.github/actions/discord-notification
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: EUDIPLO compatibility review failed
