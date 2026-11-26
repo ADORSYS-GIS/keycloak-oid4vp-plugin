@@ -92,7 +92,8 @@ jobs:
                   "question": "deny"
                 }
               }
-            }
+            },
+            "default_agent": "eudiplo-review"
           }
           JSON
           )
@@ -118,7 +119,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: ${{ env.OPENCODE_MODEL }}
-          agent: eudiplo-review
           prompt: ${{ steps.prompt.outputs.value }}
           share: false
           use_github_token: true
