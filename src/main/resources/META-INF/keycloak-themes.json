@@ -1,7 +1,7 @@
 {
     "themes": [{
         "name" : "keycloak.v2+oid4vp",
-        "types": [ "login" ]
+        "types": [ "login", "admin" ]
     }, {
         "name" : "keycloak.v2+oid4vp+dyou",
         "types": [ "login" ]

@@ -46,6 +46,54 @@ updates:
       timezone: "Africa/Douala"
     open-pull-requests-limit: 5
 
+  # Admin console npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/apps/admin-ui"
+    target-branch: "main"
+    cooldown:
+      default-days: 14
+    schedule:
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Africa/Douala"
+    open-pull-requests-limit: 5
+    groups:
+      # All Keycloak packages share the same version — group them together.
+      keycloak:
+        patterns: ["@keycloak/*"]
+      # Group minor and patch updates to reduce PR noise
+      admin-ui-dependencies:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Keycloak JS packages must match keycloak.version in the root pom.xml
+      - dependency-name: "@keycloak/*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+      # These are coupled to the Keycloak admin UI version (React 18,
+      # PatternFly 5, i18next 25). Revisit only when Keycloak itself bumps them.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@patternfly/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "i18next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "i18next-fetch-backend"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-i18next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+
   # Documentation npm dependencies
   - package-ecosystem: "npm"
     directory: "/docs"
