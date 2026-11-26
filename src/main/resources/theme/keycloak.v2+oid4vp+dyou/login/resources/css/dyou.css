@@ -101,3 +101,34 @@ body:has(.dyou-card) .pf-v5-c-login__main-body {
     color: #000000;
     text-decoration: underline;
 }
+
+.dyou-status .dyou-title,
+.dyou-status .dyou-text {
+    max-width: none;
+}
+
+.dyou-status .dyou-title {
+    white-space: nowrap;
+}
+
+.dyou-status-visual {
+    display: flex;
+    justify-content: center;
+    margin-block: 24px 16px;
+}
+
+.dyou-spinner {
+    box-sizing: border-box;
+    width: 96px;
+    height: 96px;
+    border: 8px solid #d0d0d0;
+    border-top-color: #000000;
+    border-radius: 50%;
+    animation: dyou-spin 0.8s linear infinite;
+}
+
+@keyframes dyou-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
