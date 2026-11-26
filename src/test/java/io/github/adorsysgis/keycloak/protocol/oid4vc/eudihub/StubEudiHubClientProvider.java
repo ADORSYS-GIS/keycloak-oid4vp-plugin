@@ -53,18 +53,15 @@ final class StubEudiHubClientProvider implements EudiHubClientProvider {
     public <T> T get(String token, URI uri, Class<T> responseType) {
         String path = uri.getPath();
         if (path.endsWith("/v1/me") && responseType == OrganizationPage.class) {
-            return responseType.cast(
-                    new OrganizationPage(List.of(new OrganizationSummary(
-                            ORGANIZATION_ID,
-                            token.equals(TOKEN_PASSTHROUGH_TOKEN) ? token : "Stub Org"))));
+            return responseType.cast(new OrganizationPage(List.of(new OrganizationSummary(
+                    ORGANIZATION_ID, token.equals(TOKEN_PASSTHROUGH_TOKEN) ? token : "Stub Org"))));
         }
         if (path.endsWith("/organizations/" + ORGANIZATION_ID) && responseType == OrganizationDetails.class) {
             String supportUri = token.equals(TOKEN_PASSTHROUGH_TOKEN)
                     ? "https://support.example.test/token/" + token
                     : "https://support.example.test";
             return responseType.cast(new OrganizationDetails(
-                    new OrganizationDetails.ContactInformation(List.of(supportUri)),
-                    List.of("sandbox", "live")));
+                    new OrganizationDetails.ContactInformation(List.of(supportUri)), List.of("sandbox", "live")));
         }
         if (path.endsWith("/access-certificates") && responseType == AccessCertificatePage.class) {
             return certificatePage(token, responseType);

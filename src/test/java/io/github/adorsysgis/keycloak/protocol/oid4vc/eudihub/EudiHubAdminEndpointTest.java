@@ -22,22 +22,22 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.keycloak.OAuth2Constants;
-import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.common.util.KeycloakUriBuilder;
-import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.AuthenticationExecutionInfoRepresentation;
 import org.keycloak.representations.idm.AuthenticationExecutionRepresentation;
 import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.util.JsonSerialization;
 
@@ -180,13 +180,14 @@ class EudiHubAdminEndpointTest extends BaseKeycloakTest {
     @Test
     void propagatesConflictWhenNoCertificateMatchesTheSigningKey() throws Exception {
         Map<String, String> originalConfig = authenticatorConfigContents();
-        HttpResult result = post(
-                "access-certificate",
-                certificateRequest("duplicate-no-match-" + UUID.randomUUID(), "No Match"));
+        HttpResult result =
+                post("access-certificate", certificateRequest("duplicate-no-match-" + UUID.randomUUID(), "No Match"));
 
         assertEquals(HttpStatus.SC_CONFLICT, result.status());
         assertEquals("server_error", result.body().path("error").asText());
-        assertEquals("The Hub already has a certificate for this key", result.body().path("error_description").asText());
+        assertEquals(
+                "The Hub already has a certificate for this key",
+                result.body().path("error_description").asText());
         assertEquals(originalConfig, authenticatorConfig().getConfig());
     }
 
@@ -213,7 +214,9 @@ class EudiHubAdminEndpointTest extends BaseKeycloakTest {
 
         assertEquals(HttpStatus.SC_CONFLICT, result.status());
         assertEquals("server_error", result.body().path("error").asText());
-        assertEquals("The Hub already has a certificate for this key", result.body().path("error_description").asText());
+        assertEquals(
+                "The Hub already has a certificate for this key",
+                result.body().path("error_description").asText());
         assertEquals(originalConfig, authenticatorConfig().getConfig());
     }
 
@@ -221,10 +224,11 @@ class EudiHubAdminEndpointTest extends BaseKeycloakTest {
     void createsAuthenticatorConfigWhenTheFlowExecutionHasNone() throws Exception {
         String executionId = addConfiglessAuthenticatorExecution();
         try {
-            AuthenticationExecutionInfoRepresentation execution = realm().flows().getExecutions(OID4VP_AUTH_FLOW).stream()
-                    .filter(candidate -> executionId.equals(candidate.getId()))
-                    .findFirst()
-                    .orElseThrow();
+            AuthenticationExecutionInfoRepresentation execution =
+                    realm().flows().getExecutions(OID4VP_AUTH_FLOW).stream()
+                            .filter(candidate -> executionId.equals(candidate.getId()))
+                            .findFirst()
+                            .orElseThrow();
             assertNull(execution.getAuthenticationConfig());
 
             // Make the configless execution the first OpenID4VP authenticator selected by the endpoint.
@@ -237,7 +241,8 @@ class EudiHubAdminEndpointTest extends BaseKeycloakTest {
 
             assertEquals(HttpStatus.SC_OK, result.status());
             String createdCertificate = result.body().path("accessCertificate").asText();
-            AuthenticationExecutionRepresentation updatedExecution = realm().flows().getExecution(executionId);
+            AuthenticationExecutionRepresentation updatedExecution =
+                    realm().flows().getExecution(executionId);
             assertNotNull(updatedExecution.getAuthenticatorConfig());
             AuthenticatorConfigRepresentation createdConfig =
                     realm().flows().getAuthenticatorConfig(updatedExecution.getAuthenticatorConfig());
