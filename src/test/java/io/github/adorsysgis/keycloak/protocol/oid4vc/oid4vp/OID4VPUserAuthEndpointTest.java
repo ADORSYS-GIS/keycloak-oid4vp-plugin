@@ -659,10 +659,7 @@ public class OID4VPUserAuthEndpointTest extends OID4VPBaseUserAuthEndpointTest {
         RequestObject requestObject = resolveRequestObject(authContext.getAuthorizationRequest());
 
         HttpResponse response = sendAuthorizationErrorResponse(
-                requestObject,
-                OAuthErrorException.ACCESS_DENIED,
-                "End-User denied consent",
-                requestObject.getState());
+                requestObject, OAuthErrorException.ACCESS_DENIED, "End-User denied consent", requestObject.getState());
         assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
         response = sendAuthorizationResponse(sdJwt, requestObject, TestOpts.getDefault());
