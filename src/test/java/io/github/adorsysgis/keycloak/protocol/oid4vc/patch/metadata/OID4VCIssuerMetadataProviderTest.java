@@ -1,9 +1,13 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata;
 
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.authenticator.OID4VPAuthenticatorFactory.ACCESS_CERTIFICATE_CONFIG;
 import static io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider.ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY;
+import static io.github.adorsysgis.keycloak.protocol.oid4vc.patch.metadata.OID4VCIssuerMetadataProvider.ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint.DEFLATE_COMPRESSION;
@@ -12,11 +16,19 @@ import static org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvide
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.OID4VPBaseKeycloakTest;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.PresentationDuringIssuanceBaseTest;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.RSATestUtils;
+import io.github.adorsysgis.keycloak.protocol.oid4vc.oid4vp.utils.SdJwtVPTestUtils;
 import io.github.adorsysgis.keycloak.protocol.oid4vc.presentation.AuthorizationChallengeEndpointFactory;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.http.HttpHeaders;
@@ -27,11 +39,14 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.keycloak.common.util.CertificateUtils;
 import org.keycloak.common.util.KeycloakUriBuilder;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.X509CertificateChainValidator;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.protocol.oid4vc.model.CredentialIssuer;
 import org.keycloak.protocol.oid4vc.model.DisplayObject;
+import org.keycloak.representations.idm.AuthenticatorConfigRepresentation;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.MediaType;
 
@@ -182,6 +197,58 @@ public class OID4VCIssuerMetadataProviderTest {
             });
         }
 
+        @Test
+        public void shouldUseOpenId4VpAccessCertificateBeforeLeafOnlySetting() throws Exception {
+            X509Certificate accessCertificate = accessCertificateForMetadataSigningKey();
+            assertNotEquals(leafCertificate(), accessCertificate);
+
+            AuthenticatorConfigRepresentation originalConfig = getChainAuthenticatorConfig();
+            AuthenticatorConfigRepresentation configured = getChainAuthenticatorConfig();
+            Map<String, String> config = new HashMap<>(configured.getConfig());
+            config.put(ACCESS_CERTIFICATE_CONFIG, Base64.getEncoder().encodeToString(accessCertificate.getEncoded()));
+            configured.setConfig(config);
+
+            try {
+                updateAuthenticatorConfig(configured);
+                withRealmAttributes(
+                        Map.of(ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE, "true"),
+                        () -> assertEquals(List.of(accessCertificate), signedMetadataX5c()));
+                withRealmAttributes(
+                        Map.of(
+                                ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE,
+                                "true",
+                                ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY,
+                                "true"),
+                        () -> assertEquals(List.of(accessCertificate), signedMetadataX5c()));
+            } finally {
+                updateAuthenticatorConfig(originalConfig);
+            }
+        }
+
+        @Test
+        public void shouldFallBackToLeafOnlyWhenAccessCertificateDoesNotMatch() throws Exception {
+            AuthenticatorConfigRepresentation originalConfig = getChainAuthenticatorConfig();
+            AuthenticatorConfigRepresentation configured = getChainAuthenticatorConfig();
+            Map<String, String> config = new HashMap<>(configured.getConfig());
+            X509Certificate unrelatedCertificate = certificateForUnrelatedSigningKey();
+            config.put(
+                    ACCESS_CERTIFICATE_CONFIG, Base64.getEncoder().encodeToString(unrelatedCertificate.getEncoded()));
+            configured.setConfig(config);
+
+            try {
+                updateAuthenticatorConfig(configured);
+                withRealmAttributes(
+                        Map.of(
+                                ATTR_PATCH_METADATA_X5C_TO_OID4VP_ACCESS_CERTIFICATE,
+                                "true",
+                                ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY,
+                                "true"),
+                        () -> assertEquals(List.of(leafCertificate()), signedMetadataX5c()));
+            } finally {
+                updateAuthenticatorConfig(originalConfig);
+            }
+        }
+
         private List<X509Certificate> signedMetadataX5c() throws Exception {
             String wellKnownEndpoint = KeycloakUriBuilder.fromUri(keycloak.getAuthServerUrl())
                     .path("/.well-known/openid-credential-issuer/realms/{realm}")
@@ -203,6 +270,26 @@ public class OID4VCIssuerMetadataProviderTest {
 
         private X509Certificate leafCertificate() throws Exception {
             return loadChain().getFirst();
+        }
+
+        private X509Certificate accessCertificateForMetadataSigningKey() throws Exception {
+            KeyWrapper signingKey = RSATestUtils.getRsaKeyWrapper(SdJwtVPTestUtils.getKeycloakJwk());
+            assertArrayEquals(
+                    leafCertificate().getPublicKey().getEncoded(),
+                    signingKey.getPublicKey().getEncoded());
+            return CertificateUtils.generateV1SelfSignedCertificate(
+                    new KeyPair((PublicKey) signingKey.getPublicKey(), (PrivateKey) signingKey.getPrivateKey()),
+                    "OID4VP Access Certificate");
+        }
+
+        private X509Certificate certificateForUnrelatedSigningKey() throws Exception {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return CertificateUtils.generateV1SelfSignedCertificate(generator.generateKeyPair(), "Unrelated Key");
+        }
+
+        private AuthenticatorConfigRepresentation getChainAuthenticatorConfig() {
+            return getActiveTestRealmResource().flows().getAuthenticatorConfig("test-chain-oid4vp-auth-config-id");
         }
 
         private static List<X509Certificate> loadChain() throws Exception {

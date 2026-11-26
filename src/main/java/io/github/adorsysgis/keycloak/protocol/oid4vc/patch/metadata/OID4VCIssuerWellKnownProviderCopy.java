@@ -48,15 +48,13 @@ import org.keycloak.util.JsonSerialization;
  *
  * <p>This code is <strong>copied verbatim</strong> from upstream Keycloak because the certificate
  * header handling (upstream {@code addCertificateHeaders}) is {@code private} and therefore cannot
- * be overridden. To advertise only the leaf certificate in the {@code x5c} header (see
- * {@link OID4VCIssuerMetadataProvider#ATTR_PATCH_METADATA_X5C_TO_LEAF_CERT_ONLY}) we have to reproduce
- * the whole signing flow and inject the certificate-header step at the one place it differs from
- * upstream.
+ * be overridden. To customize the {@code x5c} header (for leaf-only or OpenID4VP access-certificate
+ * advertisement; see {@link OID4VCIssuerMetadataProvider}) we reproduce the signing flow and inject
+ * a callback at the one place it differs from upstream.
  *
  * <p>The only intentional divergence from upstream is that the {@code x5c} header is built by the
- * supplied {@code addCertificateHeaders} callback instead of the private upstream
- * {@code addCertificateHeaders}. Everything else mirrors the upstream implementation and should be
- * kept in sync when Keycloak is upgraded.
+ * supplied callback instead of the private upstream method. Everything else mirrors the upstream
+ * implementation and should be kept in sync when Keycloak is upgraded.
  */
 public final class OID4VCIssuerWellKnownProviderCopy {
 
@@ -143,7 +141,7 @@ public final class OID4VCIssuerWellKnownProviderCopy {
         }
     }
 
-    private static String getSigningAlgorithm(RealmModel realm, KeycloakSession session) {
+    static String getSigningAlgorithm(RealmModel realm, KeycloakSession session) {
         List<String> supportedAlgorithms = getSupportedAsymmetricSignatureAlgorithms(session);
 
         if (supportedAlgorithms.isEmpty()) {

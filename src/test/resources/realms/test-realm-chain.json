@@ -17,6 +17,35 @@
       }
     }
   ],
+  "authenticationFlows": [
+    {
+      "id": "a971a9b9-e766-4438-b989-103991b31f45",
+      "alias": "oid4vp auth",
+      "description": "Authenticate via OpenID4VP presentations",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "oid4vp-authenticator",
+          "authenticatorConfig": "oid4vp-auth-config",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "id": "test-chain-oid4vp-auth-config-id",
+      "alias": "oid4vp-auth-config",
+      "config": {
+        "credentialTypes": "https://credentials.example.com/identity_credential"
+      }
+    }
+  ],
   "components": {
     "org.keycloak.keys.KeyProvider": [
       {

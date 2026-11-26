@@ -1,5 +1,6 @@
 package io.github.adorsysgis.keycloak.protocol.oid4vc.crypto;
 
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -7,11 +8,14 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.Extension;
@@ -24,7 +28,10 @@ import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
+import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 import org.keycloak.common.util.BouncyIntegration;
 import org.keycloak.common.util.Time;
 import org.keycloak.crypto.JavaAlgorithm;
@@ -38,6 +45,9 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
 
     public static final long DEFAULT_CERT_VALIDITY_MS = 60 * 60 * 1000L; // 1 hour
     public static final long CLOCK_SKEW_BUFFER_MS = 5 * 60 * 1000L; // 5 minutes
+
+    private static final String CSR_PEM_BEGIN = "-----BEGIN CERTIFICATE REQUEST-----";
+    private static final String CSR_PEM_END = "-----END CERTIFICATE REQUEST-----";
 
     public static ExtendedBCCertificateUtilsProvider getInstance() {
         return INSTANCE;
@@ -130,6 +140,26 @@ public class ExtendedBCCertificateUtilsProvider extends BCCertificateUtilsProvid
         return new JcaX509CertificateConverter()
                 .setProvider(BouncyIntegration.PROVIDER)
                 .getCertificate(certGen.build(sigGen));
+    }
+
+    @Override
+    public String generateCsr(PrivateKey privateKey, PublicKey publicKey, String algorithm, String commonName) {
+        String signatureAlgorithm = JavaAlgorithm.getJavaAlgorithm(algorithm);
+        try {
+            X500Name subject = new X500NameBuilder(BCStyle.INSTANCE)
+                    .addRDN(BCStyle.CN, commonName)
+                    .build();
+            ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm)
+                    .setProvider(BouncyIntegration.PROVIDER)
+                    .build(privateKey);
+            PKCS10CertificationRequest request =
+                    new JcaPKCS10CertificationRequestBuilder(subject, publicKey).build(signer);
+
+            String body = Base64.getMimeEncoder(64, new byte[] {'\n'}).encodeToString(request.getEncoded());
+            return CSR_PEM_BEGIN + "\n" + body + "\n" + CSR_PEM_END + "\n";
+        } catch (OperatorCreationException | IOException e) {
+            throw new IllegalStateException("Error creating PKCS#10 certificate signing request.", e);
+        }
     }
 
     public static String getJcaContentSignerAlg(PublicKey publicKey) {

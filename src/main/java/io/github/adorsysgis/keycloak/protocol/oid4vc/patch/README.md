@@ -44,6 +44,15 @@ appended. When the realm attribute `oid4vci.patch_metadata_x5c_to_leaf_cert_only
 signs the metadata with only the leaf certificate in the `x5c` header. The attribute defaults to `false`.
 This patch is to be removed once the wallet tolerates intermediate certificates.
 
+### Use the OpenID4VP access certificate in signed Credential Issuer Metadata
+
+When `oid4vci.patch_metadata_x5c_to_oid4vp_access_certificate` is `true`, the plugin uses the
+`accessCertificate` configured on the realm's OpenID4VP authenticator in the signed metadata's
+`x5c` header. The access certificate must match the active key that signs issuer metadata. This
+attribute defaults to `false`. A matching access certificate takes precedence over
+`oid4vci.patch_metadata_x5c_to_leaf_cert_only`; if it is unavailable or does not match, the plugin
+falls through to the leaf-only setting and then Keycloak's default certificate chain.
+
 ### Patch Wallet Credential Requests
 
 Some wallet applications send the OID4VCI Credential Request with `credential_configuration_id`

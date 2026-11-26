@@ -25,4 +25,15 @@ public interface ExtendedCertificateUtilsProvider extends CertificateUtilsProvid
             PublicKey subPublicKey,
             String subject,
             List<String> subjectAltNames);
+
+    /**
+     * Creates a PEM-encoded PKCS#10 certificate signing request.
+     *
+     * @param privateKey the private key signing the request
+     * @param publicKey the public key to certify
+     * @param algorithm the JOSE algorithm of the signing key
+     * @param commonName the subject common name
+     * @return the PEM-encoded certificate signing request
+     */
+    String generateCsr(PrivateKey privateKey, PublicKey publicKey, String algorithm, String commonName);
 }
